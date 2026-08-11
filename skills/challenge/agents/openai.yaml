@@ -1,0 +1,4 @@
+interface:
+  display_name: "Challenge"
+  short_description: "Challenge changes, specs, and plans before shipping."
+  default_prompt: "Use $challenge to pressure-test these changes before shipping."
