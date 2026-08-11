@@ -268,18 +268,12 @@ point of writing it down first.
 
 ## Design-review scope input
 
-Every ADR, spec, and plan review receives the same frozen external charter:
-
-interaction: <unchanged root value>
-scope identity: <external scope identity, never reviewed target>
-outcome: <frozen external outcome>
-completion criteria: <frozen external completion criteria>
-provenance: <external source for every outcome, criterion, and user decision>
-exclusions: <frozen external exclusions>
-surface: <frozen permitted surface>
-ambiguities: <frozen ambiguity list>
-
-Pass this complete carrier unchanged to every ADR, spec, and plan review-loop call.
+`$review-loop` is a separate skill, so the charter does cross a boundary here.
+Pass all eight fields frozen in *External scope authority* — `interaction`,
+`scope identity`, `outcome`, `completion criteria`, `provenance`, `exclusions`,
+`surface`, `ambiguities` — unchanged, to every ADR, spec, and plan review-loop
+call. `scope identity` stays the external one and never becomes the reviewed
+target.
 
 The target remains evidence for review, never a source of authority. If a design-changing
 ambiguity appears, end the current review cycle and use `SCOPE CHECKPOINT`; do not let the
@@ -343,33 +337,86 @@ Run `$review-loop` with:
   evidence. Do not reopen choices already settled in linked ADR rejected
   alternatives unless the spec contradicts them or introduces a new risk.`
 
-## 4. Implementation plan
+## 4. Inscribe — the implementation plan
 
-Pass the same complete charter and root interaction to `writing-plans`:
+Write the plan under `docs/superpowers/plans/`, named
+`YYYY-MM-DD-<feature-name>.md`, derived from the hardened spec. Do not choose an
+execution mode here: `$build-tdd` picks that from what the plan looks like.
 
-interaction: <unchanged root value>
-scope identity: <external scope identity, never reviewed target>
-outcome: <frozen external outcome>
-completion criteria: <frozen external completion criteria>
-provenance: <external source for every outcome, criterion, and user decision>
-exclusions: <frozen external exclusions>
-surface: <frozen permitted surface>
-ambiguities: <frozen ambiguity list>
+Write for an engineer who has zero context for this codebase and whose taste you
+cannot vouch for — a skilled developer who knows almost nothing about the
+toolset or the problem domain, and who is not strong on test design. Everything
+they need is on the page or it does not reach them. The next phase may hand each
+task to a context-free implementer that cannot ask you what a step meant.
 
-Use `writing-plans` to write the plan under
-`docs/superpowers/plans/`, derived from the hardened spec. **You are its
-dispatched caller** — its *Dispatched mode* section applies: it skips the
-Execution Handoff ask and returns the plan path, because `$build-tdd` picks the
-execution mode. Say so when you invoke it. The next phase
-(`$build-tdd`) may hand tasks to context-free implementer subagents, so every
-task must be self-contained:
+If the spec still spans several independent subsystems, say so and split it —
+one plan per subsystem, each producing working, testable software on its own.
 
-- full task text
-- where the task fits in the issue
-- files likely touched
+**Map the files before defining any task.** Which files get created, which get
+modified, and what each one is responsible for. This is where decomposition is
+actually decided, so it is worth doing explicitly rather than discovering it
+task by task. Keep files focused — one clear responsibility each, split by
+responsibility rather than by technical layer, with things that change together
+living together. In an existing codebase, follow the patterns already there
+rather than restructuring unilaterally, though a split is reasonable to plan for
+a file you are modifying that has grown unwieldy.
+
+**Right-size the tasks.** A task is the smallest unit that carries its own test
+cycle and is worth a fresh reviewer's gate. Fold setup, configuration,
+scaffolding, and documentation into the task whose deliverable needs them; split
+only where a reviewer could meaningfully reject one task while approving its
+neighbour. Every task ends with an independently testable deliverable.
+
+**Size the steps to one action each**, two to five minutes' work, in the order
+that makes the test do the proving: write the failing test, run it and confirm
+it fails, write the minimal implementation, run it and confirm it passes,
+commit. The confirm-it-fails step is the one that gets skipped and the one that
+establishes the test can fail at all.
+
+Start the plan with a header carrying the goal in a sentence, the architecture
+in two or three, the tech stack, and a **Global Constraints** section holding
+the project-wide requirements — version floors, dependency limits, naming and
+copy rules, platform requirements — **copied from the spec verbatim, with exact
+values**. A paraphrased version floor is a wrong version floor. Every task's
+requirements implicitly include that section, so it is written once instead of
+re-derived per task.
+
+Give each task:
+
+- exact file paths for what it creates, modifies, and tests
+- an **Interfaces** block naming what it consumes from earlier tasks and what
+  later tasks rely on from it, with exact signatures — an implementer who sees
+  only their own task learns neighbouring names nowhere else
+- where the task fits in the wider change
+- complete code in every step that changes code
+- the exact command for every verification step **and the output to expect** —
+  "run the tests" cannot be checked; a named command with a stated expected
+  result can
 - acceptance criteria a reviewer can check
-- relevant repo conventions and guardrail commands
-- rollback or cleanup expectations when applicable
+- the repo conventions and guardrail commands that bind it
+- rollback or cleanup expectations where they apply
+
+Repeat code across tasks rather than cross-referencing another task. This is the
+one place DRY is deliberately not applied, and the reason is that tasks get read
+out of order: "similar to Task 3" is unreadable to someone who has not read
+Task 3.
+
+These are plan failures, not style notes — never write them:
+
+- "TBD", "TODO", "implement later", "fill in details"
+- "add appropriate error handling", "add validation", "handle edge cases"
+- "write tests for the above", without the test code
+- "similar to Task N", instead of repeating the content
+- a step describing what to do without showing how
+- a reference to a type, function, or method no task defines
+
+**Then self-review the finished plan against the spec, with fresh eyes.** Walk
+each spec requirement and point to the task implementing it; a requirement with
+no task means adding the task. Sweep for the placeholder patterns above. Check
+that the names, signatures, and properties used in later tasks match what
+earlier tasks defined — a function called `clearLayers()` in Task 3 and
+`clearFullLayers()` in Task 7 is a defect the implementer inherits. Fix what you
+find inline.
 
 Run relevant guardrails and commit the plan.
 
