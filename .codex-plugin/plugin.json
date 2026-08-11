@@ -1,0 +1,5 @@
+{
+  "name": "adept",
+  "description": "Development-workflow skills: design, TDD, adversarial review, shipping, and campaign orchestration.",
+  "skills": "./skills/"
+}
