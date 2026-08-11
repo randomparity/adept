@@ -59,31 +59,59 @@ High-risk examples begin with transactions, persistence, concurrency, and recove
 Migrations and new public contracts are also high-risk examples. An explicit sourced
 request can authorize any of them; the list is not a blanket ban.
 
-## 1. Spec + ADR
+## 1. Council — dialogue to spec + ADR
 
-Pass the complete charter to brainstorming without changing root interaction:
+The charter frozen in *External scope authority* governs this phase and every
+phase below it; it is not re-frozen or handed on between them. Only that frozen
+charter and its provenance satisfy a dispatched approval gate. The issue body
+stays evidence used while freezing the charter, never a second live authority.
 
-interaction: <unchanged root value>
-scope identity: <external scope identity, never reviewed target>
-outcome: <frozen external outcome>
-completion criteria: <frozen external completion criteria>
-provenance: <external source for every outcome, criterion, and user decision>
-exclusions: <frozen external exclusions>
-surface: <frozen permitted surface>
-ambiguities: <frozen ambiguity list>
+Read the project first — files, docs, recent commits. A wrong premise is
+cheapest to correct before the first question rather than after the design.
 
-Only the frozen external charter and its provenance satisfy dispatched approval gates.
+Then check size before detail. A request spanning several independent
+subsystems gets decomposed, not refined: name the independent pieces, say how
+they relate and what order they should be built in, then take the first one
+through this phase alone. Each sub-project earns its own spec, plan, and
+implementation cycle. Spending the whole dialogue on the details of a project
+that needed splitting is the expensive mistake at this stage.
 
-Use `brainstorming` first if the design space is wide. **You are its dispatched
-caller** — its *Dispatched mode* section applies: the frozen external charter and
-its provenance satisfy the approval gate, step 3 below replaces its User Review
-Gate, and it returns the spec to you rather than invoking `writing-plans` itself,
-which would skip steps 2 and 3. The issue body remains evidence used while freezing
-the charter, not a second live authority source. Say so when you invoke it. Write or
-update the design doc under `docs/superpowers/specs/`. For
-decisions with viable alternatives — layer boundaries, interface or ownership
-splits, concurrency invariants, failure contracts, migration sequencing,
-rollback strategy — write or update an ADR under `docs/adr/` with:
+For a request already the right size, refine it by asking. **One question per
+message** — a message carrying three questions comes back with one answer.
+Prefer a closed set of options wherever the choice really is closed: it is
+easier to answer, and assembling the options forces you to have considered
+them. Aim the questions at purpose, constraints, and what success looks like.
+
+Once the space is clear, put up **two or three approaches** with their
+trade-offs, recommendation first and the reasoning beside it. Then present the
+design in sections, each scaled to its own complexity — a sentence where it is
+obvious, a few hundred words where it is genuinely nuanced — confirming each
+before moving to the next. A design rejected whole at the end wastes the
+sections that were right.
+
+Cover architecture, components, data flow, error handling, and testing. Design
+for isolation: every unit has one purpose, a stated interface, and can be
+understood and tested by itself. If you cannot say what a unit does without
+reading its internals, or cannot change those internals without breaking its
+callers, the boundary is in the wrong place. In an existing codebase, follow
+the patterns already there and fold in targeted improvements to the code this
+change actually touches — and propose no unrelated refactoring.
+
+Cut ruthlessly while the design is still cheap to cut. A feature nobody asked
+for costs the same to maintain as one somebody did.
+
+**No design, no implementation.** Do not write code, scaffold a project, or
+take any other implementation action until a design has been presented and
+approved. This holds for every change regardless of how simple it looks;
+"simple" is where unexamined assumptions survive longest. What scales down to a
+small change is the design's *length* — a few sentences is a complete design
+when the change is genuinely small. Skipping it is not.
+
+Write or update the design doc under `docs/superpowers/specs/`, named
+`YYYY-MM-DD-<topic>-design.md`. For decisions with viable alternatives — layer
+boundaries, interface or ownership splits, concurrency invariants, failure
+contracts, migration sequencing, rollback strategy — write or update an ADR
+under `docs/adr/` with:
 
 - Status
 - Context
@@ -108,6 +136,23 @@ over a 19-line state machine is the failure this bounds. State the decision and 
 Use the orchestrator-assigned ADR number if you were given one (from
 `$preflight` step 6); otherwise take the next free number. Link the ADR from
 the spec. Run the relevant doc guardrails and commit the spec/ADR.
+
+### Spec self-review
+
+Before the adversarial reviews below, read the spec back with fresh eyes and fix
+what you find inline:
+
+- **Placeholders** — "TBD", "TODO", an unfinished section, a requirement too
+  vague to fail against.
+- **Internal contradiction** — sections that disagree, or an architecture that
+  does not match the features described against it.
+- **Scope** — is this one implementation plan's worth of work, or does it still
+  need decomposing?
+- **Two-way ambiguity** — any requirement a competent reader could take two
+  ways. Settle it and say which reading the spec means.
+
+This pass is cheap and catches the defects an adversarial review would otherwise
+spend an iteration discovering. It does not replace steps 2 and 3.
 
 An ADR-producing change should touch **only its own ADR file**. A hand-maintained
 index table serializes parallel ADR PRs on one merge conflict — N such PRs cost
