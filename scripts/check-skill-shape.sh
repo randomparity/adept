@@ -100,6 +100,34 @@ while IFS= read -r ref; do
 	fi
 done <"$workspace/refs"
 
+# Rule 5: every link into references/ resolves to a file that exists. New
+# artifact class, same failure mode as rule 4 -- a reference is consulted by
+# path rather than invoked, so a stale link is silent until someone follows it.
+# Paths are relative to the linking SKILL.md, which is what gets checked.
+#
+# --no-filename matters here: rg prefixes `path:` when given several files, and
+# -N suppresses only the line number. Rule 4 above is immune because its sed
+# strips everything up to the backtick; this rule compares the match directly.
+links_status=0
+rg --no-config -o -N --no-filename '\.\./\.\./references/[a-z0-9-]+\.md' "$root"/skills/*/SKILL.md \
+	>"$workspace/rawlinks" || links_status=$?
+if [ "$links_status" -gt 1 ]; then
+	printf 'check-skill-shape: scanning reference links failed (rg exit %s)\n' "$links_status" >&2
+	exit 1
+fi
+sort -u "$workspace/rawlinks" >"$workspace/links"
+while IFS= read -r rel; do
+	[ -n "$rel" ] || continue
+	# Resolve the link lexically rather than handing `..` to the kernel: only
+	# skills/*/SKILL.md is scanned and the pattern is anchored to ../../, so
+	# every match denotes $root/references/<file>.md. Testing a literal
+	# "$root/skills/x/$rel" instead would fail on every link, because path
+	# lookup walks the nonexistent "x" before it ever reaches the "..".
+	if [ ! -f "$root/${rel#../../}" ]; then
+		report "reference link does not resolve: $rel"
+	fi
+done <"$workspace/links"
+
 if [ "$status" -eq 0 ]; then
 	printf 'check-skill-shape: %s skills, all rules pass\n' "$count"
 fi
