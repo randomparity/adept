@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# ripgrep applies the contents of RIPGREP_CONFIG_PATH as arguments ahead of the
+# ones below, so without this every flag this scan does not set is chosen by
+# whoever set that variable -- a personal ripgreprc, a shell profile, a CI
+# environment. --fixed-strings alone turns these patterns into literals that
+# match nothing and this gate exits 0 on a leaking tree. Unsetting once covers
+# every ripgrep this file runs, including one added later.
+unset RIPGREP_CONFIG_PATH
+
+if ! command -v rg >/dev/null 2>&1; then
+	echo "public-safety: rg is required" >&2
+	exit 2
+fi
+
+if (($# > 0)); then
+	scan_paths=("$@")
+else
+	scan_paths=("$ROOT")
+fi
+
+denied_patterns=(
+	'/Users/[[:alnum:]_][[:alnum:]_.-]+'
+	'/home/[[:alnum:]_][[:alnum:]_.-]+'
+	'/Volumes/[[:alnum:]_][^`)]*'
+	'pdx\.drc'
+	'ts\.drc'
+	'192\.168\.'
+	'(^|[^[:alnum:]])10\.[0-9]{1,3}\.'
+	'172\.(1[6-9]|2[0-9]|3[0-1])\.'
+	'[[:alnum:]-]+\.atlassian\.net'
+	'Basic[[:space:]]+[A-Za-z0-9+/=]{12,}'
+	'ATATT[A-Za-z0-9_=.-]{20,}'
+	"ATLASSIAN[A-Z0-9_]*['\"]?[[:space:]]*[=:][[:space:]]*['\"]?[A-Za-z0-9+/]{20,}"
+	'gh[pousr]_[A-Za-z0-9_]{20,}'
+	'sk-[A-Za-z0-9]{20,}'
+	'AKIA[0-9A-Z]{16}'
+	'xox[baprs]-[A-Za-z0-9-]{20,}'
+)
+
+# ripgrep applies .gitignore, .ignore and .rgignore while walking, and it applies
+# them to tracked files too. `git add -f` on an ignored path produces a file that
+# is in the index -- it ships to everyone who clones this public repo -- and that
+# the walk below never opens, so the gate prints nothing and exits 0. That is a
+# false green on exactly the content this gate exists to catch.
+#
+# --no-ignore would close it by disabling ignore handling wholesale, but it also
+# pulls in ignored files that are *untracked* and therefore never ship — the
+# agent scratch trees (`.agent/`, `CLAUDE.local.md`) whose whole purpose is to
+# hold host-specific identity out of the tracked tree. Turning those red would
+# fail every local `just verify` and every commit through the pre-commit hook.
+#
+# Naming the tracked files instead scans what ships and nothing else: ripgrep
+# searches a path given explicitly on the command line whatever the ignore rules
+# say, so this covers every ignore mechanism rather than .gitignore alone. On a
+# tree with nothing hidden it is the same set the walk already covers.
+#
+# `git ls-files` reports the index, so a tracked file deleted from the worktree
+# and not yet staged names a path with nothing behind it. There is no content to
+# scan there, and the status check below would otherwise turn every such tree
+# into a fault, so those paths are dropped before the scan rather than after.
+#
+# The test is -f, not -e: the walk only ever opened regular files, and naming a
+# path explicitly makes ripgrep open whatever is there. A tracked path replaced
+# by a FIFO blocks the scan forever with no writer, which is a burned CI timeout
+# rather than a wrong answer, but the walk-only shape never had it. -f drops a
+# dangling symlink and a directory substitution in the same breath.
+scan_targets=("${scan_paths[@]}")
+for scan_path in "${scan_paths[@]}"; do
+	while IFS= read -r -d '' tracked; do
+		[[ -f "$scan_path/$tracked" ]] || continue
+		scan_targets+=("$scan_path/$tracked")
+	done < <(git -C "$scan_path" ls-files -z 2>/dev/null)
+done
+
+# Two names under /home are not people. GitHub's runner images publish
+# /home/runner as the workspace root and install Homebrew to /home/linuxbrew,
+# and the ubuntu image's own documentation tells you to run
+# `eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"` because Homebrew is
+# not on PATH there. A workflow or design doc that quotes either published
+# constant is not leaking anyone's home directory, and a gate that reddens on it
+# teaches people to route around the gate.
+#
+# The exception is applied to a copy of the matched line, not to a file and not
+# to the scan: every pattern still reads every byte of every tracked file. A
+# line that names /home/runner *and* a real home directory or a token still
+# matches after the redaction, so it is still reported.
+#
+# The name has to end where it is written: the trailing character class is what
+# keeps a person named `runnerbee` a finding.
+public_home='/home/(runner|linuxbrew)[^[:alnum:]_.-]'
+
+status=0
+# --text: ripgrep judges a file binary on one NUL byte and skips it while
+# walking a directory, so a single NUL anywhere in a file hides every secret in
+# it. --encoding none: a leading \xFF\xFE makes ripgrep transcode the file as
+# UTF-16, garbling ASCII so these ASCII patterns cannot match. Both are one line
+# of file content to trigger, and this gate's subject is content someone may be
+# trying to get past it. The trade in --encoding none -- a file genuinely stored
+# as UTF-16 stops being scanned -- is accepted: no tracked file here is one, and
+# a documented five-byte bypass is the worse half.
+#
+# ripgrep exits 2 for a scan it could not complete -- an unreadable file, a path
+# it was handed that it cannot open, an argument list too long for exec -- and it
+# does so even when it also found matches. Read as a boolean, that is "no match":
+# the gate would print a secret to stdout and still exit 0. A bare `if` here is
+# what made a plain `rm` of any tracked file turn this gate green. Every gate in
+# this repo branches on the status for the same reason: 0 is a finding, 1 is
+# clean, anything else is a fault that stops the run.
+for pattern in "${denied_patterns[@]}"; do
+	rg_status=0
+	matches=$(rg -n --hidden --text --encoding none \
+		--glob '!.git' --glob '!.git/**' "$pattern" "${scan_targets[@]}") ||
+		rg_status=$?
+	case $rg_status in
+	0)
+		# The walk and the explicit paths overlap on every tracked file no
+		# ignore rule hides, so each match arrives twice. Report it once: a real
+		# leak is the worst moment to double the output.
+		#
+		# awk is given the pattern rather than a second ripgrep so the re-test
+		# has no exit status to misread: it prints the surviving lines and
+		# nothing else, and an empty result means every match was one of the
+		# published CI paths above.
+		matches=$(printf '%s\n' "$matches" | awk '!seen[$0]++' |
+			awk -v pattern="$pattern" -v allowed="$public_home" '
+			{
+				# The trailing space gives a name at end of line the same
+				# delimiter one mid-line has, so a single expression covers
+				# both. Redacting the delimiter with it cannot hide a match:
+				# every pattern here is built from name characters, so none
+				# spans the boundary this consumes.
+				probe = $0 " "
+				gsub(allowed, "/", probe)
+				if (probe ~ pattern) print $0
+			}')
+		[ -n "$matches" ] || continue
+		printf '%s\n' "$matches"
+		printf 'public-safety: denied pattern matched: %s\n' "$pattern" >&2
+		status=1
+		;;
+	1) ;;
+	*)
+		printf 'public-safety: ripgrep could not complete the scan (exit %s); pattern: %s\n' \
+			"$rg_status" "$pattern" >&2
+		exit 2
+		;;
+	esac
+done
+
+exit "$status"

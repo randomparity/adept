@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# adept: managed pre-push hook
+set -euo pipefail
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+	printf 'pre-push: must run inside a Git worktree\n' >&2
+	exit 2
+}
+cd "$ROOT"
+exec just push-check
