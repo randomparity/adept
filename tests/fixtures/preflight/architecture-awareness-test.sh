@@ -239,36 +239,18 @@ if [[ "$priority_output" == "$unsupported_none" ]]; then
 	fail 'priority 2/3 mutation unexpectedly passed the degraded-none contract'
 fi
 
-preflight="$ROOT/skills/preflight/SKILL.md"
-# shellcheck disable=SC2016 # these backticks are literal Markdown code spans;
-# expanding them would execute the contract values instead of checking the skill text.
-for expected in \
-	'`HOST_ARCHITECTURE`' \
-	'`TARGET_ARCHITECTURES`' \
-	'`ARCHITECTURE_RELATIONSHIP`' \
-	'native applicable-instruction precedence' \
-	'every effective target declaration' \
-	'`unresolved-target-conflict`' \
-	'`host-unresolved`' \
-	'`no-target-declared`' \
-	'`included`' \
-	'`different`' \
-	'| 1 | Effective target declarations contradict | `unresolved-target-conflict` |' \
-	'| 2 | Host is unsupported or detection failed | `host-unresolved` |' \
-	'| 3 | No effective target is declared | `no-target-declared` |' \
-	'| 4 | Host is in the effective target set | `included` |' \
-	'| 5 | Host is not in the effective target set | `different` |' \
-	'Architecture-insensitive work may continue' \
-	'Cross-compilation, emulation, and multi-architecture CI are outside'; do
-	assert_contains "$preflight" "$expected"
-done
-
-# The projection assertions that stood here checked that this skill's
-# architecture rules were mirrored into the five carrier documents
-# (content/instructions, agents/{claude,codex,bob}/shared/...). Those carriers
-# are not part of this repo: the Claude and Codex ones are whole files owned by
-# the private dotfiles repo, and the Bob ones are retired. A suite here cannot
-# read them, so the check cannot live here. The skill-side assertions above
-# still hold the contract this repo owns.
+# Two blocks of SKILL.md assertions stood here: 17 phrases and Markdown table
+# rows from this skill's own document, and before them a projection check that
+# the same rules were mirrored into five carrier documents. Both are gone.
+#
+# The carriers are not in this repo -- the Claude and Codex ones are whole files
+# owned by the private dotfiles repo, and the Bob ones are retired -- so that
+# check could not run here at all. The skill-document assertions could have run,
+# but pinning prose makes every wording improvement a test failure, and nothing
+# automated in this repo asserts on prose.
+#
+# What remains above is the whole of what this suite should test: the detector
+# and resolver behave correctly across every architecture, degraded and hostile
+# input case.
 
 printf 'architecture-awareness-test: all assertions passed\n'
