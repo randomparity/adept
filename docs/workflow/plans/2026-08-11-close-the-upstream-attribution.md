@@ -245,12 +245,30 @@ they land in the candidate set and are held to the same containment bar.
    pass against the current script, and a final summary line.
 4. Write `tests/fixtures/forge/review-package-test.sh` the same way.
 5. Run it — same expectation.
-6. **Prove both suites bite.** For each, copy the script to a scratch path,
-   mutate it, point the suite at the copy, and confirm the expected case reddens.
-   One mutation per error path: swap each `exit 2` / `exit 3`, drop an arity
-   guard, drop a `git rev-parse --verify`, write to the wrong path, drop a
-   structural section, add a second stdout line. A test that cannot redden is not
-   a regression check. Record the results for the pull-request body.
+6. **Prove both suites bite.** The existing suite hardcodes its target —
+   `SCRIPT="$SCRIPT_DIR/../../../skills/forge/scripts/sdd-workspace"` — so give
+   each new suite the same line with an override in front of it:
+
+       SCRIPT="${FORGE_SCRIPT_DIR:-$SCRIPT_DIR/../../../skills/forge/scripts}/task-brief"
+
+   The default is the real path, so the committed suite behaves identically and
+   the mechanism costs nothing. Then `cp -R skills/forge/scripts $SCRATCH/mutants`,
+   mutate one file there, and run
+   `FORGE_SCRIPT_DIR=$SCRATCH/mutants ./tests/fixtures/forge/<suite>` to confirm
+   the expected case reddens.
+
+   Mutations for `task-brief`: swap `exit 2` → `exit 0` on each of the two exit-2
+   paths; swap `exit 3` → `exit 0`; drop the arity guard; write to the wrong path;
+   remove the empty-file check so exit 3 never fires; and corrupt the awk boundary
+   so `Task 1` also matches `Task 10` — that last is the extraction semantic Task 3
+   is most likely to break.
+
+   Mutations for `review-package`: swap each of the three `exit 2`s; drop one
+   `git rev-parse --verify`; write to the wrong path; drop one written-file
+   heading; add a second stdout line.
+
+   A test that cannot redden is not a regression check. Record the results for the
+   pull-request body.
 7. Add both suite paths to the `suites=()` list in
    `scripts/git-fixture-isolation-test.sh`, beside
    `tests/fixtures/forge/sdd-workspace-test.sh`.
@@ -264,7 +282,10 @@ they land in the candidate set and are held to the same containment bar.
    untracked suite is invisible to `just test`, `just lint` and
    `just format-check` alike. Skipping this makes step 9 report success over
    files no gate ever opened.
-9. Run `just verify` bare. `just test` currently reports 8 suites; expect **10**.
+9. Run `just verify` bare. `just test`'s suite count must rise by **exactly 2**
+   from whatever it reported before this commit — record both numbers rather
+   than trusting a constant, which rots the next time a suite lands. (At the time
+   of writing it reports 9, so expect 11.)
 10. Commit: `test: cover task-brief and review-package before rewriting them`,
     with the mutation results in the body.
 
@@ -326,7 +347,8 @@ trackedness cannot be determined.
 
 - Below 2% containment, longest run ≤ 16 tokens.
 - `tests/fixtures/forge/sdd-workspace-test.sh` passes, unmodified.
-- `git diff` shows no change to any command, flag, exit code, or control flow.
+- No command name, flag, exit status or control-flow branch changes. Variable
+  renames inside a command are expected and are the point.
 - `just verify` green.
 
 ---
@@ -367,9 +389,15 @@ next Task heading or EOF.
    inspect with `runs.py` and decide: a run that is command syntax and ≤ 28 tokens
    may be exempted and named in ADR 0003's table; a prose run may not.
 4. Run `./tests/fixtures/forge/task-brief-test.sh` — expect green, **suite
-   unmodified**. If an assertion reds on wording, the suite was asserting a
-   diagnostic string and Task 1 was wrong; fix the suite's assertion, not the
-   script's message.
+   unmodified**.
+
+   If an assertion reds on wording, that is a **Task 1 defect, not a Task 3 one**,
+   and it has a defined return path: stash or revert the rewrite, fix the
+   assertion against the *unmodified* script, re-prove that assertion bites
+   against a mutated copy, commit that as its own `test:` commit, then redo the
+   rewrite. Never edit the suite in the same commit as the rewrite — that is
+   exactly the "description of whatever the rewrite produced" the pre-written
+   suites exist to prevent.
 5. `just verify` bare.
 6. Commit: `refactor: re-express task-brief in first-party words`.
 
@@ -418,7 +446,8 @@ available to the rewrite.
    tokens: rename `base`/`head` to `from`/`to`; introduce a single variable for
    the range and use it everywhere `${base}..${head}` appeared; replace `echo`
    with `printf`; validate both endpoints in a loop before writing anything; and
-   rewrite every comment. No git invocation is touched.
+   rewrite every comment. No git *command, subcommand, flag or argument order*
+   changes — only the variable names the commands read.
 3. Re-measure. Target **< 2%, run ≤ 16**.
 4. Run `./tests/fixtures/forge/review-package-test.sh` — green, suite unmodified.
 5. `just verify` bare.
@@ -428,7 +457,9 @@ available to the rewrite.
 
 - Below 2% containment, longest run ≤ 16 tokens.
 - Suite passes unmodified.
-- Every git invocation byte-identical to the current file.
+- Every git invocation keeps the same command, subcommand, flags and argument
+  order; only the variable names inside them change. Reading the diff, no
+  invocation gains or loses a flag and none changes what it resolves to.
 - `just verify` green.
 
 ---
@@ -573,19 +604,30 @@ the only step that exercises the dispatch contract rather than inspecting it.
 
 ### Steps
 
-1. Dispatch one implementer subagent using the rewritten
-   `skills/forge/implementer-prompt.md` on a throwaway task in a scratch
-   directory. Require: its final message carries exactly one of `DONE` /
-   `DONE_WITH_CONCERNS` / `BLOCKED` / `NEEDS_CONTEXT` in the `Status:` position.
-2. Dispatch one task reviewer using the rewritten
-   `skills/forge/task-reviewer-prompt.md` against a small diff. Require: both
-   verdicts present, and at least one finding graded `Critical`, `Important` or
-   `Minor`.
-3. Record both outcomes verbatim for the PR body. **Commit nothing** — no harness,
-   no fixture, no gate.
-4. Run the whole-tree scan: `python3 $SCRATCH/sweep.py $SCRATCH/upstream-sp <repo-root>`.
-   Record the tracked file count and every file at or above 2%.
-5. Confirm each of the six is below 2% with a run ≤ 16, and that the two new test
+1. **Build the smoke fixtures.** `git init $SCRATCH/smoke-repo`, two commits, and
+   a plan file containing two tasks. Then run the *rewritten* scripts there to
+   produce the inputs — which doubles as an end-to-end check of Tasks 3 and 4:
+
+       skills/forge/scripts/task-brief     $SCRATCH/smoke-repo/plan.md 1 $SCRATCH/brief.md
+       skills/forge/scripts/review-package HEAD~1 HEAD $SCRATCH/review.diff
+
+   Fill `[BRIEF_FILE]` with `$SCRATCH/brief.md`, `[DIFF_FILE]` with
+   `$SCRATCH/review.diff`, `[REPORT_FILE]` with a path under `$SCRATCH`,
+   `[GLOBAL_CONSTRAINTS]` with this plan's *Global Constraints* section, and
+   `[MODEL]` with whatever model the session dispatches.
+2. Dispatch one implementer subagent with the rewritten
+   `skills/forge/implementer-prompt.md` on the throwaway task. Require: its final
+   message carries exactly one of `DONE` / `DONE_WITH_CONCERNS` / `BLOCKED` /
+   `NEEDS_CONTEXT` in the `Status:` position.
+3. Dispatch one task reviewer with the rewritten
+   `skills/forge/task-reviewer-prompt.md` against `$SCRATCH/review.diff`.
+   Require: both verdicts present, and at least one finding graded `Critical`,
+   `Important` or `Minor`.
+4. Record both outcomes verbatim for the PR body. **Commit nothing** — no
+   harness, no fixture, no gate.
+5. Run the whole-tree sweep from Task 0. Record the tracked file count and every
+   file at or above 2%.
+6. Confirm each of the six is below 2% with a run ≤ 16, and that the two new test
    fixtures are also below 2%.
 
 ### Acceptance criteria
@@ -605,11 +647,12 @@ the only step that exercises the dispatch contract rather than inspecting it.
   verdict instead of two, an ungraded finding. Send the work back to Task 5 or
   Task 6 with the transcript attached. Task 9 is blocked until a re-run passes,
   and the re-run is recorded alongside the first.
-- **It cannot be run at all** — no dispatch capability in the session. Record it
-  in the pull-request body as **not exercised**, name it as an accepted gap in
-  ADR 0003's consequences, and tell the operator. Do not count it as a pass: the
-  fallback control is reading the checklist, which the spec already says is
-  insufficient on its own for this failure mode.
+- **It cannot be run at all** — reserved for a genuine absence of dispatch
+  capability in the session, never for a missing fixture, which step 1 creates.
+  Record it in the pull-request body as **not exercised**, name it as an accepted
+  gap in ADR 0003's consequences, and tell the operator. Do not count it as a
+  pass: the fallback control is reading the checklist, which the spec already says
+  is insufficient on its own for this failure mode.
 
 ---
 
@@ -637,7 +680,12 @@ measurement exists.
    role rather than ancestry, and relabel the table header at `:291` from
    `| superpowers | here |` to `| $forge | here |`.
 5. `docs/adr/0003-…`: fill the *After*, *Longest run* and *Exempted constructs*
-   columns from Task 8. Drop the exemption column entirely if no exemption was
+   columns from Task 8. **Also update the candidate-set count** — the record says
+   "every tracked file — 129 of them", and this change adds two fixtures, so that
+   number is stale. Set it to what Task 8 step 4 recorded, and re-check the "Five
+   files sit above the line" sentence against the same sweep. `skills/gauntlet/`
+   and the README and `CLAUDE.md` edits land after the scan, but all three are
+   first-party prose *removal* and cannot raise a figure. Drop the exemption column entirely if no exemption was
    needed. Change `## Status` from `Proposed` to `Accepted (2026-08-11)` and
    remove the staging paragraph beneath it.
 6. **Close-out sweep:** `rg -n --no-config -i 'superpowers|licenses/'`. A hit in
@@ -663,14 +711,60 @@ measurement exists.
 
 ---
 
+## Task 9b — partial closure, if any of the six missed
+
+**Only if Task 8 found a file that cannot reach the bar.** Task 9 does not run;
+this does instead. It transcribes the spec's per-bullet keying (R1) into steps,
+because "R4 does not happen" is not an instruction anyone can follow.
+
+1. `licenses/superpowers.LICENSE` **stays**, and so does `CLAUDE.md`'s Layout
+   entry. Neither is keyed to a partial result.
+2. `README.md`: keep the Licence section's structure but shorten the list to the
+   files that actually missed, and re-aim the pointer at **ADR 0003** — the
+   pointer move is not keyed to full closure, only the list is.
+3. `skills/gauntlet/SKILL.md`: the `:289` sentence and the `:291` table header are
+   keyed to the **two reviewer prompts alone**. If those two cleared the bar, make
+   both edits regardless of what the scripts did.
+4. `docs/adr/0003-…`: fill the table with the measured figures exactly as Task 9
+   step 5 describes, update the candidate-set count, and flip `## Status` to
+   `Accepted (2026-08-11)`. Then **resolve the conditional**: the Decision's "If
+   any of the six keeps its citation" paragraph is replaced by what happened —
+   which files kept their citation and why — so the merged record states an
+   outcome rather than a branch.
+5. Re-title the record if the title no longer describes it. "Close the upstream
+   attribution" is wrong for a partial close; `git mv` to a title that fits,
+   keeping the `0003-` number.
+6. Close-out sweep, `just verify` bare, and
+   `BASE_SHA=$(git rev-parse origin/main) just records`.
+7. Commit: `feat: narrow the upstream attribution to the files that kept it`.
+
+### Acceptance criteria
+
+- Every file that missed is still cited in both the README and ADR 0003, and the
+  notice is still present.
+- ADR 0003 carries no conditional and no `*pending*` cell.
+- `just verify` green.
+
+---
+
+## Cleanup
+
+`$SCRATCH` holds the upstream clone, the checker, the mutant copies and the smoke
+repository. Remove it with `trash` (never `rm -rf`) once ADR 0003's table is
+filled, and confirm nothing from it reached the checkout: `git status` clean, and
+no `containment.py`, `runs.py`, `sweep.py`, `upstream-sp/`, `mutants/` or
+`smoke-repo/` anywhere under the repository root.
+
 ## Rollback
 
 The hazard is one-directional: Task 9's deletion of the notice is licensed by
 Tasks 2–7's measurement, so the notice must never outlive the rewrite that
 justified removing it.
 
-**Pre-merge.** Revert in reverse task order, Task 9 first. Nothing is published,
-so this is ordinary history editing on a feature branch.
+**Pre-merge and unpushed.** Revert in reverse task order, Task 9 first —
+ordinary history editing on a feature branch. **Once the branch is pushed**, both
+force pushes (including `--force-with-lease`) and `git reset --hard` are denied by
+settings policy: revert forward with `git revert` in reverse task order instead.
 
 **Post-merge.** Revert the merge commit as a unit — `git revert -m 1 <merge>` —
 which restores the rewrites and the notice together. Reverting a single rewrite
