@@ -154,3 +154,14 @@ Measured 2026-08-11 against `obra/superpowers` at
 `d884ae04edebef577e82ff7c4e143debd0bbec99` (v6.1.1, 2026-07-02), 140 files and
 161,753 distinct 8-token shingles. Decided by the rewrite spec
 `docs/workflow/specs/2026-08-11-first-party-skill-rewrite-design.md` §2.
+
+The rename sweep of 2026-08-11 moved the six cited files from `skills/build-tdd/`
+to `skills/forge/`. The targets above name where they were measured; these name
+where they now are.
+
+target: skills/forge/code-reviewer.md
+target: skills/forge/implementer-prompt.md
+target: skills/forge/task-reviewer-prompt.md
+target: skills/forge/scripts/review-package
+target: skills/forge/scripts/sdd-workspace
+target: skills/forge/scripts/task-brief
