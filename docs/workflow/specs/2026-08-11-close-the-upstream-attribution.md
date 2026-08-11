@@ -34,9 +34,15 @@ The rebuild is validated before it is trusted: run against the tree as it stands
 it must reproduce all six of ADR 0002's containments **and** all six longest
 shared runs exactly. It does — 100.00%/1139, 100.00%/816, 100.00%/663,
 95.98%/152, 95.27%/127, 11.60%/45, and 1.82%/28 for the excluded
-`skills/forge/SKILL.md`. A rebuild that did not reproduce them would be
-measuring something other than what ADR 0002 measured, and the new numbers would
-not be comparable to the old.
+`skills/forge/SKILL.md`.
+
+Two caveats bound what that proves. The rebuild compares against all **171**
+files in the upstream tree where ADR 0002 reports **140** (166,165 distinct
+shingles against 161,753). Containment rises monotonically with the size of the
+union, so these figures are an **upper bound** on 0002's corpus — a file under
+threshold here is under it there, which is the direction that favours caution.
+And exact agreement across a superset is a consistency check, not proof of an
+identically constructed instrument.
 
 ### Baseline
 
@@ -98,24 +104,26 @@ that file keeps its attribution and the obligation stays open for it — ADR
 ### R1 — the six files fall below the threshold
 
 Measured by the validated rebuild against `obra/superpowers@d884ae04`, after the
-rewrite, for each of the six individually: **below 2% containment, and no shared
-run materially above the 8-token shingle floor**, functional constructs
-excepted.
+rewrite, for each of the six individually: **below 2% containment** and **no
+shared run over 16 tokens**, except functional constructs, each of which is
+enumerated individually in the pull request rather than asserted in bulk.
 
-Containment alone is the wrong control. ADR 0002 reported the longest run
-beside it because "one 40-word verbatim passage matters more than the same token
-count scattered across unavoidable technical vocabulary", yet bounded only the
+Containment alone is the wrong control. ADR 0002 reported the longest run beside
+it because "one 40-word verbatim passage matters more than the same token count
+scattered across unavoidable technical vocabulary", yet bounded only the
 percentage — under which a large template could sit at 1.9% while keeping a
-40-token verbatim passage, the exact case the notice exists for.
+40-token verbatim passage, the exact case the notice exists for. A stated
+integer is checkable where "materially above the floor" is not.
 
 Not a requirement: reaching 0%. Short unavoidable idioms are acceptable residue,
 which is why the threshold is 2% rather than nil.
 
 Feasibility is evidenced for the scripts and not the templates: the probe was a
-shell script, and its variable-renaming argument does not transfer to prose.
-Substantive re-expression breaks 8-token windows readily, so the templates are
-expected to clear it, but if one does not, ADR 0002 §2's fallback applies — that
-file keeps its attribution and R4 is reduced accordingly.
+shell script, and its variable-renaming argument does not transfer to prose. If
+a file misses, the rewrite spec's §2 fallback applies — it keeps its attribution
+and R4 is reduced accordingly. Because the measurement runs inside this change,
+that branch resolves before merge; the ADR states the outcome that happened
+rather than carrying a conditional into the merged record.
 
 ### R2 — the three reviewer templates keep their dispatch contract
 
@@ -131,7 +139,15 @@ their vocabulary:
 
 So the literal words **`Critical`, `Important`, `Minor`** survive verbatim in
 all three templates, as does each template's placeholder set and required output
-shape. Everything around them is re-expressed.
+shape.
+
+**Author these three from the in-repo contract, do not paraphrase the upstream
+text.** What each must contain is already specified here — `skills/forge/SKILL.md`
+states the dispatch requirements and `skills/gauntlet/SKILL.md:289-297` fixes the
+severity vocabulary. Writing from that contract makes the result independent of
+upstream *arrangement*, not merely of its wording, which a containment metric
+does not measure. Read the existing template to extract the contract it
+satisfies, then write the replacement from the contract.
 
 The inventory each template must still satisfy after the rewrite — placeholders,
 severity grades, output sections, and the caller that reads them — is written
