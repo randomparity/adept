@@ -137,6 +137,9 @@ tracked as [#35](https://github.com/randomparity/adept/issues/35).
   is the whole control.
 - `task-brief` and `review-package` gain behaviour suites, written against
   current behaviour and green *before* the rewrite touches them.
+- ADR 0002's `target:` provenance lines are historical. One of them now names a
+  deleted file; the append-only rule is why it stands, as it stood when the
+  rename sweep invalidated the rest.
 - Between this change and [#35](https://github.com/randomparity/adept/issues/35)
   the tree carries two shipped files with unattributed upstream runs and no
   licence notice anywhere. The owner accepts that interval: the quotation is

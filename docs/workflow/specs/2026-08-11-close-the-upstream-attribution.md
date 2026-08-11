@@ -141,8 +141,12 @@ This change adds tracked files (R6's two suites) and the candidate set is every
 tracked file, so the denominator moves. ADR 0003 records that file count beside
 the per-file figures, and names the tracked deltas that land after the scan and
 are therefore not in it: the deleted `licenses/superpowers.LICENSE`, the README
-and `CLAUDE.md` edits, and this record's own table fill. None of those can raise
-a containment figure — one is a deletion and the rest are first-party prose.
+and `CLAUDE.md` edits, and this record's own table fill. The deletion cannot raise
+a figure and the prose edits are first-party; the one delta that could carry
+upstream tokens is the table fill, if a row names an exempted construct. ADR
+0003's containment is therefore measured before the fill and not re-measured
+after, bounded at 28 tokens per exempted row against a record of several thousand
+— a post-fill rescan would cost more than the risk it removes.
 
 The bar itself governs **the six rewritten files**. Every other candidate is
 reported, and anything above 2% is dispositioned in ADR 0003's prose the way the
@@ -209,16 +213,34 @@ an author writing "from the contract" would make, and `$forge`'s party mode woul
 then fall through its dispatch on every implementer report. No gate can catch it;
 see *Verification*.
 
-Each template's placeholder set survives verbatim — `code-reviewer.md`'s
-`[DESCRIPTION]`, `[PLAN_OR_REQUIREMENTS]`, `[BASE_SHA]`, `[HEAD_SHA]`, `[SHA]`;
-`implementer-prompt.md`'s `[BRIEF_FILE]`, `[REPORT_FILE]`;
-`task-reviewer-prompt.md`'s `[MODEL]`, `[BRIEF_FILE]`, `[GLOBAL_CONSTRAINTS]`,
-`[REPORT_FILE]`, `[BASE_SHA]`.
+Each template's placeholder set survives verbatim. **Derive that set
+mechanically, never by transcription** — an earlier draft of this spec hand-listed
+five of `task-reviewer-prompt.md`'s seven and silently dropped `[DIFF_FILE]`, the
+review-package path the reviewer cannot run without:
 
-So does the output shape, as a named list rather than a category:
+    rg -o --no-config '\[[A-Z_]{2,}\]' <template> | sort -u
+
+against the file being replaced, before and after. As of this writing that yields
+`[BASE_SHA] [BRIEF_FILE] [DIFF_FILE] [GLOBAL_CONSTRAINTS] [HEAD_SHA] [MODEL]
+[REPORT_FILE]` for the task reviewer, `[BRIEF_FILE] [REPORT_FILE]` for the
+implementer, and `[BASE_SHA] [DESCRIPTION] [HEAD_SHA] [PLAN_OR_REQUIREMENTS]
+[SHA]` for the code reviewer — but the command is the requirement and the list is
+a convenience.
+
+So does the output shape. `task-reviewer-prompt.md` must keep returning **two
+verdicts separately** — does it meet the spec, and is it good code — because
+`skills/forge/SKILL.md:353-355` names a report carrying only one of them as a
+failure; its `⚠️`, `✅` and `❌` markers are frozen literals alongside
+`Cannot verify from diff`.
+
 `code-reviewer.md` returns **Strengths, Issues (Critical / Important / Minor),
-Recommendations, Assessment**, with the assessment carrying a `Ready to merge:`
-verdict line.
+Recommendations, Assessment**, with a `Ready to merge:` verdict line. **That
+sequence has no in-repo consumer.** It is inherited from the file being replaced
+and retained deliberately, because a whole-branch reviewer's report is read by a
+person rather than dispatched on. It is the one requirement here that the
+"derive from the consumption sites" control cannot validate, and ADR 0003's
+arrangement-independence claim covers the two templates that do have consumption
+sites, not this section order.
 
 **Derive the checklist from the consumption sites, not from the file being
 replaced** — `skills/forge/SKILL.md` lines 203, 213-223, 226 and 355-367. An
@@ -311,6 +333,11 @@ supersede with a new record rather than rewrite in place. Superseding delivers
 the same outcome — a reader lands on 0002, sees the banner, and follows it to
 the record that governs.
 
+ADR 0003 also notes that ADR 0002's `target:` provenance lines are historical and
+that one now names a deleted file. The append-only rule is why it stands — the
+same move 0002 made when the rename sweep invalidated its own paths — and why
+R4's no-phantom-path sweep does not extend to it.
+
 No index row: `docs/adr/README.md` deliberately has no table, and the profile
 *warns* (`W-INDEX-TABLE`) if numbered rows appear.
 
@@ -325,8 +352,10 @@ regression check rather than a description of whatever the rewrite produced.
 **What the suites may assert.** R3 lets diagnostic *wording* change, and R6 wants
 the suites green before the rewrite and still green after it, untouched. Both hold
 only if the suites never pin a diagnostic string. So they assert: exit status;
-argument handling including the arity errors (exit 2) and `task-brief`'s
-not-found path (exit 3); the output file path; the structural sections of the
+argument handling across **all six** error paths, each keyed to its status —
+`task-brief` arity (2), missing plan file (2), task-not-found (3);
+`review-package` arity (2), unresolvable BASE (2), unresolvable HEAD (2); the
+output file path; the structural sections of the
 written file; that stdout is a single line containing the resolved output path as
 a substring, which is how the controller learns where the file went; and *that*
 stderr is non-empty on each error path — never the text of a message, and never
@@ -356,7 +385,8 @@ branch should never carry a state that outruns its evidence:
 
 1. the two new suites, green against the *current* scripts (R6);
 2. the six rewrites, `sdd-workspace` and `task-brief` first (they are likeliest
-   to hit the fallback);
+   to hit the fallback) — run the rebuilt checker against each file as its commit
+   lands, so a miss surfaces at that commit rather than at step 3;
 3. the measurement against the merge-candidate tree (R1);
 4. R4's deletions and the README and `CLAUDE.md` edits, **together with** the
    ADR 0003 table fill and its flip to `Accepted`, in one commit (R5) — so no
@@ -384,9 +414,14 @@ for ambient-repo pollution.
 implementer and again at branch review:
 
     rg -c --no-config -F 'DONE_WITH_CONCERNS' skills/forge/implementer-prompt.md
+    rg -c --no-config '\bDONE\b'             skills/forge/implementer-prompt.md
 
-and the same for `DONE`, `BLOCKED`, `NEEDS_CONTEXT`, and for `Critical`,
-`Important` and `Minor` in the two reviewer prompts. R2's failure mode is a
+**Word-bound the bare enum values.** `rg -F 'DONE'` matches inside
+`DONE_WITH_CONCERNS` and returns 3 on the current file, so that check cannot
+fail; `\bDONE\b` returns 1, because `_` is a word character. Use `-F` only for
+the multi-word literals — `DONE_WITH_CONCERNS`, `Cannot verify from diff` — and
+word bounds for `DONE`, `BLOCKED`, `NEEDS_CONTEXT`, `Critical`, `Important` and
+`Minor`. R2's failure mode is a
 missing literal, which is mechanically checkable by the instrument R4 already
 uses — there is no reason to leave it to the eye. Reading stays the control for
 output shape and placeholders, which are not literals.
