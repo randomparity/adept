@@ -30,6 +30,12 @@ change.
 
 ## 2. Create the PR
 
+**If HEAD is detached there is no branch to push.** An externally managed
+workspace can hand you one — `$build-tdd` detects the case and leaves it here,
+because this is the first step that needs a branch name. Create one at the
+current commit (`git switch -c <name>`) before pushing; derive the name from the
+work and say what you chose.
+
 Push the branch and open a PR against `BASE_BRANCH` with `gh pr create`. The
 body describes only what is in the diff, in plain factual language. Avoid
 inflated words such as "critical", "crucial", "essential", "significant",
