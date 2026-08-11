@@ -49,6 +49,21 @@ not be comparable to the old.
 | `skills/forge/scripts/task-brief` | 95.27% | 127 |
 | `skills/forge/scripts/sdd-workspace` | 11.60% | 45 |
 
+### The candidate set, and what else is in it
+
+The scan covers **every tracked file — 129 of them**. ADR 0002 never stated its
+candidate set, and its claim that "no other shipped file reaches 2%" does not
+hold over that set: `LICENSE` (95.71%, run 163) is the MIT text both projects
+share, `scripts/pre-push-hook` (6.06%, run 9) is one `set -euo pipefail` /
+`git rev-parse --show-toplevel` idiom, and two `docs/workflow/` records (2.51%
+run 16, 2.25% run 51) quote the upstream behaviour they inventory and retire,
+naming the source in their own prose.
+
+None creates an obligation, so R4 stands. ADR 0003 records the correction, since
+its own "no shipped file is substantially upstream expression" consequence is
+only auditable with the denominator stated. No file outside the six is edited
+for this reason.
+
 ## The theatre question, settled by measurement
 
 ADR 0002 refused to vary `skills/forge/SKILL.md`'s 28-token
@@ -80,13 +95,27 @@ that file keeps its attribution and the obligation stays open for it — ADR
 
 ## Requirements
 
-### R1 — the six files fall below 2% containment
+### R1 — the six files fall below the threshold
 
 Measured by the validated rebuild against `obra/superpowers@d884ae04`, after the
-rewrite. Below 2% for each of the six, individually.
+rewrite, for each of the six individually: **below 2% containment, and no shared
+run materially above the 8-token shingle floor**, functional constructs
+excepted.
 
-Not a requirement: reaching 0%. Short unavoidable idioms are acceptable
-residue, which is the whole reason the threshold is 2% rather than nil.
+Containment alone is the wrong control. ADR 0002 reported the longest run
+beside it because "one 40-word verbatim passage matters more than the same token
+count scattered across unavoidable technical vocabulary", yet bounded only the
+percentage — under which a large template could sit at 1.9% while keeping a
+40-token verbatim passage, the exact case the notice exists for.
+
+Not a requirement: reaching 0%. Short unavoidable idioms are acceptable residue,
+which is why the threshold is 2% rather than nil.
+
+Feasibility is evidenced for the scripts and not the templates: the probe was a
+shell script, and its variable-renaming argument does not transfer to prose.
+Substantive re-expression breaks 8-token windows readily, so the templates are
+expected to clear it, but if one does not, ADR 0002 §2's fallback applies — that
+file keeps its attribution and R4 is reduced accordingly.
 
 ### R2 — the three reviewer templates keep their dispatch contract
 
