@@ -263,30 +263,12 @@ for expected in \
 	assert_contains "$preflight" "$expected"
 done
 
-projection_files=(
-	"$ROOT/content/instructions/global-development-standards.md"
-	"$ROOT/agents/claude/shared/CLAUDE.md"
-	"$ROOT/agents/codex/shared/AGENTS.md"
-	"$ROOT/agents/bob/shared/AGENTS.md"
-	"$ROOT/agents/bob/shared/rules/global-development-standards.md"
-)
-for projection in "${projection_files[@]}"; do
-	assert_contains "$projection" \
-		'Host architecture and project target architectures are separate facts.'
-	assert_contains "$projection" \
-		'Applicable project-local instructions and policy are authoritative for target architectures.'
-	assert_contains "$projection" 'architecture-sensitive generation, build, or verification'
-	assert_contains "$projection" 'preflight'
-	assert_contains "$projection" 'retain'
-	rg -Fiq -- 'never infer' "$projection" ||
-		fail "$projection does not prohibit target inference"
-done
-
-mutated_projection="$FIXTURE/mutated-projection.md"
-cp "${projection_files[0]}" "$mutated_projection"
-sed -i.bak '/[Nn]ever infer/d' "$mutated_projection"
-if rg -Fiq -- 'never infer' "$mutated_projection"; then
-	fail 'projection contract mutation unexpectedly passed'
-fi
+# The projection assertions that stood here checked that this skill's
+# architecture rules were mirrored into the five carrier documents
+# (content/instructions, agents/{claude,codex,bob}/shared/...). Those carriers
+# are not part of this repo: the Claude and Codex ones are whole files owned by
+# the private dotfiles repo, and the Bob ones are retired. A suite here cannot
+# read them, so the check cannot live here. The skill-side assertions above
+# still hold the contract this repo owns.
 
 printf 'architecture-awareness-test: all assertions passed\n'
