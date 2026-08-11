@@ -66,7 +66,7 @@ without ever naming a boundary has skipped the method.
 In branch mode, check whether the diff adds or modifies a spec carrying a threat model —
 the boundary inventory, actor model, and control-per-boundary that `$design` requires of a
 security-relevant change. Find it from the diff's own file list (a spec directory such as
-`docs/superpowers/specs/`); do not go hunting through the repo, and skip this silently when
+`docs/workflow/specs/`); do not go hunting through the repo, and skip this silently when
 the diff touches no spec. This is a bounded add-on: form the diff inventory first, so it is
 the reconciliation that degrades if budget runs short, never the core scan.
 
