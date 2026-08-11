@@ -150,8 +150,11 @@ after, bounded at 28 tokens per exempted row against a record of several thousan
 
 The bar itself governs **the six rewritten files**. Every other candidate is
 reported, and anything above 2% is dispositioned in ADR 0003's prose the way the
-existing five are. The new suites are candidates like anything else; R6 keeps
-upstream wording out of them, which is what should keep them low.
+existing five are. **Files this change adds are held to the same bar as the six** — below 2%
+containment and no shared run over 16 tokens — and a new file that misses is
+rewritten, not dispositioned. R6 keeps upstream wording out of them, and its
+fixtures are authored rather than copied from any existing plan or upstream
+example.
 
 Containment alone is the wrong control. ADR 0002 reported the longest run beside
 it because "one 40-word verbatim passage matters more than the same token count
@@ -233,9 +236,16 @@ verdicts separately** — does it meet the spec, and is it good code — because
 failure; its `⚠️`, `✅` and `❌` markers are frozen literals alongside
 `Cannot verify from diff`.
 
-`code-reviewer.md` returns **Strengths, Issues (Critical / Important / Minor),
-Recommendations, Assessment**, with a `Ready to merge:` verdict line. **That
-sequence has no in-repo consumer.** It is inherited from the file being replaced
+`code-reviewer.md`'s verdict line is `**Ready to merge?** [Yes | No | With
+fixes]` — the template's form at :107, not the narrative `Ready to merge: With
+fixes` its example happens to use at :169. Derive its sections the same way the
+placeholders are derived, rather than restating them in prose:
+
+    rg -n --no-config '^\s*#{2,4} ' skills/forge/code-reviewer.md
+
+before and after. Note that the file carries both an `## Output Format` block and
+an `## Example Output` block repeating the same headings, so "the sections
+survive" has two sites, not one. **That sequence has no in-repo consumer.** It is inherited from the file being replaced
 and retained deliberately, because a whole-branch reviewer's report is read by a
 person rather than dispatched on. It is the one requirement here that the
 "derive from the consumption sites" control cannot validate, and ADR 0003's
@@ -264,12 +274,18 @@ see *Verification* below.
 ### R3 — behaviour of the three scripts is preserved exactly
 
 Same arguments, same exit codes, same files written, same stdout contract, same
-diagnostics on stderr in kind (wording may change; behaviour may not). These two
-scripts have one stdout line each, a status line naming what was written: its
+diagnostics on stderr in kind (wording may change; behaviour may not).
+
+`task-brief` and `review-package` have one stdout line each, a status line naming what was written: its
 *wording* is a diagnostic and may change, and what is frozen is that it names the
 output path.
 
-**Two exceptions, in `sdd-workspace`.** Its existing suite matches the substrings
+**`sdd-workspace`'s stdout has no latitude at all.** It prints the resolved
+workspace path and nothing else, because both other scripts consume it as a
+directory through command substitution — a second line or any decoration breaks
+them.
+
+**Two further exceptions, in `sdd-workspace`'s diagnostics.** Its existing suite matches the substrings
 `refusing to modify it` (test line 177) and `cannot determine whether` (line 227),
 so those two fragments are frozen along with the behaviour they report. They are
 behaviour-adjacent assertions rather than wording churn, freezing them costs the
@@ -367,6 +383,13 @@ Task 1 in a plan that also contains Task 10 returns only Task 1; a `# Task N`
 line inside a fenced block is not a heading; a task body ends at the next Task
 heading; the final task runs to end of file; and any heading depth matches.
 
+**Each suite is shown to fail before it is committed.** Against a deliberately
+broken copy of the script it covers: swap each `exit 2` / `exit 3`, drop an arity
+guard, drop a `git rev-parse --verify`, write the output to the wrong path, drop
+a structural section from the written file, and add a second stdout line. A test
+that cannot redden is not a regression check. Report the mutation results in the
+pull-request body and in the suites' own commit message; commit only the suites.
+
 Each new suite clears the local Git environment the way
 `tests/fixtures/forge/sdd-workspace-test.sh` does, and passes an explicit
 `OUTFILE` except in the one case that pins the default path.
@@ -398,10 +421,11 @@ with no notice, and point the README at a record still marked `Proposed`.
 
 **Close-out sweep.** Before calling R4 done, run
 `rg -n --no-config -i 'superpowers|licenses/'` over the tree. The expected
-surviving hits, and nothing else: ADR 0002 and ADR 0003, this spec, the rewrite
-spec, and the `docs/workflow/` inventories and plans that name the retired
-`docs/superpowers/` paths as history. A hit in `README.md`, `CLAUDE.md`,
-`skills/`, or `licenses/` means the close-out is incomplete.
+surviving hits: ADR 0002 and ADR 0003, this spec, the rewrite spec, and the
+`docs/workflow/` inventories and plans that name the retired `docs/superpowers/`
+paths or the removed `licenses/` directory as history. The operational rule is
+the part that matters — **a hit in `README.md`, `CLAUDE.md`, `skills/`, or
+`licenses/` means the close-out is incomplete.**
 
 Suites are auto-discovered — `just test` walks `git ls-files -z -- '*-test.sh'`
 and `scripts/list-shell-sources.sh` finds shell sources by shebang — so a new
@@ -454,7 +478,21 @@ behaviour in scope — `sdd-workspace` refusing to clobber a tracked
 never sees a truncation gap — is *preserved*, not modified, and R3 plus the
 existing suite are what hold it.
 
-**No eval plan required, and none is possible here.** The three templates are an
+**One-shot dispatch smoke, before the R4 commit.** Rule 4 forbids an eval *gate*;
+it does not forbid exercising the templates once by hand. After the template
+rewrites land and before the notice comes out, dispatch one implementer with the
+rewritten `implementer-prompt.md` on a throwaway task and one task reviewer with
+the rewritten `task-reviewer-prompt.md` on a small diff. Require that the
+implementer's final message carries exactly one of `DONE` /
+`DONE_WITH_CONCERNS` / `BLOCKED` / `NEEDS_CONTEXT` in the `Status:` position, and
+that the reviewer returns both verdicts and grades at least one finding
+`Critical` / `Important` / `Minor`. Record both outcomes in the pull-request
+body. Nothing is committed — no harness, no fixture, no gate.
+
+That is the only control that exercises the contract rather than inspecting it,
+and R2's failure mode is a dispatch that silently stops matching.
+
+**No eval plan required beyond that, and no automated one is possible.** The three templates are an
 AI surface, but this change does not alter what they instruct — R3's counterpart
 for prose. The contract is unchanged **by requirement, not by construction**:
 that it held is the conclusion the verification establishes, not an input to it.
