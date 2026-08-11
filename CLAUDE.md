@@ -24,22 +24,29 @@ Structural gates are a different thing and are welcome: checking that a `SKILL.m
 
 - `skills/<name>/SKILL.md` — one directory per skill, auto-discovered by the harness. Frontmatter `name:` must match the directory name.
 - `tests/fixtures/<skill>/` — behaviour suites and their fixtures, deliberately **outside** the shipped tree. A plugin has no installer; the whole repo is copied into the plugin cache, so a fixture inside a skill's own directory is reachable by that skill at runtime. That has already caused one incident: a stub issue-tracker profile shipped, was selectable, and returned fabricated issues indistinguishable from real ones.
+- `scripts/` — the gate scripts `just` invokes, each with its suite beside it. `.github/scripts/` holds the decision-record gate, kept byte-identical to its twin under `skills/decision-records/assets/` (`just records` compares them).
+- `docs/adr/` — architecture decision records, append-only once merged.
 - `docs/superpowers/specs/`, `docs/superpowers/plans/` — design and implementation records.
 - `licenses/` — attribution for skills still derived from upstream work.
 
+Plans and specs name the checkout root as `$WORK` rather than writing it out: this repo is public and an absolute path is host identity. `scripts/check-public-safety.sh` enforces that.
+
 ## Verifying a change
 
-This repo is mid-migration and does not yet have `just`, prek, or CI; those arrive with `docs/superpowers/plans/2026-08-11-adept-dotfiles-separation.md` Task 3. Until then, run these directly and bare — no pipes that swallow an exit code, no `|| true`:
+`just verify` is the guardrail suite. CI runs it as `just ci`, and prek runs its `commit-check` subset on every commit, so it is the same chain in all three places — never a re-typed command string.
 
 ```sh
-for s in tests/fixtures/*/*-test.sh skills/decision-records/assets/check-records-test.sh; do "./$s"; done
-claude plugin validate ./
-shellcheck <any shell file you touched>
+just hooks    # once per clone: installs prek and the managed pre-push hook
+just verify
 ```
 
-`claude plugin validate ./` passes at exit 0. Exactly one warning is expected and accepted — `plugins[0] plugin.json → version: No version specified`. Manifests carry no `version` field on purpose: updates track the git SHA, so every push to `main` is an update and there is no version-bump ritual. Do not add `--strict`; it promotes that warning to an error and the two cannot both hold.
+Run gates bare — no pipes that swallow an exit code, no `|| true`. A gate's exit status is the verdict.
+
+`just plugin-check` runs `claude plugin validate ./`, which passes at exit 0. Exactly one warning is expected and accepted — `plugins[0] plugin.json → version: No version specified`. Manifests carry no `version` field on purpose: updates track the git SHA, so every push to `main` is an update and there is no version-bump ritual. Do not add `--strict`; it promotes that warning to an error and the two cannot both hold.
 
 Any other warning is a defect.
+
+`just records` enables only the `adr` profile. A record profile fails when its directory exists at neither the base ref nor the tree, and `docs/debt/` cannot be created empty — the debt profile exempts no `README.md` the way the adr profile does. Add `debt` to the profile list in the same commit as the first deferral record.
 
 ## Conventions
 
