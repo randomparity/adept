@@ -21,7 +21,7 @@ done < <(git rev-parse --local-env-vars)
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # The suite lives in tests/fixtures/ so it is excluded from the installed
 # payload; the script it exercises ships under skills/.
-SCRIPT="$SCRIPT_DIR/../../../skills/subagent-driven-development/scripts/sdd-workspace"
+SCRIPT="$SCRIPT_DIR/../../../skills/build-tdd/scripts/sdd-workspace"
 
 passed=0
 failed=0
