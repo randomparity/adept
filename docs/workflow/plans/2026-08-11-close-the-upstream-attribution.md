@@ -45,15 +45,14 @@ requirements implicitly include this section.
 
 ### The measurement tool
 
-Not in the repo and does not enter it (ADR 0002, anatomy rule 2). It lives at
-`$SCRATCH/containment.py` with the pinned upstream clone at `$SCRATCH/upstream-sp`:
+Not in the repo and never enters it (ADR 0002, anatomy rule 2). Task 0 builds it
+in a scratch directory outside the checkout. Three capabilities, whether as three
+scripts or one with flags:
 
-```
-python3 $SCRATCH/containment.py $SCRATCH/upstream-sp <repo-root> <path> [<path>...]
-```
-
-It prints `containment` and `longest run` per path. It reproduces all six of ADR
-0002's figures exactly, which is what licenses trusting it.
+- **containment** — per path, print containment and longest shared run;
+- **runs** — per path, list the maximal shared passages above a token floor, so a
+  residual can be judged command-syntax versus prose;
+- **sweep** — every tracked file, so the candidate set has a denominator.
 
 ### The gated literals — they differ per file
 
@@ -91,6 +90,63 @@ Expected, as of now — the command is the requirement, this list is a convenien
 - `task-reviewer-prompt.md`: `[BASE_SHA] [BRIEF_FILE] [DIFF_FILE] [GLOBAL_CONSTRAINTS] [HEAD_SHA] [MODEL] [REPORT_FILE]`
 - `implementer-prompt.md`: `[BRIEF_FILE] [REPORT_FILE]`
 - `code-reviewer.md`: `[BASE_SHA] [DESCRIPTION] [HEAD_SHA] [PLAN_OR_REQUIREMENTS] [SHA]`
+
+## Task 0 — build and validate the measurement tool
+
+**Where this fits:** before everything. Every later task's acceptance criteria
+are measurements, and an unvalidated instrument makes all of them worthless.
+
+**Creates:** files under `$SCRATCH`, a scratch directory **outside** the
+repository. Nothing in the tree.
+
+### Steps
+
+1. Choose `$SCRATCH` outside the checkout and record the path in your working
+   notes. It must not be inside the repo — the whole repo ships to the plugin
+   cache.
+2. `git clone https://github.com/obra/superpowers.git $SCRATCH/upstream-sp` and
+   `git -C $SCRATCH/upstream-sp checkout d884ae04edebef577e82ff7c4e143debd0bbec99`.
+   Confirm with `git -C $SCRATCH/upstream-sp log -1 --format=%H`.
+3. Write `$SCRATCH/containment.py` implementing exactly the method ADR 0002
+   records: lowercase the text; keep every run of `[a-z0-9]` and discard
+   everything else; cut into overlapping 8-token shingles; for candidate C
+   against the union U of every upstream file's shingles,
+   `containment(C) = |shingles(C) ∩ U| / |shingles(C)|`. Report alongside it the
+   longest run of consecutive candidate tokens occurring contiguously in some one
+   upstream file.
+4. Add the `runs` capability: for a candidate, print each maximal token span of at
+   least N tokens that occurs contiguously upstream. Used to judge whether a
+   residual is command syntax or prose.
+5. Add the `sweep` capability: run containment over every tracked file
+   (`git ls-files`), sorted descending, with longest runs computed for anything
+   above 1%.
+6. **Validate before trusting it.** Run containment over the six baseline files
+   and `skills/forge/SKILL.md`. It must reproduce ADR 0002 exactly:
+
+   | File | Containment | Longest run |
+   |---|---|---|
+   | `skills/forge/task-reviewer-prompt.md` | 100.00% | 1139 |
+   | `skills/forge/implementer-prompt.md` | 100.00% | 816 |
+   | `skills/forge/code-reviewer.md` | 100.00% | 663 |
+   | `skills/forge/scripts/review-package` | 95.98% | 152 |
+   | `skills/forge/scripts/task-brief` | 95.27% | 127 |
+   | `skills/forge/scripts/sdd-workspace` | 11.60% | 45 |
+   | `skills/forge/SKILL.md` (excluded from the bar) | 1.82% | 28 |
+
+7. **Stop rule.** If any figure differs, the rebuild is measuring something other
+   than what ADR 0002 measured. Do not proceed to Task 1 — the discrepancy is the
+   finding, and it goes to the operator. Note that this run's corpus is 171
+   upstream files against ADR 0002's reported 140; because containment rises with
+   the size of the union, agreement across the larger corpus is the conservative
+   direction, but a *disagreement* is disqualifying.
+
+### Acceptance criteria
+
+- The clone is at the pinned SHA.
+- All seven figures reproduce exactly.
+- `$SCRATCH` is outside the repository and `git status` is clean.
+
+---
 
 ## File map
 
@@ -162,7 +218,18 @@ wording. Assert:
   plan and so are in bounds: asking for Task 1 in a plan that also contains
   Task 10 returns only Task 1; a `# Task N` line inside a fenced block is not a
   heading; a body ends at the next Task heading; the final task runs to EOF; any
-  heading depth matches.
+  heading depth matches;
+- **the default-`OUTFILE` case**, one per suite, invoked with two arguments only:
+  the resolved path equals `<sdd-workspace stdout>/task-<N>-brief.md` and
+  `<sdd-workspace stdout>/review-<base7>..<head7>.diff` respectively. Run it with
+  cwd inside the scratch repository and Git's local environment cleared — it is
+  the only case that writes `.agent/` state, and Tasks 3 and 4 both carry a
+  default-path acceptance criterion that nothing else covers;
+- **that `task-brief` exit 3 leaves an empty `OUTFILE`.** The awk redirect at
+  `skills/forge/scripts/task-brief:36` runs before the emptiness test at `:38`,
+  so a not-found task creates a zero-byte file and then exits 3. Verified
+  empirically. That is observable behaviour and R3 freezes "same files written",
+  so the suite asserts it and the rewrite preserves it.
 
 Fixtures are **authored**, not copied from an existing plan or upstream example —
 they land in the candidate set and are held to the same containment bar.
@@ -187,10 +254,19 @@ they land in the candidate set and are held to the same containment bar.
 7. Add both suite paths to the `suites=()` list in
    `scripts/git-fixture-isolation-test.sh`, beside
    `tests/fixtures/forge/sdd-workspace-test.sh`.
-8. Run `just verify` bare. Expect it green, with `just test` reporting two more
-   suites than before.
-9. Commit: `test: cover task-brief and review-package before rewriting them`,
-   with the mutation results in the body.
+8. **Stage both suites before running any gate:**
+
+       git add tests/fixtures/forge/task-brief-test.sh \
+               tests/fixtures/forge/review-package-test.sh
+
+   `just test` iterates `git ls-files -z -- '*-test.sh'` (Justfile:88) and
+   `scripts/list-shell-sources.sh` iterates `git ls-files -z` (:69), so an
+   untracked suite is invisible to `just test`, `just lint` and
+   `just format-check` alike. Skipping this makes step 9 report success over
+   files no gate ever opened.
+9. Run `just verify` bare. `just test` currently reports 8 suites; expect **10**.
+10. Commit: `test: cover task-brief and review-package before rewriting them`,
+    with the mutation results in the body.
 
 ### Acceptance criteria
 
@@ -330,13 +406,19 @@ reporting the commit count and byte size.
 `git diff -U10`, `git rev-list --count`, and `git rev-parse --short` — every one
 byte-identical, flags included.
 
+The four headings written **into the output file** are content rather than
+diagnostics, and R3 freezes the files written: `# Review package:`, `## Commits`,
+`## Files changed`, `## Diff`. Task 1's suite asserts them, so they are not
+available to the rewrite.
+
 ### Steps
 
 1. Baseline: expect `95.98%`, run `152`.
-2. Rewrite following the probe at `$SCRATCH/probe-review-package`, which measured
-   0.00% / 6 tokens: rename `base`/`head` to `from`/`to`, introduce a single
-   variable for the range, replace `echo` with `printf`, validate both endpoints
-   in a loop before writing anything, and rewrite the comments.
+2. Rewrite using the five moves a probe of this file measured at 0.00% / 6
+   tokens: rename `base`/`head` to `from`/`to`; introduce a single variable for
+   the range and use it everywhere `${base}..${head}` appeared; replace `echo`
+   with `printf`; validate both endpoints in a loop before writing anything; and
+   rewrite every comment. No git invocation is touched.
 3. Re-measure. Target **< 2%, run ≤ 16**.
 4. Run `./tests/fixtures/forge/review-package-test.sh` — green, suite unmodified.
 5. `just verify` bare.
@@ -435,6 +517,22 @@ contract, not from its wording.
 
 **Modifies:** `skills/forge/code-reviewer.md`
 
+### Method
+
+This file's in-repo contract is deliberately thin — one dispatch line at
+`skills/forge/SKILL.md:208` and the severity table at
+`skills/gauntlet/SKILL.md:289-297` — so unlike Tasks 5 and 6 it cannot be
+authored from the contract alone. Read `code-reviewer.md` **once** to extract an
+inventory: placeholders, the verdict line, the heading sequence, and the fact
+that the headings appear at two sites (`## Output Format` and `## Example
+Output`). Write that inventory down. Then write the replacement from the
+inventory rather than from the file.
+
+**The section sequence is inherited, not derived, and that is intentional.** Do
+not "improve" it. ADR 0003 claims arrangement independence for the two templates
+that have consumption sites; it does not claim it for this one, because a
+whole-branch report is read by a person rather than dispatched on.
+
 ### What must survive
 
 - `Critical`, `Important`, `Minor`.
@@ -496,6 +594,22 @@ the only step that exercises the dispatch contract rather than inspecting it.
 - Whole-tree scan recorded, with the file count and every above-2% file named.
 - If any of the six missed, **stop**: the spec's §2 fallback applies, Task 9's
   first two bullets do not happen, and ADR 0003 is revised to say so.
+- A fixture from Task 1 measuring at or above 2%, or carrying a run over 16
+  tokens, is **rewritten and re-measured** before Task 9 begins. It is not a §2
+  fallback case and does not keep the notice standing — it is a file this change
+  authored, held to the same bar as the six.
+
+### When the smoke does not pass
+
+- **It runs and the output is off-contract** — a missing status literal, one
+  verdict instead of two, an ungraded finding. Send the work back to Task 5 or
+  Task 6 with the transcript attached. Task 9 is blocked until a re-run passes,
+  and the re-run is recorded alongside the first.
+- **It cannot be run at all** — no dispatch capability in the session. Record it
+  in the pull-request body as **not exercised**, name it as an accepted gap in
+  ADR 0003's consequences, and tell the operator. Do not count it as a pass: the
+  fallback control is reading the checklist, which the spec already says is
+  insufficient on its own for this failure mode.
 
 ---
 
@@ -511,9 +625,12 @@ measurement exists.
 ### Steps
 
 1. `git rm licenses/superpowers.LICENSE` — the directory goes with its last file.
-2. `README.md`: remove the six-file list and the
-   `licenses/superpowers.LICENSE` link. Keep MIT. Re-aim the measurement pointer
-   at **ADR 0003**, not 0002.
+2. `README.md`: replace the whole *Licence* passage at **lines 58-72** — the
+   framing sentence about six files, the six-file list, the
+   `licenses/superpowers.LICENSE` link, and the closing "that list is a
+   measurement" sentence — with MIT plus one sentence pointing at **ADR 0003**.
+   No occurrence of `superpowers` or `licenses/` may survive in the file; step 6
+   checks it.
 3. `CLAUDE.md`: delete the Layout bullet at line 33,
    ``- `licenses/` — attribution for skills still derived from upstream work.``
 4. `skills/gauntlet/SKILL.md`: reword `:289` so it identifies the two templates by
@@ -527,8 +644,12 @@ measurement exists.
    `README.md`, `CLAUDE.md`, `skills/`, or `licenses/` means this task is not
    done. Expected survivors: ADR 0002, ADR 0003, this plan, the two specs, and the
    `docs/workflow/` inventories and plans that name the retired paths as history.
-7. `just verify` bare — including `just records`, which must accept the
-   `Proposed` → `Accepted` transition and the filled table.
+7. `just verify` bare, **and** `BASE_SHA=$(git rev-parse origin/main) just records`
+   once. A bare `just records` prints "BASE_SHA unset — validating records only"
+   and skips the append-only pass entirely, so it would not exercise this edit at
+   all. The edit is legal for two independent reasons worth knowing: ADR 0003 does
+   not exist at the base ref, so it is a new record rather than a merged one; and
+   `APPEND_ONLY_SECTIONS="*"` excludes `## Status` in any case.
 8. Commit: `feat: close the upstream attribution`.
 
 ### Acceptance criteria
@@ -544,7 +665,18 @@ measurement exists.
 
 ## Rollback
 
-Every task is one commit on a feature branch and nothing is published mid-way.
-`git revert` the offending commit; the only ordering that matters is that Task 9
-must not survive a revert of Tasks 2–7, since the notice's removal is licensed by
-their measurement.
+The hazard is one-directional: Task 9's deletion of the notice is licensed by
+Tasks 2–7's measurement, so the notice must never outlive the rewrite that
+justified removing it.
+
+**Pre-merge.** Revert in reverse task order, Task 9 first. Nothing is published,
+so this is ordinary history editing on a feature branch.
+
+**Post-merge.** Revert the merge commit as a unit — `git revert -m 1 <merge>` —
+which restores the rewrites and the notice together. Reverting a single rewrite
+commit is the dangerous case, because it puts back upstream expression while
+`licenses/superpowers.LICENSE` stays deleted. If one rewrite genuinely must come
+out alone, the *same* commit restores `licenses/superpowers.LICENSE`, that file's
+README entry, and appends a correction paragraph to ADR 0003. The record is
+append-only once merged, so that is a new paragraph, never an edit to the
+table.
