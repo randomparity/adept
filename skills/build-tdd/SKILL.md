@@ -41,6 +41,31 @@ the new authority, if supplied, in provenance before re-freezing the charter.
 guardrails means proceed to the next step — do not end your turn. Stop only on
 a genuine blocker you have named (e.g. a guardrail that cannot be made green).
 
+## Cast — direct execution
+
+Chosen when there is no plan because the change is a trivial bugfix or a
+caller-verified `governed-small-change`, or when a plan exists but its tasks are
+too tightly coupled to hand out separately.
+
+Read the plan and review it critically **before** starting — questions and
+concerns raised now cost one answer; discovered mid-task they cost one per task.
+Raise them rather than noting them. If the plan changes in response, review the
+amended plan rather than executing against your reading of the old one.
+
+Create a todo per plan task. Conversation memory does not survive compaction,
+and the todo list is what survives it.
+
+Then, per task: mark it in progress, follow its steps exactly, run the
+verifications the plan specifies — not a substitute for them — and mark it
+complete only once those pass. The plan phase spent its effort making the steps
+bite-sized; improvising past them discards that work, and a task marked complete
+before its verification ran is the false green everything else here exists to
+prevent.
+
+Stop on a genuine blocker — a missing dependency, a test that will not pass, an
+instruction you do not understand, a verification that fails repeatedly — and
+say so. Guessing past a blocker produces work that looks finished and is not.
+
 ## Pocket dimension — the isolated workspace
 
 Set this up before either execution mode runs.
