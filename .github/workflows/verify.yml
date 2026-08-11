@@ -1,0 +1,80 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    # macOS is not redundant coverage. Its system bash is 3.2 and its sed is BSD,
+    # and both have already shipped breakage this suite could not see from ubuntu
+    # alone: a `mapfile` that exits 127 and a `sed -i` that reads the script as a
+    # backup suffix. Neither reproduces on GNU userland.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Homebrew ships on both runner images and carries a bottle for every tool
+      # the gates need, so one command covers both legs. The shellenv line is for
+      # ubuntu, where Homebrew lives under /home/linuxbrew and is not guaranteed
+      # to be on PATH; on macOS the guard is false and brew is already there.
+      - name: Install tools
+        run: |
+          if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+            printf '%s\n' "$HOMEBREW_PREFIX/bin" >>"$GITHUB_PATH"
+          fi
+          brew install --quiet just shfmt actionlint zizmor prek ripgrep shellcheck jq
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      # `just plugin-check` runs the harness's own validator against the
+      # manifests, so the harness has to be present. It is the only gate that
+      # needs a Claude CLI, and it reads files rather than calling the API.
+      #
+      # zizmor's adhoc-packages audit wants installs to come from a lockfile.
+      # There is no lockfile for a global CLI, and pinning a version here would
+      # reintroduce the version-bump ritual this repo exists to remove — the
+      # gate's job is to validate the manifests against the harness people
+      # actually run, which is the current one.
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code # zizmor: ignore[adhoc-packages]
+      - name: Verify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: just ci
+
+  # A matrix renames its checks to `job (axis)`, so the bare `verify` context that
+  # branch protection requires would stop reporting and every PR would sit BLOCKED
+  # on a check that never arrives. This job keeps that context stable, so adding or
+  # dropping an OS above stays a workflow change and never a repo-settings change.
+  #
+  # `if: always()` is what makes it a gate rather than a rubber stamp: without it a
+  # failed or cancelled matrix skips this job, and a skipped required check reads as
+  # success to branch protection. The result is then asserted explicitly.
+  verify:
+    needs: suite
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check matrix result
+        env:
+          SUITE_RESULT: ${{ needs.suite.result }}
+        run: |
+          if [ "$SUITE_RESULT" != success ]; then
+            printf 'verify: suite matrix reported %s\n' "$SUITE_RESULT" >&2
+            exit 1
+          fi
+          printf 'verify: every suite leg passed\n'
