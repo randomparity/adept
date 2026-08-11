@@ -28,7 +28,7 @@ update.
 
 ## What ships
 
-34 skills covering design, TDD, adversarial review, shipping, and campaign
+31 skills covering design, TDD, adversarial review, shipping, and campaign
 orchestration, plus 2 MCP servers (`context7`, `exa`). `claude plugin details adept`
 prints the current inventory and its projected token cost.
 

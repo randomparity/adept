@@ -286,7 +286,7 @@ When `--json` is present, the skill's **output artifact** is exactly this JSON o
 
 These four values — `critical | high | medium | low` — are the **canonical finding severities for command-pipeline surfaces**. `$review-loop`'s dispositions and `$design`'s ADR/spec/plan reviews report against this scale; the `WORK:REVIEW` annotation is itself scale-agnostic (verdict, findings count, iterations), so it inherits whatever the reviews beneath it used.
 
-The vendored superpowers review skills — `requesting-code-review` and `subagent-driven-development`'s task reviewer — grade `Critical / Important / Minor` instead. When one of their findings crosses into a command surface, map it:
+The vendored superpowers review skills — `requesting-code-review` and `$build-tdd`'s task reviewer — grade `Critical / Important / Minor` instead. When one of their findings crosses into a command surface, map it:
 
 | superpowers | here |
 |---|---|

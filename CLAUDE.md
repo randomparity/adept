@@ -24,7 +24,7 @@ Structural gates are a different thing and are welcome: checking that a `SKILL.m
 
 ## Layout
 
-- `skills/<name>/SKILL.md` — one directory per skill, auto-discovered by the harness. Frontmatter `name:` must match the directory name.
+- `skills/<name>/SKILL.md` — one directory per skill, auto-discovered by the harness. Frontmatter `name:` must match the directory name. A skill may also carry supporting files — `scripts/` for helpers that clear rule 2's bar, `assets/`, or a dispatch-prompt template — but by rule 1 those are the exception and each one needs an argument. `SKILL.md` alone is the default.
 - `tests/fixtures/<skill>/` — behaviour suites and their fixtures, deliberately **outside** the shipped tree. A plugin has no installer; the whole repo is copied into the plugin cache, so a fixture inside a skill's own directory is reachable by that skill at runtime. That has already caused one incident: a stub issue-tracker profile shipped, was selectable, and returned fabricated issues indistinguishable from real ones.
 - `scripts/` — the gate scripts `just` invokes, each with its suite beside it. `.github/scripts/` holds the decision-record gate, kept byte-identical to its twin under `skills/decision-records/assets/` (`just records` compares them).
 - `docs/adr/` — architecture decision records, append-only once merged.

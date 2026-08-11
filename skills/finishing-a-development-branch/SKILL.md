@@ -186,7 +186,7 @@ GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
 
 **If `GIT_DIR == GIT_COMMON`:** Normal repo, no worktree to clean up. Done.
 
-Otherwise, decide provenance. A worktree is **ours** when it sits where `using-git-worktrees` puts one: under the sibling root `../<repo>-worktrees/`, or — for a worktree predating that default — under a nested `.worktrees/`/`worktrees/`.
+Otherwise, decide provenance. A worktree is **ours** when it sits where `$build-tdd`'s pocket-dimension mode puts one: under the sibling root `../<repo>-worktrees/`, or — for a worktree predating that default — under a nested `.worktrees/`/`worktrees/`.
 
 ```bash
 # Resolve BOTH sides with `pwd -P` before comparing. A symlinked checkout
