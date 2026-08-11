@@ -179,6 +179,14 @@ A new record, ADR 0003, carrying the method reference, the before/after table,
 and the consequences. ADR 0002 gets the one edit a merged record permits: a
 supersession banner on its `## Status`.
 
+ADR 0003 lands as **`Proposed`** with its *After* column marked pending, and the
+change that completes the rewrite flips it to `Accepted (YYYY-MM-DD)` in the same
+commit that fills that column. The consequences — deleting `licenses/`, stripping
+the README list, dropping the `$gauntlet` citation — are licensed by the
+post-rewrite measurement, so the record must not assert them before it holds
+them. A merged ADR whose own evidence lives only in a pull-request body is a
+weaker record than the one it supersedes.
+
 The issue asks for ADR 0002's consequences to be "updated to match". That is not
 available: the `adr` profile sets `APPEND_ONLY_SECTIONS="*"`, so every level-2
 section the base ref had is protected, and `docs/adr/README.md` says to
