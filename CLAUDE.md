@@ -1,6 +1,8 @@
 # adept — Repository Instructions
 
-Development-workflow skills for Claude Code and Codex, distributed as a Claude Code plugin. This repo is its own marketplace: `.claude-plugin/marketplace.json` lists one plugin whose source is `./`.
+Development-workflow skills for Claude Code and Codex, distributed as a plugin. This repo is its own marketplace: `.claude-plugin/marketplace.json` lists one plugin whose source is `./`, and Codex reads that same file.
+
+Both harnesses copy the **whole repository** into their plugin cache — `tests/`, `scripts/`, `docs/` and all — not just `skills/`. That is why fixtures live outside the shipped tree; see Layout below.
 
 There is no install script and there will not be one. The harness owns install, update, uninstall, and caching. A predecessor repo carried a 1,337-line installer whose config-merge layer generated roughly thirty open bug reports; retiring it is why this repo exists.
 
@@ -61,4 +63,4 @@ Any other warning is a defect.
 
 `CLAUDE.md` is the only repository instruction file. There is deliberately no `AGENTS.md` duplicating it: two documents stating the same rules is the drift problem this project spent real effort removing.
 
-A `.codex-plugin/plugin.json` is planned (migration plan Task 4) so Codex can consume the skills in this repo, but it does not exist yet. If development work ever happens here through Codex, decide then whether to point `AGENTS.md` at this file rather than copy it.
+`.codex-plugin/plugin.json` lets Codex consume the skills in this repo; Codex reads the same `.claude-plugin/marketplace.json` to find the plugin. That is Codex consuming adept, not Codex developing it — if development work ever happens here through Codex, decide then whether to point `AGENTS.md` at this file rather than copy it.
