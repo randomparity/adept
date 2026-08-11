@@ -79,8 +79,14 @@ not prevent other dependents from being evaluated.
    step below is wrong from there: `git switch` refuses a branch checked
    out elsewhere, and `git worktree remove .` succeeds and takes your
    working directory with it.
-2. Remove any external worktree **this run created** for this issue
-   (`git worktree remove`).
+2. Remove any external worktree **this run created** for this issue. If the
+   harness created it with its own tool — `EnterWorktree`, a `/worktree`
+   command, a `--worktree` flag — tear it down with that tool's counterpart.
+   Reaching past it for `git worktree remove` leaves the harness holding a
+   workspace it still believes is live, the teardown half of the phantom state
+   `$build-tdd` warns about on the way in. Otherwise `git worktree remove`,
+   then `git worktree prune` to clear any registration a previous removal left
+   behind — that is worktree bookkeeping, and unrelated to step 6.
 3. Switch to `BASE_BRANCH`.
 4. Fast-forward pull.
 5. Delete the merged local branch.
