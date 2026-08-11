@@ -4,10 +4,13 @@
 
 Proposed
 
-Flipped to `Accepted (YYYY-MM-DD)` by the change that lands the rewrite, in the
-same commit that fills the *After* column below. The consequences here are
-licensed by that measurement, so the record does not claim them before it holds
-them.
+Filled and flipped to `Accepted (YYYY-MM-DD)` **in this change, before merge**,
+in the one commit that supplies the *After* column below. The consequences here
+are licensed by that measurement, so the record does not claim them before it
+holds them — and this record must not reach `main` with pending cells. Once it
+is in the base ref the `adr` profile protects `## Decision`
+(`APPEND_ONLY_SECTIONS="*"`), so replacing those cells later would fail
+`E-REWRITE` and need a fourth record to correct.
 
 ## Context
 
@@ -47,14 +50,19 @@ merely of its wording.
 
 **Threshold**, applying to the six rewritten files, measured against
 `obra/superpowers` at `d884ae04edebef577e82ff7c4e143debd0bbec99` (v6.1.1) by ADR
-0002's method: below **2% containment** and **no shared run over 16 tokens**. Any
-functional construct exempted from the run bound is named in the table below, so
-the carve-out is visible in the record rather than asserted — ADR 0002 set that
-precedent by naming its one exception as a 28-token `git rev-parse` idiom. The
+0002's method: below **2% containment** and **no shared run over 16 tokens**. The
 bar is two-sided because 0002 reported the run beside containment ("one 40-word
 verbatim passage matters more than the same token count scattered across
 unavoidable technical vocabulary") but bounded only the percentage, under which a
 large file could sit at 1.9% while keeping a 40-token verbatim passage.
+
+A run may be exempted from the bound only if it is **command syntax rather than
+prose** and **no longer than 28 tokens** — ADR 0002's `git rev-parse` idiom, the
+longest construct this repository has blessed. Each exemption is named in the
+table below, so the carve-out is visible rather than asserted. A prose run of any
+length, or a longer construct, keeps its citation under the rewrite spec's §2
+fallback; without both limits the exemption would reopen one level down the very
+hole the run bound closes.
 
 The excluded `skills/forge/SKILL.md` is not held to this bar; it keeps the 1.82%
 / 28-token idiom ADR 0002 blessed and is out of scope here.
@@ -84,8 +92,15 @@ that set. Four files sit above the line and none creates an obligation: the MIT
 `LICENSE` both projects share; one `set -euo pipefail` / `git rev-parse` idiom in
 `scripts/pre-push-hook`; and two `docs/workflow/` records — a behaviour inventory
 and a migration plan — which quote the upstream behaviour they catalogue and
-retire, **naming `obra/superpowers` in their own prose**, so the quotation is
-attributed where it sits rather than by a notice elsewhere.
+retire, at runs of 16 and 51 tokens. That last pair is documentary quotation
+inside records describing what was removed, not reuse of the software, and the
+16-token bound above governs the six rewritten files rather than the tree.
+
+Neither of those two names `obra/superpowers` in its own prose — the inventory
+cites only the retired `agent-config` skill path it was extracted from — so after
+closure they are the sole shipped files carrying upstream wording with no
+attribution near it. Adding that line is outside this change's surface and is
+tracked as [#35](https://github.com/randomparity/adept/issues/35).
 
 ## Consequences
 
@@ -95,9 +110,12 @@ attributed where it sits rather than by a notice elsewhere.
 - `$gauntlet`'s citation of the two reviewer templates as "derived from vendored
   superpowers prompts" is dropped. ADR 0002 made that line correct; it becomes
   false, and a stale attribution is a defect in the direction nobody checks.
-- **ADR 0002's narrowing is superseded**, and only its narrowing. Its *Method*
-  section and its measurement survive as the definition of the metric this record
-  and any future re-derivation use.
+- **ADR 0002's narrowing is superseded.** Its *Method* section and its six
+  per-file figures survive as the definition of the metric this record and any
+  future re-derivation use. One further claim of 0002's does **not** survive: "no
+  other shipped file reaches 2%", which does not hold over the candidate set
+  stated above and is replaced by the four-file correction there. A reader
+  arriving by 0002's banner should not rely on that sentence.
 - The templates keep the literal words `Critical`, `Important` and `Minor` with
   their placeholders and output shape, because two skills gate on them. The
   accepted risk is that a careless rewrite breaks `$forge`'s party-mode dispatch
@@ -146,14 +164,6 @@ least work saved.
 **Edit ADR 0002's consequences in place**, as issue #32 literally asks. Rejected:
 the `adr` profile sets `APPEND_ONLY_SECTIONS="*"` and `docs/adr/README.md`
 directs superseding rather than rewriting in place.
-
-**Rewrite the prompts freely and re-point the gates.** Rejected as scope this
-change has no authority for: the gates encode a working contract between `$forge`
-and `$gauntlet`.
-
-**Add a gate asserting the severity vocabulary survives.** Rejected under anatomy
-rule 4 — a gate grepping Markdown for the word `Critical` is exactly the prose
-assertion that rule forbids.
 
 ## Provenance
 
