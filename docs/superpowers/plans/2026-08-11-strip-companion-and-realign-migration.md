@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Spec of record: `docs/superpowers/specs/2026-08-11-first-party-skill-rewrite-design.md` (in this repo). Rule numbers below refer to its §4.
-- Work happens in `/Volumes/Source Code Volume/src/adept`. The source repo `/Volumes/Source Code Volume/src/agent-config` is referenced as `$OLD`; every shell block assumes `export OLD="/Volumes/Source Code Volume/src/agent-config"`. Note the space in both paths — always quote them.
+- Work happens in `$WORK/adept`. The source repo `$WORK/agent-config` is referenced as `$OLD`; every shell block assumes `export OLD="$WORK/agent-config"`. Note the space in both paths — always quote them.
 - Tasks 1–2 add commits to the **existing** branch `feat/import-skills`, which is already pushed and open as PR #1. Do not create a new branch for them and do not rebase or force-push — all force pushes are denied by settings policy.
 - Never push to `main`; the user's settings hook blocks it. Every push targets a feature branch.
 - Every commit: conventional-commits subject ≤ 72 chars, imperative mood, ending with the trailer `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
@@ -38,7 +38,7 @@
 - [ ] **Step 1: Check out the existing import branch**
 
 ```bash
-cd "/Volumes/Source Code Volume/src/adept"
+cd "$WORK/adept"
 git checkout feat/import-skills
 git pull --ff-only
 git log --oneline -2

@@ -10,9 +10,9 @@
 
 ## Global Constraints
 
-- Source repo (read-only during this plan): `/Volumes/Source Code Volume/src/agent-config`. Every shell block assumes `export OLD="/Volumes/Source Code Volume/src/agent-config"` has been run in that shell. Do not modify `$OLD` until Phase 3.
+- Every shell block assumes two variables are already exported in that shell: `WORK`, the directory holding the clones, and `OLD="$WORK/agent-config"`, the source repo. `$OLD` is read-only until Phase 3. This repo is public, so the checkout root is named by variable rather than written out — `$WORK` may contain spaces, so quote every expansion of it.
 - Claude Code hooks stay **inline in `settings.json`** (owned by dotfiles), not as a plugin `hooks/hooks.json` in adept. The hook bodies are self-contained command strings enforcing personal policy (rm/git-clean guards), and keeping them with settings avoids any `${CLAUDE_PLUGIN_ROOT}` path migration. Reversible later if the guardrails should travel with the skills.
-- New working clones: `/Volumes/Source Code Volume/src/adept` and `/Volumes/Source Code Volume/src/dotfiles`.
+- New working clones: `$WORK/adept` and `$WORK/dotfiles`.
 - `adept` is **public** (matching agent-config today, and keeping the superpowers attribution and `check-public-safety.sh` meaningful). `dotfiles` is **private**. All remotes are **SSH** (`git@github.com:...`).
 - The pre-existing public `randomparity/dotfiles` (shell/vim/tmux/powerline config, last pushed 2022-09-07, default branch `master`) is **archived, not deleted**, before the new private `dotfiles` is created — Task 6 Step 0.
 - **Bob is retired.** Task 9 is skipped in full; nothing under `$OLD/agents/bob/` is carried into either new repo, and Bob-related issues close as obsolete in Task 11.
@@ -54,8 +54,8 @@ git fetch origin --prune && git branch -u origin/main main
 
 ```bash
 gh repo create randomparity/adept --public --description "Development-workflow skills for Claude Code and Codex, distributed as a plugin marketplace"
-git clone git@github.com:randomparity/adept.git "/Volumes/Source Code Volume/src/adept"
-cd "/Volumes/Source Code Volume/src/adept"
+git clone git@github.com:randomparity/adept.git "$WORK/adept"
+cd "$WORK/adept"
 ```
 
 - [ ] **Step 2: Write the failing check** — validate an empty plugin dir
@@ -167,7 +167,7 @@ The user's settings hook blocks pushes to `main`; see Global Constraints. Expect
 - [ ] **Step 1: Branch**
 
 ```bash
-cd "/Volumes/Source Code Volume/src/adept" && git checkout -b feat/import-skills
+cd "$WORK/adept" && git checkout -b feat/import-skills
 ```
 
 - [ ] **Step 2: Copy the skills tree**
@@ -710,7 +710,7 @@ Expected: marketplace `randomparity` listed, sourced from the SSH remote. Do **n
 ### Task 6: Scaffold dotfiles and capture the Claude configuration
 
 **Files:**
-- Create: GitHub repo `randomparity/dotfiles`; chezmoi source dir at `/Volumes/Source Code Volume/src/dotfiles`
+- Create: GitHub repo `randomparity/dotfiles`; chezmoi source dir at `$WORK/dotfiles`
 - Create (chezmoi source names): `dot_claude/settings.json`, `dot_claude/CLAUDE.md`, `dot_claude/executable_statusline.sh`, `dot_claude/languages/*.md` (5 files), `dot_claude/references/orchestration.md`, `README.md`, `.gitignore`
 
 **Interfaces:**
@@ -732,9 +732,9 @@ Expected: the 2022 shell-config repo reports `pushedAt` in 2022 and `isArchived:
 ```bash
 brew install chezmoi
 gh repo create randomparity/dotfiles --private --description "chezmoi-managed agent configuration"
-git clone git@github.com:randomparity/dotfiles.git "/Volumes/Source Code Volume/src/dotfiles"
+git clone git@github.com:randomparity/dotfiles.git "$WORK/dotfiles"
 mkdir -p ~/.config/chezmoi
-printf 'sourceDir = "/Volumes/Source Code Volume/src/dotfiles"\n' > ~/.config/chezmoi/chezmoi.toml
+printf 'sourceDir = "$WORK/dotfiles"\n' > ~/.config/chezmoi/chezmoi.toml
 chezmoi doctor
 ```
 
@@ -793,7 +793,7 @@ Skills come from the adept plugin, not this repo:
 ```
 
 ```bash
-cd "/Volumes/Source Code Volume/src/dotfiles"
+cd "$WORK/dotfiles"
 git add -A
 git commit -m "feat: capture Claude configuration under chezmoi"
 git push origin HEAD:refs/heads/bootstrap
@@ -820,7 +820,7 @@ git fetch origin --prune && git branch -u origin/main main
 - [ ] **Step 1: Branch**
 
 ```bash
-cd "/Volumes/Source Code Volume/src/dotfiles" && git checkout -b feat/codex
+cd "$WORK/dotfiles" && git checkout -b feat/codex
 ```
 
 - [ ] **Step 2: Drift check, then capture**
@@ -1182,7 +1182,7 @@ gh repo archive randomparity/agent-config --yes
 cd "$OLD" && git checkout main && git pull && git branch -d docs/tombstone && git remote prune origin
 ```
 
-Keep the local clone (it is the archive's working copy and `$OLD` references die with this plan). The second working directory `/Users/dave/src/agent-config`, if it is a clone of the same repo, gets the same `git pull`; remove it only with the user's say-so — it predates this plan.
+Keep the local clone (it is the archive's working copy and `$OLD` references die with this plan). The second working directory `~/src/agent-config`, if it is a clone of the same repo, gets the same `git pull`; remove it only with the user's say-so — it predates this plan.
 
 - [ ] **Step 4: Confirm the estate**
 
