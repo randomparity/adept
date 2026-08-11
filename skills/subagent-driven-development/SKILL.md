@@ -434,7 +434,7 @@ Done!
 
 **Required workflow skills:**
 - **using-git-worktrees** - Ensures isolated workspace (creates one or verifies existing)
-- **writing-plans** - Creates the plan this skill executes
+- **`$design`** - Its `inscribe` phase writes the plan this skill executes
 - **requesting-code-review** - Code review template for the final whole-branch review
 - **finishing-a-development-branch** - Complete development after all tasks (interactive mode only; in dispatched mode the caller owns integration)
 
