@@ -2,6 +2,8 @@
 
 ## Status
 
+> **Superseded by [0003](0003-close-the-upstream-attribution.md)** (2026-08-11)
+
 Accepted (2026-08-11)
 
 ## Context
