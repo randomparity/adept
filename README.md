@@ -53,6 +53,20 @@ and that nothing automated asserts on prose.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Some skills derive from
-[obra/superpowers](https://github.com/obra/superpowers); its licence is retained at
-[licenses/superpowers.LICENSE](licenses/superpowers.LICENSE).
+MIT — see [LICENSE](LICENSE).
+
+Six files remain substantially the work of
+[obra/superpowers](https://github.com/obra/superpowers) at `d884ae04`, and its
+licence travels with them at
+[licenses/superpowers.LICENSE](licenses/superpowers.LICENSE):
+
+- `skills/build-tdd/code-reviewer.md`
+- `skills/build-tdd/implementer-prompt.md`
+- `skills/build-tdd/task-reviewer-prompt.md`
+- `skills/build-tdd/scripts/review-package`
+- `skills/build-tdd/scripts/sdd-workspace`
+- `skills/build-tdd/scripts/task-brief`
+
+Everything else is first-party. That list is a measurement, not an estimate —
+[ADR 0002](docs/adr/0002-narrow-the-upstream-attribution.md) records the method,
+the numbers, and what the check found.
