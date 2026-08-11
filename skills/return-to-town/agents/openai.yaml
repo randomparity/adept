@@ -1,0 +1,4 @@
+interface:
+  display_name: "Merge And Clean Up"
+  short_description: "Merge an authorized PR and clean local state"
+  default_prompt: "Use $return-to-town to hand off or merge this ready pull request and clean up."

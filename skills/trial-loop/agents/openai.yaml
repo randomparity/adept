@@ -1,0 +1,4 @@
+interface:
+  display_name: "Run Review Loop"
+  short_description: "Challenge and fix changes until approved"
+  default_prompt: "Use $trial-loop to challenge these changes and fix defensible findings."

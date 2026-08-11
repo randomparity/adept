@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build With TDD"
+  short_description: "Implement plans with test-driven development"
+  default_prompt: "Use $forge to implement this plan with test-driven development."

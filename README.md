@@ -60,12 +60,12 @@ Six files remain substantially the work of
 licence travels with them at
 [licenses/superpowers.LICENSE](licenses/superpowers.LICENSE):
 
-- `skills/build-tdd/code-reviewer.md`
-- `skills/build-tdd/implementer-prompt.md`
-- `skills/build-tdd/task-reviewer-prompt.md`
-- `skills/build-tdd/scripts/review-package`
-- `skills/build-tdd/scripts/sdd-workspace`
-- `skills/build-tdd/scripts/task-brief`
+- `skills/forge/code-reviewer.md`
+- `skills/forge/implementer-prompt.md`
+- `skills/forge/task-reviewer-prompt.md`
+- `skills/forge/scripts/review-package`
+- `skills/forge/scripts/sdd-workspace`
+- `skills/forge/scripts/task-brief`
 
 Everything else is first-party. That list is a measurement, not an estimate —
 [ADR 0002](docs/adr/0002-narrow-the-upstream-attribution.md) records the method,

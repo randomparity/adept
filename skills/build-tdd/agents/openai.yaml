@@ -1,4 +1,0 @@
-interface:
-  display_name: "Build With TDD"
-  short_description: "Implement plans with test-driven development"
-  default_prompt: "Use $build-tdd to implement this plan with test-driven development."

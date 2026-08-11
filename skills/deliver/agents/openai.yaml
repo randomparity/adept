@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ship Pull Request"
+  short_description: "Create a PR and drive CI to green"
+  default_prompt: "Use $deliver to publish this branch as a green, mergeable pull request."

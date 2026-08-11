@@ -1,7 +1,7 @@
 # Trial By Fire — the test-driven development standard
 
 Read this before writing a test, when a test is hard to write, or when you are
-about to argue yourself out of writing one first. `$build-tdd` owns the cycle you
+about to argue yourself out of writing one first. `$forge` owns the cycle you
 execute; this document owns why the order is the point and what a test has to do
 to be worth having.
 

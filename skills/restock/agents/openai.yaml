@@ -1,0 +1,4 @@
+interface:
+  display_name: "Merge Dependabot PRs"
+  short_description: "Evaluate and merge safe dependency updates"
+  default_prompt: "Use $restock to evaluate and merge safe Dependabot pull requests."

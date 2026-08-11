@@ -1,4 +1,0 @@
-interface:
-  display_name: "Compound Solution"
-  short_description: "Record a solved problem as durable knowledge"
-  default_prompt: "Use $compound to record the non-obvious problem solved in this session."

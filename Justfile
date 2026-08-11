@@ -41,7 +41,7 @@ records:
   shared_assets="$shared_assets profiles/adr.sh profiles/debt.sh records.yml"
   for asset in $shared_assets; do
     root_asset=".github/scripts/$asset"
-    skill_asset="skills/decision-records/assets/$asset"
+    skill_asset="skills/tome-of-lore/assets/$asset"
     if ! cmp -s "$root_asset" "$skill_asset"; then
       echo "record gate mismatch: $skill_asset differs from $root_asset" >&2
       exit 1
@@ -78,7 +78,7 @@ test:
   while IFS= read -r -d '' suite; do
     case $suite in
     .github/scripts/check-records-test.sh | \
-      skills/decision-records/assets/check-records-test.sh)
+      skills/tome-of-lore/assets/check-records-test.sh)
       continue
       ;;
     esac
