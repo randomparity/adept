@@ -86,7 +86,7 @@ not prevent other dependents from being evaluated.
    workspace it still believes is live, the teardown half of the phantom state
    `$build-tdd` warns about on the way in. Otherwise `git worktree remove`,
    then `git worktree prune` to clear any registration a previous removal left
-   behind — that is worktree bookkeeping, and unrelated to step 6.
+   behind — worktree bookkeeping, not the remote-tracking prune below.
 3. Switch to `BASE_BRANCH`.
 4. Fast-forward pull.
 5. Delete the merged local branch.
