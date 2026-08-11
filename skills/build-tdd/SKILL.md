@@ -203,10 +203,9 @@ either choice could be wrong.
    Do not move on with either still open.
 8. Mark the task complete in the todo list and the progress ledger.
 
-After the last task, dispatch the whole-branch review using
-`requesting-code-review`'s `code-reviewer.md`, on the most capable model. The
-per-task reviews are task-scoped by design and cannot see a defect that spans
-tasks.
+After the last task, dispatch the whole-branch review with
+[code-reviewer.md](code-reviewer.md), on the most capable model. The per-task
+reviews are task-scoped by design and cannot see a defect that spans tasks.
 
 ### Handling what an implementer reports
 
