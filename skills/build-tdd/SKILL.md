@@ -166,19 +166,19 @@ conflict.
 Execute all tasks without pausing to check in. The only reasons to stop are a
 `BLOCKED` you cannot resolve, ambiguity that genuinely prevents progress, or
 completion; "should I continue?" asks the human to re-decide something they
-already decided. Between tool calls narrate at most one short line — the ledger
-and the tool results are the record.
+already decided. Keep commentary between tool calls to a single line at most:
+what is durable is the ledger and the tool output, not the running account.
 
 ### Before the first dispatch
 
 Read the plan, note its Global Constraints, and create a todo per task.
 
-Then scan the plan once for conflicts: tasks that contradict each other or the
-Global Constraints, and anything the plan *mandates* that the review rubric
-treats as a defect — a test that asserts nothing, a verbatim-duplicated logic
-block. Without this scan such a plan burns one fix cycle per task instead of one
-question up front. Batch everything you find into a single question, each
-finding beside the plan text that mandates it, asking which governs. If the scan
+Then read it through once looking for contradictions — between two tasks, or
+between a task and the Global Constraints — and for anything the plan *requires*
+that a reviewer would write up as a defect: an assertion-free test, a logic block
+duplicated word for word. Left undetected, that costs a fix cycle on every task
+it touches, where catching it costs one question. Collect them and ask once,
+quoting the plan text beside each and asking which of the two holds. If the scan
 is clean, proceed without comment.
 
 Where nobody can be asked, the Global Constraints and the repo's conventions
@@ -195,8 +195,9 @@ either choice could be wrong.
    instead of an answer.
 4. It implements, tests, self-reviews, and commits.
 5. Generate the review package: `scripts/review-package BASE HEAD`, using the
-   BASE you recorded **before** dispatching — never `HEAD~1`, which silently
-   drops all but the last commit of a multi-commit task.
+   BASE you noted **before** the dispatch. `HEAD~1` is wrong and fails quietly:
+   where a task produced several commits it shows the reviewer only the final
+   one, and the diff still looks plausible.
 6. Dispatch the task reviewer with
    [task-reviewer-prompt.md](task-reviewer-prompt.md) and that path.
 7. On Critical or Important findings, dispatch a fix subagent, then re-review.
@@ -223,10 +224,11 @@ Four statuses, four responses:
 escalation.** If the implementer says it is stuck, something has to change.
 
 A task reviewer may also report "⚠️ Cannot verify from diff" — requirements
-living in unchanged code or spanning tasks. These do not block the rest of the
-review, but resolve each one yourself before marking the task complete: you hold
-the plan and cross-task context the reviewer does not. A confirmed gap is a
-failed spec review.
+living in unchanged code or spanning tasks. The rest of the review proceeds
+around them, but none may be left open when you close the task. Settle each one: the
+plan and everything the neighbouring tasks established are yours to see and the
+reviewer's to guess at. If it turns out to be a genuine gap, the spec review
+failed.
 
 ### Choosing a model
 
@@ -239,8 +241,9 @@ capable and most expensive.
 - Design judgment, broad codebase understanding, or the final whole-branch
   review → most capable.
 
-**Turn count beats token price.** The cheapest models routinely take 2–3× the
-turns on multi-step work and cost more overall. Use a mid-tier floor for
+**Turn count beats token price.** Give a weak model something multi-step and it
+will often need two or three times as many turns to finish, which is more
+expensive than the stronger model would have been. Use a mid-tier floor for
 reviewers and for implementers working from prose; reserve the cheapest tier for
 transcription — where the plan text already contains the code to write — and for
 single-file mechanical fixes.
@@ -253,7 +256,8 @@ single-file mechanical fixes.
   use verbatim
 - where this task fits in the wider change
 - the issue requirement and acceptance criteria
-- interfaces and decisions from earlier tasks that the brief cannot know
+- anything settled by an earlier task — an interface, a chosen approach — that
+  the brief itself has no way of carrying
 - your resolution of any ambiguity you noticed in the brief
 - applicable `AGENTS.md` conventions
 - exact guardrail commands to run before committing
@@ -265,9 +269,10 @@ single-file mechanical fixes.
   transcript
 
 Exact values — numbers, magic strings, signatures, test cases — live in the
-brief and nowhere else. A dispatch describes one task, never the session's
-history: do not paste accumulated prior-task summaries. One real session's
-dispatch reached 42k characters of which 99% was pasted history.
+brief and nowhere else. What you send describes one task, not where the session
+has been — resist pasting in the running summary of everything finished so far.
+A dispatch observed in practice ran to 42k characters, essentially all of it
+that accumulated history.
 
 Hand artifacts over as **files**, not pasted text. Anything you paste into a
 prompt, and anything a subagent prints back, stays resident in your context and
@@ -277,18 +282,20 @@ dispatches append to the same report file.
 
 **Constructing a reviewer prompt**, the rules that matter most:
 
-- **Never pre-judge a finding.** If what you are writing contains "do not flag",
-  "don't treat X as a defect", "at most Minor", or "the plan chose" — stop. You
-  are pre-judging, usually to spare yourself a review loop. Let the reviewer
-  raise it and adjudicate it afterwards.
+- **Never rule on a finding before the reviewer has made it.** Watch for the
+  shape: you are about to tell the reviewer that something is out of bounds, is
+  settled, is at worst cosmetic, or was chosen deliberately. Every one of those
+  is a verdict, written by the party a review exists to check, and the motive is
+  almost always to avoid another round. Let it be raised; decide it after.
 - Copy the plan's binding requirements **verbatim** into the global-constraints
   block: exact values, formats, and stated relationships ("same layout as X").
   That block is the reviewer's attention lens, and a paraphrase changes what it
   looks at. The template already carries the process rules.
-- No open-ended directives ("check all uses", "run race tests if useful")
-  without a concrete task-specific reason.
-- Do not ask a reviewer to re-run tests the implementer already ran on the same
-  code — the implementer's report carries that evidence.
+- Give no instruction whose scope you cannot state. "Look at everything that
+  touches this" and "try the concurrency suite if it seems worthwhile" are
+  invitations to wander; name the reason and the target, or leave them out.
+- The implementer already ran the tests and reported the results. Asking for
+  that again buys nothing and costs a full run.
 
 Every reviewer dispatch ends with the same report contract, so you get a bounded
 verdict rather than the whole review.
@@ -301,18 +308,20 @@ send **one** fix subagent with the complete list; per-finding fixers each rebuil
 context and re-run suites, and one real session's final-review wave cost more
 than all its tasks combined.
 
-Record Minor findings in the ledger as you go and point the final review at that
-list, so it can triage what must be fixed before merge — a roll-up nobody reads
-is a silent discard. A finding that conflicts with what the plan mandates is the
-human's decision: present the finding and the plan text and ask which governs.
-Do not dismiss it because the plan mandates it, and do not dispatch a fix that
-contradicts the plan without asking.
+Put Minor findings in the ledger as they arrive, and hand the final review that
+list to triage against the merge bar. A summary nobody is directed to read is
+indistinguishable from having thrown the findings away. Where a finding and the
+plan disagree, neither one wins by default and neither is yours to overrule: put
+both in front of the human and ask which holds. That means not waving the
+finding away on the plan's authority, and equally not sending a fix that
+contradicts the plan without having asked.
 
 ### Durable progress
 
-Conversation memory does not survive compaction. Controllers that lost their
-place have re-dispatched entire completed task sequences — the most expensive
-failure observed in practice. Track progress in a ledger, not only in todos.
+Conversation memory does not survive compaction. A coordinator that no longer
+knows which tasks finished will hand out work already done, sometimes a whole
+run of it — the costliest failure this process has produced. Keep the record in
+a ledger; todos alone are not enough.
 
 Resolve the workspace with `scripts/sdd-workspace`, which prints its absolute
 path, and check for `<workspace>/progress.md`. Tasks marked complete there are
@@ -337,13 +346,13 @@ be denied writes to `.git/` entirely.
 
 When a review comes back clean, append one line:
 `Task N: complete (commits <base7>..<head7>, review clean)`. After any
-compaction, trust the ledger and `git log` over your own recollection — the
-commits it names exist in git even when you no longer remember creating them.
+compaction the ledger and `git log` outrank whatever you seem to remember: the
+commits they name are on disk whether or not you recall making them.
 
 ### Never
 
-- Skip a task review, or accept a report missing either verdict — spec
-  compliance and code quality are both required.
+- Let a task through unreviewed, or settle for a report carrying only one of the
+  two verdicts. Both are required: does it meet the spec, and is it good code.
 - Accept "close enough" on spec compliance, or let an implementer's self-review
   stand in for the task review.
 - Make a subagent read the whole plan file instead of its brief.
