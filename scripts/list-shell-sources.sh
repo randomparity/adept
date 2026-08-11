@@ -9,11 +9,8 @@ set -euo pipefail
 # requires no recipe edit.
 #
 # --tabs (default) prints the sources formatted at the repository default.
-# --two-space prints the subset formatted with `shfmt -i 2`:
-#   - .github/scripts/ and its byte-identical twins under
-#     skills/decision-records/assets/ are two-space;
-#   - find-polluter.sh predates the format gate at two-space and stays that way
-#     to avoid an unrelated full-file reformat.
+# --two-space prints the subset formatted with `shfmt -i 2`: .github/scripts/
+# and its byte-identical twins under skills/decision-records/assets/.
 # --all prints both subsets. Either subset list fails closed when empty: an
 # empty inventory means discovery broke, not that nothing needs checking.
 
@@ -52,7 +49,6 @@ is_shell_source() {
 is_two_space() {
 	case $1 in
 	.github/scripts/* | skills/decision-records/assets/*) return 0 ;;
-	skills/systematic-debugging/find-polluter.sh) return 0 ;;
 	*) return 1 ;;
 	esac
 }
