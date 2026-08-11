@@ -59,7 +59,9 @@ identically constructed instrument.
 
 The scan covers **every tracked file — 129 of them**. ADR 0002 never stated its
 candidate set, and its claim that "no other shipped file reaches 2%" does not
-hold over that set: `LICENSE` (95.71%, run 163) is the MIT text both projects
+hold over that set. **Five** tracked files sit above it, not four: the first is
+`licenses/superpowers.LICENSE` itself at 100.00% / run 170 — it *is* the upstream
+notice, and R4 deletes it. Of the rest, `LICENSE` (95.71%, run 163) is the MIT text both projects
 share, `scripts/pre-push-hook` (6.06%, run 9) is one `set -euo pipefail` /
 `git rev-parse --show-toplevel` idiom, and two records quote the upstream
 behaviour they inventory and retire —
@@ -134,10 +136,18 @@ A run may be exempted only if it is **command syntax rather than prose** *and*
 the exemption reopens the hole the run bound closes. Exemptions are recorded in
 ADR 0003's table — the durable record — with the pull request carrying a copy.
 
-**The final scan runs against the merge-candidate tree, not the baseline.** This
-change adds tracked files (R6's two suites) and the candidate set is every
-tracked file, so the denominator moves. ADR 0003 records the final file count
-beside the per-file figures; new fixtures are candidates like anything else.
+**The final scan runs after the last rewrite commit, not against the baseline.**
+This change adds tracked files (R6's two suites) and the candidate set is every
+tracked file, so the denominator moves. ADR 0003 records that file count beside
+the per-file figures, and names the tracked deltas that land after the scan and
+are therefore not in it: the deleted `licenses/superpowers.LICENSE`, the README
+and `CLAUDE.md` edits, and this record's own table fill. None of those can raise
+a containment figure — one is a deletion and the rest are first-party prose.
+
+The bar itself governs **the six rewritten files**. Every other candidate is
+reported, and anything above 2% is dispositioned in ADR 0003's prose the way the
+existing five are. The new suites are candidates like anything else; R6 keeps
+upstream wording out of them, which is what should keep them low.
 
 Containment alone is the wrong control. ADR 0002 reported the longest run beside
 it because "one 40-word verbatim passage matters more than the same token count
@@ -204,8 +214,11 @@ see *Verification* below.
 
 ### R3 — behaviour of the three scripts is preserved exactly
 
-Same arguments, same exit codes, same stdout contract, same files written, same
-diagnostics on stderr in kind (wording may change; behaviour may not).
+Same arguments, same exit codes, same files written, same stdout contract, same
+diagnostics on stderr in kind (wording may change; behaviour may not). These two
+scripts have one stdout line each, a status line naming what was written: its
+*wording* is a diagnostic and may change, and what is frozen is that it names the
+output path.
 `sdd-workspace` in particular keeps its three-way tracked / untracked /
 unanswerable handling, its `check-ignore` verification on the tracked path, and
 its atomic temp-file-and-rename write with the cleanup trap — that logic exists
@@ -214,6 +227,10 @@ because `$campaign`'s fail-closed reader would otherwise see a truncation gap.
 ### R4 — the attribution is removed
 
 - `licenses/superpowers.LICENSE` is deleted, and `licenses/` with it.
+- `CLAUDE.md`'s *Layout* entry at line 33 — "`licenses/` — attribution for skills
+  still derived from upstream work" — goes with the directory. Leaving it is a
+  documented path that does not exist, which this repository treats as a defect
+  in its own right.
 - `README.md`'s *Licence* section loses the six-file list and the
   `licenses/superpowers.LICENSE` link, keeping MIT and the pointer to the
   decision record.
@@ -277,7 +294,8 @@ only if the suites never pin a diagnostic string. So they assert: exit status;
 argument handling including the arity errors (exit 2) and `task-brief`'s
 not-found path (exit 3); the output file path; the structural sections of the
 written file; and *that* stderr is non-empty on each error path — never the text
-of a message.
+of a message, and never the wording of the stdout status line, only that the
+named output path exists and is non-empty.
 
 That also keeps upstream wording out of new tracked files, which matters because
 those files land in the candidate set R1 rescans.
@@ -301,6 +319,13 @@ branch should never carry a state that outruns its evidence:
 Doing R4 early would publish a branch where six files at 95–100% containment ship
 with no notice, and point the README at a record still marked `Proposed`.
 
+**Close-out sweep.** Before calling R4 done, run
+`rg -n --no-config -i 'superpowers|licenses/'` over the tree. The expected
+surviving hits, and nothing else: ADR 0002 and ADR 0003, this spec, the rewrite
+spec, and the `docs/workflow/` inventories and plans that name the retired
+`docs/superpowers/` paths as history. A hit in `README.md`, `CLAUDE.md`,
+`skills/`, or `licenses/` means the close-out is incomplete.
+
 Suites are auto-discovered — `just test` walks `git ls-files -z -- '*-test.sh'`
 and `scripts/list-shell-sources.sh` finds shell sources by shebang — so a new
 suite needs no recipe edit. It does need one registration:
@@ -308,7 +333,22 @@ suite needs no recipe edit. It does need one registration:
 list, and a new suite that touches git must be added to it or it goes unchecked
 for ambient-repo pollution.
 
-**No gate asserts on the prompt templates' prose, and none will be added.**
+**The per-file checklist carries a literal check per gated token**, run by the
+implementer and again at branch review:
+
+    rg -c --no-config -F 'DONE_WITH_CONCERNS' skills/forge/implementer-prompt.md
+
+and the same for `DONE`, `BLOCKED`, `NEEDS_CONTEXT`, and for `Critical`,
+`Important` and `Minor` in the two reviewer prompts. R2's failure mode is a
+missing literal, which is mechanically checkable by the instrument R4 already
+uses — there is no reason to leave it to the eye. Reading stays the control for
+output shape and placeholders, which are not literals.
+
+This is not a gate and does not become one: it is a command a person runs from a
+checklist, not an assertion wired into `just verify`.
+
+**No automated gate asserts on the prompt templates' prose, and none will be
+added.**
 Repository anatomy rule 4 forbids it, and a gate grepping a Markdown file for
 the word `Critical` is exactly the prohibited shape. R2 is therefore verified by
 reading the per-file checklist in the plan against the rewritten file — by the

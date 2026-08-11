@@ -92,8 +92,9 @@ recorded here as a judgment rather than as a measurement result.
 
 The candidate set is **every tracked file — 129 of them**. ADR 0002 never stated
 its own, and its claim that "no other shipped file reaches 2%" does not hold over
-that set. Four files sit above the line and none creates an obligation: the MIT
-`LICENSE` both projects share; one `set -euo pipefail` / `git rev-parse` idiom in
+that set. Five files sit above the line and none creates an obligation. The first
+is `licenses/superpowers.LICENSE` at 100.00% / run 170 — it *is* the upstream
+notice, and this change deletes it. Then: the MIT `LICENSE` both projects share; one `set -euo pipefail` / `git rev-parse` idiom in
 `scripts/pre-push-hook`; and two `docs/workflow/` records — a behaviour inventory
 and a migration plan — which quote the upstream behaviour they catalogue and
 retire, at runs of 16 and 51 tokens. That last pair is documentary quotation
@@ -109,7 +110,8 @@ tracked as [#35](https://github.com/randomparity/adept/issues/35).
 
 ## Consequences
 
-- `licenses/superpowers.LICENSE` is deleted and `licenses/` goes with it.
+- `licenses/superpowers.LICENSE` is deleted and `licenses/` goes with it, along
+  with `CLAUDE.md`'s *Layout* entry describing the directory.
 - `README.md`'s *Licence* section loses the six-file list, keeping MIT and
   re-aiming its measurement pointer at **this** record.
 - `$gauntlet`'s stale attribution goes — the sentence at `SKILL.md:289` and the
