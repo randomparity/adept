@@ -1,0 +1,4 @@
+interface:
+  display_name: "Simplify"
+  short_description: "Simplify recent changes safely"
+  default_prompt: "Use $dispel to simplify recent changes without changing behavior."

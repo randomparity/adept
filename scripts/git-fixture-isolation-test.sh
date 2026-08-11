@@ -107,10 +107,10 @@ run_suite() {
 snapshot_state "$tmp_root/before"
 
 suites=(
-	tests/fixtures/build-tdd/sdd-workspace-test.sh
-	tests/fixtures/github-tracking/tracker-test.sh
+	tests/fixtures/forge/sdd-workspace-test.sh
+	tests/fixtures/quest-log/tracker-test.sh
 	.github/scripts/check-records-test.sh
-	skills/decision-records/assets/check-records-test.sh
+	skills/tome-of-lore/assets/check-records-test.sh
 	scripts/check-ripgrep-config-test.sh
 	scripts/check-public-safety-test.sh
 )

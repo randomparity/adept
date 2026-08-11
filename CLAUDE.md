@@ -16,7 +16,7 @@ These four rules govern what may ship here. They are construction rules, not asp
 
 **3. No long-lived processes.** No servers, no port binding, no PID files, no lockfiles, no daemon lifecycle, no liveness checks against a previous invocation. Every script runs and exits.
 
-This rule is not theoretical. The inherited `brainstorming` skill — since absorbed into `$design` — shipped a Node HTTP server with shell PID lifecycle management — 1,411 lines — and both open bugs against it were defects in the "is the previous instance still alive" logic. That whole bug class exists only because something had to survive between invocations. It was deleted rather than fixed.
+This rule is not theoretical. The inherited `brainstorming` skill — since absorbed into `$spellcraft` — shipped a Node HTTP server with shell PID lifecycle management — 1,411 lines — and both open bugs against it were defects in the "is the previous instance still alive" logic. That whole bug class exists only because something had to survive between invocations. It was deleted rather than fixed.
 
 **4. Nothing automated asserts on prose.** No gate greps Markdown for a sentence; no test pins a table row. A predecessor gate of 563 lines plus a 753-line suite did exactly that and produced false reds under bracketed checkout paths, non-UTF-8 bytes, and a developer's personal ripgrep configuration. Prose correctness is a reading problem.
 
@@ -27,7 +27,7 @@ Structural gates are a different thing and are welcome: checking that a `SKILL.m
 - `skills/<name>/SKILL.md` — one directory per skill, auto-discovered by the harness. Frontmatter `name:` must match the directory name. A skill may also carry supporting files — `scripts/` for helpers that clear rule 2's bar, `assets/`, or a dispatch-prompt template — but by rule 1 those are the exception and each one needs an argument. `SKILL.md` alone is the default.
 - `references/<name>.md` — standards you consult while doing something else, as against skills, which are procedures you invoke. A reference is linked by relative path from the skills that consult it and is never written as a `$invocation`. `check-skill-shape.sh` rule 5 checks those links resolve.
 - `tests/fixtures/<skill>/` — behaviour suites and their fixtures, deliberately **outside** the shipped tree. A plugin has no installer; the whole repo is copied into the plugin cache, so a fixture inside a skill's own directory is reachable by that skill at runtime. That has already caused one incident: a stub issue-tracker profile shipped, was selectable, and returned fabricated issues indistinguishable from real ones.
-- `scripts/` — the gate scripts `just` invokes, each with its suite beside it. `.github/scripts/` holds the decision-record gate, kept byte-identical to its twin under `skills/decision-records/assets/` (`just records` compares them).
+- `scripts/` — the gate scripts `just` invokes, each with its suite beside it. `.github/scripts/` holds the decision-record gate, kept byte-identical to its twin under `skills/tome-of-lore/assets/` (`just records` compares them).
 - `docs/adr/` — architecture decision records, append-only once merged.
 - `docs/workflow/specs/`, `docs/workflow/plans/` — design and implementation records.
 - `licenses/` — attribution for skills still derived from upstream work.

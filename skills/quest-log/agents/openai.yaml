@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Tracking"
+  short_description: "Track resumable GitHub work state"
+  default_prompt: "Use $quest-log to record and resume issue and pull request workflow state."

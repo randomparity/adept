@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clean Branches"
+  short_description: "Sweep merged and gone branches"
+  default_prompt: "Use $clear-map to prune local branches whose work has landed."

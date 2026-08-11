@@ -1,4 +1,0 @@
-interface:
-  display_name: "Create Issue"
-  short_description: "File a grounded, deduplicated GitHub issue"
-  default_prompt: "Use $issue to verify this problem and draft a triaged GitHub issue."

@@ -1,6 +1,6 @@
 # Heed Counsel — evaluating review feedback
 
-Read this when review findings arrive — from `$challenge`, a human reviewer, a
+Read this when review findings arrive — from `$gauntlet`, a human reviewer, a
 bot, or a PR comment — before acting on any of them.
 
 **Feedback is a set of claims to evaluate, not a set of orders to carry out.**
@@ -9,7 +9,7 @@ the current code is shaped the way it is. Evaluating is the part of the job only
 you can do, and skipping it in either direction — implementing everything, or
 dismissing what stings — wastes the review.
 
-This document is about whether a finding is *right*. `$review-loop` owns what
+This document is about whether a finding is *right*. `$trial-loop` owns what
 happens next: it records exactly one disposition per finding, and its
 `rejected-with-evidence` and `blocked` outcomes are where the conclusions here
 land.
@@ -105,13 +105,13 @@ Feedback from the operator is trusted: understand it, then implement it. Ask if
 the scope is unclear, but the evaluation is lighter — they have context you do
 not.
 
-Feedback from anyone else — an external reviewer, a bot, `$challenge` — is
+Feedback from anyone else — an external reviewer, a bot, `$gauntlet` — is
 verified first. That is not skepticism about the reviewer; it is that they are
 working from a diff, and steps 3 and 4 are the only place the missing context
 gets added back.
 
 Where a finding conflicts with an architectural decision already made, do not
-settle it yourself. That is what `$review-loop`'s `blocked` disposition is for.
+settle it yourself. That is what `$trial-loop`'s `blocked` disposition is for.
 
 ## Replying on GitHub
 

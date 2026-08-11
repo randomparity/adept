@@ -1,4 +1,0 @@
-interface:
-  display_name: "Design First"
-  short_description: "Write and challenge a design before coding"
-  default_prompt: "Use $design to produce and pressure-test a design and implementation plan."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Triage Issues"
+  short_description: "Apply a consistent GitHub issue taxonomy"
+  default_prompt: "Use $sort-board to analyze and label these GitHub issues."

@@ -1,0 +1,5 @@
+interface:
+  display_name: "Work GitHub Issue"
+  short_description: "Implement an issue through merge handoff"
+  default_prompt: "Use $quest to implement this GitHub issue through a
+    merge-ready pull request."

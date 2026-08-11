@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scope Issue"
+  short_description: "Estimate issue blast radius and risk"
+  default_prompt: "Use $divination to assess the blast radius, risk, and decomposition of this GitHub issue."

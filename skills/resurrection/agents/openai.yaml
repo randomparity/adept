@@ -1,0 +1,4 @@
+interface:
+  display_name: "Recover Orphans"
+  short_description: "Reconcile stale GitHub workflow states"
+  default_prompt: "Use $resurrection to reconcile issue status labels with pull request and branch state."
