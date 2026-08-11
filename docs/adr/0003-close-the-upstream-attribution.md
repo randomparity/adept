@@ -4,13 +4,9 @@
 
 Proposed
 
-Filled and flipped to `Accepted (YYYY-MM-DD)` **in this change, before merge**,
-in the one commit that supplies the *After* column below. The consequences here
-are licensed by that measurement, so the record does not claim them before it
-holds them — and this record must not reach `main` with pending cells. Once it
-is in the base ref the `adr` profile protects `## Decision`
-(`APPEND_ONLY_SECTIONS="*"`), so replacing those cells later would fail
-`E-REWRITE` and need a fourth record to correct.
+Filled and flipped to `Accepted (YYYY-MM-DD)` **in this change, before merge** —
+the consequences are licensed by that measurement, and the record must not reach
+`main` with pending cells.
 
 ## Context
 
@@ -33,13 +29,12 @@ largely `git log --oneline`, `git diff --stat` and `git diff -U10`.
 
 **Rewrite the six files and remove the attribution.**
 
-*Scripts — re-express, change nothing functional.* The conflict with the theatre
-principle is an artifact of the shingle length: the git invocations take their
-arguments from variables, so renaming those breaks the matching windows while
-leaving each invocation byte-identical. A probe rewrite of `review-package`
-measured 0.00% containment with a longest shared run of 6 tokens, every
-invocation, flag and exit code preserved. ADR 0002's protected idiom is
-untouched.
+*Scripts — re-express, change nothing functional.* A probe rewrite of
+`review-package` measured 0.00% containment with a longest shared run of 6
+tokens, every invocation, flag and exit code preserved: renaming the variables
+the git commands read breaks the matching windows without touching a single
+invocation. ADR 0002's theatre objection does not bite, and its protected idiom
+is untouched.
 
 *Templates — author from the in-repo contract, do not paraphrase upstream.* What
 those three files must contain is already specified here: `skills/forge/SKILL.md`
@@ -50,8 +45,9 @@ merely of its wording.
 
 **Threshold**, applying to the six rewritten files, measured against
 `obra/superpowers` at `d884ae04edebef577e82ff7c4e143debd0bbec99` (v6.1.1) by ADR
-0002's method: below **2% containment** and **no shared run over 16 tokens**. The
-bar is two-sided because 0002 reported the run beside containment ("one 40-word
+0002's method: below **2% containment** and **no shared run over 16 tokens** —
+twice the shingle width, so a run must be at least two disjoint shingles long
+before it counts as a passage rather than an idiom. The bar is two-sided because 0002 reported the run beside containment ("one 40-word
 verbatim passage matters more than the same token count scattered across
 unavoidable technical vocabulary") but bounded only the percentage, under which a
 large file could sit at 1.9% while keeping a 40-token verbatim passage.
@@ -62,7 +58,13 @@ longest construct this repository has blessed. Each exemption is named in the
 table below, so the carve-out is visible rather than asserted. A prose run of any
 length, or a longer construct, keeps its citation under the rewrite spec's §2
 fallback; without both limits the exemption would reopen one level down the very
-hole the run bound closes.
+hole the run bound closes. The probe suggests no exemption will be needed — if
+the measurement produces none, that column comes out with the same commit that
+fills the table rather than shipping as empty machinery.
+
+**If any of the six keeps its citation**, the closure does not happen: the notice
+and a shortened README list stay, and this record is revised to say so before
+merge rather than merged as written.
 
 The excluded `skills/forge/SKILL.md` is not held to this bar; it keeps the 1.82%
 / 28-token idiom ADR 0002 blessed and is out of scope here.
@@ -93,8 +95,9 @@ that set. Four files sit above the line and none creates an obligation: the MIT
 `scripts/pre-push-hook`; and two `docs/workflow/` records — a behaviour inventory
 and a migration plan — which quote the upstream behaviour they catalogue and
 retire, at runs of 16 and 51 tokens. That last pair is documentary quotation
-inside records describing what was removed, not reuse of the software, and the
-16-token bound above governs the six rewritten files rather than the tree.
+inside records describing what was removed rather than reuse of the software —
+the same owner's judgment as above, not a measurement result — and the 16-token
+bound governs the six rewritten files rather than the tree.
 
 Neither of those two names `obra/superpowers` in its own prose — the inventory
 cites only the retired `agent-config` skill path it was extracted from — so after
@@ -124,6 +127,11 @@ tracked as [#35](https://github.com/randomparity/adept/issues/35).
   branch review is the whole control.
 - `task-brief` and `review-package` gain behaviour suites, written against
   current behaviour and green *before* the rewrite touches them.
+- Between this change and [#35](https://github.com/randomparity/adept/issues/35)
+  the tree carries two shipped files with unattributed upstream runs and no
+  licence notice anywhere. The owner accepts that interval: the quotation is
+  documentary and short, #35 is filed and small, and holding the closure for it
+  would keep a notice standing for files it was never about.
 - After closure the repository makes an unbounded first-party claim with nothing
   watching it. No in-tree artifact reproduces the measurement, and where 0002 left
   a cited exception, 0003 leaves none — so fresh upstream text entering a new
@@ -138,7 +146,9 @@ move that has occurred, the rename sweep, cost a provenance addendum and six
 README entries — while closing it costs rewriting three live dispatch contracts
 and two untested scripts, and writing two suites first. So this is discretionary,
 chosen because the obligation is bounded and closable now and because a cited
-file list must be kept true as files move.
+file list must be kept true as files move. Against it, and the strongest thing
+the status quo has: a cited list is a *watched* claim, and closure trades it for
+an unwatched one, as the Consequences above concede.
 
 **Rewrite the six but keep `licenses/superpowers.LICENSE`** as a voluntary
 provenance record. Obtains nearly everything for the cost of one 1 KB file, and
