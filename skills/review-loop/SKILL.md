@@ -8,6 +8,14 @@ Run `$challenge` against a target iteratively, fixing findings between passes,
 until it returns `approve` or 5 iterations are exhausted. This is both a
 standalone skill and a subroutine of `$work-issue` and `$design`.
 
+Callers own most of the timing: `$build-tdd` reviews after every task and once
+across the whole branch, `$ship-pr` before a merge. Beyond those, petition the
+council when you are stuck and want a reading that owes nothing to how you got
+here, before a refactor to establish what the baseline actually is, and after
+fixing a bug that was hard to find. Never skip a review because the change looks
+simple — a simple-looking change is where an unexamined assumption survives all
+the way to merge.
+
 Input: pass through the user-supplied challenge target and focus text.
 
 The arguments are passed through to `$challenge` verbatim as the challenge
@@ -158,9 +166,9 @@ focus: <review focus, unchanged>
 
 Repeat up to 5 iterations:
 
-1. Run `$challenge` in a **subagent** with `--json --out <findings-path>
-   <challenge-args>`, then the exact `review-dispatch` block above as the labeled
-   trailing block.
+1. **Petition the council** — run `$challenge` in a **subagent** with
+   `--json --out <findings-path> <challenge-args>`, then the exact
+   `review-dispatch` block above as the labeled trailing block.
 
    Restating the focus inside the block is deliberate — it keeps the charter
    self-contained for the reviewer, and `$challenge` reads the duplicate as one
