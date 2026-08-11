@@ -353,19 +353,20 @@ If the spec still spans several independent subsystems, say so and split it —
 one plan per subsystem, each producing working, testable software on its own.
 
 **Map the files before defining any task.** Which files get created, which get
-modified, and what each one is responsible for. This is where decomposition is
-actually decided, so it is worth doing explicitly rather than discovering it
-task by task. Keep files focused — one clear responsibility each, split by
+changed, and what each is answerable for. Decomposition gets settled here
+whether or not you do it deliberately, so do it deliberately instead of letting
+it emerge one task at a time. Keep files focused — one clear responsibility each, split by
 responsibility rather than by technical layer, with things that change together
 living together. In an existing codebase, follow the patterns already there
 rather than restructuring unilaterally, though a split is reasonable to plan for
 a file you are modifying that has grown unwieldy.
 
-**Right-size the tasks.** A task is the smallest unit that carries its own test
-cycle and is worth a fresh reviewer's gate. Fold setup, configuration,
-scaffolding, and documentation into the task whose deliverable needs them; split
-only where a reviewer could meaningfully reject one task while approving its
-neighbour. Every task ends with an independently testable deliverable.
+**Right-size the tasks.** Draw the boundary where a review verdict could
+plausibly differ on either side of it: if no reviewer could accept the work
+before the line while rejecting the work after it, there is one task there, not
+two. Setup, configuration, scaffolding and documentation are not tasks — they
+belong to whichever deliverable needs them. Each task ends at something testable
+on its own.
 
 **Size the steps to one action each**, two to five minutes' work, in the order
 that makes the test do the proving: write the failing test, run it and confirm
@@ -375,9 +376,9 @@ establishes the test can fail at all.
 
 Start the plan with a header carrying the goal in a sentence, the architecture
 in two or three, the tech stack, and a **Global Constraints** section holding
-the project-wide requirements — version floors, dependency limits, naming and
-copy rules, platform requirements — **copied from the spec verbatim, with exact
-values**. A paraphrased version floor is a wrong version floor. Every task's
+whatever binds the project as a whole: the lowest supported versions, what may
+be depended on, the rules governing names and wording, the platforms that must
+work — **transcribed from the spec exactly, values and all**. A paraphrased version floor is a wrong version floor. Every task's
 requirements implicitly include that section, so it is written once instead of
 re-derived per task.
 
@@ -401,14 +402,17 @@ one place DRY is deliberately not applied, and the reason is that tasks get read
 out of order: "similar to Task 3" is unreadable to someone who has not read
 Task 3.
 
-These are plan failures, not style notes — never write them:
+Each of the following is a defect in the plan, not a matter of house style. A
+plan containing one is not finished:
 
-- "TBD", "TODO", "implement later", "fill in details"
-- "add appropriate error handling", "add validation", "handle edge cases"
-- "write tests for the above", without the test code
-- "similar to Task N", instead of repeating the content
-- a step describing what to do without showing how
-- a reference to a type, function, or method no task defines
+- a deferral marker of any kind standing in for content — `TBD`, `TODO`,
+  "fill this in", "decide later"
+- an instruction whose object is unnamed: handle the errors, validate the
+  input, cover the edge cases. *Which* errors, and what should happen?
+- an instruction to write tests, with no test written
+- a cross-reference used to avoid repeating something — "as in Task 4"
+- a step naming an outcome without the means to reach it
+- a type, function, or signature used but defined by no task
 
 **Then self-review the finished plan against the spec, with fresh eyes.** Walk
 each spec requirement and point to the task implementing it; a requirement with
