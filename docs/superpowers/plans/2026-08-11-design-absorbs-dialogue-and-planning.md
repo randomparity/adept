@@ -259,9 +259,9 @@ Keep `Run relevant guardrails and commit the plan.` (line 329).
 
 - [ ] **Step 2: Confirm every KEEP row is traceable**
 
-Read `docs/superpowers/inventories/writing-plans.md` beside the rewritten section. For each of the 19 KEEP rows, point to the line or lines that carry it. For each of the 6 DROP rows, confirm it is absent.
+Read `docs/superpowers/inventories/writing-plans.md` beside the rewritten section. For each of the 20 KEEP rows, point to the line or lines that carry it. For each of the 6 DROP rows, confirm it is absent.
 
-Expected: 19 KEEP rows traced, 6 DROP rows absent.
+Expected: 20 KEEP rows traced, 6 DROP rows absent.
 
 Pay particular attention to DROP row 25: the rewritten section must not name `subagent-driven-development` or `executing-plans`. Naming `$build-tdd` as the next phase is correct and is not the same thing.
 
@@ -392,4 +392,6 @@ Poll `gh pr checks <n> --json name,state` and `gh pr view <n> --json mergeable,m
 
 **2. Placeholder scan.** No "TBD", no "handle edge cases", no "similar to Task N". The one `<body>` token in Task 5 Step 3 is immediately followed by the sentence enumerating what it must contain, which is the content an engineer needs. Tasks 2 and 3 Step 1 specify structure and the behaviour rows to carry rather than embedding the finished prose — the inventories are the contract, and reproducing the target document inside the plan would duplicate it into two places that then drift.
 
-**3. Type consistency.** Phase names are `council` and `inscribe` in the spec §3 table, the inventory titles, the section headings of Tasks 2 and 3, and the re-pointed bullet in Task 4 — checked. Skill counts are consistent and decreasing: 36 before, 35 after Task 2, 34 after Task 3, asserted at both points. Inventory row counts are consistent: `brainstorming` 22 rows (14 KEEP, 8 DROP), `writing-plans` 25 rows (19 KEEP, 6 DROP), and Tasks 2–3 Step 2 assert those same totals.
+**3. Type consistency.** Phase names are `council` and `inscribe` in the spec §3 table, the inventory titles, the section headings of Tasks 2 and 3, and the re-pointed bullet in Task 4 — checked. Skill counts are consistent and decreasing: 36 before, 35 after Task 2, 34 after Task 3, asserted at both points. Inventory row counts are consistent: `brainstorming` 22 rows (14 KEEP, 8 DROP), `writing-plans` 26 rows (20 KEEP, 6 DROP), and Tasks 2–3 Step 2 assert those same totals.
+
+**Amended during execution.** Task 1 Step 3's completeness check found `writing-plans`' `## Remember` section mapping to no row: "exact commands with expected output" was carried by none of rows 1–25. Added as row 26 (KEEP), appended rather than inserted so that the "DROP row 25" citation in Task 3 Step 2 stays valid. This is the check doing its job — a behaviour that reaches neither KEEP nor DROP is the inertia loss §5 exists to prevent.
