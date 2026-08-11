@@ -16,7 +16,7 @@ These four rules govern what may ship here. They are construction rules, not asp
 
 **3. No long-lived processes.** No servers, no port binding, no PID files, no lockfiles, no daemon lifecycle, no liveness checks against a previous invocation. Every script runs and exits.
 
-This rule is not theoretical. The `brainstorming` skill shipped a Node HTTP server with shell PID lifecycle management — 1,411 lines — and both open bugs against it were defects in the "is the previous instance still alive" logic. That whole bug class exists only because something had to survive between invocations. It was deleted rather than fixed.
+This rule is not theoretical. The inherited `brainstorming` skill — since absorbed into `$design` — shipped a Node HTTP server with shell PID lifecycle management — 1,411 lines — and both open bugs against it were defects in the "is the previous instance still alive" logic. That whole bug class exists only because something had to survive between invocations. It was deleted rather than fixed.
 
 **4. Nothing automated asserts on prose.** No gate greps Markdown for a sentence; no test pins a table row. A predecessor gate of 563 lines plus a 753-line suite did exactly that and produced false reds under bracketed checkout paths, non-UTF-8 bytes, and a developer's personal ripgrep configuration. Prose correctness is a reading problem.
 
