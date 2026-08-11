@@ -28,9 +28,10 @@ update.
 
 ## What ships
 
-29 skills covering design, TDD, adversarial review, shipping, and campaign
-orchestration, plus 2 MCP servers (`context7`, `exa`). `claude plugin details adept`
-prints the current inventory and its projected token cost.
+26 skills covering design, TDD, adversarial review, shipping, and campaign
+orchestration, plus 3 references the skills consult and 2 MCP servers (`context7`,
+`exa`). `claude plugin details adept` prints the current inventory and its
+projected token cost.
 
 The `exa` server reads `EXA_API_KEY` from the session environment at start. A machine
 without the key set gets a failing server it can disable; nothing else depends on it.
