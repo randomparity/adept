@@ -1,0 +1,12 @@
+{
+  "name": "randomparity",
+  "owner": { "name": "David Christensen" },
+  "description": "Personal marketplace: development-workflow skills for Claude Code and Codex.",
+  "plugins": [
+    {
+      "name": "adept",
+      "source": "./",
+      "description": "Development-workflow skills: design, TDD, adversarial review, shipping, and campaign orchestration."
+    }
+  ]
+}
