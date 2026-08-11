@@ -303,7 +303,8 @@ Repeat up to 5 iterations:
    so it must not advance invisibly. The exit-disclosure rule under *Stop conditions*
    also applies here, as it does on every exit. Then exit the loop **and immediately
    continue to the next workflow step** — do not pause or hand back control.
-5. If `verdict` is `needs-attention`, apply `receiving-code-review` to
+5. If `verdict` is `needs-attention`, apply
+   [heed-counsel](../../references/heed-counsel.md) to
    every finding, verifying each instead of agreeing reflexively — a finding you
    cannot defend on re-reading is `rejected-with-evidence`, not a fix.
 6. Record exactly one disposition per finding:
