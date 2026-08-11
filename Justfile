@@ -102,7 +102,22 @@ ripgrep-config-check:
   ./scripts/check-ripgrep-config.sh
 
 plugin-check:
+  #!/usr/bin/env bash
+  set -euo pipefail
   claude plugin validate ./
+  # The validator reads the Claude manifests only. It passes green with
+  # .mcp.json and .codex-plugin/plugin.json both unparseable, so without these
+  # a typo in either ships and surfaces the next time someone runs Codex or
+  # starts a server. Parseability plus the one cross-reference that can rot --
+  # the skills path Codex is pointed at -- is the whole check; the rest of each
+  # manifest's meaning belongs to its own harness.
+  jq -e . .mcp.json >/dev/null
+  jq -e . .codex-plugin/plugin.json >/dev/null
+  skills_path="$(jq -r '.skills' .codex-plugin/plugin.json)"
+  if [[ ! -d $skills_path ]]; then
+    echo "plugin-check: .codex-plugin/plugin.json names a missing skills path: $skills_path" >&2
+    exit 1
+  fi
 
 actions-check:
   actionlint
