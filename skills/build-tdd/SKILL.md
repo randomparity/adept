@@ -41,19 +41,96 @@ the new authority, if supplied, in provenance before re-freezing the charter.
 guardrails means proceed to the next step — do not end your turn. Stop only on
 a genuine blocker you have named (e.g. a guardrail that cannot be made green).
 
+## Pocket dimension — the isolated workspace
+
+Set this up before either execution mode runs.
+
+**Detect isolation before creating anything.**
+
+```bash
+GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
+GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
+git rev-parse --show-superproject-working-tree 2>/dev/null   # non-empty ⇒ submodule
+```
+
+`GIT_DIR != GIT_COMMON` means a linked worktree — **but it is also true inside a
+submodule**, so the third command is not optional. A submodule is a normal
+checkout for this purpose.
+
+Already isolated: report the path and whether HEAD is detached (detached means a
+branch has to be created at finish time), then skip to project setup. Do not
+create a second worktree.
+
+Not isolated: if the instructions do not already declare a worktree preference,
+ask before creating one — it changes where the user's work lives. Honour a
+declared preference without asking. If the user declines, work in place and
+continue to project setup.
+
+**Prefer the harness's native worktree tool** — something named like
+`EnterWorktree`, a `/worktree` command, a `--worktree` flag. It handles
+placement, branch creation, and cleanup, and running `git worktree add` behind
+it creates phantom state it cannot see.
+
+**Unless it would nest.** Check where it puts the worktree first. A worktree
+inside the working copy is never acceptable — not `.worktrees/`, not
+`worktrees/`, not under `.codex/`, not any subdirectory, and not made acceptable
+by a `.gitignore` entry, because whole-tree tooling does not all honour one.
+Linters, type checkers, test discovery, and search walk a nested worktree and
+fail your commit on another agent's in-flight code. If the native tool nests,
+refuse it and run `git worktree add` against an external path yourself.
+
+**Choose the directory** by priority: an explicit external path in your
+instructions, then an existing `../<repo>-worktrees/` sibling root, then that
+path as the default. Placement outranks priority — if your instructions name a
+path inside the repo, say so and use an external one anyway.
+
+```bash
+REPO_ROOT=$(cd "$(git rev-parse --show-toplevel)" && pwd -P)
+LOCATION="$(dirname "$REPO_ROOT")/$(basename "$REPO_ROOT")-worktrees"
+path="$LOCATION/$BRANCH_NAME"
+mkdir -p "$(dirname "$path")"
+git worktree add "$path" -b "$BRANCH_NAME"
+cd "$path"
+
+# Confirm it really landed outside the repo before working in it.
+case "$(pwd -P)/" in
+  "$REPO_ROOT"/*) echo "NESTED — relocate outside $REPO_ROOT" ;;
+esac
+```
+
+`BRANCH_NAME` is whatever your instructions assigned (`$work-issue` names it
+explicitly); derive it from the work and report your choice if nothing did. If
+the containment check prints, remove the worktree and recreate it externally —
+never paper over it with a `.gitignore` entry.
+
+If `git worktree add` fails on a sandbox permission denial, say the sandbox
+blocked it, work in the current directory, and run setup and baseline there.
+
+**Then set up and verify a clean baseline.** Install dependencies for whatever
+manifests are present — `package.json`, `Cargo.toml`, `requirements.txt`,
+`pyproject.toml`, `go.mod` — and run the project's test command. A baseline you
+did not check is a baseline that gets blamed on your change.
+
+On a failing baseline the response depends on who is reachable:
+
+- **Interactive:** report the failures, ask whether to proceed or investigate, wait.
+- **Dispatched, with an instruction or repo rule that explicitly addresses the
+  failed baseline:** report, then follow it.
+- **Dispatched, without one:** report the failures as a blocker and return.
+
+Generic dispatch, autonomy, or task-completion language is not authority to
+proceed past a red baseline. Do not infer permission and do not start
+implementing.
+
+Report when ready: the path, the passing test count, and what is about to be
+built.
+
 ## Subagent execution
 
 Honor repo-level subagent and worktree rules. If repo instructions require
 mutating subagents to work in separate worktrees, obey that. Otherwise,
 sequential subagent dispatch on the same feature branch is allowed. Never
 dispatch mutating subagents in parallel in the same working tree.
-
-Worktrees must live outside the repo tree — never nest them inside the repo
-(not under `.codex/`, not any subdir). Whole-tree tooling (linters, type
-checkers, test discovery, search) will walk a nested worktree and fail your
-commit on another agent's in-flight code. If the harness's built-in worktree
-isolation would place the worktree inside the repo, do not use it; run
-`git worktree add <external-path>` yourself.
 
 **Model selection per dispatch.** Use the skill's model-selection guidance:
 
