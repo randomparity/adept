@@ -1,0 +1,4 @@
+interface:
+  display_name: "Groom Repository"
+  short_description: "Surface stale issues and maintenance work"
+  default_prompt: "Use $groom to sweep this repository for maintenance work without doing it."

@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+fail() {
+	printf 'resolve-architecture-context: %s\n' "$1" >&2
+	exit 64
+}
+
+normalize_target() {
+	case "$1" in
+	x86_64 | amd64) printf 'x86_64\n' ;;
+	arm64 | aarch64) printf 'arm64\n' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+[[ "$#" -ge 3 ]] ||
+	fail 'usage: <ok|unsupported|detection-failed> <host-value> <conflict|none|declared> [targets...]'
+
+host_status="$1"
+host_value="$2"
+target_state="$3"
+shift 3
+
+if [[ "$host_value" =~ [[:cntrl:]] ]]; then
+	fail 'host value must be one escaped record field'
+fi
+for target in "$@"; do
+	if [[ "$target" =~ [[:cntrl:]] ]]; then
+		fail 'target declarations must be printable record fields'
+	fi
+	if [[ -z "${target//[[:space:]]/}" ]]; then
+		fail 'target declarations must not be blank'
+	fi
+done
+
+case "$host_status" in
+ok)
+	case "$host_value" in
+	x86_64 | arm64 | ppc64le | s390x) ;;
+	*) fail 'ok host must be normalized' ;;
+	esac
+	host_rendering="$host_value"
+	;;
+unsupported) host_rendering="unsupported ($host_value)" ;;
+detection-failed) host_rendering="detection failed ($host_value)" ;;
+*) fail "unknown host status: $host_status" ;;
+esac
+
+case "$target_state" in
+conflict | none | declared) ;;
+*) fail "unknown target state: $target_state" ;;
+esac
+if [[ "$target_state" == declared && "$#" -eq 0 ]]; then
+	fail 'declared target state requires at least one target'
+fi
+if [[ "$target_state" == none && "$#" -ne 0 ]]; then
+	fail 'none target state does not accept targets'
+fi
+if [[ "$target_state" == conflict && "$#" -lt 2 ]]; then
+	fail 'conflict target state requires at least two declarations'
+fi
+
+if [[ "$target_state" == conflict ]]; then
+	relationship=unresolved-target-conflict
+elif [[ "$host_status" != ok ]]; then
+	relationship=host-unresolved
+elif [[ "$target_state" == none ]]; then
+	relationship=no-target-declared
+elif [[ "$target_state" == declared ]]; then
+	relationship=different
+	for target in "$@"; do
+		if [[ "$(normalize_target "$target")" == "$host_value" ]]; then
+			relationship=included
+			break
+		fi
+	done
+fi
+
+printf 'HOST_ARCHITECTURE\t%s\n' "$host_rendering"
+if [[ "$target_state" == none ]]; then
+	printf 'TARGET_ARCHITECTURES\tnone declared\n'
+else
+	for target in "$@"; do
+		printf 'TARGET_ARCHITECTURES\t%s\n' "$target"
+	done
+fi
+printf 'ARCHITECTURE_RELATIONSHIP\t%s\n' "$relationship"

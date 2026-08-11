@@ -1,0 +1,4 @@
+interface:
+  display_name: "Run Preflight"
+  short_description: "Discover repository state and guardrails"
+  default_prompt: "Use $preflight to inspect this repository before making changes."

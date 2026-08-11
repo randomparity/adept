@@ -1,0 +1,4 @@
+interface:
+  display_name: "Run Issue Campaign"
+  short_description: "Drive a set of GitHub issues to completion"
+  default_prompt: "Use $campaign to resolve and merge this set of GitHub issues."

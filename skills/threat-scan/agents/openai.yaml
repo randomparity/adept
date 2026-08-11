@@ -1,0 +1,4 @@
+interface:
+  display_name: "Threat Scan"
+  short_description: "Scan a diff for security boundary issues"
+  default_prompt: "Use $threat-scan to inventory trust boundaries and security findings in this change."

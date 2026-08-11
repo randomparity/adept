@@ -1,0 +1,4 @@
+interface:
+  display_name: "Process Retrospective"
+  short_description: "Analyze workflow telemetry and propose tuning"
+  default_prompt: "Use $retro to analyze recent workflow telemetry and write a process retrospective."
