@@ -38,10 +38,12 @@ is untouched.
 
 *Templates — author from the in-repo contract, do not paraphrase upstream.* What
 those three files must contain is already specified here: `skills/forge/SKILL.md`
-states the dispatch requirements and `skills/gauntlet/SKILL.md:289-297` fixes the
-severity vocabulary. Writing them from that contract, rather than rewording the
-upstream text, makes the result independent of upstream *arrangement* and not
-merely of its wording.
+states the dispatch requirements — the severity scale at
+`skills/gauntlet/SKILL.md:289-297` for the two reviewer prompts, and the
+four-value status enum at `skills/forge/SKILL.md:213-223` for the implementer
+prompt. Writing them from that contract, rather than rewording the upstream text,
+makes the result independent of upstream *arrangement* and not merely of its
+wording.
 
 **Threshold**, applying to the six rewritten files, measured against
 `obra/superpowers` at `d884ae04edebef577e82ff7c4e143debd0bbec99` (v6.1.1) by ADR
@@ -110,21 +112,25 @@ tracked as [#35](https://github.com/randomparity/adept/issues/35).
 - `licenses/superpowers.LICENSE` is deleted and `licenses/` goes with it.
 - `README.md`'s *Licence* section loses the six-file list, keeping MIT and
   re-aiming its measurement pointer at **this** record.
-- `$gauntlet`'s citation of the two reviewer templates as "derived from vendored
-  superpowers prompts" is dropped. ADR 0002 made that line correct; it becomes
-  false, and a stale attribution is a defect in the direction nobody checks.
+- `$gauntlet`'s stale attribution goes — the sentence at `SKILL.md:289` and the
+  conversion table's `| superpowers | here |` header at :291, which is the same
+  claim in table form. ADR 0002 made that line correct; it becomes false, and a
+  stale attribution is a defect in the direction nobody checks.
 - **ADR 0002's narrowing is superseded.** Its *Method* section and its six
   per-file figures survive as the definition of the metric this record and any
   future re-derivation use. One further claim of 0002's does **not** survive: "no
   other shipped file reaches 2%", which does not hold over the candidate set
   stated above and is replaced by the four-file correction there. A reader
   arriving by 0002's banner should not rely on that sentence.
-- The templates keep the literal words `Critical`, `Important` and `Minor` with
-  their placeholders and output shape, because two skills gate on them. The
-  accepted risk is that a careless rewrite breaks `$forge`'s party-mode dispatch
-  silently — no gate can catch it, since anatomy rule 4 forbids asserting on
-  prose, so a per-file contract checklist read at implementation and again at
-  branch review is the whole control.
+- The three templates keep their gated vocabulary, which **differs per file**:
+  `task-reviewer-prompt.md` and `code-reviewer.md` keep `Critical` / `Important`
+  / `Minor`, while `implementer-prompt.md` contains none of those words and
+  instead keeps `DONE` / `DONE_WITH_CONCERNS` / `BLOCKED` / `NEEDS_CONTEXT`,
+  which `skills/forge/SKILL.md:213-223` dispatches on four separate ways. The
+  accepted risk is that a careless rewrite breaks that dispatch silently — no
+  gate can catch it, since anatomy rule 4 forbids asserting on prose, so a
+  per-file contract checklist read at implementation and again at branch review
+  is the whole control.
 - `task-brief` and `review-package` gain behaviour suites, written against
   current behaviour and green *before* the rewrite touches them.
 - Between this change and [#35](https://github.com/randomparity/adept/issues/35)

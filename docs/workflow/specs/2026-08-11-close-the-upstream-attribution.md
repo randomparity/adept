@@ -61,9 +61,20 @@ The scan covers **every tracked file — 129 of them**. ADR 0002 never stated it
 candidate set, and its claim that "no other shipped file reaches 2%" does not
 hold over that set: `LICENSE` (95.71%, run 163) is the MIT text both projects
 share, `scripts/pre-push-hook` (6.06%, run 9) is one `set -euo pipefail` /
-`git rev-parse --show-toplevel` idiom, and two `docs/workflow/` records (2.51%
-run 16, 2.25% run 51) quote the upstream behaviour they inventory and retire,
-naming the source in their own prose.
+`git rev-parse --show-toplevel` idiom, and two records quote the upstream
+behaviour they inventory and retire —
+`docs/workflow/inventories/subagent-driven-development.md` (2.51%, run 16) and
+`docs/workflow/plans/2026-08-11-strip-companion-and-realign-migration.md`
+(2.25%, run 51).
+
+**Neither of those two names `obra/superpowers` in its own prose.** The string
+occurs in exactly five tracked files, and the inventory cites only the retired
+`agent-config` skill path it was extracted from. So the argument that they carry
+no obligation is *not* that the source is named: it is that the quotation is
+short and documentary, inside records describing behaviour being removed rather
+than reusing the software. That is the owner's judgment and ADR 0003 records it
+as one. Adding the attribution line is out of surface, tracked as
+[#35](https://github.com/randomparity/adept/issues/35).
 
 None creates an obligation, so R4 stands. ADR 0003 records the correction, since
 its own "no shipped file is substantially upstream expression" consequence is
@@ -96,8 +107,17 @@ wording, variable naming, and statement structure. That is the expression the
 licence protects, and it is the only thing this change touches.
 
 If any file cannot reach the threshold without altering a functional construct,
-that file keeps its attribution and the obligation stays open for it — ADR
-0002's own §2 fallback. The probe says this will not arise.
+that file keeps its attribution and the obligation stays open for it — the
+rewrite spec's §2 fallback.
+
+**The probe is n=1 and does not generalise across the three scripts.** Its
+mechanism is variable renaming breaking windows that span `git` invocations, and
+`review-package` is where that works best. `task-brief` embeds an awk program
+whose density is pattern text rather than variables — renaming `infence` and
+`intask` leaves the regex literals intact. `sdd-workspace` starts at 11.60% with
+a 45-token run that must come below 16, in logic R3 pins in place. Those two are
+the likeliest to hit the fallback, so the plan sequences them **first**, where a
+miss is cheap to discover.
 
 ## Requirements
 
@@ -105,8 +125,19 @@ that file keeps its attribution and the obligation stays open for it — ADR
 
 Measured by the validated rebuild against `obra/superpowers@d884ae04`, after the
 rewrite, for each of the six individually: **below 2% containment** and **no
-shared run over 16 tokens**, except functional constructs, each of which is
-enumerated individually in the pull request rather than asserted in bulk.
+shared run over 16 tokens** — twice the shingle width, so a run is two disjoint
+shingles before it counts as a passage rather than an idiom.
+
+A run may be exempted only if it is **command syntax rather than prose** *and*
+**no longer than 28 tokens**, the longest construct this repository has blessed
+(ADR 0002's `git rev-parse` idiom). Both limits are load-bearing; without them
+the exemption reopens the hole the run bound closes. Exemptions are recorded in
+ADR 0003's table — the durable record — with the pull request carrying a copy.
+
+**The final scan runs against the merge-candidate tree, not the baseline.** This
+change adds tracked files (R6's two suites) and the candidate set is every
+tracked file, so the denominator moves. ADR 0003 records the final file count
+beside the per-file figures; new fixtures are candidates like anything else.
 
 Containment alone is the wrong control. ADR 0002 reported the longest run beside
 it because "one 40-word verbatim passage matters more than the same token count
@@ -119,27 +150,44 @@ Not a requirement: reaching 0%. Short unavoidable idioms are acceptable residue,
 which is why the threshold is 2% rather than nil.
 
 Feasibility is evidenced for the scripts and not the templates: the probe was a
-shell script, and its variable-renaming argument does not transfer to prose. If
-a file misses, the rewrite spec's §2 fallback applies — it keeps its attribution
-and R4 is reduced accordingly. Because the measurement runs inside this change,
-that branch resolves before merge; the ADR states the outcome that happened
-rather than carrying a conditional into the merged record.
+shell script, and its variable-renaming argument does not transfer to prose.
 
-### R2 — the three reviewer templates keep their dispatch contract
+If any file misses, the rewrite spec's §2 fallback applies and **R4 does not
+happen** — it is not reducible. Its first bullet deletes `licenses/` outright, so
+one surviving citation means the notice and a shortened README list stay. Because
+the measurement runs inside this change, that branch resolves before merge and
+the ADR states the outcome that happened rather than carrying a conditional into
+the merged record.
 
-These are prompts consumed by dispatched subagents, and two other places gate on
-their vocabulary:
+### R2 — the three dispatch templates keep their contract
+
+Two reviewer prompts and one implementer prompt, all consumed by dispatched
+subagents. **They do not share a vocabulary, and the gated tokens differ per
+file** — a bulk "the severity words survive" requirement would leave the one file
+where the risk is highest completely unprotected.
+
+**`task-reviewer-prompt.md` and `code-reviewer.md`** keep the literal words
+`Critical`, `Important`, `Minor`. Gated at:
 
 - `skills/forge/SKILL.md:203` — "On Critical or Important findings, dispatch a
   fix subagent, then re-review."
 - `skills/forge/SKILL.md:361-367` — states outright that rewriting the severity
   words at the dispatch site breaks the party mode's gates.
-- `skills/gauntlet/SKILL.md:289-297` — a severity-conversion table keyed on
-  `Critical` / `Important` / `Minor`.
+- `skills/gauntlet/SKILL.md:289-297` — the severity-conversion table.
 
-So the literal words **`Critical`, `Important`, `Minor`** survive verbatim in
-all three templates, as does each template's placeholder set and required output
-shape.
+**`implementer-prompt.md` carries none of those words** — zero occurrences. Its
+gated vocabulary is a four-value status enum, `Status: DONE |
+DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT` (implementer-prompt.md:127,
+restated at :136-137). All four literals survive verbatim. Gated at
+`skills/forge/SKILL.md:213-223`, "Four statuses, four responses", which
+dispatches differently on each, and again at :167 and :223 for `BLOCKED`.
+
+Normalising `DONE_WITH_CONCERNS` to something tidier is exactly the kind of edit
+an author writing "from the contract" would make, and `$forge`'s party mode would
+then fall through its dispatch on every implementer report. No gate can catch it;
+see *Verification*.
+
+Each template's placeholder set and required output shape survive too.
 
 **Author these three from the in-repo contract, do not paraphrase the upstream
 text.** What each must contain is already specified here — `skills/forge/SKILL.md`
@@ -169,14 +217,32 @@ because `$campaign`'s fail-closed reader would otherwise see a truncation gap.
 - `README.md`'s *Licence* section loses the six-file list and the
   `licenses/superpowers.LICENSE` link, keeping MIT and the pointer to the
   decision record.
-- `skills/gauntlet/SKILL.md`'s "both derived from vendored superpowers prompts"
-  citation is dropped — it stops being true, and a stale attribution is a
-  correctness defect in the opposite direction.
+- `skills/gauntlet/SKILL.md`'s stale attribution goes — **the whole passage, not
+  just the sentence**. Line 289's "both derived from vendored superpowers
+  prompts" clause stops being true, and so does the conversion table's own header
+  two lines below it at :291, `| superpowers | here |`, which is the same claim in
+  table form. Relabel that column for the scale's owner (`| $forge | here |`) and
+  reword :289 to identify the two templates by role rather than ancestry. The
+  table is the normative conversion `skills/forge/SKILL.md:361-367` points callers
+  at, so a column named for a retired provenance is a live cross-reference.
+  `rg -n --no-config -i superpowers skills/gauntlet/SKILL.md` before calling R4
+  done.
 
 ### R5 — the measurement is recorded as ADR 0002 recorded its own
 
 A new record, ADR 0003, carrying the method reference, the before/after table,
-and the consequences. ADR 0002 gets the one edit a merged record permits: a
+and the consequences.
+
+**It also records the file-selection predicate**, which ADR 0002 did not. This
+change is the first attempt to reproduce 0002's method with that record in hand,
+and it produced a corpus 22% larger (171 files against 140). The tokeniser,
+shingle width and containment formula transferred; the predicate — what counts as
+an upstream file, which directories and extensions are in or out — did not,
+because it was never written down. "Recorded in enough detail to reproduce" has
+now been tested once and failed, so ADR 0003 records, for both sides: the
+upstream ref, the exact enumeration used, any exclusions, and the resulting file
+and distinct-shingle counts. That is the missing artifact — not the checker,
+which stays out under anatomy rule 2. ADR 0002 gets the one edit a merged record permits: a
 supersession banner on its `## Status`.
 
 ADR 0003 lands as **`Proposed`** with its *After* column marked pending, and the
@@ -205,11 +271,35 @@ suite under `tests/fixtures/forge/`, written against the **current** behaviour
 and passing **before** the rewrite. That ordering is what makes them a
 regression check rather than a description of whatever the rewrite produced.
 
+**What the suites may assert.** R3 lets diagnostic *wording* change, and R6 wants
+the suites green before the rewrite and still green after it, untouched. Both hold
+only if the suites never pin a diagnostic string. So they assert: exit status;
+argument handling including the arity errors (exit 2) and `task-brief`'s
+not-found path (exit 3); the output file path; the structural sections of the
+written file; and *that* stderr is non-empty on each error path — never the text
+of a message.
+
+That also keeps upstream wording out of new tracked files, which matters because
+those files land in the candidate set R1 rescans.
+
 `sdd-workspace`'s existing 8-assertion suite stays green untouched.
 
 ## Verification
 
 `just verify` at every commit, bare.
+
+**Commit order is fixed**, because three requirements impose one and a public
+branch should never carry a state that outruns its evidence:
+
+1. the two new suites, green against the *current* scripts (R6);
+2. the six rewrites, `sdd-workspace` and `task-brief` first (they are likeliest
+   to hit the fallback);
+3. the measurement against the merge-candidate tree (R1);
+4. R4's deletions and the README edit — licensed only by step 3;
+5. the ADR 0003 flip to `Accepted`, filling the table in the same commit (R5).
+
+Doing R4 early would publish a branch where six files at 95–100% containment ship
+with no notice, and point the README at a record still marked `Proposed`.
 
 Suites are auto-discovered — `just test` walks `git ls-files -z -- '*-test.sh'`
 and `scripts/list-shell-sources.sh` finds shell sources by shebang — so a new
