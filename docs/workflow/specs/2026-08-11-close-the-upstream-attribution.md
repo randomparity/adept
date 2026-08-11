@@ -162,9 +162,16 @@ which is why the threshold is 2% rather than nil.
 Feasibility is evidenced for the scripts and not the templates: the probe was a
 shell script, and its variable-renaming argument does not transfer to prose.
 
-If any file misses, the rewrite spec's §2 fallback applies and **R4 does not
-happen** — it is not reducible. Its first bullet deletes `licenses/` outright, so
-one surviving citation means the notice and a shortened README list stay. Because
+If any file misses, the rewrite spec's §2 fallback applies and R4 is keyed per
+bullet rather than reduced wholesale:
+
+- deleting `licenses/` and stripping the README list require **all six** to
+  clear; one surviving citation and the notice stays with a shortened list;
+- the `CLAUDE.md` Layout entry is keyed to `licenses/` actually being gone;
+- the `$gauntlet` passage and table header are keyed to the two reviewer prompts
+  alone, so they happen whenever those two clear the bar, whatever the scripts do.
+
+Because
 the measurement runs inside this change, that branch resolves before merge and
 the ADR states the outcome that happened rather than carrying a conditional into
 the merged record.
@@ -192,12 +199,32 @@ restated at :136-137). All four literals survive verbatim. Gated at
 `skills/forge/SKILL.md:213-223`, "Four statuses, four responses", which
 dispatches differently on each, and again at :167 and :223 for `BLOCKED`.
 
+**`task-reviewer-prompt.md` carries a third gated literal**: the reviewer
+convention `Cannot verify from diff` (task-reviewer-prompt.md:145), which
+`skills/forge/SKILL.md:226` consumes as a category the controller must settle
+before closing a task. It survives verbatim too.
+
 Normalising `DONE_WITH_CONCERNS` to something tidier is exactly the kind of edit
 an author writing "from the contract" would make, and `$forge`'s party mode would
 then fall through its dispatch on every implementer report. No gate can catch it;
 see *Verification*.
 
-Each template's placeholder set and required output shape survive too.
+Each template's placeholder set survives verbatim — `code-reviewer.md`'s
+`[DESCRIPTION]`, `[PLAN_OR_REQUIREMENTS]`, `[BASE_SHA]`, `[HEAD_SHA]`, `[SHA]`;
+`implementer-prompt.md`'s `[BRIEF_FILE]`, `[REPORT_FILE]`;
+`task-reviewer-prompt.md`'s `[MODEL]`, `[BRIEF_FILE]`, `[GLOBAL_CONSTRAINTS]`,
+`[REPORT_FILE]`, `[BASE_SHA]`.
+
+So does the output shape, as a named list rather than a category:
+`code-reviewer.md` returns **Strengths, Issues (Critical / Important / Minor),
+Recommendations, Assessment**, with the assessment carrying a `Ready to merge:`
+verdict line.
+
+**Derive the checklist from the consumption sites, not from the file being
+replaced** — `skills/forge/SKILL.md` lines 203, 213-223, 226 and 355-367. An
+author who extracts the contract from the template they are about to rewrite
+inherits whatever that template happens to say; branch review re-derives it from
+the same sites independently.
 
 **Author these three from the in-repo contract, do not paraphrase the upstream
 text.** What each must contain is already specified here — `skills/forge/SKILL.md`
@@ -219,6 +246,13 @@ diagnostics on stderr in kind (wording may change; behaviour may not). These two
 scripts have one stdout line each, a status line naming what was written: its
 *wording* is a diagnostic and may change, and what is frozen is that it names the
 output path.
+
+**Two exceptions, in `sdd-workspace`.** Its existing suite matches the substrings
+`refusing to modify it` (test line 177) and `cannot determine whether` (line 227),
+so those two fragments are frozen along with the behaviour they report. They are
+behaviour-adjacent assertions rather than wording churn, freezing them costs the
+rewrite nothing, and criterion 6 promises that suite stays green *untouched* —
+which a free hand with the wording would break.
 `sdd-workspace` in particular keeps its three-way tracked / untracked /
 unanswerable handling, its `check-ignore` verification on the tracked path, and
 its atomic temp-file-and-rename write with the cleanup trap — that logic exists
@@ -293,9 +327,20 @@ the suites green before the rewrite and still green after it, untouched. Both ho
 only if the suites never pin a diagnostic string. So they assert: exit status;
 argument handling including the arity errors (exit 2) and `task-brief`'s
 not-found path (exit 3); the output file path; the structural sections of the
-written file; and *that* stderr is non-empty on each error path — never the text
-of a message, and never the wording of the stdout status line, only that the
-named output path exists and is non-empty.
+written file; that stdout is a single line containing the resolved output path as
+a substring, which is how the controller learns where the file went; and *that*
+stderr is non-empty on each error path — never the text of a message, and never
+the wording around the path on stdout.
+
+`task-brief`'s extraction semantics are content assertions on a fixture plan, not
+diagnostic strings, so they sit inside that rule and are required: asking for
+Task 1 in a plan that also contains Task 10 returns only Task 1; a `# Task N`
+line inside a fenced block is not a heading; a task body ends at the next Task
+heading; the final task runs to end of file; and any heading depth matches.
+
+Each new suite clears the local Git environment the way
+`tests/fixtures/forge/sdd-workspace-test.sh` does, and passes an explicit
+`OUTFILE` except in the one case that pins the default path.
 
 That also keeps upstream wording out of new tracked files, which matters because
 those files land in the candidate set R1 rescans.
@@ -313,8 +358,10 @@ branch should never carry a state that outruns its evidence:
 2. the six rewrites, `sdd-workspace` and `task-brief` first (they are likeliest
    to hit the fallback);
 3. the measurement against the merge-candidate tree (R1);
-4. R4's deletions and the README edit — licensed only by step 3;
-5. the ADR 0003 flip to `Accepted`, filling the table in the same commit (R5).
+4. R4's deletions and the README and `CLAUDE.md` edits, **together with** the
+   ADR 0003 table fill and its flip to `Accepted`, in one commit (R5) — so no
+   commit exists in which the notice is gone and its evidence is not yet
+   recorded.
 
 Doing R4 early would publish a branch where six files at 95–100% containment ship
 with no notice, and point the README at a record still marked `Proposed`.
@@ -373,8 +420,11 @@ never sees a truncation gap — is *preserved*, not modified, and R3 plus the
 existing suite are what hold it.
 
 **No eval plan required, and none is possible here.** The three templates are an
-AI surface, but this change does not alter what they instruct — R3's
-counterpart for prose. The surface's contract is unchanged by construction, and
-the only honest check is the reading described under *Verification*; anatomy
-rule 4 rules out an automated one. An eval harness asserting on prompt text
+AI surface, but this change does not alter what they instruct — R3's counterpart
+for prose. The contract is unchanged **by requirement, not by construction**:
+that it held is the conclusion the verification establishes, not an input to it.
+The controls are the literal token checks plus the reading described under
+*Verification*, with the checklist re-derived at branch review from
+`skills/forge/SKILL.md`'s consumption sites rather than from the replaced
+templates. Anatomy rule 4 rules out an automated one. An eval harness asserting on prompt text
 would be the phantom feature this repository was built to stop shipping.

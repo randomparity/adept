@@ -41,7 +41,8 @@ those three files must contain is already specified here: `skills/forge/SKILL.md
 states the dispatch requirements — the severity scale at
 `skills/gauntlet/SKILL.md:289-297` for the two reviewer prompts, and the
 four-value status enum at `skills/forge/SKILL.md:213-223` for the implementer
-prompt. Writing them from that contract, rather than rewording the upstream text,
+prompt, and the `Cannot verify from diff` convention at :226. Writing them from
+that contract, rather than rewording the upstream text,
 makes the result independent of upstream *arrangement* and not merely of its
 wording.
 
@@ -128,7 +129,8 @@ tracked as [#35](https://github.com/randomparity/adept/issues/35).
   `task-reviewer-prompt.md` and `code-reviewer.md` keep `Critical` / `Important`
   / `Minor`, while `implementer-prompt.md` contains none of those words and
   instead keeps `DONE` / `DONE_WITH_CONCERNS` / `BLOCKED` / `NEEDS_CONTEXT`,
-  which `skills/forge/SKILL.md:213-223` dispatches on four separate ways. The
+  which `skills/forge/SKILL.md:213-223` dispatches on four separate ways, plus
+  the task reviewer's `Cannot verify from diff` convention consumed at :226. The
   accepted risk is that a careless rewrite breaks that dispatch silently — no
   gate can catch it, since anatomy rule 4 forbids asserting on prose, so a
   per-file contract checklist read at implementation and again at branch review
