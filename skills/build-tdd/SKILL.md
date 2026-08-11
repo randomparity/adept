@@ -359,8 +359,8 @@ Critical or Important findings"), so rewriting them at the dispatch site breaks 
 
 ## TDD rules
 
-Whoever writes code — subagent or this session — uses
-`test-driven-development`:
+Whoever writes code — subagent or this session — works to the standard in
+[trial-by-fire](../../references/trial-by-fire.md):
 
 1. Write the failing test first.
 2. Run it and confirm it fails for the expected reason.
