@@ -26,11 +26,10 @@ The caller owns approval gates, so each gate below has a dispatched replacement:
 | Gate as written | In dispatched mode |
 |---|---|
 | `HARD-GATE` — user approves the design | The frozen external charter **is** the approved requirement. Its provenance identifies the issue, direct request, linked decisions, and later user answers that authorize it. |
-| Checklist 3 — ask clarifying questions one at a time | Return every design-changing ambiguity through `SCOPE CHECKPOINT`. The interactive root asks; the unattended root parks. Record only non-design-changing assumptions in the spec. |
-| Checklist 5 — approval after each design section | Write the sections. There is no per-section approval. |
-| Checklist 8 / **User Review Gate** — ask the user to review the spec, "Wait for the user's response" | `$design` step 3 replaces it: an adversarial `$review-loop` over the spec file. Do not wait. |
-| Checklist 2 / **Visual Companion** offer | Never applies — it requires a browser a human is looking at. Do not offer it. |
-| Checklist 9 / terminal state — invoke `writing-plans` | **Return to your caller instead.** See below. |
+| Checklist 2 — ask clarifying questions one at a time | Return every design-changing ambiguity through `SCOPE CHECKPOINT`. The interactive root asks; the unattended root parks. Record only non-design-changing assumptions in the spec. |
+| Checklist 4 — approval after each design section | Write the sections. There is no per-section approval. |
+| Checklist 7 / **User Review Gate** — ask the user to review the spec, "Wait for the user's response" | `$design` step 3 replaces it: an adversarial `$review-loop` over the spec file. Do not wait. |
+| Checklist 8 / terminal state — invoke `writing-plans` | **Return to your caller instead.** See below. |
 
 **Do not invoke `writing-plans` yourself.** `$design` owns the sequence: step 1 is this skill, step 2 adversarially reviews the ADR, step 3 adversarially reviews the spec, and only step 4 invokes `writing-plans`. Chaining straight to `writing-plans` from here skips both review gates. Your terminal state in dispatched mode is a spec (and, where the decision warrants one, an ADR) written, committed, and reported to the caller by path.
 
@@ -68,17 +67,16 @@ checks the spec without expanding that authority.
 
 ## Checklist
 
-You MUST create a task for each of these items and complete them in order. In dispatched mode, items 2, 3, 5, 8 and 9 change — see the table above before you create the tasks, so the list you build is the one you can actually finish.
+You MUST create a task for each of these items and complete them in order. In dispatched mode, items 2, 4, 7 and 8 change — see the table above before you create the tasks, so the list you build is the one you can actually finish.
 
 1. **Explore project context** — check files, docs, recent commits
-2. **Offer the visual companion just-in-time** — NOT upfront. The first time a question would genuinely be clearer shown than described, offer it then (its own message); on approval its browser tab opens for you. If no visual question ever arises, never offer it. See the Visual Companion section below.
-3. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
-4. **Propose 2-3 approaches** — with trade-offs and your recommendation
-5. **Present design** — in sections scaled to their complexity, get user approval after each section
-6. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
-7. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see below)
-8. **User reviews written spec** — ask user to review the spec file before proceeding
-9. **Transition to implementation** — invoke writing-plans skill to create implementation plan
+2. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
+3. **Propose 2-3 approaches** — with trade-offs and your recommendation
+4. **Present design** — in sections scaled to their complexity, get user approval after each section
+5. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
+6. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see below)
+7. **User reviews written spec** — ask user to review the spec file before proceeding
+8. **Transition to implementation** — invoke writing-plans skill to create implementation plan
 
 ## Process Flow
 
@@ -203,24 +201,3 @@ The first, second and fifth of these describe a conversation. In dispatched mode
 owns that conversation: the frozen charter carries the requirement, design-changing
 ambiguity returns through `SCOPE CHECKPOINT`, and validation is the caller's adversarial
 review of the written spec. YAGNI and exploring alternatives apply unchanged.
-
-## Visual Companion
-
-A browser-based companion for showing mockups, diagrams, and visual options during brainstorming. Available as a tool — not a mode. Accepting the companion means it's available for questions that benefit from visual treatment; it does NOT mean every question goes through the browser.
-
-**Never offer it in dispatched mode.** The offer must be its own message and then wait for a reply, and there is no one to reply or to look at the browser tab.
-
-**Offering the companion (just-in-time):** Do NOT offer it upfront. Wait until a question would genuinely be clearer shown than told — a real mockup / layout / diagram question, not merely a UI *topic*. The first time that happens, offer it then, as its own message:
-> "This next part might be easier if I show you — I can put together mockups, diagrams, and comparisons in a browser tab as we go. It's still new and can be token-intensive. Want me to? I'll open it for you."
-
-**This offer MUST be its own message.** Only the offer — no clarifying question, summary, or other content. Wait for the user's response. If they accept, start the server with `--open` so their browser opens to the first screen automatically. If they decline, continue text-only and don't offer again unless they raise it.
-
-**Per-question decision:** Even after the user accepts, decide FOR EACH QUESTION whether to use the browser or the terminal. The test: **would the user understand this better by seeing it than reading it?**
-
-- **Use the browser** for content that IS visual — mockups, wireframes, layout comparisons, architecture diagrams, side-by-side visual designs
-- **Use the terminal** for content that is text — requirements questions, conceptual choices, tradeoff lists, A/B/C/D text options, scope decisions
-
-A question about a UI topic is not automatically a visual question. "What does personality mean in this context?" is a conceptual question — use the terminal. "Which wizard layout works better?" is a visual question — use the browser.
-
-If they agree to the companion, read the detailed guide before proceeding:
-`skills/brainstorming/visual-companion.md`
