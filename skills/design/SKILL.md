@@ -107,7 +107,7 @@ approved. This holds for every change regardless of how simple it looks;
 small change is the design's *length* — a few sentences is a complete design
 when the change is genuinely small. Skipping it is not.
 
-Write or update the design doc under `docs/superpowers/specs/`, named
+Write or update the design doc under `docs/workflow/specs/`, named
 `YYYY-MM-DD-<topic>-design.md`. For decisions with viable alternatives — layer
 boundaries, interface or ownership splits, concurrency invariants, failure
 contracts, migration sequencing, rollback strategy — write or update an ADR
@@ -339,7 +339,7 @@ Run `$review-loop` with:
 
 ## 4. Inscribe — the implementation plan
 
-Write the plan under `docs/superpowers/plans/`, named
+Write the plan under `docs/workflow/plans/`, named
 `YYYY-MM-DD-<feature-name>.md`, derived from the hardened spec. Do not choose an
 execution mode here: `$build-tdd` picks that from what the plan looks like.
 

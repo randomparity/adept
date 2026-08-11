@@ -26,7 +26,7 @@ This binds both modes and every subagent either one dispatches.
 
 When the caller supplies a governed-small-change classification with its revalidated decision reference, decision kind, accepted status, governed behavior, and acceptance criteria, reject any supplied or auto-discovered plan and write and run the focused failing test as the first executable proof.
 
-Otherwise, if no plan path is supplied, look for one under `docs/superpowers/plans/`.
+Otherwise, if no plan path is supplied, look for one under `docs/workflow/plans/`.
 No plan is valid only for a trivial bugfix. Any other non-trivial change without a plan
 stops and returns to `$design`.
 

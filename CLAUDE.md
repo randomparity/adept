@@ -29,7 +29,7 @@ Structural gates are a different thing and are welcome: checking that a `SKILL.m
 - `tests/fixtures/<skill>/` — behaviour suites and their fixtures, deliberately **outside** the shipped tree. A plugin has no installer; the whole repo is copied into the plugin cache, so a fixture inside a skill's own directory is reachable by that skill at runtime. That has already caused one incident: a stub issue-tracker profile shipped, was selectable, and returned fabricated issues indistinguishable from real ones.
 - `scripts/` — the gate scripts `just` invokes, each with its suite beside it. `.github/scripts/` holds the decision-record gate, kept byte-identical to its twin under `skills/decision-records/assets/` (`just records` compares them).
 - `docs/adr/` — architecture decision records, append-only once merged.
-- `docs/superpowers/specs/`, `docs/superpowers/plans/` — design and implementation records.
+- `docs/workflow/specs/`, `docs/workflow/plans/` — design and implementation records.
 - `licenses/` — attribution for skills still derived from upstream work.
 
 Plans and specs name the checkout root as `$WORK` rather than writing it out: this repo is public and an absolute path is host identity. `scripts/check-public-safety.sh` enforces that.

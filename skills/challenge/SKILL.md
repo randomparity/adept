@@ -334,11 +334,11 @@ verdict:
 ```
 $challenge                                      # default: working-tree review
 $challenge --base main                          # branch diff vs main
-$challenge docs/superpowers/specs/YYYY-MM-DD-<rollout-design>.md
+$challenge docs/workflow/specs/YYYY-MM-DD-<rollout-design>.md
                                                 # single doc
-$challenge docs/superpowers/specs/*.md          # all specs in a directory
+$challenge docs/workflow/specs/*.md          # all specs in a directory
 $challenge src/auth/*.ts focus on tenant isolation
-$challenge --json docs/superpowers/plans/YYYY-MM-DD-<migration>.md
+$challenge --json docs/workflow/plans/YYYY-MM-DD-<migration>.md
 $challenge --json --out "$TMPDIR/challenge-review.json" --base main   # findings to a temp file, compact object inline
 $challenge --base main <CHARTER block>          # charter paths are focus, never targets;
                                                 # a CHARTER label ahead of every target is an error
