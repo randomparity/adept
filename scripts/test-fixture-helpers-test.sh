@@ -13,6 +13,15 @@ script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 clear_git_env
 fixture_init test-fixture-helpers-test
 
+# Every assertion below reports through abort rather than the sourced fail,
+# because fail is one of the things under test. Discharging these assertions
+# through it would mean a fail that stopped exiting could not be caught here --
+# and fail is now the assertion primitive of five other gate suites.
+abort() {
+	printf 'test-fixture-helpers-test: %s\n' "$*" >&2
+	exit 1
+}
+
 helper=$script_dir/test-fixture-helpers.sh
 child_tmp=$SCRATCH/child-tmp
 mkdir -p "$child_tmp"
@@ -42,9 +51,9 @@ CHILD
 created=$(cat "$SCRATCH/child.out")
 case $created in
 "$child_tmp"/sample.*) : ;;
-*) fail "init should create a scratch directory under TMPDIR, got: $created" ;;
+*) abort "init should create a scratch directory under TMPDIR, got: $created" ;;
 esac
-[ ! -e "$created" ] || fail "the EXIT trap should remove $created"
+[ ! -e "$created" ] || abort "the EXIT trap should remove $created"
 
 # A second scratch directory registered under a different parent is removed by
 # the same trap. This is the shape check-public-safety-test.sh needs: its
@@ -61,9 +70,9 @@ CHILD
 side=$(cat "$SCRATCH/child.out")
 case $side in
 "$extra_parent"/side.*) : ;;
-*) fail "fixture_scratch should honour its prefix, got: $side" ;;
+*) abort "fixture_scratch should honour its prefix, got: $side" ;;
 esac
-[ ! -e "$side" ] || fail "the EXIT trap should remove the extra directory $side"
+[ ! -e "$side" ] || abort "the EXIT trap should remove the extra directory $side"
 
 # The guard on the `rm -R`. Reaching into the registry is deliberate: this is
 # the one line in the helper whose failure destroys data, and no public entry
@@ -76,9 +85,13 @@ fixture_init sample
 fixture_scratch_prefixes[0]=/nowhere/
 fixture_scratch_paths[0]=$survivor
 CHILD
-[ -d "$survivor" ] || fail 'cleanup removed a path outside its registered prefix'
+[ -d "$survivor" ] || abort 'cleanup removed a path outside its registered prefix'
 grep -qF "sample: refusing to remove unsafe path: $survivor" "$SCRATCH/child.out" ||
-	fail "refusal should name the label and the path: $(cat "$SCRATCH/child.out")"
+	abort "refusal should name the label and the path: $(cat "$SCRATCH/child.out")"
+# The refusal warns; it does not decide the suite's verdict. This is what all
+# five migrated suites did before the extraction, and an `exit` added to the
+# trap is what would break it.
+[ "$status" -eq 0 ] || abort "a refused cleanup should not change the exit status, got $status"
 
 # fail prefixes the label and exits 1.
 status=0
@@ -87,9 +100,9 @@ fixture_init sample
 fail 'something went wrong'
 printf 'unreachable\n'
 CHILD
-[ "$status" -eq 1 ] || fail "fail should exit 1, got $status"
+[ "$status" -eq 1 ] || abort "fail should exit 1, got $status"
 [ "$(cat "$SCRATCH/child.out")" = 'sample: something went wrong' ] ||
-	fail "unexpected fail output: $(cat "$SCRATCH/child.out")"
+	abort "unexpected fail output: $(cat "$SCRATCH/child.out")"
 
 # clear_git_env unsets the repository-local selectors a caller may have
 # exported, so a fixture's `git -C` is not overridden.
@@ -98,6 +111,6 @@ clear_git_env
 printf '%s %s\n' "${GIT_DIR:-unset}" "${GIT_INDEX_FILE:-unset}"
 CHILD
 [ "$(cat "$SCRATCH/child.out")" = 'unset unset' ] ||
-	fail "clear_git_env left git selectors set: $(cat "$SCRATCH/child.out")"
+	abort "clear_git_env left git selectors set: $(cat "$SCRATCH/child.out")"
 
 printf 'test-fixture-helpers-test: ok\n'
