@@ -14,6 +14,7 @@ are what the harness matches against.
 | I have a batch of issues to clear | `/campaign` |
 | I found a bug or gap that isn't an issue yet | `/bounty` |
 | I want to know how big/risky an issue is before committing | `/divination` |
+| I want the next issue to work, chosen for me | `/seek-quest` |
 | My backlog needs type/priority/status labels | `/sort-board` |
 | A branch or diff needs review before it ships | `/gauntlet` or `/trial-loop` |
 | Something broke and I don't know why yet | `/detect-curse` |
@@ -47,6 +48,10 @@ attunement (preflight)
 `/campaign` runs this same lifecycle over a set of issues, in parallel where
 safe, and serializes merges.
 
+Have no specific issue in mind? `$seek-quest` ranks the `status:ready` queue
+and recommends one before you start the lifecycle above — a separate,
+read-only step, not a new stage of `/quest` itself.
+
 ## Phase skills (run standalone when you only need one step)
 
 | Skill | Does | Called by |
@@ -71,6 +76,7 @@ safe, and serializes merges.
 | `bounty` | Verify, dedupe, and file a grounded GitHub issue; also decomposes an epic into sub-issues |
 | `divination` | Estimate an issue's blast radius, risk, and whether it fits one PR |
 | `sort-board` | Apply type/priority/status/risk/effort labels to a backlog, bootstrapping labels if missing |
+| `seek-quest` | Rank the `status:ready` queue and recommend the next issue to run `$quest` on |
 
 ## Batch orchestration & hygiene
 
