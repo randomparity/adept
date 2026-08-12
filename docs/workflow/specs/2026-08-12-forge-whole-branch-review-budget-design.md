@@ -210,7 +210,9 @@ file, which it has to do anyway to put the finding and the plan side by side.
 
 `code-reviewer.md` ends with three blocks that describe the dispatch from
 outside it, and all three go stale under R1–R3 unless the same change edits
-them: the `**Placeholders:**` list gains `[DIFF_FILE]` and `[REVIEW_FILE]` and
+them: the `**Placeholders:**` list gains `[DIFF_FILE]`, `[REVIEW_FILE]` and
+`[MINOR_LEDGER]` — the last being the carrier for the accumulated Minor list
+`SKILL.md` already hands this reviewer, which has never had a named slot — and
 keeps `[BASE_SHA]` / `[HEAD_SHA]`, which the template still needs to name the
 range it is judging — not for any rebuild, which this design declines to carry;
 `**What comes back:**` is rewritten to the bounded return; and `## Example
@@ -242,8 +244,12 @@ Five edits in `skills/forge/SKILL.md`:
    bar, and on a `Yes` nothing else would ever read the answer — "a summary
    nobody is directed to read is indistinguishable from having thrown the
    findings away" is that instruction's own reasoning, and this change would
-   otherwise make it true of itself. One conditional read, and no growth in the
-   return.
+   otherwise make it true of itself. The controller reads the triage section
+   rather than the whole file, and the return does not grow. Note that this is
+   the *common* path, not a rare exemption: `SKILL.md` puts Minor findings in
+   the ledger as they arrive and the task rubric has a standing Minor bucket, so
+   most multi-task runs will carry some. The bounded-context benefit is a
+   reduction, not an elimination.
    Cleared-before plus present-after is what makes the review this run's rather
    than a leftover from a resumed session at the same range; existence alone
    cannot tell the two apart, and leaving a legitimately occupied path
@@ -267,7 +273,11 @@ Five edits in `skills/forge/SKILL.md`:
    what in that file binds the subagent: Critical and Important findings are to
    be fixed, Minor findings and Recommendations are not — Recommendations are
    the template's own "not defects, and not obligations" — and a finding
-   labelled `plan-mandated` is returned to the controller rather than fixed.
+   labelled `plan-mandated` is returned to the controller rather than fixed,
+   *unless the dispatch names it as one the human has already upheld*. That
+   qualifier is what keeps the rule and the ordering below from deadlocking:
+   without it the wave carries an upheld finding to a subagent instructed to
+   hand it straight back.
    The list the controller used to hand over carried that filtering implicitly,
    because the controller had read the review and chose what to send. A path
    carries none of it, and `SKILL.md` reserves the plan-versus-finding call for

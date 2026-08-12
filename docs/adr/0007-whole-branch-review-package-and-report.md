@@ -91,8 +91,12 @@ which can be corrected as they drift.
   never seen, the precise thing that instruction exists to prevent ("a summary
   nobody is directed to read is indistinguishable from having thrown the
   findings away"). So the controller opens the file on any verdict when the
-  ledger carried Minor findings. That is a conditional read, not a fourth return
-  item — the return shape stays as argued above.
+  ledger carried Minor findings — reading that section, not the whole file. It
+  is a conditional read rather than a fourth return item, so the return shape
+  stays as argued above. It is also the *common* path and not a rare exemption:
+  Minor findings accumulate across task reviews by default. The bounded-context
+  benefit above is therefore a reduction, not an elimination, and this record
+  would rather say so than let it read as one.
 - The final review is destroyed with the worktree, where an inline review
   persisted in the session transcript. Its readers during the run can reach it
   while the worktree exists.

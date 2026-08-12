@@ -49,7 +49,7 @@ the exact values.
    `implementer-prompt.md` already states.
 6. **Placeholders in `code-reviewer.md`** after this change:
    `[DESCRIPTION]`, `[PLAN_OR_REQUIREMENTS]`, `[DIFF_FILE]`, `[REVIEW_FILE]`,
-   `[BASE_SHA]`, `[HEAD_SHA]`, `[SHA]`. `[BASE_SHA]` and `[HEAD_SHA]` stay
+   `[MINOR_LEDGER]`, `[BASE_SHA]`, `[HEAD_SHA]`, `[SHA]`. `[BASE_SHA]` and `[HEAD_SHA]` stay
    because the template still names the range it is judging.
 7. **The base is the fork point.** Wherever `SKILL.md` names the whole-branch
    review's base, it is `git merge-base HEAD <BASE_BRANCH>`, recomputed at
@@ -202,8 +202,10 @@ Constraint 3.
 Then, under the `#### Minor (Nice to Have)` bucket's existing description, add:
 
 ```
-    Where the controller handed you a list of Minor findings carried over from
-    earlier tasks, triage it here against the merge bar.
+    Triage the Minor findings carried over from earlier tasks, listed in
+    [MINOR_LEDGER], here against the merge bar. Where that placeholder is empty,
+    say so in one line rather than omitting the section — the controller reads
+    this section and an absent one is indistinguishable from a skipped triage.
 ```
 
 ### Step 1.6 — add the bounded return
@@ -250,6 +252,10 @@ Replace the `**Placeholders:**` list with:
   package's contents never pass through the controller's own context.
 - `[REVIEW_FILE]` — REQUIRED. Where the reviewer writes the review. The
   controller clears this path before dispatching and reads it afterwards.
+- `[MINOR_LEDGER]` — the Minor findings accumulated from the task reviews, for
+  triage against the merge bar. `SKILL.md` already requires this handover; until
+  now it had no named slot. Pass an explicit "none" when the ledger carried no
+  Minor findings.
 - `[BASE_SHA]` — the branch's fork point from the base branch
 - `[HEAD_SHA]` — the commit it ends on
 ```
@@ -301,7 +307,8 @@ git commit -m "feat(forge): budget the whole-branch reviewer's diff and return"
 
 - `skills/forge/code-reviewer.md` names `[DIFF_FILE]` as the diff's source and
   contains no instruction to run `git diff` at all.
-- It instructs the reviewer to write the review to `[REVIEW_FILE]`.
+- It instructs the reviewer to write the review to `[REVIEW_FILE]`, and names
+  `[MINOR_LEDGER]` as the carrier for the Minor list it triages.
 - It caps the return at fifteen lines carrying exactly three items, and defines
   both `WRITE_FAILED` and `PACKAGE_MISSING`.
 - It labels plan-fault findings `plan-mandated` and counts them as a subset.
@@ -364,10 +371,10 @@ Then produce the two paths and check them:
    directory `scripts/sdd-workspace` prints. Remove anything already at that
    path before dispatching, so that a file there afterwards is this dispatch's
    and not a leftover from a resumed session.
-3. After the reviewer returns, that path must exist and be non-empty. If the
-   ledger carried Minor findings, open it whatever the verdict — you handed that
-   list to the reviewer to triage against the merge bar, and on a `Yes` nothing
-   else would read the answer.
+3. After the reviewer returns, that path must exist and be non-empty. If you
+   passed a non-empty `[MINOR_LEDGER]`, read that file's triage section whatever
+   the verdict — the section, not the whole file — because on a `Yes` nothing
+   else would ever read the answer you asked for.
 
 A missing or empty file means the return is not evidence: discard it and
 re-dispatch once, then stop and report. That single blind retry is for a
@@ -402,7 +409,10 @@ tasks combined.
 Say in that dispatch what binds it, because a path carries none of the filtering
 a hand-picked list did: Critical and Important findings are to be fixed, Minor
 findings and Recommendations are not, and a finding labelled `plan-mandated` is
-returned to you rather than fixed.
+returned to you rather than fixed — unless you name it in the dispatch as one
+the human has already upheld, in which case it is fixed like any other. Without
+that qualifier the two rules deadlock: the wave carries an upheld finding to a
+subagent instructed to hand it straight back.
 
 Order the two triggers: a non-zero `plan-mandated` count goes to the human
 **before** the fix wave is dispatched, and the human's answer decides which
@@ -411,8 +421,10 @@ labelled findings that wave carries.
 You no longer read the review, so you cannot interleave the question and the
 wave by judgment as you could when a list passed through your hands. A wave sent
 first would already have changed the code the human was being asked about —
-overruling, by sequence, a call reserved for them. Nothing beyond the ordering
-is prescribed here; the rest stays your judgment.
+overruling, by sequence, a call reserved for them. Carry the answer into the
+dispatch by naming the upheld findings: you cannot edit the reviewer's file to
+record the ruling, and the subagent has no other way to learn it. Nothing beyond
+that is prescribed; the rest stays your judgment.
 ```
 
 ### Step 2.3 — narrow the overstated report-contract claim
