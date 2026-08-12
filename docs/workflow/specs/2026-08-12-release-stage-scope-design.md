@@ -1,0 +1,87 @@
+# Release stage: decide the scope and record it
+
+## Summary
+
+Issue #50 asks a design question before it asks for an artifact: is release management —
+tagging, changelog, release notes, deploy, post-merge verification — in scope for adept, for
+the target repositories its skills operate on? Either answer closes the issue, one as a skill
+and one as a recorded decision.
+
+The answer is **scope-out**, recorded in
+[ADR 0005](../../adr/0005-release-management-out-of-scope.md). That record is the entire
+deliverable: one new file under `docs/adr/`, plus this design record and its plan.
+
+## The question, and why it is open
+
+`docs/adr/0001-distribution-via-plugin-marketplace.md` settled versioning for *this*
+repository — manifests carry no `version`, updates track the git SHA. `CLAUDE.md` repeats it.
+Neither says anything about the repositories the skills are pointed at, so the missing stage
+reads as an oversight rather than a decision. That is the defect issue #50 reports; it reports
+no blocked work.
+
+Evidence gathered before deciding:
+
+- No skill covers release, tagging, changelog, or deploy. The string `release` occurs in
+  `skills/return-to-town/SKILL.md`, `skills/sort-board/SKILL.md` and `skills/campaign/SKILL.md`
+  meaning *release a blocked issue*, and in `skills/clear-map/SKILL.md` meaning a protected
+  `release/*` branch pattern. Neither sense is a software release.
+- This repository has no git tags and no GitHub releases, and runs one workflow, `verify.yml`.
+- `$warding` reports dependency version drift and `$restock` merges Dependabot updates. Both
+  read versions; neither publishes anything.
+
+## Decision
+
+Scope-out. The reasoning, the four grounds it rests on, the consequences, and the falsifiable
+revisit condition all live in ADR 0005 and are not restated here — a second copy is the drift
+problem `CLAUDE.md` exists to prevent.
+
+## Non-goals
+
+- ADR 0001 is not reopened. This record extends its discipline outward to target repositories;
+  it neither supersedes it nor amends it, so 0001 takes no supersession banner.
+- No skill is added and no existing skill is edited. `$return-to-town` and `$clear-map` keep
+  their current endings, which ADR 0005 records as complete rather than truncated.
+- `docs/cheatsheet.md` and `README.md` are not touched. The cheat sheet is a which-skill-do-I-run
+  table and there is no new skill to list; the skill-count line in `README.md` is unchanged for
+  the same reason.
+- No `docs/debt/` deferral record, and no `debt` profile added to `just records`. This is a
+  decided exclusion, not deferred work.
+
+## Acceptance criteria
+
+| # | Source | Satisfied by |
+|---|---|---|
+| 1 | Issue #50 "Proposed approach" — decide scope-in or scope-out first | The Decision above, argued in ADR 0005 |
+| 2 | Issue #50 "Expected" — a stated decision that release management is out of scope for adept, **and why** | ADR 0005 `## Decision` and `## Considered & rejected` |
+| 3 | Issue #50 "Problem" — the omission must stop reading as a gap | ADR 0005 `## Context`, which names the ambiguity and closes it |
+| 4 | Issue #50 "Proposed approach" — one PR | Three files, one PR, no code change |
+| 5 | `CLAUDE.md` "Verifying a change" | `just verify` green |
+
+## Guardrail interactions
+
+- **`just records`** (`adr` profile) is the only gate with an opinion about the new file. It
+  requires the H1 to begin `# 0005 `, the five level-2 sections `## Status`, `## Context`,
+  `## Decision`, `## Consequences`, `## Considered & rejected`, and a `## Status` body matching
+  `Accepted (YYYY-MM-DD)`. It also warns `W-INDEX-TABLE` if a numbered-row table appears in
+  `docs/adr/README.md` — which is why no index row is added: this repository's ADR index is the
+  directory listing.
+- **`just public-safety`** forbids absolute checkout paths in plans and specs. None of the three
+  files carries one.
+- **`just shape-check`**, **`just plugin-check`**, **`just test`**, `lint`, `format-check`,
+  `actions-check` are unaffected: no skill directory, no shell, no manifest, no workflow changes.
+
+## Testing
+
+Nothing automated asserts on prose — `CLAUDE.md` anatomy rule 4 forbids a gate that greps
+Markdown for a sentence, so no test is added and none would be legitimate. The record gate's
+structural checks above are the whole of the automation that touches this change; correctness of
+the decision itself is a reading problem, which the adversarial review of ADR 0005 is what
+answers.
+
+## Risk
+
+The decision can be wrong, and the honest mitigation is not more argument but the revisit
+condition in ADR 0005: three hand-driven releases in target repositories, sharing enough policy
+that one instruction file would have served them. That makes the decision falsifiable by
+observation rather than by opinion, and it is cheap to reverse — a superseding record and the
+skill the evidence then specifies.
