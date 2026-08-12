@@ -79,7 +79,6 @@ fixture_scratch() { # prefix -- sets FIXTURE_SCRATCH
 # because check-public-safety-test.sh registers a fixture inside the working
 # tree and it is always last.
 #
-#
 # `-f` is load-bearing, not habit. A git fixture holds mode-444 objects, and
 # without `-f` rm prompts for an override on each one whenever it has a
 # terminal -- so the same suite passes under `just verify` and, run by hand from
