@@ -33,9 +33,10 @@ Every task's requirements implicitly include this section.
 - **Never call a three-valued predicate under `if !` or in an `&&`/`||` chain
   that branches on it.** Both collapse `1` and `2` into one branch and reinstate
   the defect. Capture the status and `case` on it.
-- **Scan faults report through `err_full`, never `err`.** `err` is collected in
-  the base-ref pass and downgraded to `W-LEGACY-SHAPE` for a grandfathered
-  record, either of which can leave the gate at exit 0.
+- **Scan faults report through `err_full`, never `err`.** `err` downgrades to
+  `W-LEGACY-SHAPE` for a record already non-conforming at the base ref, leaving
+  the gate at exit 0. Note `err_full` is still suppressed in the `collect` pass,
+  which discards findings by design — see ADR 0005's Consequences.
 - **Mirrors must stay byte-identical.** After editing any of
   `check-records.sh`, `check-records-test.sh`, `migrate-records.sh`,
   `profiles/adr.sh`, `profiles/debt.sh`, `records.yml` under
@@ -254,7 +255,7 @@ pre-existing `E-PROFILE-DIR-MISSING` case is unchanged; mirrors compare equal.
    case $cand_status in
    0) continue ;;          # existed at base, not a renumber destination
    1) ;;                   # absent at base, a real candidate
-   *) scan_faulted=1; continue ;;
+   *) scan_faulted=$path_exists_status; continue ;;
    esac
    ```
 
@@ -264,7 +265,10 @@ pre-existing `E-PROFILE-DIR-MISSING` case is unchanged; mirrors compare equal.
 
    ```sh
    # replaces the bare `return 1` at the end
-   [ "$scan_faulted" -eq 0 ] || return 2
+   if [ "$scan_faulted" -ne 0 ]; then
+     path_exists_status=$scan_faulted
+     return 2
+   fi
    return 1
    ```
 5. Convert the caller in `check_no_disappearances`, which is currently
@@ -276,7 +280,7 @@ pre-existing `E-PROFILE-DIR-MISSING` case is unchanged; mirrors compare equal.
    case $renum_status in
    0) info "note: $record was renumbered to $renumbered_to (content unchanged)" ;;
    1) err "E-GONE: $record is no longer a record at that path (deleted, moved, untracked, or renamed with its content changed) — resolve records in place with a '> **Resolved by ...**' banner" ;;
-   *) err_full "E-RENUMBER-SCAN: $record: could not search for a renumbered copy at $base (git exit $renum_status)" ;;
+   *) err_full "E-RENUMBER-SCAN: $record: could not search for a renumbered copy at $base (git exit $path_exists_status)" ;;
    esac
    ```
 
@@ -332,7 +336,7 @@ could not accept one without the other.
    0) ;;
    1) continue ;;
    *)
-     err_full "E-GATE-SCAN: $self: could not check the gate file at $base (git exit $self_status)"
+     err_full "E-GATE-SCAN: $self: could not check the gate file at $base (git exit $path_exists_status)"
      gate_path_count=$((gate_path_count + 1))
      continue
      ;;
@@ -393,7 +397,7 @@ could not accept one without the other.
    case $existed_status in
    0) err "E-GATE-EMPTY-SET: no gate file from the base ref is protected — a rename must declare its predecessors in GATE_PREDECESSORS" ;;
    1) info "I-GATE-BOOTSTRAP: no gate existed at $base — this is the change installing it" ;;
-   *) err_full "E-GATE-WITNESS-SCAN: could not determine whether a gate existed at $base (git exit $existed_status)" ;;
+   *) err_full "E-GATE-WITNESS-SCAN: $gate_witness_path: could not determine whether a gate existed at $base (git exit $path_exists_status)" ;;
    esac
    ```
 6. Copy to mirrors. Run the suite. The three new cases pass; the existing

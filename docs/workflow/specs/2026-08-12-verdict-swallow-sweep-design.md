@@ -64,6 +64,8 @@ above. The shipped scripts it reached, and their dispositions:
 | `migrate-records.sh` (+ mirror) | five sites, all pipelines — #63. It is a migrator run by hand, not a gate, so none of its sites gate a merge. |
 | `quest-log/assets/profiles/github.sh` | one site, in-memory URL extraction with an explicit empty-result handler — no fix |
 | `quest-log/assets/cleared-dependencies.sh` | one `&& return 0`, on a tracker API error string rather than a scan of external bytes — outside this goal's definition |
+| `bounty/scripts/create-verified-issue.sh` | one site, same in-memory URL extraction — no fix |
+| `scripts/list-shell-sources.sh` | one `read ... || return 1` in `is_shell_source`: an unreadable file reads as "not a shell source" and drops out of the lint and format inventory. Same class, different mechanism — owned by **#69** |
 
 One further residual the sweep found and does not fix: `tracked_in_index`
 (`check-records.sh:371`) wraps `git ls-files --error-unmatch` and collapses a
@@ -71,7 +73,6 @@ fault into "not tracked", which three callers read as authoritative — includin
 a literal `tracked_in_index ... || continue` at `renumbered_elsewhere:415`. Same
 class, but converting it requires a separate post-fault decision at each of the
 three callers. Owned by issue **#69**.
-| `bounty/scripts/create-verified-issue.sh` | one site, same in-memory URL extraction — no fix |
 
 ## Findings that shaped the design
 
@@ -122,12 +123,20 @@ Two rules bind every three-valued predicate here:
   candidates or witnesses, a fault is remembered and returned only once the loop
   has exhausted every candidate without a positive answer. A witness that
   genuinely found evidence is not made unreliable by a sibling probe failing.
-- **Scan faults report through `err_full`, not `err`.** `err` is collected in
-  the base-ref pass and downgraded to `W-LEGACY-SHAPE` for a grandfathered
-  record, so a scan fault reported through it can leave the gate at exit 0 —
-  which is the silent pass this change exists to remove. `adr.sh`'s existing
-  `E-INDEX-SCAN` already uses `err_full` for this reason. The rule's own
-  verdicts (`E-TITLE-MISMATCH`, `E-GONE`) keep whichever channel they use today.
+- **Scan faults report through `err_full`, not `err`.** `err` downgrades to
+  `W-LEGACY-SHAPE` for a record that was already non-conforming at the base ref,
+  so a scan fault reported through it leaves the gate at exit 0 — the silent
+  pass this change exists to remove. A fault describes the scan, not the record,
+  so it must not be downgradable. `adr.sh`'s existing `E-INDEX-SCAN` already
+  uses `err_full` for this reason. The rule's own verdicts
+  (`E-TITLE-MISMATCH`, `E-GONE`) keep whichever channel they use today.
+
+  `err_full` does **not** cover the base-ref `collect` pass: both helpers are
+  suppressed there, because that pass keeps a verdict and discards findings by
+  design. A fault reachable only while scanning the base-ref blob is therefore
+  unreported and the record reads as conforming. Accepted rather than fixed —
+  the alternative is a fourth emit mode, which costs more than the case is
+  worth. Recorded in ADR 0005's Consequences.
 
 ## Sites and their behaviour
 

@@ -75,9 +75,11 @@ check_title_number() {
   # reported E-TITLE-MISMATCH against a title it never read -- a second, factually wrong
   # finding alongside the honest one check_sections already reports.
   #
-  # err_full, not err: this rule runs in both passes, and err would let the base-ref pass
-  # collect the fault silently and a grandfathered record downgrade it to a warning, leaving
-  # the gate at exit 0 over a scan that never completed.
+  # err_full, not err: a scan fault describes the scan, not the record, so it must not be
+  # downgraded to W-LEGACY-SHAPE for a record that was already non-conforming at the base ref
+  # — which is what err does, leaving the gate at exit 0 over a scan that never completed.
+  # Both helpers are suppressed in the `collect` pass, so a fault reachable only against the
+  # base-ref blob is still unreported there; see ADR 0005's Consequences.
   title=$(grep -m1 '^# ' "$file") || title_status=$?
   case $title_status in
   0 | 1) ;;
