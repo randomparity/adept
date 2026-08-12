@@ -64,11 +64,19 @@ fork point is what makes this the whole-branch review its own Context and ADR
 0007 describe, and it is the same base `$trial-loop` reviews against at `$quest`
 step 6. `HEAD` is taken after the last task's fix cycle closed.
 
-`BASE_BRANCH` is the value `$attunement` discovered and recorded, which
-`SKILL.md` already treats as the source for the guardrail commands. A controller
-that has no such value asks for it — it does not default to `main`, which is a
-guess that produces a plausible-looking package of the wrong range on every repo
-that names its default branch anything else.
+Base resolution is stated here and nowhere else, so it cannot acquire a
+precedence order by accident. The controller **recomputes** the merge-base at
+dispatch time from `BASE_BRANCH` — the value `$attunement` discovered, which
+`SKILL.md` already treats as the source for the guardrail commands. If it has no
+such value it asks. It does not default to `main`, which is a guess that
+produces a plausible-looking package of the wrong range on every repo naming its
+default branch something else, and it does not carry a base forward from earlier
+in the run, because a rebase moves the fork point and leaves a recorded value
+pointing at a commit no longer on the branch.
+
+Recomputing is why this design records no base anywhere: a value derived on
+demand from something `$attunement` already froze cannot go stale between the
+first task and the last, which a written-down copy can.
 
 What this buys is determinism and fewer round trips rather than fewer tokens:
 the range is the controller's own known-good one instead of whatever the
@@ -83,12 +91,18 @@ the task reviewer's equivalent section is the *delivery*, clause by clause, and
 the distinction matters enough to spell out rather than say "the same rules":
 
 - **Crosses:** open the package once; its wide context lines *are* the files as
-  they now stand; rebuild with `git diff --stat` / `git diff` if the package is
-  missing.
+  they now stand; the package **is** the diff, so do not re-derive it — the
+  package-missing rebuild below is the only sanctioned exception, and it is
+  disclosed.
 - **Does not cross:** "it is the whole of what you are judging", "resist opening
-  one on the side", "Leave git alone otherwise", and "Stay out of the rest of the
-  codebase". These read as delivery rules and are scoping rules, which is
-  precisely why importing the section wholesale would be a silent narrowing.
+  one on the side", and "Stay out of the rest of the codebase". These read as
+  delivery rules and are scoping rules, which is precisely why importing the
+  section wholesale would be a silent narrowing.
+
+The first list's third clause is what makes R1 falsifiable. Removing the
+*instruction* to run `git diff` is not the same as removing the *permission*:
+without a clause saying the package is the diff, a reviewer that ran one anyway
+would be breaking nothing.
 
 This is the one review whose value is seeing what a task-scoped reviewer could
 not: the plan it was built against, the call sites of a contract the branch
@@ -199,7 +213,7 @@ its body is worse than one that never had a footer.
 
 ### The controller side (R4)
 
-Six edits in `skills/forge/SKILL.md`:
+Five edits in `skills/forge/SKILL.md`:
 
 1. The final-review dispatch instruction (currently "After the last task,
    dispatch the whole-branch review with `code-reviewer.md`, on the most capable
@@ -213,25 +227,30 @@ Six edits in `skills/forge/SKILL.md`:
    destination write fails (issue #36), and the template's rebuild clause then
    falls back to an inline `git diff`, silently restoring exactly what this
    change removes. A failed before-check does not dispatch: the controller
-   reports it, and does not fall back. Also before dispatching, the controller
-   recomputes the base rather than trusting the ledger's copy — a rebase moves
-   the fork point and leaves the recorded value pointing at a commit no longer
-   on the branch — and where `BASE_BRANCH` is genuinely unavailable, checks the
-   recorded one with `git merge-base --is-ancestor <BASE> HEAD` and stops if it
-   fails. Then it removes any file already at the review-file path. **After:**
-   that path exists and is non-empty.
+   reports it, and does not fall back. Then it removes any file already at the
+   review-file path. **After:** that path exists, is non-empty, and its first
+   line names the delivery the reviewer used. The controller is already at the
+   path to stat it, so reading one line costs one line of context and makes the
+   `git diff` fallback visible on every verdict rather than only when something
+   else happens to open the file — a disclosure nobody is directed to read is
+   not a disclosure.
    Cleared-before plus present-after is what makes the review this run's rather
    than a leftover from a resumed session at the same range; existence alone
    cannot tell the two apart, and leaving a legitimately occupied path
    undefined would be worse than either. On the after-check failing, the
    controller discards the return and re-dispatches once, then stops and reports
-   rather than dispatching again. That blind retry is for the *silent* failure;
-   a reviewer that returned `WRITE_FAILED` has already named the problem, so the
-   controller changes something rather than re-running an identical dispatch —
-   and the only change it may make is a second path inside the same
-   `scripts/sdd-workspace` directory. Anywhere else and the single-named-path
-   containment the read-only rule rests on stops being true on the retry. If
-   that also fails, it stops and reports. `SKILL.md` already
+   rather than dispatching again. That blind retry is for the *silent* failure.
+   A reviewer that returned `WRITE_FAILED` has already named a reason, and the
+   reason decides: where it names the path, the controller retries once at a
+   second path inside the same `scripts/sdd-workspace` directory — and nowhere
+   else, or the single-named-path containment the read-only rule rests on stops
+   being true on the retry. Where it names the directory or the permission, a
+   different path cannot help, so the controller stops on the first failure and
+   names the workspace as the blocker.
+
+   A stop here means the branch reaches the rest of the pipeline with no
+   whole-branch review, and the controller says exactly that rather than closing
+   the phase quietly. `SKILL.md` already
    applies the same discipline to implementer reports ("Confirm the report has
    all three before re-dispatching the reviewer").
 3. The final-fix instruction (currently "send **one** fix subagent with the
@@ -252,8 +271,14 @@ Six edits in `skills/forge/SKILL.md`:
    - a non-zero `plan-mandated` count goes to the human **first**, and the fix
      wave waits on the answer, because a fix dispatched before it would be the
      controller overruling a call `SKILL.md` reserves for the human;
-   - Critical or Important greater than zero then sends one fix subagent,
-     against the unlabelled findings only, whatever the merge verdict says;
+   - that answer **partitions** the labelled findings: the ones the human
+     upholds join the fix wave, the ones the human overrules are dropped and
+     recorded as overruled. Waiting is what makes the answer usable — a wave
+     that ignored it would leave an upheld Critical unassigned to anybody;
+   - one fix subagent then goes out against the unlabelled findings plus the
+     upheld labelled ones, graded Critical or Important, whatever the merge
+     verdict says — and only if that set is non-empty, since a dispatch with
+     nothing in it still costs a full context build;
    - a `No` or `With fixes` carrying no graded findings is a return the
      controller opens the file for rather than acting on, since the two halves
      of it cannot both be right.
@@ -273,18 +298,12 @@ Six edits in `skills/forge/SKILL.md`:
 5. The `### Never` bullet "Dispatch a task reviewer without a review-package
    file" widens to any reviewer, since after this change both reviewer
    dispatches require one.
-6. The `### Durable progress` section adds the branch base to what the ledger
-   records, written before the first task is dispatched. The final review's
-   package is keyed to that base, and nothing currently writes it down: the
-   per-task loop notes a base per task, and the ledger's completion lines carry
-   per-task ranges. Recovering it from Task 1's line is inference, and the whole
-   point of that section is that a controller which lost its conversation memory
-   reads the ledger instead of remembering. A base recovered wrongly produces a
-   package that looks plausible and shows the reviewer the wrong branch. A
-   ledger written before this change has no base line: that means the base is
-   unknown, so the controller stops and asks rather than inferring one — the
-   same discipline the section already applies to a task it cannot confirm is
-   complete.
+There is deliberately no seventh edit adding the branch base to the progress
+ledger. An earlier draft had one, on the reasoning that a controller which lost
+its conversation memory must read the base rather than remember it — sound, but
+answered better by recomputing it, which is what R1 now specifies. A recorded
+base is a copy that can go stale; a recomputed one cannot, and it needs no
+recovery rule for a ledger written before this change.
 
 ### Testing (R5)
 
@@ -307,23 +326,29 @@ still returning different shapes.
 
 These files are dispatch prompt templates, which is an AI surface, and the
 design changes one. There is no eval plan here, and that is deliberate — but the
-reason is not that the change adds no model behavior. It adds four:
+reason is not that the change adds no model behavior. It adds six:
 
 | New behavior | How it is checked |
 |---|---|
 | writing the review file at the supplied path | the controller's cleared-before / present-and-non-empty check |
-| labelling plan-fault findings `plan-mandated` | not checked — see below |
+| naming the delivery used on the file's first line | the controller reads that line as part of the after-check |
+| returning `WRITE_FAILED` and a reason instead of a verdict | by reading the return |
+| labelling plan-fault findings `plan-mandated` | not checked |
 | counting graded and `plan-mandated` findings in the return | not checked against the file |
+| recording the reason for a read beyond the package | not checked |
 | holding the return under the cap | not checked — the cap is prose in a template, as in `implementer-prompt.md` |
 
-What is unchanged is what an eval plan would actually score: the rubric, the
-severity vocabulary, and the calibration guidance are all out of scope and
-untouched, so grading accuracy, citation quality, and verdict correctness carry
-no new exposure. The three unchecked rows are the honest residual — the label and
-the counts are the reviewer's own classification of its own findings, and ADR
-0007 records that as the weakest link in the design rather than claiming a check
-covers it. An eval harness for a prompt template's self-report would be a larger
-apparatus than the thing it grades, and outside this issue's charter.
+The rubric, the severity vocabulary, and the calibration guidance are out of
+scope and untouched, so what an eval plan scores most directly — grading
+accuracy, citation quality, verdict correctness — is not being altered by
+design. That is not the same as no exposure, and claiming so would be false: the
+reviewer's *evidence base* does change, from a diff it derives itself to a
+package it is handed, and this design does not measure what that does to the
+findings. Four of the seven rows are unchecked, all of them the reviewer's
+self-report about its own work, which ADR 0007 records as the weakest link
+rather than claiming a check covers it. An eval harness for a prompt template's
+self-report would be a larger apparatus than the thing it grades, and outside
+this issue's charter.
 
 ## Not a security-relevant change
 
