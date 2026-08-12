@@ -22,8 +22,17 @@ set -euo pipefail
 # belongs to a content finding alone, so nothing that merely stopped the gate
 # from running may borrow it: a gate that goes red on a status no message
 # accounts for leaves the operator hunting a violation that does not exist.
+#
+# A fault outranks a finding, deliberately. Where a scan cannot run, the rules it
+# decides are undecided, so the run reports 2 even when an earlier rule already
+# printed a finding -- those findings still reach stderr, and reporting 1 would
+# assert the remaining rules were checked and passed.
+#
+# One residual is left open: the `done <file` redirects below still exit 1 with
+# nothing printed if a redirect fails. `done <file || fault` would misread the
+# loop body's own status instead, and every one of those files is one this script
+# just wrote into its own scratch directory.
 
-root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 status=0
 
 fault() {
@@ -35,6 +44,12 @@ report() {
 	printf 'check-skill-shape: %s\n' "$1" >&2
 	status=1
 }
+
+root=${1:-}
+if [ -z "$root" ]; then
+	root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd) ||
+		fault 'could not locate the repository root'
+fi
 
 # grep answers three ways for the same reason rg does -- 0 match, 1 no match,
 # >1 the scan could not run -- and both membership loops below would otherwise
@@ -62,7 +77,10 @@ workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")" ||
 # shellcheck disable=SC2329 # run by the EXIT trap; 0.11 stops tracing at the terminal exit
 cleanup() {
 	local exit_status=$?
-	if rm -R -- "$workspace"; then
+	# -f so a directory already gone is not reported as one left behind: without
+	# it rm exits 1 on ENOENT, which would name a path that does not exist and
+	# redden an otherwise clean run. A removal that genuinely fails still does.
+	if rm -Rf -- "$workspace"; then
 		exit "$exit_status"
 	fi
 	printf 'check-skill-shape: retained scratch path: %s\n' "$workspace" >&2

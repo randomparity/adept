@@ -280,9 +280,11 @@ assert_gate 'invocation scan fault' 2 'membership scan of' \
 	"$invocation_status" "$invocation_output"
 
 # Case 14: a collating pipeline that could not run. sed is used at exactly one
-# site, so shimming it isolates that guard; the sort at the reference-link
-# collation carries the same clause but no shim reaches it alone, since sort
-# runs in three earlier places.
+# site, so shimming it isolates that guard.
+#
+# The reference-link collation carries the same clause and has no case: it runs
+# `sort`, which three earlier lines also run, so a sort shim always trips one of
+# those first. That guard is covered by inspection, not by this suite.
 sed_shim=$SCRATCH/shim-sed
 mkdir -p "$sed_shim"
 printf '#!/usr/bin/env bash\nexit 1\n' >"$sed_shim/sed"
@@ -292,5 +294,18 @@ collate_status=0
 collate_output=$(PATH="$sed_shim:$PATH" "$gate" "$collate_root" 2>&1) || collate_status=$?
 assert_gate 'invocation list cannot be collated' 2 'could not collate the invocation list' \
 	"$collate_status" "$collate_output"
+
+# Case 15: the skill count cannot be taken. wc runs at one site too, and the
+# count it produces is what decides whether the tree holds any skills at all --
+# an unguarded failure here would exit 1 with nothing printed.
+wc_shim=$SCRATCH/shim-wc
+mkdir -p "$wc_shim"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$wc_shim/wc"
+chmod +x "$wc_shim/wc"
+count_root=$(new_baseline count-fault)
+count_status=0
+count_output=$(PATH="$wc_shim:$PATH" "$gate" "$count_root" 2>&1) || count_status=$?
+assert_gate 'skill count cannot be taken' 2 'could not count' \
+	"$count_status" "$count_output"
 
 printf 'check-skill-shape-test: ok\n'
