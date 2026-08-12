@@ -121,20 +121,19 @@ for pattern in "${denied_patterns[@]}"; do
 		# ignore rule hides, so each match arrives twice. Structured records keep
 		# arbitrary filename bytes out of the content decision and preserve the
 		# exact path, line and content in the finding.
-		jq_status=0
+		filter_status=0
 		matches=$(printf '%s\n' "$matches" |
-			jq -sc --arg allowed "$public_home_match" '
-				map(select(.type == "match"))
-				| unique_by([.data.path, .data.line_number, .data.lines])
-				| .[]
+			jq -c --arg allowed "$public_home_match" '
+				select(.type == "match")
 				| select(any(.data.submatches[];
 					((.match.text // (.match.bytes | @base64d))
 					| test($allowed) | not)))
 				| .data
-				| {path, line_number, lines}') || jq_status=$?
-		if [ "$jq_status" -ne 0 ]; then
+				| {path, line_number, lines}' |
+			awk '!seen[$0]++') || filter_status=$?
+		if [ "$filter_status" -ne 0 ]; then
 			printf 'public-safety: jq could not filter ripgrep output (exit %s)\n' \
-				"$jq_status" >&2
+				"$filter_status" >&2
 			exit 2
 		fi
 		[ -n "$matches" ] || continue
