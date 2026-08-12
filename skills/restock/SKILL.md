@@ -98,7 +98,8 @@ confirmation at any phase.
   dependabot is the PR author, so the Phase 4a approval counts. A refused merge is
   a `BLOCKED` outcome to report, never a reason to retry with `--admin`.
 - **Stop conditions.** **Abort the whole run** if the default-branch baseline
-  build or tests fail (Phase 1c — fix the default branch first), the repo allows
+  build or tests fail, or a baseline test flakes (Phase 1c — fix the default
+  branch first), the repo allows
   no merge method at all, or there are no open dependabot PRs (Phase 1a).
   Otherwise honor the turn budget below: at **75%** of turns, stop launching
   evaluations and merge already-`PASS` PRs (summary only); at **90%**, print the
@@ -462,11 +463,9 @@ this PR's checkout, changing nothing. A test that fails and then passes
 is flaky: neither run is evidence, so it settles nothing about the
 dependency bump. Do not attribute it either — a bump can introduce
 nondeterminism as readily as expose it, and you have not tested which.
-It counts as neither a pass nor a failure:
-leave it out of the verdict, judge the PR on the tests that behaved
-deterministically, and name it under Concerns with both outcomes and the
-test's name. Never re-run a suite until it comes up green and then report
-that as a pass.
+Record it under Concerns with both outcomes and the test's name; Step 6
+assigns the verdict. Never re-run a suite until it comes up green and
+then report that as a pass.
 
 If there are new test failures that repeat (pass on `{default_branch}`,
 fail on this PR both times), report FAIL with the failing test names and

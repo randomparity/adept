@@ -70,7 +70,8 @@ Subagent (general-purpose):
     - Do the tests exercise real behaviour rather than the mocks around it?
     - Are the edge cases covered?
     - Where components have to work together, is that pairing tested?
-    - Is the suite green?
+    - Is the suite green, and green on the first run? A suite that needed a
+      second attempt is a finding, not a pass.
 
     **Production readiness:**
     - If a schema moved, how does the data already out there get across?
