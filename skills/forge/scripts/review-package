@@ -1,50 +1,58 @@
 #!/usr/bin/env bash
-# Generate a review package: commit list, stat summary, and the net
-# diff with extended context, written to a file the reviewer reads in one
-# call. Using the recorded per-task BASE (not HEAD~1) keeps multi-commit
-# tasks intact.
+# Collect everything a reviewer needs about one revision range into a single
+# readable file: which commits landed, which files moved, and the whole net diff
+# with wide context, so a hunk can be judged without opening the tree.
 #
-# Usage: review-package BASE HEAD [OUTFILE]
-# Default OUTFILE: <repo-root>/.agent/sdd/review-<base7>..<head7>.diff
-# (named per range, so a re-review after fixes gets a distinct fresh file).
+# The range is supplied rather than assumed to be the last commit. A task often
+# lands as several commits, and reviewing only the tip hides the rest of it.
+#
+# Usage: review-package FROM TO [DESTINATION]
+#
+# Without DESTINATION the file lands in the shared scratch directory, keyed to
+# the abbreviated range, so re-reviewing after a fix writes somewhere new rather
+# than overwriting the reading it should be compared against.
 set -euo pipefail
 
-if [ $# -lt 2 ] || [ $# -gt 3 ]; then
-	echo "usage: review-package BASE HEAD [OUTFILE]" >&2
+case $# in
+2 | 3) ;;
+*)
+	printf 'usage: review-package FROM TO [DESTINATION]\n' >&2
 	exit 2
-fi
+	;;
+esac
 
-base=$1
-head=$2
+from=$1
+to=$2
 
-git rev-parse --verify --quiet "$base" >/dev/null || {
-	echo "bad BASE: $base" >&2
-	exit 2
-}
-git rev-parse --verify --quiet "$head" >/dev/null || {
-	echo "bad HEAD: $head" >&2
-	exit 2
-}
+# Both endpoints are checked before anything is written, so a typo in the second
+# one cannot leave a half-built package behind.
+for endpoint in "$from" "$to"; do
+	if ! git rev-parse --verify --quiet "$endpoint" >/dev/null; then
+		printf 'review-package: %s does not name a revision here\n' "$endpoint" >&2
+		exit 2
+	fi
+done
 
 if [ $# -eq 3 ]; then
-	out=$3
+	destination=$3
 else
-	dir=$("$(cd "$(dirname "$0")" && pwd)/sdd-workspace")
-	out="$dir/review-$(git rev-parse --short "$base")..$(git rev-parse --short "$head").diff"
+	scratch=$("$(cd "$(dirname "$0")" && pwd)/sdd-workspace")
+	abbreviated="$(git rev-parse --short "$from")..$(git rev-parse --short "$to")"
+	destination="$scratch/review-$abbreviated.diff"
 fi
 
+span="$from..$to"
 {
-	echo "# Review package: ${base}..${head}"
-	echo
-	echo "## Commits"
-	git log --oneline "${base}..${head}"
-	echo
-	echo "## Files changed"
-	git diff --stat "${base}..${head}"
-	echo
-	echo "## Diff"
-	git diff -U10 "${base}..${head}"
-} >"$out"
+	printf '# Review package: %s\n\n' "$span"
+	printf '## Commits\n'
+	git log --oneline "$span"
+	printf '\n## Files changed\n'
+	git diff --stat "$span"
+	printf '\n## Diff\n'
+	git diff -U10 "$span"
+} >"$destination"
 
-commits=$(git rev-list --count "${base}..${head}")
-echo "wrote ${out}: ${commits} commit(s), $(wc -c <"$out" | tr -d ' ') bytes"
+printf 'review-package: wrote %s (%s commit(s), %s bytes)\n' \
+	"$destination" \
+	"$(git rev-list --count "$span")" \
+	"$(wc -c <"$destination" | tr -d ' ')"
