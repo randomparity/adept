@@ -61,13 +61,22 @@ frames carry no decision value, only the terminal states do.
    services may be expected; wait on required checks.
 2. If a required check fails, inspect the failure, fix it, run relevant local
    guardrails, push, and restart the loop. **Never re-run a failed check hoping
-   for green.** A check that fails and then passes on the same commit is
-   nondeterministic: the green run is not evidence the branch is sound and the
-   red one is not evidence it is broken — see
-   [true-seeing](../../references/true-seeing.md), *Flaky tests*. Fix the
-   determinism defect or file it, and note it in the PR body either way. A PR
-   that went green on a retry is indistinguishable afterwards from one that
-   went green first time, and only you can still tell them apart.
+   for green** — see [true-seeing](../../references/true-seeing.md), *Flaky
+   tests*. Two cases, and they are not the same act:
+   - **The failure is in the repo's own suite.** Fix the determinism defect. If
+     you file it instead, that is a terminal state for this loop, not a step in
+     it: the required check stays red, so there is no exit condition to reach.
+     Stop and report the PR state and the issue reference to the operator, the
+     same shape as step 8.
+   - **The failure is in the CI infrastructure** — runner, network, registry,
+     cache. Re-run it once and name the external cause in the PR body. A re-run
+     whose cause you can name is diagnosis; re-running until the answer changes
+     is not, and "it was probably infra" is the second one wearing the first
+     one's clothes.
+
+   Note either outcome in the PR body. A PR that went green on a retry looks
+   afterwards exactly like one that went green first time, and only you can
+   still tell them apart.
 3. Poll merge state with `gh pr view <PR> --json mergeable,mergeStateStatus`
    (always request explicit `--json` fields — never a bare `gh pr view`, which
    dumps the full body and comments). Green checks alone are never the exit
