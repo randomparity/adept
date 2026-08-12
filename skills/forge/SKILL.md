@@ -425,9 +425,10 @@ the limitation in the PR body.
 If a guardrail fails, stop and fix it. Do not commit with red guardrails.
 
 A guardrail that fails once and passes on re-run has not gone green — see
-[true-seeing](../../references/true-seeing.md), *Flaky tests*. Do not commit on
-it either: fix the determinism or file it, and say in the commit or the PR body
-that it flaked.
+[true-seeing](../../references/true-seeing.md), *Flaky tests*. The rule above
+holds unchanged: fix the determinism and say in the commit that it flaked. If
+you file it instead of fixing it, that is a stop — report it to the controller
+with the issue reference. Filing does not turn a red guardrail into a green one.
 
 ## Context checkpoint
 

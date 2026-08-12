@@ -55,18 +55,27 @@ Subagent (general-purpose):
     is, and report that:
 
     - **Pre-existing.** Your work is not committed yet, so `HEAD` is the tree
-      without it. Run the same test against `HEAD` in a throwaway worktree —
-      `git worktree add <tmp> HEAD`, run it there, then remove the worktree.
-      Never `git checkout` the base over your own uncommitted work: git will
-      either refuse or carry your changes across, and a base run carrying your
-      changes is not a base run. If the test fails there too, your task did not
-      cause it — report it as context with the test's name, do not fix it, and
-      do not let it block your commit.
+      without it. Run the same test against `HEAD` in a throwaway worktree
+      placed outside the repository — `git worktree add <tmp> HEAD`, run it
+      there, then remove the worktree. Never `git checkout` the base over your
+      own uncommitted work: git will either refuse or carry your changes
+      across, and a base run carrying your changes is not a base run. If the
+      test fails there too, your task did not cause it — report it as context
+      with the test's name, do not fix it, and do not let it block your commit.
+      If it cannot run there at all, because dependencies or build output live
+      in your own tree and not in a fresh checkout, the comparison settled
+      nothing: say so and report the failure unclassified rather than calling
+      it pre-existing.
     - **Flaky.** Run it again on your own code, changing nothing. If it fails
       and then passes, the test is nondeterministic. That is a determinism
       defect in its own right, and it is evidence of nothing in either
       direction — the green run does not clear your code and the red run does
-      not condemn it. Report it with both outcomes and the test's name.
+      not condemn it. Report it with both outcomes and the test's name. Fixing
+      or filing it is the controller's call, not yours; reporting it is what
+      you owe.
+
+    If instead it passes on the base and fails again on yours, you did touch
+    it: fix it, or report BLOCKED. Do not commit past it.
 
     Either way, never write "tests pass" on the strength of a re-run. A suite
     you had to run twice is a suite you have to say you ran twice.

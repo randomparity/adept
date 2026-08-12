@@ -88,7 +88,9 @@ Subagent (general-purpose):
     so the task has no usable test evidence until the flake is dealt with. Do
     not re-run the test yourself to work out which run was the real one — a
     re-run cannot distinguish them, which is precisely the defect. Recommend
-    fixing the nondeterminism, or filing it, and say which you think it is.
+    fixing the nondeterminism, or filing it, and say which you think it is. A
+    flake the report already shows fixed, or filed with an issue reference, is
+    dispositioned: note it and do not hold the task verdict on it.
 
     ## Part 1 — does it match the spec?
 
