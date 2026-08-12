@@ -1,43 +1,65 @@
 #!/usr/bin/env bash
-# Extract one task's full text from an implementation plan into a file the
-# implementer reads in one call, so the task text never has to be pasted
-# through the controller's context.
+# Pull a single task's section out of an implementation plan and drop it in a
+# file of its own, so a dispatched implementer can read the whole task in one
+# call instead of having it relayed through the controller's context.
 #
-# Usage: task-brief PLAN_FILE TASK_NUMBER [OUTFILE]
-# Default OUTFILE: <repo-root>/.agent/sdd/task-<N>-brief.md
-# (per worktree; concurrent runs in the same working tree share it).
+# Usage: task-brief PLAN_FILE TASK_NUMBER [DESTINATION]
+#
+# Without DESTINATION the brief lands in the shared scratch directory as
+# task-<N>-brief.md. That path is per worktree, so two runs against the same
+# working tree and the same task number write the same file.
 set -euo pipefail
 
-if [ $# -lt 2 ] || [ $# -gt 3 ]; then
-	echo "usage: task-brief PLAN_FILE TASK_NUMBER [OUTFILE]" >&2
+case $# in
+2 | 3) ;;
+*)
+	printf 'usage: task-brief PLAN_FILE TASK_NUMBER [DESTINATION]\n' >&2
 	exit 2
-fi
+	;;
+esac
 
 plan=$1
-n=$2
-[ -f "$plan" ] || {
-	echo "no such plan file: $plan" >&2
-	exit 2
-}
+wanted=$2
 
-if [ $# -eq 3 ]; then
-	out=$3
-else
-	dir=$("$(cd "$(dirname "$0")" && pwd)/sdd-workspace")
-	out="$dir/task-${n}-brief.md"
+if [ ! -f "$plan" ]; then
+	printf 'task-brief: %s is not a file\n' "$plan" >&2
+	exit 2
 fi
 
-awk -v n="$n" '
-  /^```/ { infence = !infence }
-  !infence && /^#+[ \t]+Task[ \t]+[0-9]+/ {
-    intask = ($0 ~ ("^#+[ \t]+Task[ \t]+" n "([^0-9]|$)"))
-  }
-  intask { print }
-' "$plan" >"$out"
+if [ $# -eq 3 ]; then
+	destination=$3
+else
+	scratch=$("$(cd "$(dirname "$0")" && pwd)/sdd-workspace")
+	destination="$scratch/task-${wanted}-brief.md"
+fi
 
-if [ ! -s "$out" ]; then
-	echo "task ${n} not found in ${plan} (no heading matching 'Task ${n}')" >&2
+# Three things this has to get right, none of them obvious:
+#
+#   * a fenced block may contain a line that looks exactly like a task heading,
+#     and it is code rather than structure, so track the fences and ignore
+#     headings found inside one;
+#   * the heading level is not fixed, so match one or more leading hashes rather
+#     than a particular depth;
+#   * "Task 1" must not also select "Task 10", which is why the number is
+#     followed by a non-digit-or-end assertion rather than left open.
+#
+# Everything from the matching heading up to the next task heading is the task,
+# and the last task in the file simply runs to the end.
+awk -v wanted="$wanted" '
+  /^```/ { fenced = !fenced }
+  !fenced && /^#+[ \t]+Task[ \t]+[0-9]+/ {
+    selected = ($0 ~ ("^#+[ \t]+Task[ \t]+" wanted "([^0-9]|$)"))
+  }
+  selected { print }
+' "$plan" >"$destination"
+
+# The redirect above has already created the file, empty, by the time this runs.
+# That is left as it is: callers have always seen the file appear regardless, and
+# the exit status is what tells them whether it holds anything.
+if [ ! -s "$destination" ]; then
+	printf 'task-brief: no heading for task %s in %s\n' "$wanted" "$plan" >&2
 	exit 3
 fi
 
-echo "wrote ${out}: $(wc -l <"$out" | tr -d ' ') lines"
+printf 'task-brief: wrote %s (%s lines)\n' \
+	"$destination" "$(wc -l <"$destination" | tr -d ' ')"

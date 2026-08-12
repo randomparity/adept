@@ -30,7 +30,6 @@ Structural gates are a different thing and are welcome: checking that a `SKILL.m
 - `scripts/` — the gate scripts `just` invokes, each with its suite beside it. `.github/scripts/` holds the decision-record gate, kept byte-identical to its twin under `skills/tome-of-lore/assets/` (`just records` compares them).
 - `docs/adr/` — architecture decision records, append-only once merged.
 - `docs/workflow/specs/`, `docs/workflow/plans/` — design and implementation records.
-- `licenses/` — attribution for skills still derived from upstream work.
 
 Plans and specs name the checkout root as `$WORK` rather than writing it out: this repo is public and an absolute path is host identity. `scripts/check-public-safety.sh` enforces that.
 
