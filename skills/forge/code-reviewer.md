@@ -170,8 +170,8 @@ Subagent (general-purpose):
 
     ## Critical Rules
 
-    These govern the review you write to [REVIEW_FILE]. The cap above governs
-    what you send back, and it is not in competition with them.
+    These govern the review you write to [REVIEW_FILE], not the message you
+    send back.
 
     Cite, do not assert: every finding carries a `file:line`, the defect and why
     it matters. "Improve error handling" names nothing and cannot be acted on.

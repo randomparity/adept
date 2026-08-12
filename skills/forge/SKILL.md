@@ -221,26 +221,23 @@ asked report it as a blocker and return. Never default to `main`.
    re-dispatch. Both lines: the phase is done.
 2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
    and print a non-zero commit count and a non-zero byte count. Report and stop
-   rather than dispatching: this file is the reviewer's whole input, and a
-   generation step that half-failed is not a review package.
+   rather than dispatching: this file is the reviewer's whole input.
 3. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
    directory `scripts/sdd-workspace` prints. Remove anything already at that
    path before dispatching, so a file there afterwards is this dispatch's.
    `[MINOR_LEDGER]` is the Minor findings you have been accumulating; pass the
-   literal `none` when there were none, so an empty triage is a stated result
-   rather than a slot you left blank.
+   literal `none` when there were none.
 4. When the reviewer returns, `[REVIEW_FILE]` must exist and be non-empty. If
    you passed a non-empty `[MINOR_LEDGER]`, read that file's `#### Minor triage`
    heading whatever the verdict — that heading, not the whole file. On a `Yes`
    nothing else reads the answer you asked for.
-5. **Append the ledger line once that check passes** — `Final review
-   <base7>..<head7>: <verdict> (review <path>)` — and append a second,
-   `Final review <base7>..<head7>: closed`, when the fix wave finishes. Two
-   appends rather than an edit, because that is how every other line in that
-   ledger is written. Writing the first here and not at the end is what protects
-   the fix wave: a run that dies mid-wave otherwise leaves no line, and step 1
-   would clear a finished review to re-run it. A dispatch that ends in a stop
-   gets no line — there is no review file for a resume to skip to.
+5. **Append the ledger line once that check passes**, before the fix wave —
+   `Final review <base7>..<head7>: <verdict> (review <path>)` — and a second,
+   `Final review <base7>..<head7>: closed`, when the wave finishes. Two appends,
+   not an edit, as everywhere else in that ledger. Before the wave and not
+   after, because a run that dies mid-wave leaving no line sends the next one
+   through step 1 to clear a finished review. A dispatch ending in a stop gets
+   no line.
 
 A missing or empty file means the return is not evidence: discard it and
 re-dispatch **once**, then stop and report. That blind retry is for a silent
