@@ -1,7 +1,10 @@
 # Behaviour inventory — `subagent-driven-development` (absorbed into `$build-tdd` as `party`)
 
 Extracted from `skills/subagent-driven-development/SKILL.md` at commit `760c91a`
-before any rewriting, per the rewrite spec §5. Rows are observable behaviours,
+before any rewriting, per the rewrite spec §5. That skill descends from
+[obra/superpowers](https://github.com/obra/superpowers) at
+`d884ae04edebef577e82ff7c4e143debd0bbec99`, MIT licensed; the rows below quote its
+wording where quoting was the point, and the attribution belongs with them. Rows are observable behaviours,
 not wording. KEEP rows are the regression contract for the `party` mode. DROP
 rows are deliberate deletions — the YAGNI filter of §5 — and must not reappear.
 

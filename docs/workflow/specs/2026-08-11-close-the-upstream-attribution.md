@@ -69,14 +69,16 @@ behaviour they inventory and retire —
 `docs/workflow/plans/2026-08-11-strip-companion-and-realign-migration.md`
 (2.25%, run 51).
 
-**Neither of those two names `obra/superpowers` in its own prose.** The string
-occurs in exactly five tracked files, and the inventory cites only the retired
-`agent-config` skill path it was extracted from. So the argument that they carry
-no obligation is *not* that the source is named: it is that the quotation is
-short and documentary, inside records describing behaviour being removed rather
-than reusing the software. That is the owner's judgment and ADR 0003 records it
-as one. Adding the attribution line is out of surface, tracked as
-[#35](https://github.com/randomparity/adept/issues/35).
+**Neither of those two named `obra/superpowers` in its own prose** — the string
+occurred in exactly five tracked files, and the inventory cited only the retired
+`agent-config` skill path it was extracted from.
+
+**R4a — both gain an attribution line in this change.** Deferring it would have
+deferred a concern this change *worsens*: `licenses/superpowers.LICENSE` is the
+only upstream notice in the tree today, and R4 deletes it, so after the close-out
+those two files would carry upstream wording with no notice anywhere. A deferral
+is only available for a concern the change neither depends on nor worsens. Two
+lines, in files already inside the close-out sweep.
 
 None creates an obligation, so R4 stands. ADR 0003 records the correction, since
 its own "no shipped file is substantially upstream expression" consequence is

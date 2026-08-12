@@ -8,6 +8,11 @@
 
 **Tech Stack:** bash, `rg`, `shellcheck`, `git`, `gh`, `claude plugin validate`.
 
+**Upstream quotation:** the behaviour rows this plan reproduces are quoted from
+skills descending from [obra/superpowers](https://github.com/obra/superpowers) at
+`d884ae04edebef577e82ff7c4e143debd0bbec99`, MIT licensed. They are quoted here to
+record what was removed.
+
 ## Global Constraints
 
 - Spec of record: `docs/superpowers/specs/2026-08-11-first-party-skill-rewrite-design.md` (in this repo). Rule numbers below refer to its §4.

@@ -103,11 +103,14 @@ inside records describing what was removed rather than reuse of the software —
 the same owner's judgment as above, not a measurement result — and the 16-token
 bound governs the six rewritten files rather than the tree.
 
-Neither of those two names `obra/superpowers` in its own prose — the inventory
-cites only the retired `agent-config` skill path it was extracted from — so after
-closure they are the sole shipped files carrying upstream wording with no
-attribution near it. Adding that line is outside this change's surface and is
-tracked as [#35](https://github.com/randomparity/adept/issues/35).
+Neither of those two named `obra/superpowers` in its own prose — the inventory
+cited only the retired `agent-config` skill path it was extracted from — which
+would have left them the sole shipped files carrying upstream wording with no
+attribution anywhere in the tree. **This change adds that line to both**, rather
+than deferring it: the deferral would have been of a concern this change itself
+worsens, since deleting `licenses/superpowers.LICENSE` removes the only upstream
+notice those two files were ever covered by. Two lines, in files already inside
+the close-out sweep, and the outcome above is then literally true at merge.
 
 ## Consequences
 
@@ -140,11 +143,9 @@ tracked as [#35](https://github.com/randomparity/adept/issues/35).
 - ADR 0002's `target:` provenance lines are historical. One of them now names a
   deleted file; the append-only rule is why it stands, as it stood when the
   rename sweep invalidated the rest.
-- Between this change and [#35](https://github.com/randomparity/adept/issues/35)
-  the tree carries two shipped files with unattributed upstream runs and no
-  licence notice anywhere. The owner accepts that interval: the quotation is
-  documentary and short, #35 is filed and small, and holding the closure for it
-  would keep a notice standing for files it was never about.
+- No interval exists in which the tree carries unattributed upstream wording. The
+  two `docs/workflow/` records gain their attribution line in this change, which
+  is what makes the first consequence above true rather than nearly true.
 - After closure the repository makes an unbounded first-party claim with nothing
   watching it. No in-tree artifact reproduces the measurement, and where 0002 left
   a cited exception, 0003 leaves none — so fresh upstream text entering a new

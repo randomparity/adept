@@ -208,6 +208,8 @@ repository. Nothing in the tree.
 | `README.md` | modify — Licence section |
 | `CLAUDE.md` | modify — Layout entry at line 33 |
 | `skills/gauntlet/SKILL.md` | modify — `:289` sentence and `:291` table header |
+| `docs/workflow/inventories/subagent-driven-development.md` | modify — one attribution line |
+| `docs/workflow/plans/2026-08-11-strip-companion-and-realign-migration.md` | modify — one attribution line |
 | `docs/adr/0003-close-the-upstream-attribution.md` | modify — fill the table, flip to `Accepted` |
 
 `just test` and `scripts/list-shell-sources.sh` discover suites automatically, so
@@ -545,9 +547,20 @@ else does, so it is the highest-risk file in the change.
 
 **Author from the contract, do not paraphrase the existing file.** Read
 `skills/forge/SKILL.md` — the dispatch flow at :190-208 and the four-status
-handling at :213-223 — and write the prompt that contract requires. Read the
-current template once to extract *what it must contain*, then write from the
-contract, not from its wording.
+handling at :213-223 — and write the prompt that contract requires.
+
+**But the contract is thin, and an instruction inventory comes first.** Whole
+blocks of this template have no in-repo consumer: the self-review block at
+`:80-106` (Completeness / Quality / Discipline / Testing) is represented by five
+words at `skills/forge/SKILL.md:196`, and `## Code Organization` (`:50-62`) and
+the escalation triggers (`:63-79`) by nothing at all. Authoring from the contract
+alone would silently drop them, which is exactly the redesign exclusion (c)
+forbids — on an AI surface, in the change whose point is that the wording must
+not be reused.
+
+So: read the current template **once**, write down an inventory of every
+instruction it gives (not its wording — what it tells the implementer to do),
+then write the replacement from the contract *and* that inventory.
 
 ### What must survive
 
@@ -579,7 +592,11 @@ contract, not from its wording.
 ### Acceptance criteria
 
 - All four status literals present, word-bound checks pass.
-- Placeholder set unchanged.
+- Placeholder set unchanged; `Work from:` and the model-cost warning present.
+- **Every instruction in the inventory is present in the replacement, or its
+  removal is named and justified in the commit body.** Containment and literal
+  checks cannot see a dropped instruction; this criterion is the only thing that
+  can.
 - Below 2% containment, run ≤ 16.
 - `just verify` green.
 
@@ -600,11 +617,18 @@ contract, not from its wording.
   [HEAD_SHA] [MODEL] [REPORT_FILE]` — `[DIFF_FILE]` is the review-package path
   and the reviewer cannot run without it.
 
+### Method
+
+As Task 5: this contract is thin too, so read the current template **once** and
+write down an instruction inventory before authoring. Write the replacement from
+the contract and that inventory together.
+
 ### Steps
 
-1. Record the placeholder set with the `rg -o` command.
+1. Record the placeholder set with the `rg -o` command, and the instruction
+   inventory.
 2. Read `skills/forge/SKILL.md:196-208`, `:226`, `:353-367`.
-3. Re-author from that contract.
+3. Re-author from that contract and the inventory.
 4. Re-run the placeholder command → identical set.
 5. Literal checks: `Critical`, `Important`, `Minor` word-bound;
    `Cannot verify from diff` with `-F`; the three markers.
@@ -616,6 +640,8 @@ contract, not from its wording.
 
 - Every literal above present; placeholder set unchanged; both verdicts required
   by the template's output section.
+- Every instruction in the inventory present in the replacement, or its removal
+  named and justified in the commit body.
 - Below 2% containment, run ≤ 16.
 - `just verify` green.
 
@@ -658,7 +684,8 @@ whole-branch report is read by a person rather than dispatched on.
 1. `rg -n --no-config '^\s*#{2,4} ' skills/forge/code-reviewer.md` → record the
    heading list. Same for placeholders.
 2. Re-author from `skills/forge/SKILL.md:208` and `skills/gauntlet/SKILL.md:289-297`.
-3. Re-run both commands → heading list and placeholder set unchanged.
+3. Re-run both commands → heading list and placeholder set unchanged. Check the
+   instruction inventory the same way Tasks 5 and 6 do.
 4. Literal checks for the three grades.
 5. Measure. Target **< 2%, run ≤ 16**.
 6. `just verify` bare.
@@ -683,7 +710,11 @@ the only step that exercises the dispatch contract rather than inspecting it.
 
 1. **Build the smoke fixtures.** `git init $SCRATCH/smoke-repo`, set
    `user.email` and `user.name` on it, and make two commits — the second adding a
-   `plan.md` containing two tasks. Then, **with cwd `$SCRATCH/smoke-repo`**, run
+   `plan.md` containing two tasks **and an obvious defect for the reviewers to
+   find**: a shell snippet with an unquoted `$1` inside a `rm` argument, say.
+   Without a planted defect, "at least one graded finding" tests whether the
+   fixture happens to contain a bug, and its failure branch sends the hardest
+   template in the change back for a re-author on that basis. Then, **with cwd `$SCRATCH/smoke-repo`**, run
    the *rewritten* scripts by absolute path, which doubles as an end-to-end check
    of Tasks 3 and 4:
 
@@ -712,8 +743,9 @@ the only step that exercises the dispatch contract rather than inspecting it.
    `Important` or `Minor`.
 4. Dispatch one whole-branch reviewer with the rewritten
    `skills/forge/code-reviewer.md` against the smoke repo's two-commit range.
-   Require the `**Ready to merge?**` verdict line and at least one finding under a
-   `Critical` / `Important` / `Minor` heading. This one is the hardest to
+   Require the `**Ready to merge?**` verdict line, the four output sections, and
+   that the planted defect is graded under a `Critical` / `Important` / `Minor`
+   heading. This one is the hardest to
    re-author — its contract is thinnest and its arrangement is inherited — so
    leaving it unexercised would exempt the riskiest file. A failure here returns
    to **Task 7**.
@@ -784,10 +816,17 @@ explains why.
    checks it.
 3. `CLAUDE.md`: delete the Layout bullet at line 33,
    ``- `licenses/` — attribution for skills still derived from upstream work.``
-4. `skills/gauntlet/SKILL.md`: reword `:289` so it identifies the two templates by
+4. **Attribution for the two quoting records.** Add one line to
+   `docs/workflow/inventories/subagent-driven-development.md` and one to
+   `docs/workflow/plans/2026-08-11-strip-companion-and-realign-migration.md`,
+   naming `obra/superpowers` at `d884ae04` and its MIT licence beside the quoted
+   material. These are the only shipped files that keep upstream runs after the
+   close-out, and this change removes the notice that covered them — so the line
+   goes in here rather than being deferred.
+5. `skills/gauntlet/SKILL.md`: reword `:289` so it identifies the two templates by
    role rather than ancestry, and relabel the table header at `:291` from
    `| superpowers | here |` to `| $forge | here |`.
-5. `docs/adr/0003-…`: fill the *After*, *Longest run* and *Exempted constructs*
+6. `docs/adr/0003-…`: fill the *After*, *Longest run* and *Exempted constructs*
    columns from Task 8. **Also update the candidate-set count** — the record says
    "every tracked file — 129 of them", and this change adds two fixtures, so that
    number is stale. Set it to what Task 8 step 6 recorded, and re-check the "Five
@@ -800,11 +839,11 @@ explains why.
    reader cannot verify that without knowing which tree was counted. Drop the exemption column entirely if no exemption was
    needed. Change `## Status` from `Proposed` to `Accepted (2026-08-11)` and
    remove the staging paragraph beneath it.
-6. **Close-out sweep:** `rg -n --no-config -i 'superpowers|licenses/'`. A hit in
+7. **Close-out sweep:** `rg -n --no-config -i 'superpowers|licenses/'`. A hit in
    `README.md`, `CLAUDE.md`, `skills/`, or `licenses/` means this task is not
    done. Expected survivors: ADR 0002, ADR 0003, this plan, the two specs, and the
    `docs/workflow/` inventories and plans that name the retired paths as history.
-7. `just verify` bare, **and** `BASE_SHA=$(git rev-parse origin/main) just records`
+8. `just verify` bare, **and** `BASE_SHA=$(git rev-parse origin/main) just records`
    once. A bare `just records` prints "BASE_SHA unset — validating records only"
    and skips the append-only pass entirely, so it would not exercise this edit at
    all.
@@ -815,7 +854,7 @@ explains why.
    is an `E-REWRITE` the moment the record exists at the base ref. If the design
    commits somehow merged ahead of the implementation, do not fill the table —
    write a superseding ADR 0004 carrying the measurement instead.
-8. Commit: `feat: close the upstream attribution`.
+9. Commit: `feat: close the upstream attribution`.
 
 ### Acceptance criteria
 
