@@ -50,6 +50,7 @@ Evidence for one claim is not evidence for a different one:
 | The bug is fixed | The original symptom, exercised, gone | The code changed in the right place |
 | Requirements met | The plan, walked line by line | The test suite being green |
 | Green and mergeable | Guardrails exit 0 **and** a clean `git status --porcelain` | Green checks with untracked files |
+| The merge published | The base-branch run's conclusion, read | The merge landing; the pull request's own green checks |
 | A subagent finished | The diff, read by you | The subagent's report saying it succeeded |
 | A red run was a fluke | The nondeterminism found, and fixed or filed | The same test passing on re-run |
 
