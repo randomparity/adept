@@ -142,7 +142,7 @@ Subagent (general-purpose):
     - what you built, or attempted, if you could not finish;
     - what you tested, and what the tests said;
     - **any test you ran more than once**, whatever the reason — both outcomes,
-      the test's name, and whether it also fails on the base commit. A test that
+      the test's name. A test that
       failed and then passed is the one the reviewer most needs told about;
     - **TDD evidence**, where the task required TDD — the RED command with the
       failing output it produced and why that failure was the expected one, then
