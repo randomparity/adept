@@ -1476,6 +1476,36 @@ EOF
   run_case "record directory absent at both refs" 1 E-PROFILE-DIR-MISSING "$d" \
     BASE_SHA="$b2" RECORD_PROFILES=debt
 
+  # The same question asked of a base ref that cannot be read. dir_in_ref used to test only
+  # whether `git ls-tree` printed anything, discarding its status, so a scan that never ran
+  # was indistinguishable from a directory that was never there -- and the run reported
+  # E-PROFILE-DIR-MISSING, naming the wrong cause. The directory is removed from the working
+  # tree only, uncommitted: the tree check short-circuits ahead of the witness, so a fixture
+  # that leaves it in place never reaches the code under test.
+  d=$(case_dir dir_scan_fault)
+  b=$(base_of "$d")
+  rm -r "$d/docs/debt"
+  stub_bin="$SCRATCH/git-dir-fault-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+# Keyed on subcommand and pathspec together: three sites in this gate issue an ls-tree, and a
+# stub keyed on the subcommand alone fires at whichever runs first.
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = docs/debt ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "record dir witness faults, not reported absent" 1 E-DIR-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=debt PATH="$stub_bin:$PATH"
+
   printf -- '-- grandfathering --\n'
   # Non-conforming at the base ref, so its structural findings are warnings and the run is
   # green. A bulleted `- target:` is the legacy shape the migrator exists to fix, and
