@@ -43,19 +43,28 @@ requirements implicitly include this section.
 - **Nothing functional changes in the scripts.** Same arguments, same exit codes,
   same files written, same stdout contract. Comments, diagnostic wording, variable
   names and statement structure are what change.
+- **Missing the bar is not a task failure.** A rewrite that lands above 2% or
+  over 16 tokens still commits its improvement and **records the measured
+  figure**; the miss is the §2 fallback input Task 8 collects and Task 9b
+  discharges. Read every per-task containment criterion as "below the bar, or the
+  figure recorded and carried to Task 8".
 - **Anatomy rule 4:** no automated gate asserts on prose. The literal checks below
   are commands a person runs from a checklist, never wired into `just verify`.
 
 ### The measurement tool
 
 Not in the repo and never enters it (ADR 0002, anatomy rule 2). Task 0 builds it
-in a scratch directory outside the checkout. Three capabilities, whether as three
-scripts or one with flags:
+in a scratch directory outside the checkout, as **three files with these exact
+names and argument orders**, so every later task can name them without ambiguity:
 
-- **containment** — per path, print containment and longest shared run;
-- **runs** — per path, list the maximal shared passages above a token floor, so a
-  residual can be judged command-syntax versus prose;
-- **sweep** — every tracked file, so the candidate set has a denominator.
+    $SCRATCH/containment.py <upstream-root> <repo-root> <path> [<path>...]
+    $SCRATCH/runs.py        <upstream-root> <abs-candidate-path> <label> [min-tokens]
+    $SCRATCH/sweep.py       <upstream-root> <repo-root>
+
+`containment.py` prints containment and longest shared run per path; `runs.py`
+lists the maximal shared passages above a token floor, so a residual can be judged
+command-syntax versus prose; `sweep.py` runs containment over every tracked file
+so the candidate set has a denominator.
 
 ### The gated literals — they differ per file
 
@@ -123,8 +132,11 @@ repository. Nothing in the tree.
 5. Add the `sweep` capability: run containment over every tracked file
    (`git ls-files`), sorted descending, with longest runs computed for anything
    above 1%.
-6. **Validate before trusting it.** Run containment over the six baseline files
-   and `skills/forge/SKILL.md`. It must reproduce ADR 0002 exactly:
+6. **Validate before trusting it.** Measure the six baseline files and
+   `skills/forge/SKILL.md` **as of the merge base**, not the working tree —
+   `git show "$(git merge-base HEAD origin/main)":<path>` — so the validation
+   reproduces at any point in the branch's life, including after the rewrites
+   land. It must reproduce ADR 0002 exactly:
 
    | File | Containment | Longest run |
    |---|---|---|
@@ -233,7 +245,10 @@ wording. Assert:
   heading depth matches;
 - **the default-`OUTFILE` case**, one per suite, invoked with two arguments only:
   the resolved path equals `<sdd-workspace stdout>/task-<N>-brief.md` and
-  `<sdd-workspace stdout>/review-<base7>..<head7>.diff` respectively. It is the
+  `<sdd-workspace stdout>/review-<from>..<to>.diff`, where each endpoint is what
+  `git rev-parse --short` yields **in the fixture repo** — derive it by calling
+  that command, never by slicing seven characters, since `core.abbrev` and repo
+  size both move it. It is the
   only case that writes `.agent/` state, and Tasks 3 and 4 both carry a
   default-path acceptance criterion that nothing else covers;
 - **that `task-brief` exit 3 leaves an empty `OUTFILE`.** The awk redirect at
@@ -644,11 +659,18 @@ the only step that exercises the dispatch contract rather than inspecting it.
    `skills/forge/task-reviewer-prompt.md` against `$SCRATCH/review.diff`.
    Require: both verdicts present, and at least one finding graded `Critical`,
    `Important` or `Minor`.
-4. Record both outcomes verbatim for the PR body. **Commit nothing** — no
+4. Dispatch one whole-branch reviewer with the rewritten
+   `skills/forge/code-reviewer.md` against the smoke repo's two-commit range.
+   Require the `**Ready to merge?**` verdict line and at least one finding under a
+   `Critical` / `Important` / `Minor` heading. This one is the hardest to
+   re-author — its contract is thinnest and its arrangement is inherited — so
+   leaving it unexercised would exempt the riskiest file. A failure here returns
+   to **Task 7**.
+5. Record all three outcomes verbatim for the PR body. **Commit nothing** — no
    harness, no fixture, no gate.
-5. Run the whole-tree sweep from Task 0. Record the tracked file count and every
+6. Run the whole-tree sweep from Task 0. Record the tracked file count and every
    file at or above 2%.
-6. Confirm each of the six is below 2% with a run ≤ 16, and that the two new test
+7. Confirm each of the six is below 2% with a run ≤ 16, and that the two new test
    fixtures are also below 2%.
 
 ### Acceptance criteria
@@ -657,8 +679,8 @@ the only step that exercises the dispatch contract rather than inspecting it.
 - The dispatched prompt text contains no remaining `[A-Z_]{2,}` bracket token —
   an unfilled placeholder makes the smoke prove nothing.
 - Whole-tree scan recorded, with the file count and every above-2% file named.
-- If any of the six missed, **stop**: the spec's §2 fallback applies, Task 9's
-  first two bullets do not happen, and ADR 0003 is revised to say so.
+- If any of the six missed, **Task 9 does not run at all** — go to Task 9b, which
+  holds the whole fallback in one place.
 - A fixture from Task 1 measuring at or above 2%, or carrying a run over 16
   tokens, is **rewritten and re-measured** before Task 9 begins. It is not a §2
   fallback case and does not keep the notice standing — it is a file this change
@@ -684,6 +706,10 @@ the only step that exercises the dispatch contract rather than inspecting it.
 **Where this fits:** last, as one commit. Nothing here is licensed until Task 8's
 measurement exists.
 
+**Prerequisite:** the design commits — the spec, ADR 0003, and ADR 0002's
+supersession banner — reach `main` in the *same* pull request as this task. Step 7
+explains why.
+
 **Modifies:** `licenses/superpowers.LICENSE` (delete), `README.md`, `CLAUDE.md`,
 `skills/gauntlet/SKILL.md`, `docs/adr/0003-close-the-upstream-attribution.md`,
 `docs/adr/0002-narrow-the-upstream-attribution.md` (banner already in place)
@@ -705,7 +731,7 @@ measurement exists.
 5. `docs/adr/0003-…`: fill the *After*, *Longest run* and *Exempted constructs*
    columns from Task 8. **Also update the candidate-set count** — the record says
    "every tracked file — 129 of them", and this change adds two fixtures, so that
-   number is stale. Set it to what Task 8 step 4 recorded, and re-check the "Five
+   number is stale. Set it to what Task 8 step 6 recorded, and re-check the "Five
    files sit above the line" sentence against the same sweep. Then append one sentence to that paragraph **naming the deltas that
    land after the scan** — the deleted `licenses/superpowers.LICENSE`, the README,
    `CLAUDE.md` and `skills/gauntlet/SKILL.md` edits, and the table fill itself —
@@ -722,9 +748,14 @@ measurement exists.
 7. `just verify` bare, **and** `BASE_SHA=$(git rev-parse origin/main) just records`
    once. A bare `just records` prints "BASE_SHA unset — validating records only"
    and skips the append-only pass entirely, so it would not exercise this edit at
-   all. The edit is legal for two independent reasons worth knowing: ADR 0003 does
-   not exist at the base ref, so it is a new record rather than a merged one; and
-   `APPEND_ONLY_SECTIONS="*"` excludes `## Status` in any case.
+   all.
+
+   The edit is legal for exactly one reason, and it is a prerequisite rather than
+   a property: **ADR 0003 must not already be in `main`.** `APPEND_ONLY_SECTIONS="*"`
+   exempts only `## Status`, and the table lives in `## Decision`, so filling it
+   is an `E-REWRITE` the moment the record exists at the base ref. If the design
+   commits somehow merged ahead of the implementation, do not fill the table —
+   write a superseding ADR 0004 carrying the measurement instead.
 8. Commit: `feat: close the upstream attribution`.
 
 ### Acceptance criteria
@@ -794,8 +825,7 @@ most likely to be needed.
 
 After the merge, remove it with `trash` (never `rm -rf` as an interactive
 command), and confirm nothing from it reached the checkout: `git status` clean,
-and no `containment.py`, `runs.py`, `sweep.py`, `upstream-sp/`, `mutants/` or
-`smoke-repo/` anywhere under the repository root.
+and `git ls-files --others --exclude-standard` empty under the repository root.
 
 ## Rollback
 
@@ -808,11 +838,19 @@ the branch has been pushed. There is no unpushed carve-out: `git reset --hard`
 and every force-push form, `--force-with-lease` included, are denied
 unconditionally by settings policy. Revert forward, always.
 
-**Post-merge.** Revert the merge commit as a unit — `git revert -m 1 <merge>` —
-which restores the rewrites and the notice together. Reverting a single rewrite
-commit is the dangerous case, because it puts back upstream expression while
-`licenses/superpowers.LICENSE` stays deleted. If one rewrite genuinely must come
-out alone, the *same* commit restores `licenses/superpowers.LICENSE`, that file's
-README entry, and appends a correction paragraph to ADR 0003. The record is
-append-only once merged, so that is a new paragraph, never an edit to the
-table.
+**Post-merge.** Under a `--merge` merge, `git revert -m 1 <merge>` restores the
+rewrites and the notice together. Under `--rebase` there is no merge commit:
+revert the range in reverse task order instead. The repository forbids squash for
+code, so those are the only two shapes.
+
+**Either way the revert must not delete ADR 0003.** Once the record is in the base
+ref, `check-records.sh` reports `E-GONE` for a record present at the base and
+absent from the tree, so a wholesale revert fails CI. Restore it in the same
+commit — `git checkout <merge> -- docs/adr/` — and append the reversal to its
+`## Consequences`. The record is append-only once merged, so that is a new
+paragraph, never an edit to the table.
+
+Reverting a single rewrite commit is the dangerous case: it puts back upstream
+expression while `licenses/superpowers.LICENSE` stays deleted. If one genuinely
+must come out alone, the *same* commit restores the licence file and that file's
+README entry.
