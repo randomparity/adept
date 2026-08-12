@@ -1360,6 +1360,48 @@ STUB
     passed=$((passed + 1))
     printf 'ok   E-GONE suppressed\n'
   fi
+
+  # The same search, with the vanished record's own base-ref copy unreadable rather than a
+  # candidate's witness. `git cat-file blob ... || return 1` reported E-GONE off a read that
+  # never happened -- fail-closed, so not a silent pass, but a verdict the gate did not
+  # establish: whether the record moved is exactly what could not be determined.
+  d=$(case_dir renumber_blob_scan_fault)
+  write_record "$d" "0002-b.md"
+  git -C "$d" add -A
+  git -C "$d" commit -qm "two records"
+  b=$(base_of "$d")
+  git -C "$d" mv docs/debt/0002-b.md docs/debt/0003-b.md
+  stub_bin="$SCRATCH/git-renumber-blob-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+# Keyed on the subcommand and the ref:path argument together. The ls-tree witness that
+# establishes the path was at the base ref must still run for real, or the fault under test
+# would be the witness's rather than the blob read's.
+if [ "\$1" = cat-file ]; then
+  for arg in "\$@"; do
+    case "\$arg" in
+    *:docs/debt/0002-b.md)
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+      ;;
+    esac
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "renumber blob read faults, not reported gone" 1 E-RENUMBER-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "blob fault replaces E-GONE"
+  if grep -q '::error::E-GONE: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL E-GONE also fired for a copy that was never read\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-GONE suppressed\n'
+  fi
+
   d=$(case_dir renumber_with_edit)
   write_record "$d" "0002-b.md"
   git -C "$d" add -A
@@ -1492,6 +1534,58 @@ STUB
     passed=$((passed + 1))
     printf 'ok   E-TITLE-MISMATCH suppressed\n'
   fi
+
+  # The base-ref blob behind the three anti-erasure rules. `git cat-file blob ... || return 0`
+  # read an unreadable copy as an absent one, and absent is the legitimate common case -- a
+  # record the change adds has no base copy -- so the record was silently exempted from
+  # check_sections_append_only, check_headings_intact and check_preamble_intact, and the run
+  # exited 0. `git cat-file` cannot separate the two on its own (ADR 0005 decision 2), so
+  # presence is witnessed with git ls-tree first and a read that then fails is a fault.
+  #
+  # The fixture leaves the working tree exactly as committed, so no other rule fires and the
+  # pre-change run is a genuine exit 0 rather than one some other finding carried.
+  stub_bin="$SCRATCH/git-base-blob-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  # Keyed on the subcommand and the ref:path argument together. The ls-tree witness that
+  # establishes the path was at the base ref must still run for real, or the fault under test
+  # would be the witness's rather than the blob read's.
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = cat-file ]; then
+  for arg in "\$@"; do
+    case "\$arg" in
+    *:docs/debt/0001-valid.md)
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+      ;;
+    esac
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  d=$(case_dir base_blob_scan_fault)
+  b=$(base_of "$d")
+  run_case "base blob unreadable, record not exempted" 1 E-BASE-BLOB-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
+  # The same read in evaluate_base_conformance, which left base_verdict=absent: a record that
+  # could not be read at the base ref was treated as one that was not there. Both sites fault
+  # on this stub, so each needs its own code -- with one shared code, neutralising either
+  # conversion would leave the other still firing it and both cases green.
+  d=$(case_dir base_shape_scan_fault)
+  b=$(base_of "$d")
+  run_case "base conformance read faults, not absent" 1 E-BASE-SHAPE-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
+  # The other side of the distinction, unstubbed: a record the change adds genuinely has no
+  # base blob, and that must stay silent. This case is green before the conversion and after
+  # it; what it guards is the conversion misreading absence as a fault.
+  d=$(case_dir base_blob_absent)
+  b=$(base_of "$d")
+  write_record "$d" "0002-new.md"
+  run_case "record added by the change has no base blob" 0 - "$d" BASE_SHA="$b"
 
   d=$(case_dir resolve_in_place)
   b=$(base_of "$d")
