@@ -1228,6 +1228,43 @@ YAML
     printf 'FAIL renumber note missing or names the wrong paths\n'
   fi
 
+  # The same renumber, with the candidate witness unable to run. The witness answers "did
+  # this destination already exist at the base ref"; a fault used to read as "it did not",
+  # which silently promoted an unverified candidate. Reporting E-GONE here would be worse
+  # than silence -- it asserts the record is gone on the strength of a search that never
+  # happened -- so the fault must replace that verdict rather than accompany it.
+  d=$(case_dir renumber_scan_fault)
+  write_record "$d" "0002-b.md"
+  git -C "$d" add -A
+  git -C "$d" commit -qm "two records"
+  b=$(base_of "$d")
+  git -C "$d" mv docs/debt/0002-b.md docs/debt/0003-b.md
+  stub_bin="$SCRATCH/git-renumber-fault-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = docs/debt/0003-b.md ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "renumber candidate scan faults, not reported gone" 1 E-RENUMBER-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "scan fault replaces E-GONE"
+  if grep -q '::error::E-GONE: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL E-GONE also fired for a search that never ran\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-GONE suppressed\n'
+  fi
   d=$(case_dir renumber_with_edit)
   write_record "$d" "0002-b.md"
   git -C "$d" add -A
