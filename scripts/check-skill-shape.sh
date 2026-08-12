@@ -89,13 +89,10 @@ workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")" ||
 
 # Under `set -e` an EXIT trap's non-zero return becomes the shell's exit status,
 # so the bare `trap 'rm -R "$workspace"' EXIT` this replaces turned a scratch
-# directory it could not remove into the finding status. The removal reports
-# itself on the fault status instead, and names what it left behind -- nothing
-# else will, and the path is the only way to reclaim it.
-#
-# shellcheck disable=SC2329 # run by the EXIT trap; 0.11 stops tracing at the terminal exit
-# Both branches report and then fall into one shared tail, so neither can
-# displace a status the run already earned.
+# directory it could not remove into the finding status. Both branches below
+# report and then fall into one shared tail, so neither displaces a status the
+# run already earned, and a retained directory is named -- nothing else will
+# name it, and the path is the only way to reclaim it.
 #
 # The prefix guard is defence in depth on the one recursive removal here, the
 # same shape check-ripgrep-config.sh and test-fixture-helpers.sh carry:
@@ -107,6 +104,8 @@ workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")" ||
 # -f so a directory already gone is not reported as one left behind: without it
 # rm exits 1 on ENOENT, which would name a path that does not exist and redden
 # an otherwise clean run. A removal that genuinely fails still does.
+#
+# shellcheck disable=SC2329 # run by the EXIT trap; 0.11 stops tracing at the terminal exit
 cleanup() {
 	local exit_status=$?
 	case $workspace in
