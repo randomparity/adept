@@ -42,7 +42,9 @@ requirements implicitly include this section.
   transcripts.
 - No absolute host paths in committed files; plans and specs name
   the checkout root as `$WORK`. `scripts/check-public-safety.sh` enforces it.
-- **Threshold:** below **2% containment** and **no shared run over 16 tokens**,
+- **Threshold** (ratified into the charter as `WORK:SCOPE` amendment 2 — it is a
+  necessary consequence of the outcome sentence, not a design addition): below
+  **2% containment** and **no shared run over 16 tokens**,
   measured against `obra/superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99`.
   A run may be exempted only if it is command syntax rather than prose *and* no
   longer than 28 tokens; exemptions are named in ADR 0003's table.
@@ -896,13 +898,23 @@ because "R4 does not happen" is not an instruction anyone can follow.
    is a path, not a claim.
 6. Close-out sweep, `just verify` bare, and
    `BASE_SHA=$(git rev-parse origin/main) just records`.
-7. Commit: `feat: narrow the upstream attribution to the files that kept it`.
+7. **Leave the residual owned.** `gh issue create` naming each file that kept its
+   citation, with its measured containment and longest run, why it could not
+   clear the bar, and what would close it — labelled from the repo's existing set
+   (`type:chore`, a `priority:`, `status:needs-triage`). Then state issue #32's
+   disposition explicitly: either closed as partially delivered with the successor
+   linked, or held open with its unmet criteria restated. Do not leave the
+   remaining rewrite living only in a merged record's prose — that is the failure
+   mode ADR 0002's tracked follow-up existed to avoid, and the reason #32 exists.
+8. Commit: `feat: narrow the upstream attribution to the files that kept it`.
 
 ### Acceptance criteria
 
 - Every file that missed is still cited in both the README and ADR 0003, and the
   notice is still present.
 - ADR 0003 carries no conditional and no `*pending*` cell.
+- A successor issue exists naming every file that kept its citation, and #32's
+  disposition is recorded.
 - `BASE_SHA=... just records` reports no `E-SUPERSEDE-DANGLING`: ADR 0002's
   banner still resolves.
 - `just verify` green.
