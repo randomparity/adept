@@ -68,11 +68,13 @@ names and argument orders**, so every later task can name them without ambiguity
     $SCRATCH/containment.py <upstream-root> <repo-root> <path> [<path>...]
     $SCRATCH/runs.py        <upstream-root> <abs-candidate-path> <label> [min-tokens]
     $SCRATCH/sweep.py       <upstream-root> <repo-root>
+    $SCRATCH/longruns.py    <upstream-root> <repo-root> [bound]
 
 `containment.py` prints containment and longest shared run per path; `runs.py`
 lists the maximal shared passages above a token floor, so a residual can be judged
 command-syntax versus prose; `sweep.py` runs containment over every tracked file
-so the candidate set has a denominator.
+so the candidate set has a denominator; `longruns.py` answers the run question
+across the whole tree with no containment floor.
 
 ### The gated literals — they differ per file
 
@@ -149,9 +151,13 @@ repository. Nothing in the tree.
    least N tokens that occurs contiguously upstream. Used to judge whether a
    residual is command syntax or prose.
 5. Add the `sweep` capability: run containment over every tracked file
-   (`git ls-files`), sorted descending, with longest runs computed for anything
-   above 1%.
-6. **Materialise the baseline as a tree**, so validation reproduces at any point
+   (`git ls-files`), sorted descending.
+6. Add a `longruns` capability, and do **not** gate it on containment. Build the
+   set of upstream 17-token grams once, then report every tracked file carrying a
+   shared run over 16 tokens. A containment floor would miss exactly what the run
+   bound exists to catch: 40 shared tokens inside a 7,500-token document is 0.44%
+   containment. This is the only thing that can back a tree-wide run claim.
+7. **Materialise the baseline as a tree**, so validation reproduces at any point
    in the branch's life and `containment.py`'s `<repo-root> <path>` signature can
    express it. For each of the seven paths:
 
@@ -159,7 +165,7 @@ repository. Nothing in the tree.
        mkdir -p "$SCRATCH/baseline/$(dirname <path>)"
        git show "$base:<path>" > "$SCRATCH/baseline/<path>"
 
-7. **Validate before trusting it:**
+8. **Validate before trusting it:**
    `python3 $SCRATCH/containment.py $SCRATCH/upstream-sp $SCRATCH/baseline <path>...`
    It must reproduce ADR 0002 exactly:
 
@@ -173,7 +179,7 @@ repository. Nothing in the tree.
    | `skills/forge/scripts/sdd-workspace` | 11.60% | 45 |
    | `skills/forge/SKILL.md` (excluded from the bar) | 1.82% | 28 |
 
-8. **Stop rule.** If the clone fails, or the pinned SHA does not resolve
+9. **Stop rule.** If the clone fails, or the pinned SHA does not resolve
    (`git -C $SCRATCH/upstream-sp cat-file -e d884ae04^{commit}`), stop the change
    and go to the operator — nothing is measured against any other ref, and no
    later task proceeds on an unvalidated instrument. Likewise if any figure
@@ -303,24 +309,25 @@ they land in the candidate set and are held to the same containment bar.
    pass against the current script, and a final summary line.
 4. Write `tests/fixtures/forge/review-package-test.sh` the same way.
 5. Run it — same expectation.
-6. **Prove both suites bite.** The existing suite hardcodes its target —
-   `SCRIPT="$SCRIPT_DIR/../../../skills/forge/scripts/sdd-workspace"` — so give
-   each new suite the same line with an override in front of it:
+6. **Prove both suites bite.** Locate the target exactly as
+   `sdd-workspace-test.sh` does —
+   `SCRIPT="$SCRIPT_DIR/../../../skills/forge/scripts/<name>"` — with **no
+   environment-variable override**. An override would ship permanent test
+   configuration whose only consumer runs once, out of tree, and is committed
+   nowhere: config nobody needs, and a second script-locating convention in a
+   two-file directory.
 
-       SCRIPT="${FORGE_SCRIPT_DIR:-$SCRIPT_DIR/../../../skills/forge/scripts}/task-brief"
-
-   The default is the real path, so the committed suite behaves identically and
-   the mechanism costs nothing. **One fresh tree per mutation**, because a single
-   reused directory accumulates every prior mutation and stops isolating anything
-   after the first round:
+   Copy the checkout instead, so that existing relative path resolves inside the
+   copy. **One fresh tree per mutation** — a reused directory accumulates every
+   prior mutation and stops isolating anything after the first round:
 
        mutant=$(mktemp -d "$SCRATCH/mutant.XXXXXX")
-       cp -R skills/forge/scripts/. "$mutant"
-       # apply exactly one mutation inside "$mutant"
-       FORGE_SCRIPT_DIR=$mutant ./tests/fixtures/forge/<suite>
+       git archive HEAD | tar -x -C "$mutant"
+       # apply exactly one mutation inside "$mutant/skills/forge/scripts/"
+       "$mutant"/tests/fixtures/forge/<suite>
 
-   The trailing `/.` makes the copy behave the same whether or not the destination
-   exists. Record which mutation produced which red.
+   `git archive HEAD` copies the tracked tree only, so no `.agent/` state or
+   scratch file follows it. Record which mutation produced which red.
 
    Mutations for `task-brief`, one per assertion class so the criterion below is
    actually reachable: swap `exit 2` → `exit 0` on each of the two exit-2 paths;
@@ -754,7 +761,11 @@ the only step that exercises the dispatch contract rather than inspecting it.
 5. Record all three outcomes verbatim for the PR body. **Commit nothing** — no
    harness, no fixture, no gate.
 6. Run the whole-tree sweep from Task 0. Record the tracked file count and every
-   file at or above 2%.
+   file at or above 2%. **Then run `longruns.py` over the whole tree** and record
+   every file carrying a run over 16 tokens. Any file not already dispositioned —
+   not one of the six, not `LICENSE`, not `skills/forge/SKILL.md`, not the two
+   attributed records — gets an attribution line in Task 9, same treatment and
+   same commit. A tree-wide consequence needs a tree-wide measurement.
 7. Confirm each of the six is below 2% with a run ≤ 16, and that the two new test
    fixtures are also below 2%.
 
@@ -856,7 +867,12 @@ explains why.
    is an `E-REWRITE` the moment the record exists at the base ref. If the design
    commits somehow merged ahead of the implementation, do not fill the table —
    write a superseding ADR 0004 carrying the measurement instead.
-9. Commit: `feat: close the upstream attribution`.
+9. **Discharge issue #35.** Its whole content — the attribution lines for the two
+   `docs/workflow/` records — ships in this change, so it must not stay open and
+   untriaged for the next `$sort-board` or `$campaign` to pick up as live work.
+   Carry `Closes #35` in the pull-request body, and close it manually with a link
+   to this change if the merge does not.
+10. Commit: `feat: close the upstream attribution`.
 
 ### Acceptance criteria
 
