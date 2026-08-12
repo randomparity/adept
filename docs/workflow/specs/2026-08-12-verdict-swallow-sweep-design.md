@@ -12,7 +12,7 @@ captures the status explicitly and reports a fault instead of silently passing.
 
 ## Scope
 
-The three idioms in scope all discard a single command's status outright:
+The four idioms in scope all discard a single command's status outright:
 
 - `cmd || true` — the status is thrown away and an empty result stands in.
 - `cmd && return 0` with an unconditional `return 1` fallthrough — every
@@ -37,6 +37,12 @@ failure cannot hide another's findings), the two URL extractions in
 empty result already has an explicit non-silent handler), and everything under
 `tests/fixtures/` and `*-test.sh` (test harnesses, not gate verdicts).
 
+Also out of scope and owned by **#64**, found during this design's ADR review:
+`check_not_rewritten:507` and `evaluate_base_conformance:547` read a base blob
+with `git cat-file blob` and fail open on any non-zero status, silently
+exempting a record from the append-only rules. Same defect class, different
+function family, and the fix depends on `path_exists_at` landing here first.
+
 ## Findings that shaped the design
 
 Established by probing git directly in this repository, not from documentation:
@@ -55,7 +61,7 @@ This is the substance of ADR 0005 decision 2.
 `git ls-tree` returns 0 for a directory absent from the ref, so the only way the
 listing at `gate_paths` can fault is an **empty pathspec** — which happens when
 `repo_relative` returns nothing because the script lives outside the repo. That
-site needs an input guard, not a status capture (ADR 0005 decision 4).
+site needs an input guard, not a status capture (ADR 0005 decision 1).
 
 ## Design
 
@@ -87,10 +93,11 @@ mirror under `skills/tome-of-lore/assets/**`; every change lands in both.
 | 5 | `gate_existed_at` both witnesses | `check-records.sh` | `E-GATE-WITNESS-SCAN` |
 | 6 | `check_title_number` title read | `profiles/adr.sh` | `E-TITLE-SCAN` |
 | 7 | `resolve_tracker` declaration count | `quest-log/assets/tracker.sh` | usage exit |
+| 8 | `gate_paths` profile listing | `check-records.sh` | none — input guard |
 | 9 | `dir_in_ref` record-directory witness | `check-records.sh` | `E-DIR-SCAN` |
 
-Plus site 8, `gate_paths`' profile listing, which takes an input guard and emits
-no code, per ADR 0005 decision 4.
+Site 8 takes an input guard rather than a status capture and emits no code, per
+ADR 0005 decision 1.
 
 `tracker.sh` carries no coded-error channel, so site 7 reports through the usage
 exit it already fails through, per ADR 0005 decision 1.
