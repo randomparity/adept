@@ -37,8 +37,11 @@ run_child() { # <<body -- writes $SCRATCH/child.out, returns the child's status
 		printf '. %q\n' "$helper"
 		cat
 	} >"$SCRATCH/child.sh"
-	TMPDIR=$child_tmp bash "$SCRATCH/child.sh" >"$SCRATCH/child.out" 2>&1 ||
-		status=$?
+	# Closing stdin is deliberate: `rm -R` on an unwritable directory prompts
+	# for an override when it has a terminal, and this suite redirects the
+	# child's output, so such a prompt would hang invisibly.
+	TMPDIR=$child_tmp bash "$SCRATCH/child.sh" >"$SCRATCH/child.out" 2>&1 \
+		</dev/null || status=$?
 	return "$status"
 }
 
@@ -76,7 +79,11 @@ esac
 
 # The guard on the `rm -R`. Reaching into the registry is deliberate: this is
 # the one line in the helper whose failure destroys data, and no public entry
-# point can produce the mismatch it defends against.
+# point can produce the mismatch it defends against -- mktemp always returns the
+# template it was given, so the recorded path always matches the recorded
+# prefix. This is the suite's one white-box case: it names fixture_scratch_paths
+# and fixture_scratch_prefixes, and renaming or collapsing them means updating
+# it here.
 survivor=$SCRATCH/survivor
 mkdir -p "$survivor"
 status=0
@@ -97,10 +104,16 @@ grep -qF "sample: refusing to remove unsafe path: $survivor" "$SCRATCH/child.out
 # One unremovable fixture must not strand the ones registered after it.
 # check-public-safety-test.sh's second fixture lives inside the working tree and
 # is always last, so an abort partway through leaves a directory in the repo.
-blocker_parent=$SCRATCH/blocker
-mkdir -p "$blocker_parent"
-status=0
-run_child <<CHILD || status=$?
+#
+# The case makes a removal fail by taking write permission off a directory, so
+# it proves nothing where mode bits do not bite -- as root, or on a filesystem
+# that ignores them -- and is skipped there rather than asserted falsely. This
+# is the shape check-public-safety-test.sh uses for its own mode-000 fixture.
+if [ "$(id -u)" -ne 0 ]; then
+	blocker_parent=$SCRATCH/blocker
+	mkdir -p "$blocker_parent"
+	status=0
+	run_child <<CHILD || status=$?
 fixture_init sample
 fixture_scratch "$blocker_parent/late."
 late=\$FIXTURE_SCRATCH
@@ -108,12 +121,18 @@ mkdir "\$SCRATCH/child"
 chmod 500 "\$SCRATCH"
 printf '%s\n' "\$late"
 CHILD
-# The child's own line comes first; the trap's diagnostics follow it, because
-# run_child merges stderr into the same file.
-late=$(head -1 "$SCRATCH/child.out")
-chmod 700 "$child_tmp"/sample.* 2>/dev/null || :
-[ "$status" -eq 1 ] || abort "a failed removal should redden the suite, got $status"
-[ ! -e "$late" ] || abort "cleanup stopped at the failure and stranded $late"
+	# The child's own line comes first; the trap's diagnostics follow it,
+	# because run_child merges stderr into the same file.
+	late=$(head -1 "$SCRATCH/child.out")
+	chmod 700 "$child_tmp"/sample.* 2>/dev/null || :
+	[ "$status" -eq 1 ] ||
+		abort "a failed removal should redden the suite, got $status"
+	[ ! -e "$late" ] || abort "cleanup stopped at the failure and stranded $late"
+else
+	printf 'test-fixture-helpers-test: SKIP unremovable-fixture case: running as\n'
+	printf 'test-fixture-helpers-test: root, which removes a mode-500 directory\n'
+	printf 'test-fixture-helpers-test: anyway. This run did not check it.\n'
+fi
 
 # fail prefixes the label and exits 1.
 status=0

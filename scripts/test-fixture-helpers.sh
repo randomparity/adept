@@ -6,7 +6,12 @@
 # Every suite here builds disposable fixtures in a scratch directory and needs
 # the same three things around them: a directory that is removed however the
 # suite exits, a refusal to remove anything else, and a diagnostic carrying the
-# suite's name. Five suites had grown their own copy.
+# suite's name. Five suites under scripts/ had grown their own copy.
+#
+# The suites under tests/fixtures/ still carry theirs and are candidates for the
+# same treatment. The check-records-test.sh pair is not: `just records` compares
+# .github/scripts/ and skills/tome-of-lore/assets/ byte for byte, and the two sit
+# at different depths, so no single relative source path resolves from both.
 #
 #   clear_git_env            unsets the variables git reports as
 #                            repository-local, so a caller's GIT_DIR or
