@@ -84,15 +84,20 @@ answers.
 
 ## Risk
 
-The decision can be wrong. The mitigation is the revisit condition in ADR 0005 — three
-hand-driven releases in target repositories, sharing enough policy that one instruction file
-would have served them — which makes it falsifiable by observation rather than by opinion, and
-cheap to reverse: a superseding record and the skill that evidence then specifies.
+The decision can be wrong. The mitigation is the revisit condition in ADR 0005: reopen the
+first time adept is actually asked to drive a release in a target repository. That is a
+one-occurrence trigger on purpose. An earlier draft set it at three, borrowing the
+third-repetition rule — but that rule governs when to *extract* a utility from code already
+written, and the count here is zero, so applying it turned a do-not-extract-yet standard into a
+do-not-build-until-three bar the evidence does not support. Reopening is also not building: one
+real need settles what an artifact would have to do, and whether that generalises is the
+superseding record's question.
 
 The mitigation is weaker than it first reads, and the record says so rather than implying
-otherwise. Nothing in this repository counts those three releases: they happen elsewhere,
-`$warding` sweeps `docs/debt/` review-by dates rather than ADRs, and no other sweep watches
-this record. Reopening depends on a reader raising it. Building a counter would cost more than
-the risk it removes, so the residual is stated and accepted instead — which is also why the
-`README.md` pointer matters more than it looks: it is the only thing that puts the condition in
-front of a reader who was not looking for it.
+otherwise. Nothing in this repository watches for the trigger: those releases happen elsewhere,
+`$warding`'s review-by sweep reads `docs/debt/` rather than `docs/adr/`, and issue #50 closes
+with this change, so it is not a channel either. The record therefore names a new issue citing
+it as where a sighting goes. Building a counter would cost more than the risk it removes, so
+the residual is stated and accepted — which is also why the `README.md` pointer matters more
+than it looks: it is the only thing that puts the condition in front of a reader who was not
+looking for it.
