@@ -8,7 +8,7 @@ set -euo pipefail
 # skill inventory or cheat sheet.
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=scripts/test-fixture-helpers.sh
+# shellcheck source=SCRIPTDIR/test-fixture-helpers.sh
 . "$script_dir/test-fixture-helpers.sh"
 
 fixture_init check-skill-shape-test

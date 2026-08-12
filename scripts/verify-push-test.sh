@@ -2,7 +2,7 @@
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=scripts/test-fixture-helpers.sh
+# shellcheck source=SCRIPTDIR/test-fixture-helpers.sh
 . "$script_dir/test-fixture-helpers.sh"
 
 # Hooks export repository-local selectors that override every fixture's `git -C`.
