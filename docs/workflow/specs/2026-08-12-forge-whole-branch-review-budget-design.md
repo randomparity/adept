@@ -252,8 +252,12 @@ Five edits in `skills/forge/SKILL.md`:
    bar, and on a `Yes` nothing else would ever read the answer — "a summary
    nobody is directed to read is indistinguishable from having thrown the
    findings away" is that instruction's own reasoning, and this change would
-   otherwise make it true of itself. The controller reads the triage section
-   rather than the whole file, and the return does not grow. Note that this is
+   otherwise make it true of itself. The controller reads the `#### Minor
+   triage` heading rather than the whole file, and the return does not grow.
+   There is a **second** bounded read for the same reason: a non-zero
+   `plan-mandated` count sends the controller to those labelled findings before
+   it puts them to the human, since a count alone asks someone to rule on work
+   they have not seen. Two conditional reads, both of a named section. Note that this is
    the *common* path, not a rare exemption: `SKILL.md` puts Minor findings in
    the ledger as they arrive and the task rubric has a standing Minor bucket, so
    most multi-task runs will carry some. The bounded-context benefit is a
@@ -331,6 +335,11 @@ Five edits in `skills/forge/SKILL.md`:
 5. The `### Never` bullet "Dispatch a task reviewer without a review-package
    file" widens to any reviewer, since after this change both reviewer
    dispatches require one.
+6. The dispatch step opens by reading the ledger and closes by appending to it:
+   a final-review line already there means the phase ran, and the step stops
+   rather than regenerating. Without it the clear-before-dispatch rule in item 2
+   deletes a finished review on any resumed run — the rule is what creates the
+   need, so the fix belongs beside it.
 There is deliberately no sixth edit adding the branch base to the progress
 ledger. An earlier draft had one, on the reasoning that a controller which lost
 its conversation memory must read the base rather than remember it — sound, but

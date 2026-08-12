@@ -91,9 +91,11 @@ which can be corrected as they drift.
   never seen, the precise thing that instruction exists to prevent ("a summary
   nobody is directed to read is indistinguishable from having thrown the
   findings away"). So the controller opens the file on any verdict when the
-  ledger carried Minor findings — reading that section, not the whole file. It
-  is a conditional read rather than a fourth return item, so the return shape
-  stays as argued above. It is also the *common* path and not a rare exemption:
+  ledger carried Minor findings — reading that section, not the whole file. A
+  non-zero `plan-mandated` count triggers a second such read, of those findings,
+  because the human cannot rule on a count. Both are conditional reads of a
+  named section rather than return items, so the return shape stays as argued
+  above. The Minor one is also the *common* path and not a rare exemption:
   Minor findings accumulate across task reviews by default. The bounded-context
   benefit above is therefore a reduction, not an elimination, and this record
   would rather say so than let it read as one.

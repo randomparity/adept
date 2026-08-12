@@ -105,6 +105,11 @@ Subagent (general-purpose):
 
     Write the review to [REVIEW_FILE], in the sections below.
 
+    Create that file empty **before** you open the package. If you cannot, send
+    `WRITE_FAILED` and stop there — discovering it after the review is written
+    throws away the whole of this dispatch, which is the most expensive one in
+    the build.
+
     ### Strengths
     [Name what the work got right, concretely.]
 
@@ -120,14 +125,17 @@ Subagent (general-purpose):
     #### Minor (Nice to Have)
     [Naming, polish, a stale comment, an optimisation worth recording]
 
+    Each entry in the three buckets above gives its `file:line`, the defect, the
+    reason it matters, and — where that is not already obvious — the remedy.
+
     #### Minor triage
     Triage the Minor findings carried over from earlier tasks, listed in
     [MINOR_LEDGER], against the merge bar. Where that placeholder is empty, say
     so in one line rather than omitting this heading — the controller reads it
     by name, and an absent heading is indistinguishable from a skipped triage.
 
-    Each entry gives its `file:line`, the defect, the reason it matters, and —
-    where that is not already obvious — the remedy.
+    These are carried over, not found by you: they do not count toward
+    `Minor N`, which is your own findings on this branch.
 
     ### Recommendations
     [Worth doing to the code, the design, or the way this was built; not
@@ -160,6 +168,9 @@ Subagent (general-purpose):
     could not read, or could not record.
 
     ## Critical Rules
+
+    These govern the review you write to [REVIEW_FILE]. The cap above governs
+    what you send back, and it is not in competition with them.
 
     Cite, do not assert: every finding carries a `file:line`, the defect and why
     it matters. "Improve error handling" names nothing and cannot be acted on.
