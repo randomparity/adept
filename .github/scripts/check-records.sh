@@ -578,7 +578,7 @@ check_not_rewritten() {
   # granted by a read that never completed, on a run that then exited 0.
   *)
     rm -f "$tmp"
-    err_full "E-BASE-BLOB-SCAN: $path: could not read the base ref's copy at $base (git exit $base_blob_status)"
+    err_full "E-BASE-BLOB-SCAN: $path: could not read the base ref's copy at $base, so the append-only rules did not run (exit $base_blob_status)"
     return 0
     ;;
   esac
@@ -638,7 +638,7 @@ evaluate_base_conformance() {
   # cannot establish the grandfathering a `nonconforming` verdict would grant.
   *)
     rm -f "$tmp"
-    err_full "E-BASE-SHAPE-SCAN: $path: could not read the base ref's copy at $base (git exit $base_blob_status)"
+    err_full "E-BASE-SHAPE-SCAN: $path: could not read the base ref's copy at $base, so its base-ref shape is undetermined (exit $base_blob_status)"
     return 0
     ;;
   esac
@@ -679,9 +679,11 @@ check_no_disappearances() {
       case $renum_status in
       0) info "note: $record was renumbered to $renumbered_to (content unchanged)" ;;
       1) err "E-GONE: $record is no longer a record at that path (deleted, moved, untracked, or renamed with its content changed) — resolve records in place with a '> **Resolved by ...**' banner" ;;
-      # Reported instead of E-GONE, never alongside it: a search that did not run establishes
-      # neither that the record moved nor that it is gone.
-      *) err_full "E-RENUMBER-SCAN: $record: could not search for a renumbered copy at $base (git exit $path_exists_status)" ;;
+      # Reported instead of E-GONE, never alongside it: whether the record moved is exactly what
+      # could not be established — by a candidate witness that did not run, or by the record's
+      # own base-ref copy being unreadable, which aborts before any candidate is tried. The
+      # message names neither, because the two reach here through the same status.
+      *) err_full "E-RENUMBER-SCAN: $record: could not determine whether it was renumbered at $base (exit $path_exists_status)" ;;
       esac
     fi
   done <<<"$tree"
@@ -1137,9 +1139,10 @@ path_exists_at() {
 # witnessed with `git ls-tree` first (ADR 0005 decision 2) and a read that fails for a path git
 # has just listed is a fault, not an absence.
 #
-# git's real status is left in base_blob_status for the caller's diagnostic, for the reason
+# The failing status is left in base_blob_status for the caller's diagnostic, for the reason
 # path_exists_at leaves its own there: this predicate's 2 is a sentinel, and reporting it would
-# name a status git never returned.
+# name a status nothing returned. The callers' messages say `exit N` rather than `git exit N`,
+# because a redirection that fails on a full temp directory yields bash's status, not git's.
 base_blob_status=0
 read_base_blob() {
   local base=$1 path=$2 dest=$3 status=0
