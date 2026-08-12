@@ -399,7 +399,7 @@ still_a_record() {
 # here would be a guard that cannot fire — a false guarantee, by the same argument date_to_int
 # makes about its own missing invalid-input branch.
 renumbered_elsewhere() {
-  local base=$1 path=$2 blob_canon candidate tmp
+  local base=$1 path=$2 blob_canon candidate tmp cand_status scan_faulted=0
   tmp=$(mktemp) || return 1
   if ! git cat-file blob "${base}:${path}" >"$tmp" 2>/dev/null; then
     rm -f "$tmp"
@@ -413,7 +413,19 @@ renumbered_elsewhere() {
     [ -n "$candidate" ] || continue
     [ -f "$candidate" ] || continue
     tracked_in_index "$candidate" || continue
-    git cat-file -e "${base}:${candidate}" 2>/dev/null && continue
+    # A candidate that already existed at the base ref is not a renumber destination. The
+    # witness can also fail to run, which used to read the same as "did not exist" and so
+    # let a faulted scan promote a candidate silently.
+    cand_status=0
+    path_exists_at "$base" "$candidate" || cand_status=$?
+    case $cand_status in
+    0) continue ;;
+    1) ;;
+    *)
+      scan_faulted=$path_exists_status
+      continue
+      ;;
+    esac
     if printf '%s\n' "$used_renumber_targets" | grep -qxF "$candidate"; then
       continue
     fi
@@ -428,6 +440,13 @@ $candidate"
       return 0
     fi
   done <<<"$records"
+  # A positive match returns above, so a fault only decides the answer once every candidate
+  # has been tried without one: a witness that genuinely found the copy is not made
+  # unreliable by an unrelated candidate's scan failing.
+  if [ "$scan_faulted" -ne 0 ]; then
+    path_exists_status=$scan_faulted
+    return 2
+  fi
   return 1
 }
 
@@ -568,7 +587,7 @@ evaluate_base_conformance() {
 }
 
 check_no_disappearances() {
-  local base=$1 tree record renumbered_to="" used_renumber_targets=""
+  local base=$1 tree record renumbered_to="" used_renumber_targets="" renum_status
   if ! tree=$(records_in_ref "$base"); then
     err "E-BASE-TREE: could not read $RECORD_DIR at $base — cannot check for removed records"
     return 0
@@ -582,11 +601,15 @@ check_no_disappearances() {
       check_not_rewritten "$base" "$record"
     elif ! still_a_record "$record"; then
       renumbered_to=""
-      if renumbered_elsewhere "$base" "$record"; then
-        info "note: $record was renumbered to $renumbered_to (content unchanged)"
-      else
-        err "E-GONE: $record is no longer a record at that path (deleted, moved, untracked, or renamed with its content changed) — resolve records in place with a '> **Resolved by ...**' banner"
-      fi
+      renum_status=0
+      renumbered_elsewhere "$base" "$record" || renum_status=$?
+      case $renum_status in
+      0) info "note: $record was renumbered to $renumbered_to (content unchanged)" ;;
+      1) err "E-GONE: $record is no longer a record at that path (deleted, moved, untracked, or renamed with its content changed) — resolve records in place with a '> **Resolved by ...**' banner" ;;
+      # Reported instead of E-GONE, never alongside it: a search that did not run establishes
+      # neither that the record moved nor that it is gone.
+      *) err_full "E-RENUMBER-SCAN: $record: could not search for a renumbered copy at $base (git exit $path_exists_status)" ;;
+      esac
     fi
   done <<<"$tree"
 }
