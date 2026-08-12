@@ -92,6 +92,7 @@ done
 # The name has to end where it is written: the trailing character class is what
 # keeps a person named `runnerbee` a finding.
 public_home='/home/(runner|linuxbrew)[^[:alnum:]_.-]'
+match_separator=$'\034'
 
 status=0
 # --text: ripgrep judges a file binary on one NUL byte and skips it while
@@ -112,7 +113,8 @@ status=0
 # clean, anything else is a fault that stops the run.
 for pattern in "${denied_patterns[@]}"; do
 	rg_status=0
-	matches=$(rg -n --hidden --text --encoding none \
+	matches=$(rg -n --with-filename --field-match-separator="$match_separator" \
+		--hidden --text --encoding none \
 		--glob '!.git' --glob '!.git/**' "$pattern" "${scan_targets[@]}") ||
 		rg_status=$?
 	case $rg_status in
@@ -126,16 +128,26 @@ for pattern in "${denied_patterns[@]}"; do
 		# nothing else, and an empty result means every match was one of the
 		# published CI paths above.
 		matches=$(printf '%s\n' "$matches" | awk '!seen[$0]++' |
-			awk -v pattern="$pattern" -v allowed="$public_home" '
+			awk -v pattern="$pattern" -v allowed="$public_home" \
+				-v separator="$match_separator" '
 			{
+				first = index($0, separator)
+				remainder = substr($0, first + 1)
+				second = index(remainder, separator)
+				content = substr(remainder, second + 1)
+
 				# The trailing space gives a name at end of line the same
 				# delimiter one mid-line has, so a single expression covers
 				# both. Redacting the delimiter with it cannot hide a match:
 				# every pattern here is built from name characters, so none
 				# spans the boundary this consumes.
-				probe = $0 " "
+				probe = content " "
 				gsub(allowed, "/", probe)
-				if (probe ~ pattern) print $0
+				if (probe ~ pattern) {
+					path = substr($0, 1, first - 1)
+					line = substr(remainder, 1, second - 1)
+					print path ":" line ":" content
+				}
 			}')
 		[ -n "$matches" ] || continue
 		printf '%s\n' "$matches"

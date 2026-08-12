@@ -10,11 +10,17 @@ CHECKER="$ROOT/scripts/check-public-safety.sh"
 unset RIPGREP_CONFIG_PATH
 
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/public-safety-test.XXXXXX")"
+HOME_PATH_FIXTURE="$(mktemp -d "$ROOT/.public-safety-path-test.XXXXXX")"
 
 cleanup() {
 	case "$SCRATCH" in
 	"${TMPDIR:-/tmp}"/public-safety-test.*) rm -R "$SCRATCH" ;;
 	*) printf 'public-safety-test: refusing cleanup outside scratch root: %s\n' "$SCRATCH" >&2 ;;
+	esac
+	case "$HOME_PATH_FIXTURE" in
+	"$ROOT"/.public-safety-path-test.*) rm -R "$HOME_PATH_FIXTURE" ;;
+	*) printf 'public-safety-test: refusing cleanup outside repository root: %s\n' \
+		"$HOME_PATH_FIXTURE" >&2 ;;
 	esac
 }
 trap cleanup EXIT
@@ -62,6 +68,18 @@ rm -f "$SCRATCH/repo/linux.txt"
 } >"$SCRATCH/repo/workflow.yml"
 if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
 	printf 'public-safety-test: published CI home paths should not be denied\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# Ripgrep prefixes a match with its filename when the gate supplies more than
+# one target. A checkout beneath a denied home path must not turn that generated
+# prefix into content when the matched line itself contains only a published CI
+# path. Keep the fixture under ROOT so it exercises the real checkout shape.
+printf 'workspace is /ho%s/runner/work/adept/adept\n' 'me' \
+	>"$HOME_PATH_FIXTURE/workflow.yml"
+if ! "$CHECKER" "$HOME_PATH_FIXTURE" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: scanner filename prefix should not be denied\n' >&2
 	cat "$SCRATCH/output" >&2
 	exit 1
 fi
