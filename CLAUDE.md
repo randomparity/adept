@@ -50,6 +50,8 @@ Any other warning is a defect.
 
 `just records` enables only the `adr` profile. A record profile fails when its directory exists at neither the base ref nor the tree, and `docs/debt/` cannot be created empty — the debt profile exempts no `README.md` the way the adr profile does. Add `debt` to the profile list in the same commit as the first deferral record.
 
+`git push` runs the managed pre-push hook (`scripts/pre-push-hook`, installed by `just hooks`), which re-runs the entire `just verify` suite in an isolated worktree — this regularly exceeds a 2-minute default tool timeout and is not a hang. Run `git push` as a background task with a long timeout (or a foreground call with `timeout` raised well above 2 minutes) rather than re-invoking it after an apparent timeout, which only restarts the same suite.
+
 ## Conventions
 
 - This repository is **public**. Never commit host-specific configuration, absolute user paths, local hostnames or addresses, auth headers, API keys, or session state. Host-private configuration belongs in the private `dotfiles` repo.
