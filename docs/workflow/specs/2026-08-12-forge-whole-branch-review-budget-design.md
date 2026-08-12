@@ -1,7 +1,7 @@
 # Forge's whole-branch review gets a token budget
 
 Design for issue [#46](https://github.com/randomparity/adept/issues/46).
-Decision record: [ADR 0005](../../adr/0005-whole-branch-review-package-and-report.md).
+Decision record: [ADR 0007](../../adr/0007-whole-branch-review-package-and-report.md).
 
 ## Problem
 
@@ -38,9 +38,9 @@ every later turn of the build.
 - **R3** — The reviewer's inline return message carries a hard cap, the way
   `implementer-prompt.md` caps its return.
 - **R4** — `SKILL.md`'s final-review dispatch step tells the controller to
-  generate the package and supply both paths, and its final-fix dispatch step
-  hands the fix subagent the review-file path rather than a findings list the
-  controller had to read.
+  generate the package and supply both paths, verify both files, and hand the
+  fix subagent the review-file path rather than a findings list the controller
+  had to read.
 - **R5** — `just verify` is green.
 
 Out of scope, per the frozen charter on issue #46: the review rubric and its
@@ -142,7 +142,7 @@ file, which it has to do anyway to put the finding and the plan side by side.
 
 ### The controller side (R4)
 
-Four edits in `skills/forge/SKILL.md`:
+Five edits in `skills/forge/SKILL.md`:
 
 1. The final-review dispatch instruction (currently "After the last task,
    dispatch the whole-branch review with `code-reviewer.md`, on the most capable
@@ -150,19 +150,33 @@ Four edits in `skills/forge/SKILL.md`:
    branch base explicitly — the endpoint noted before the *first* task, not the
    per-task base, which is the mistake the per-task loop's own step 5 warns
    about in the other direction.
-2. The controller confirms the review file exists and is non-empty before acting
-   on the return at all. On a missing or empty file it discards the return and
-   re-dispatches the reviewer once; a second failure stops and is reported,
-   rather than dispatching again. The review now
-   reaches the controller as a path and a count, so a reviewer that wrote
-   nothing is otherwise indistinguishable from one that wrote a full report —
-   the failure mode this change creates, and the one it has to discharge.
+2. The same step adds the two file checks. **Before dispatching:** the package is
+   non-empty, because `review-package` reports success and exits 0 when its
+   destination write fails (issue #36) and the template's rebuild clause then
+   falls back to an inline `git diff` — silently restoring exactly what this
+   change removes. Also before dispatching: nothing already sits at the
+   review-file path. **After:** that path exists and is non-empty. Absence-before
+   plus presence-after is what makes the review this run's rather than a leftover
+   from a resumed session; existence alone cannot tell the two apart. On either
+   check failing after the dispatch, the controller discards the return and
+   re-dispatches once, then stops and reports rather than dispatching again.
    `SKILL.md` already applies the same discipline to implementer reports
    ("Confirm the report has all three before re-dispatching the reviewer").
 3. The final-fix instruction (currently "send **one** fix subagent with the
-   complete list") hands over the review-file path instead of a list. A list the
-   controller has to hold is exactly the resident cost this change removes.
-4. The `### Never` bullet "Dispatch a task reviewer without a review-package
+   complete list") hands over the review-file path instead of a list, and tells
+   that subagent to return a labelled plan-fault finding rather than fix it.
+   After this change the fix subagent is the only party that reads the findings,
+   and `SKILL.md` reserves the plan-versus-finding call for the human ("put both
+   in front of the human and ask which holds") — an obligation that previously
+   sat with a controller who had read the review.
+4. "Every reviewer dispatch ends with the same report contract, so you get a
+   bounded verdict rather than the whole review" narrows to what will be true:
+   the whole-branch reviewer returns a bounded verdict and a path, while the task
+   reviewer's message is still its report. The sentence is already overstated
+   today; this change makes the overstatement load-bearing, since it is the rule
+   the whole-branch template is being brought under. Merging the two return
+   shapes belongs to issue #45.
+5. The `### Never` bullet "Dispatch a task reviewer without a review-package
    file" widens to any reviewer, since after this change both reviewer
    dispatches require one.
 
@@ -177,11 +191,11 @@ reviewer" is a claim only a reader can settle.
 
 ## Consequences
 
-Recorded in [ADR 0005](../../adr/0005-whole-branch-review-package-and-report.md),
-which owns them — the review reaching the controller by assertion, the Minor
-triage discarded unread on a `Yes` verdict, the review file's destruction with
-the worktree, and the two templates staying near-duplicates kept in sync by
-reading.
+Recorded in [ADR 0007](../../adr/0007-whole-branch-review-package-and-report.md),
+which owns them — the reviewer's input growing under `-U10`, the review reaching
+the controller by assertion, the Minor triage discarded unread on a `Yes`
+verdict, the review file's destruction with the worktree, and the two templates
+still returning different shapes.
 
 ## Not an AI-surface change requiring an eval plan
 
