@@ -1571,13 +1571,39 @@ STUB
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
 
   # The same read in evaluate_base_conformance, which left base_verdict=absent: a record that
-  # could not be read at the base ref was treated as one that was not there. Both sites fault
-  # on this stub, so each needs its own code -- with one shared code, neutralising either
-  # conversion would leave the other still firing it and both cases green.
-  d=$(case_dir base_shape_scan_fault)
+  # could not be read at the base ref was treated as one that was not there. Both sites fault on
+  # the one stub, so this reads back the run above rather than building a second identical
+  # fixture. Its own code is what makes the assertion mean anything -- with one code shared
+  # between the sites, neutralising either conversion would leave the other still firing it and
+  # both assertions green.
+  printf '  %-4s %-44s ' "" "base conformance read faults, not absent"
+  if grep -q '::error::E-BASE-SHAPE-SCAN: ' "$d/.err"; then
+    passed=$((passed + 1))
+    printf 'ok   E-BASE-SHAPE-SCAN\n'
+  else
+    failed=$((failed + 1))
+    printf 'FAIL an unreadable base copy still read as absent\n'
+  fi
+
+  # The base-ref copy is git's bytes now, where it used to be a command substitution's: that
+  # stripped every trailing newline and printf put exactly one back, so the base side was
+  # normalised while the tree side was read raw. Both sides are raw now, which is what makes the
+  # append-only comparison symmetric -- and it means a trailing blank line the base ref had is
+  # content like any other, so removing it from a merged record drops a line from that record's
+  # last section. The old asymmetry excused that silently; this case pins which way it goes,
+  # since nothing else in the suite has a record that merged with one.
+  d=$(case_dir trailing_blank_removed)
+  printf '\n' >>"$d/docs/debt/0001-valid.md"
+  git -C "$d" add -A
+  git -C "$d" commit -qm "a record that merged with a trailing blank line"
   b=$(base_of "$d")
-  run_case "base conformance read faults, not absent" 1 E-BASE-SHAPE-SCAN "$d" \
-    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  # Append a line and normalise the file to a single trailing newline, which is what an
+  # end-of-file fixer does to a record it has no opinion about. The append is what defeats
+  # marker_only_change: dropping the blank line alone is marker-only, because protected_shape
+  # compares command substitutions and those strip trailing newlines on both sides.
+  printf '%s\nFurther detail found later.\n' "$(cat "$d/docs/debt/0001-valid.md")" >"$d/.t"
+  mv "$d/.t" "$d/docs/debt/0001-valid.md"
+  run_case "trailing blank line dropped from a merged record" 1 E-REWRITE "$d" BASE_SHA="$b"
 
   # The other side of the distinction, unstubbed: a record the change adds genuinely has no
   # base blob, and that must stay silent. This case is green before the conversion and after
