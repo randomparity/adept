@@ -958,6 +958,31 @@ YAML
     printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
   fi
 
+  # The gate's own protected-path witness, unable to run. It used to be `git cat-file -e ... ||
+  # continue`, so a fault silently dropped the path from the protected set — the one condition
+  # the self-protection rule exists to detect. The fault must be named, and the path must still
+  # count, or the empty-set branch would go on to report a bootstrap.
+  d=$(case_dir gate_self_scan_fault)
+  b=$(base_of "$d")
+  stub_bin="$SCRATCH/git-gate-fault-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = .github/scripts/check-records.sh ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "gate file witness faults, not silently unprotected" 1 E-GATE-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
   # A base ref that predates the gate is the adoption PR, and it must not be red — and it
   # must say why, per the same discipline as every other rule: assert both the exit status
   # and which code fired. Bespoke rather than run_case: I-GATE-BOOTSTRAP is informational,
@@ -992,6 +1017,76 @@ YAML
   else
     failed=$((failed + 1))
     printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.err" | head -1)"
+  fi
+
+  # The same bootstrap shape with a witness that cannot run. gate_existed_at is only reached
+  # when the protected set came out empty, which is exactly what the bootstrap fixture
+  # produces, so it is reused for both witnesses below. A fault used to be indistinguishable
+  # from every witness finding nothing, reporting the exit-0 I-GATE-BOOTSTRAP over a scan that
+  # never happened -- the silent pass an undeclared rename would hide behind.
+  #
+  # The SELF_DIR witness. Keyed on `.github/scripts/debt.sh`: gate_known_basenames offers it
+  # (the profiles predecessor mapping retires that basename) but gate_paths never emits it,
+  # because that mapping's key carries a slash and so resolves to its own path rather than a
+  # SELF_DIR sibling. A key gate_paths did emit would fault at the protected-path witness
+  # first, count the path, and take check_gate_files out of the empty-set branch entirely.
+  stub_bin="$SCRATCH/git-witness-selfdir-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = .github/scripts/debt.sh ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  printf '  %-4s %-44s ' "" "SELF_DIR witness faults, not a bootstrap"
+  if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$b" \
+    PATH="$stub_bin:$PATH" ./.github/scripts/check-records.sh) >"$d/.o2" 2>"$d/.e2"; then
+    failed=$((failed + 1))
+    printf 'FAIL exit=0 on a witness that never ran\n'
+  elif grep -q '::error::E-GATE-WITNESS-SCAN: ' "$d/.e2"; then
+    passed=$((passed + 1))
+    printf 'ok   exit=1 E-GATE-WITNESS-SCAN\n'
+  else
+    failed=$((failed + 1))
+    printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e2" | head -1)"
+  fi
+
+  # The workflow witness, reached only once the SELF_DIR witness has found nothing -- which is
+  # this fixture's ordinary state, so no stubbing of the first witness is needed to get here.
+  stub_bin="$SCRATCH/git-witness-workflow-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = grep ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = .github/workflows ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  printf '  %-4s %-44s ' "" "workflow witness faults, not a bootstrap"
+  if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$b" \
+    PATH="$stub_bin:$PATH" ./.github/scripts/check-records.sh) >"$d/.o3" 2>"$d/.e3"; then
+    failed=$((failed + 1))
+    printf 'FAIL exit=0 on a witness that never ran\n'
+  elif grep -q '::error::E-GATE-WITNESS-SCAN: ' "$d/.e3"; then
+    passed=$((passed + 1))
+    printf 'ok   exit=1 E-GATE-WITNESS-SCAN\n'
+  else
+    failed=$((failed + 1))
+    printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e3" | head -1)"
   fi
 
   # gate_existed_at has two witnesses, and `renamed_gate` above happens to satisfy both at
