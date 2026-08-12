@@ -178,6 +178,14 @@ one number rather than two. The message carries exactly three things:
 - the counts — `Critical N, Important N, Minor N, plan-mandated N`;
 - where the review file is.
 
+The graded counts are load-bearing, not decoration, and this is the only place
+that says so. `SKILL.md` fires the final fix wave "if the **final** review
+returns findings", and after this change the controller cannot see the findings:
+the counts are its only evidence that any exist, short of opening the very file
+this design keeps out of its context. The verdict does not substitute — it is a
+merge judgment, and a `Yes` can accompany a Minor finding the triage promotes.
+Anything that later trims the return should trim something else.
+
 `plan-mandated N` is a **subset** of the graded counts, not a fourth grade: a
 plan-fault finding is graded like any other and carries the label as well, the
 way `task-reviewer-prompt.md` grades its equivalent Important *and* labels it.
