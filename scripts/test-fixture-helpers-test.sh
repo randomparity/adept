@@ -16,7 +16,7 @@ fixture_init test-fixture-helpers-test
 # Every assertion below reports through abort rather than the sourced fail,
 # because fail is one of the things under test. Discharging these assertions
 # through it would mean a fail that stopped exiting could not be caught here --
-# and fail is now the assertion primitive of five other gate suites.
+# and fail is now the assertion primitive of nine other suites.
 abort() {
 	printf 'test-fixture-helpers-test: %s\n' "$*" >&2
 	exit 1
@@ -301,6 +301,11 @@ WRAPPER
 
 	[ -s "$SCRATCH/pty-status" ] ||
 		abort 'the child under a terminal never reported its status'
+	# The wrapper writes pty-status unconditionally, so a status alone does not
+	# prove the child reached fixture_init. Without this the `cat` below fails
+	# under `set -e` and the suite dies unlabelled, naming no case.
+	[ -f "$SCRATCH/pty-path" ] ||
+		abort "the child under a terminal never reported its scratch directory: $(cat "$SCRATCH/pty-child.out")"
 	pty_path=$(cat "$SCRATCH/pty-path")
 	case $pty_path in
 	"$child_tmp"/sample.*) : ;;
