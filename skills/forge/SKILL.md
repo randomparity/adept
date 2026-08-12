@@ -416,6 +416,12 @@ the limitation in the PR body.
 
 If a guardrail fails, stop and fix it. Do not commit with red guardrails.
 
+A guardrail that fails once and passes on re-run has not gone green — it has
+identified itself as nondeterministic. See
+[true-seeing](../../references/true-seeing.md), *Flaky tests*: a flake is a
+determinism defect to fix or report, never evidence in either direction. Fix it
+or file it, and say in the commit or the PR body that it flaked.
+
 ## Context checkpoint
 
 The **durable artifacts** of this phase are the committed code and tests and the

@@ -60,7 +60,14 @@ frames carry no decision value, only the terminal states do.
    context. Skipped integration jobs that require unavailable hardware or external
    services may be expected; wait on required checks.
 2. If a required check fails, inspect the failure, fix it, run relevant local
-   guardrails, push, and restart the loop.
+   guardrails, push, and restart the loop. **Never re-run a failed check hoping
+   for green.** A check that fails and then passes on the same commit is
+   nondeterministic: the green run is not evidence the branch is sound and the
+   red one is not evidence it is broken — see
+   [true-seeing](../../references/true-seeing.md), *Flaky tests*. Fix the
+   determinism defect or file it, and note it in the PR body either way. A PR
+   that went green on a retry is indistinguishable afterwards from one that
+   went green first time, and only you can still tell them apart.
 3. Poll merge state with `gh pr view <PR> --json mergeable,mergeStateStatus`
    (always request explicit `--json` fields — never a bare `gh pr view`, which
    dumps the full body and comments). Green checks alone are never the exit

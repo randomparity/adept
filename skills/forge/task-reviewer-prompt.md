@@ -75,6 +75,16 @@ Subagent (general-purpose):
     Warnings or other noise in the reported test output are themselves findings.
     Test output should be pristine.
 
+    A retry in that output is a finding too. If the report shows a test that
+    failed and then passed with no code change between the two runs, or a suite
+    run twice for a reason it does not give, the evidence backing this task is
+    nondeterministic. Grade it Important and name the test. It is not a pass:
+    the green run does not settle the code and the red one does not condemn it,
+    so the task has no usable test evidence until the flake is dealt with. Do
+    not re-run the test yourself to work out which run was the real one — a
+    re-run cannot distinguish them, which is precisely the defect. Recommend
+    fixing the nondeterminism, or filing it, and say which you think it is.
+
     ## Part 1 — does it match the spec?
 
     Read the diff against *What was asked for* and look for three things:
