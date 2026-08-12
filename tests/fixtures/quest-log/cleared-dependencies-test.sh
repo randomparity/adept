@@ -7,22 +7,18 @@ set -euo pipefail
 unset RIPGREP_CONFIG_PATH
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=SCRIPTDIR/../../../scripts/test-fixture-helpers.sh
+. "$script_dir/../../../scripts/test-fixture-helpers.sh"
 
-fail() {
-	printf 'cleared-dependencies-test: %s\n' "$*" >&2
-	exit 1
-}
-
-tmp_dir=$(mktemp -d)
-trap 'rm -rf "$tmp_dir"' EXIT
+fixture_init cleared-dependencies-test
 # The recipe ships as an asset under skills/; lint and format gates cover it
 # directly now that it is a file rather than a block embedded in SKILL.md.
 # shellcheck source=/dev/null
 source "$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh"
 
-gh_log=$tmp_dir/gh.log
-blocker_log=$tmp_dir/blockers.log
-ready_state=$tmp_dir/ready
+gh_log=$SCRATCH/gh.log
+blocker_log=$SCRATCH/blockers.log
+ready_state=$SCRATCH/ready
 fake_mode=normal
 
 gh() {
@@ -139,7 +135,7 @@ fi
 # shellcheck disable=SC2034
 cleared_dependency_max_lookups=500
 
-plan_errors=$tmp_dir/plan-errors
+plan_errors=$SCRATCH/plan-errors
 set +e
 plan_output=$(reconcile_cleared_dependencies plan owner/repo 2>"$plan_errors")
 plan_status=$?
@@ -167,33 +163,33 @@ edit=$(<"$gh_log")
 
 fake_mode=stale
 rm -f "$ready_state"
-if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$tmp_dir/stale"; then
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/stale"; then
 	fail 'stale dependent snapshot must cancel the transition'
 fi
-rg -q 'stale evaluation' "$tmp_dir/stale" || fail 'stale snapshot was not reported'
+rg -q 'stale evaluation' "$SCRATCH/stale" || fail 'stale snapshot was not reported'
 
 fake_mode=changed-body
 rm -f "$ready_state"
-if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$tmp_dir/changed"; then
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/changed"; then
 	fail 'changed dependency body must cancel the transition'
 fi
-rg -q 'dependency snapshot changed' "$tmp_dir/changed" ||
+rg -q 'dependency snapshot changed' "$SCRATCH/changed" ||
 	fail 'changed dependency body was not reported'
 
 fake_mode=conflict
 rm -f "$ready_state"
-if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$tmp_dir/conflict"; then
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/conflict"; then
 	fail 'conflicting post-write status must be reported'
 fi
-rg -q 'conflicting status write' "$tmp_dir/conflict" || fail 'conflict was not actionable'
+rg -q 'conflicting status write' "$SCRATCH/conflict" || fail 'conflict was not actionable'
 
 fake_mode=race
 rm -f "$ready_state"
 : >"$gh_log"
-if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$tmp_dir/race"; then
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/race"; then
 	fail 'a blocker reopened during the edit must restore blocked status'
 fi
-rg -q 'restored #101 to status:blocked' "$tmp_dir/race" ||
+rg -q 'restored #101 to status:blocked' "$SCRATCH/race" ||
 	fail 'post-write blocker race was not restored'
 rg -q -- '--add-label status:blocked' "$gh_log" || fail 'race did not restore blocked label'
 
@@ -201,18 +197,18 @@ for failure_mode in label-fail edit-fail postread-fail; do
 	fake_mode=$failure_mode
 	rm -f "$ready_state"
 	if apply_cleared_dependency owner/repo "$initial" >/dev/null \
-		2>"$tmp_dir/$failure_mode"; then
+		2>"$SCRATCH/$failure_mode"; then
 		fail "$failure_mode must fail closed"
 	fi
-	if LC_ALL=C rg -q $'\033' "$tmp_dir/$failure_mode"; then
+	if LC_ALL=C rg -q $'\033' "$SCRATCH/$failure_mode"; then
 		fail "$failure_mode leaked a control character"
 	fi
 done
 fake_mode=api-fail
-if reconcile_cleared_dependencies plan owner/repo >/dev/null 2>"$tmp_dir/api-fail"; then
+if reconcile_cleared_dependencies plan owner/repo >/dev/null 2>"$SCRATCH/api-fail"; then
 	fail 'unreadable issue listing must fail closed'
 fi
-if LC_ALL=C rg -q $'\033' "$tmp_dir/api-fail"; then
+if LC_ALL=C rg -q $'\033' "$SCRATCH/api-fail"; then
 	fail 'issue-list error leaked a control character'
 fi
 
