@@ -370,7 +370,10 @@ Then produce the two paths and check them:
 2. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
    directory `scripts/sdd-workspace` prints. Remove anything already at that
    path before dispatching, so that a file there afterwards is this dispatch's
-   and not a leftover from a resumed session.
+   and not a leftover from a resumed session. `[MINOR_LEDGER]` is the Minor
+   findings you have been accumulating; pass the literal `none` when there were
+   none, so an empty triage is a stated result rather than a slot you left
+   blank.
 3. After the reviewer returns, that path must exist and be non-empty. If you
    passed a non-empty `[MINOR_LEDGER]`, read that file's triage section whatever
    the verdict — the section, not the whole file — because on a `Yes` nothing
@@ -413,24 +416,21 @@ dispatch*, which is what you have just read the triage section to decide. A
 finding labelled `plan-mandated` is likewise returned to you rather than fixed,
 unless you name it as one the human has already upheld.
 
-Both "unless you name it" clauses exist for the same reason. The list you used
-to hand over was composed after you read the whole review, so a triage-promoted
-Minor finding or a human-upheld plan fault could ride along in it. A path
-carries neither, and without the escape the two rules deadlock — the wave
-carries a finding to a subagent instructed to hand it straight back.
-
 Order the two triggers: a non-zero `plan-mandated` count goes to the human
-**before** the fix wave is dispatched, and the human's answer decides which
-labelled findings that wave carries.
-
-You no longer read the review, so you cannot interleave the question and the
-wave by judgment as you could when a list passed through your hands. A wave sent
-first would already have changed the code the human was being asked about —
-overruling, by sequence, a call reserved for them. Carry the answer into the
-dispatch by naming the upheld findings: you cannot edit the reviewer's file to
-record the ruling, and the subagent has no other way to learn it. Nothing beyond
-that is prescribed; the rest stays your judgment.
+**before** the fix wave. Read those labelled findings out of `[REVIEW_FILE]`
+first — that subset, not the whole file — and put each in front of the human
+beside the plan text it disputes; a count alone asks them to rule on work they
+have not seen. Then carry their answer into the dispatch by naming the upheld
+findings. Nothing further is prescribed.
 ```
+
+Both "unless you name it" clauses exist for the same reason, and it is why the
+ordering paragraph follows them rather than standing alone. The list the
+controller used to hand over was composed after it read the whole review, so a
+triage-promoted Minor finding or a human-upheld plan fault could ride along in
+it; a path carries neither. Without the escapes the two rules deadlock — the
+wave carries a finding to a subagent instructed to hand it straight back. Keep
+that reasoning here and out of `SKILL.md`, which is re-read on every run.
 
 ### Step 2.3 — narrow the overstated report-contract claim
 
@@ -479,28 +479,40 @@ Give the numbered list a first item that reads the ledger and a later one that
 writes it:
 
 ```
-1. **Read the ledger first.** No final-review line for this range: dispatch. A
-   line with an open verdict: the review ran, so resume at the fix wave —
-   do not regenerate, do not clear, do not re-dispatch. A line with a closed
-   verdict: the phase is done.
+1. **Read the ledger first.** No `Final review` line for this range: dispatch.
+   A verdict line and no `closed` line: the review ran and its file is on disk,
+   so resume at the fix wave — do not regenerate, do not clear, do not
+   re-dispatch. Both lines: the phase is done.
 ```
 
 ```
-4. **Append the ledger line as soon as the reviewer returns** — the review
-   file's path and the verdict, in the shape the per-task lines use — and close
-   it when the fix wave finishes. Write it then, not at the end: a run that dies
-   mid-fix-wave otherwise leaves no line, and step 1 would clear a finished
-   review to re-run it.
+5. **Append the ledger line once that check passes** — `Final review
+   <base7>..<head7>: <verdict> (review <path>)` — and append a second,
+   `Final review <base7>..<head7>: closed`, when the fix wave finishes. Two
+   appends rather than an edit, because that is how every other line in that
+   ledger is written. Writing the first here and not at the end is what protects
+   the fix wave: a run that dies mid-wave otherwise leaves no line, and step 1
+   would clear a finished review to re-run it. A dispatch that ends in a stop
+   gets no line — there is no review file for a resume to skip to.
 ```
 
 Three states, not two. A line written only at the very end leaves the fix-wave
 window unprotected, which is the window a long final review is most likely to
 die in.
 
+The append follows the existence check rather than the reviewer's return, and
+the two states are two lines rather than one line edited. Both for the same
+reason: the line asserts that a review file is on disk and a resume skips the
+dispatch on the strength of it, so it must not be written before that is known,
+and it must not need a rewrite that the ledger's append-only convention has no
+form for.
+
 **Acceptance criteria.**
 
-- Step 2.1's list opens with a ledger read distinguishing three states and
-  contains an append that happens on the reviewer's return, not at the end.
+- Step 2.1's list opens with a ledger read distinguishing three states, and the
+  append comes after the existence check and before the fix wave.
+- Both ledger lines are given a literal shape, and closing the phase is a second
+  append rather than an edit of the first.
 - Nothing else in `SKILL.md`'s `### Durable progress` section changes; the
   per-task ledger lines keep their existing shape.
 

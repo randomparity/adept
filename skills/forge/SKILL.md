@@ -215,10 +215,10 @@ belong to the branch this review judges. `BASE_BRANCH` is the value
 `$attunement` recorded; if you do not have it, ask, and where nobody can be
 asked report it as a blocker and return. Never default to `main`.
 
-1. **Read the ledger first.** No final-review line for this range: dispatch. A
-   line with an open verdict: the review ran, so resume at the fix wave —
-   do not regenerate, do not clear, do not re-dispatch. A line with a closed
-   verdict: the phase is done.
+1. **Read the ledger first.** No `Final review` line for this range: dispatch.
+   A verdict line and no `closed` line: the review ran and its file is on disk,
+   so resume at the fix wave — do not regenerate, do not clear, do not
+   re-dispatch. Both lines: the phase is done.
 2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
    and print a non-zero commit count and a non-zero byte count. Report and stop
    rather than dispatching: this file is the reviewer's whole input, and a
@@ -226,15 +226,21 @@ asked report it as a blocker and return. Never default to `main`.
 3. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
    directory `scripts/sdd-workspace` prints. Remove anything already at that
    path before dispatching, so a file there afterwards is this dispatch's.
-4. **Append the ledger line as soon as the reviewer returns** — the review
-   file's path and the verdict, in the shape the per-task lines use — and close
-   it when the fix wave finishes. Write it then, not at the end: a run that dies
-   mid-fix-wave otherwise leaves no line, and step 1 would clear a finished
-   review to re-run it.
-5. That path must exist and be non-empty. If you passed a non-empty
+   `[MINOR_LEDGER]` is the Minor findings you have been accumulating; pass the
+   literal `none` when there were none, so an empty triage is a stated result
+   rather than a slot you left blank.
+4. That path must exist and be non-empty. If you passed a non-empty
    `[MINOR_LEDGER]`, read `[REVIEW_FILE]`'s `#### Minor triage` heading whatever
    the verdict — that heading, not the whole file. On a `Yes` nothing else reads
    the answer you asked for.
+5. **Append the ledger line once that check passes** — `Final review
+   <base7>..<head7>: <verdict> (review <path>)` — and append a second,
+   `Final review <base7>..<head7>: closed`, when the fix wave finishes. Two
+   appends rather than an edit, because that is how every other line in that
+   ledger is written. Writing the first here and not at the end is what protects
+   the fix wave: a run that dies mid-wave otherwise leaves no line, and step 1
+   would clear a finished review to re-run it. A dispatch that ends in a stop
+   gets no line — there is no review file for a resume to skip to.
 
 A missing or empty file means the return is not evidence: discard it and
 re-dispatch **once**, then stop and report. That blind retry is for a silent
