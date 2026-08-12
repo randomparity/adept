@@ -47,14 +47,24 @@ assert_passes() { # name root
 	fi
 }
 
-assert_fails() { # name root expected-fragment
-	local name=$1 root=$2 expected=$3 output status=0
-	output=$("$gate" "$root" 2>&1) || status=$?
-	[ "$status" -eq 1 ] || fail "$name: expected exit 1, got $status: $output"
+# Split from assert_fails because the cases below run the gate under a shimmed
+# PATH and a redirected TMPDIR, which a helper that invokes the gate itself
+# cannot carry, and because they assert the fault status rather than the finding
+# status. Two of them assert twice against one run.
+assert_gate() { # name expected-status expected-fragment status output
+	local name=$1 expected_status=$2 expected=$3 status=$4 output=$5
+	[ "$status" -eq "$expected_status" ] ||
+		fail "$name: expected exit $expected_status, got $status: $output"
 	case $output in
 	*"$expected"*) : ;;
 	*) fail "$name: expected '$expected' in: $output" ;;
 	esac
+}
+
+assert_fails() { # name root expected-fragment
+	local name=$1 root=$2 expected=$3 output status=0
+	output=$("$gate" "$root" 2>&1) || status=$?
+	assert_gate "$name" 1 "$expected" "$status" "$output"
 }
 
 # Case 1: the baseline fixture alone -- rules 1-5 (SKILL.md exists, name:
@@ -155,5 +165,87 @@ cat >"$partial_collision_root/docs/cheatsheet.md" <<'SHEET'
 SHEET
 assert_fails 'substring-adjacent names, shorter name undocumented' "$partial_collision_root" \
 	'quest: not referenced in docs/cheatsheet.md'
+
+# Cases 7-11 pin the gate's exit contract: 0 clean, 1 for a content finding, 2
+# for a fault. A fault that borrowed exit 1 would report a violation that no
+# message names, which is the whole defect -- `just verify` goes red and the
+# operator has nothing to fix.
+#
+# The two shims are how a removal or an allocation is made to fail on demand;
+# scripts/verify-push-test.sh forces its own failures the same way. Each shim
+# directory holds exactly the one command its cases need, so a case takes only
+# the failure it is testing.
+
+# Case 7: the scratch directory cannot be created. The gate never ran, so
+# nothing about the skills tree was decided.
+mktemp_shim=$SCRATCH/shim-mktemp
+mkdir -p "$mktemp_shim"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$mktemp_shim/mktemp"
+chmod +x "$mktemp_shim/mktemp"
+allocation_root=$(new_baseline allocation-fault)
+allocation_status=0
+allocation_output=$(PATH="$mktemp_shim:$PATH" "$gate" "$allocation_root" 2>&1) ||
+	allocation_status=$?
+assert_gate 'scratch directory cannot be created' 2 \
+	'could not create a scratch directory' "$allocation_status" "$allocation_output"
+
+# Case 8: the EXIT trap cannot remove the scratch directory on an otherwise
+# clean run. TMPDIR points into this suite's own scratch so the directory the
+# shimmed rm refuses to remove leaves with fixture_cleanup instead of
+# accumulating under /tmp across runs.
+rm_shim=$SCRATCH/shim-rm
+mkdir -p "$rm_shim"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$rm_shim/rm"
+chmod +x "$rm_shim/rm"
+retained_root=$(new_baseline cleanup-fault)
+retained_status=0
+retained_output=$(PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$retained_root" 2>&1) ||
+	retained_status=$?
+assert_gate 'clean run, cleanup fails' 2 'retained scratch path:' \
+	"$retained_status" "$retained_output"
+
+# Case 9: the same failed removal on a run that already had a finding. The
+# finding is the verdict; the cleanup failure reports itself without displacing
+# it, so exit 1 still means what it said.
+finding_root=$(new_baseline cleanup-fault-with-finding)
+mkdir -p "$finding_root/skills/undocumented-skill"
+cat >"$finding_root/skills/undocumented-skill/SKILL.md" <<'SKILL'
+---
+name: undocumented-skill
+description: "A fixture skill with no cheat-sheet entry."
+---
+# Undocumented Skill
+SKILL
+finding_status=0
+finding_output=$(PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$finding_root" 2>&1) ||
+	finding_status=$?
+assert_gate 'finding survives a failed cleanup' 1 \
+	'undocumented-skill: not referenced in docs/cheatsheet.md' \
+	"$finding_status" "$finding_output"
+assert_gate 'failed cleanup still names its path' 1 'retained scratch path:' \
+	"$finding_status" "$finding_output"
+
+# Case 10: a skills directory holding nothing. The gate has nothing to check
+# rather than something to report.
+empty_root=$SCRATCH/empty-skills
+mkdir -p "$empty_root/skills" "$empty_root/scripts" "$empty_root/docs"
+printf '# Reserved names\n' >"$empty_root/scripts/reserved-skill-names.txt"
+printf '# Cheat sheet\n' >"$empty_root/docs/cheatsheet.md"
+empty_status=0
+empty_output=$("$gate" "$empty_root" 2>&1) || empty_status=$?
+assert_gate 'empty skills directory' 2 'no skills found under' \
+	"$empty_status" "$empty_output"
+
+# Case 11: no skills directory at all. find fails rather than returning an
+# empty list, and pipefail carries that status out, so this reaches a different
+# branch than Case 10 does.
+absent_root=$SCRATCH/absent-skills
+mkdir -p "$absent_root/scripts" "$absent_root/docs"
+printf '# Reserved names\n' >"$absent_root/scripts/reserved-skill-names.txt"
+printf '# Cheat sheet\n' >"$absent_root/docs/cheatsheet.md"
+absent_status=0
+absent_output=$("$gate" "$absent_root" 2>&1) || absent_status=$?
+assert_gate 'absent skills directory' 2 'could not enumerate' \
+	"$absent_status" "$absent_output"
 
 printf 'check-skill-shape-test: ok\n'
