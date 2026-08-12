@@ -51,10 +51,17 @@ records:
 lint:
   #!/usr/bin/env bash
   set -euo pipefail
+  # The list is captured to a file rather than read from a process substitution:
+  # `while ... done < <(lister)` reports the loop's status, not the lister's, so
+  # a discovery that stopped on a file it could not classify would lint a short
+  # list and pass. check-ripgrep-config.sh captures it for the same reason.
+  sources="$(mktemp)"
+  trap 'rm -f "$sources"' EXIT
+  ./scripts/list-shell-sources.sh --all -z >"$sources"
   files=()
   while IFS= read -r -d '' file; do
     files+=("$file")
-  done < <(./scripts/list-shell-sources.sh --all -z)
+  done <"$sources"
   # -x follows `# shellcheck source=` directives. Without it the suites that
   # source scripts/test-fixture-helpers.sh pass here only because the batch
   # happens to include the helper, while a per-file run reports SC1091.
@@ -63,14 +70,20 @@ lint:
 format-check:
   #!/usr/bin/env bash
   set -euo pipefail
+  # Captured rather than read from a process substitution, for the reason the
+  # lint recipe above gives.
+  sources="$(mktemp)"
+  trap 'rm -f "$sources"' EXIT
+  ./scripts/list-shell-sources.sh --tabs -z >"$sources"
   tabs=()
   while IFS= read -r -d '' file; do
     tabs+=("$file")
-  done < <(./scripts/list-shell-sources.sh --tabs -z)
+  done <"$sources"
+  ./scripts/list-shell-sources.sh --two-space -z >"$sources"
   two_space=()
   while IFS= read -r -d '' file; do
     two_space+=("$file")
-  done < <(./scripts/list-shell-sources.sh --two-space -z)
+  done <"$sources"
   shfmt -d "${tabs[@]}"
   shfmt -i 2 -d "${two_space[@]}"
 
