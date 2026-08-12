@@ -55,7 +55,10 @@ lint:
   while IFS= read -r -d '' file; do
     files+=("$file")
   done < <(./scripts/list-shell-sources.sh --all -z)
-  shellcheck "${files[@]}"
+  # -x follows `# shellcheck source=` directives. Without it the suites that
+  # source scripts/test-fixture-helpers.sh pass here only because the batch
+  # happens to include the helper, while a per-file run reports SC1091.
+  shellcheck -x "${files[@]}"
 
 format-check:
   #!/usr/bin/env bash

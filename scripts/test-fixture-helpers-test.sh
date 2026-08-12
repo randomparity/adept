@@ -112,10 +112,21 @@ grep -qF "sample: refusing to remove unsafe path: $survivor" "$SCRATCH/child.out
 # is always last, so an abort partway through leaves a directory in the repo.
 #
 # The case makes a removal fail by taking write permission off a directory, so
-# it proves nothing where mode bits do not bite -- as root, or on a filesystem
-# that ignores them -- and is skipped there rather than asserted falsely. This
-# is the shape check-public-safety-test.sh uses for its own mode-000 fixture.
-if [ "$(id -u)" -ne 0 ]; then
+# it proves nothing where mode bits do not bite -- as root, or on a mount that
+# ignores them (SMB/CIFS, exFAT, some container and WSL mounts). Probe for the
+# property itself rather than for root: the probe answers both, and asserting
+# either falsely would redden `just verify` with a message naming a cleanup
+# defect that does not exist.
+mode_probe=$SCRATCH/mode-probe
+mkdir -p "$mode_probe"
+chmod 500 "$mode_probe"
+mode_bits_bite=1
+if (: >"$mode_probe/canary") 2>/dev/null; then
+	mode_bits_bite=0
+fi
+chmod 700 "$mode_probe"
+
+if [ "$mode_bits_bite" -eq 1 ]; then
 	blocker_parent=$SCRATCH/blocker
 	mkdir -p "$blocker_parent"
 	status=0
@@ -135,9 +146,10 @@ CHILD
 		abort "a failed removal should redden the suite, got $status"
 	[ ! -e "$late" ] || abort "cleanup stopped at the failure and stranded $late"
 else
-	printf 'test-fixture-helpers-test: SKIP unremovable-fixture case: running as\n'
-	printf 'test-fixture-helpers-test: root, which removes a mode-500 directory\n'
-	printf 'test-fixture-helpers-test: anyway. This run did not check it.\n'
+	printf 'test-fixture-helpers-test: SKIP unremovable-fixture case: this user and\n'
+	printf 'test-fixture-helpers-test: TMPDIR write into a mode-500 directory, so a\n'
+	printf 'test-fixture-helpers-test: removal cannot be made to fail. This run did\n'
+	printf 'test-fixture-helpers-test: not check it.\n'
 fi
 
 # fail prefixes the label and exits 1.

@@ -9,9 +9,13 @@
 # suite's name. Five suites under scripts/ had grown their own copy.
 #
 # The suites under tests/fixtures/ still carry theirs and are candidates for the
-# same treatment. The check-records-test.sh pair is not: `just records` compares
-# .github/scripts/ and skills/tome-of-lore/assets/ byte for byte, and the two sit
-# at different depths, so no single relative source path resolves from both.
+# same treatment. Two groups are not. The check-records-test.sh pair cannot be:
+# `just records` compares .github/scripts/ and skills/tome-of-lore/assets/ byte
+# for byte, and the two sit at different depths, so no single relative source
+# path resolves from both. The gates themselves -- check-skill-shape.sh,
+# check-ripgrep-config.sh, verify-push.sh -- keep their own cleanup deliberately;
+# a production gate sourcing a file named test-fixture-helpers.sh is worse
+# layering than the duplication it would remove.
 #
 #   clear_git_env            unsets the variables git reports as
 #                            repository-local, so a caller's GIT_DIR or
