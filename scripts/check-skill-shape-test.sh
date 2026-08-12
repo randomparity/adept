@@ -201,7 +201,10 @@ retained_root=$(new_baseline cleanup-fault)
 retained_status=0
 retained_output=$(PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$retained_root" 2>&1) ||
 	retained_status=$?
-assert_gate 'clean run, cleanup fails' 2 'retained scratch path:' \
+# The fragment carries the path, not just the label: the criterion is that the
+# message names what was left behind, and a message printing the label alone
+# would satisfy a prefix-only assertion while telling the operator nothing.
+assert_gate 'clean run, cleanup fails' 2 "retained scratch path: $SCRATCH/check-skill-shape." \
 	"$retained_status" "$retained_output"
 
 # Case 9: the same failed removal on a run that already had a finding. The
