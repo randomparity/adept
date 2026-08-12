@@ -75,18 +75,27 @@ establish.
   stable because the test suite asserts on them by name.
 - Predicates that gain a fault value change from two-valued to three-valued, and
   that constrains how they may be called: never under `if !`, and never in an
-  `&&`/`||` chain, both of which collapse `1` and `2` back into one branch and
-  reinstate the defect. Every caller `case`s on the status.
+  `&&`/`||` chain that *branches* on the predicate, both of which collapse `1`
+  and `2` into one branch and reinstate the defect. Every caller captures the
+  status and `case`s on it. These scripts run under `set -euo pipefail`, where a
+  bare call and a following `; status=$?` both abort, so the capture is written
+  `status=0; predicate ... || status=$?` — an `||` that assigns rather than
+  branches, and the required form rather than merely a permitted one.
 - `git cat-file -e` is no longer used as an existence witness in
   `check-records.sh`.
-- **Two classes of site remain outside this rule and are recorded, not
-  claimed.** `check_not_rewritten` and `evaluate_base_conformance` read a base
-  blob with `git cat-file blob` and fail open on any non-zero status, silently
-  exempting a record from the append-only rules — owned by issue #64.
-  `resolve_tracker`'s repository and `AGENTS.md` probes also fail open, to the
-  default tracker; there absence is the ordinary case and no reporting channel
-  exists before the tracker is resolved, so they are accepted exceptions rather
-  than oversights.
+- **Sites remain outside this rule. They are recorded with owners, and the list
+  is not claimed to be exhaustive** — the sweep that found them is one reading of
+  three scripts, not a mechanical guarantee. `check_not_rewritten`,
+  `evaluate_base_conformance` and `renumbered_elsewhere` read a base blob with
+  `git cat-file blob` and mishandle a non-zero status — the first two fail open,
+  silently exempting a record from the append-only rules; the third fails closed
+  into a misattributed `E-GONE` — all owned by issue #64. `records_in_ref`'s
+  extraction can empty the base record list and so disarm `E-COUNT-FLOOR`; that
+  is a pipeline site, owned by issue #63. `resolve_tracker`'s repository and
+  `AGENTS.md` probes fail open to the default tracker: both test for *absence*
+  rather than scanning content, absence is the ordinary case, and no reporting
+  channel exists before the tracker is resolved — accepted exceptions, not
+  oversights.
 - **Nothing enforces this record.** It shapes fixes; it does not prevent the
   next recurrence, because no gate checks for the idiom.
 
