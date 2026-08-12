@@ -11,10 +11,10 @@ scan — a `grep`, an `rg`, or a `git` query whose result decides a verdict. A
 scan has three outcomes, not two: it matched, it did not match, or it could not
 run. Shell makes the third easy to lose. `if ! grep ...` reads a fault as "no
 match"; `cmd || true`, `cmd && return 0`, `cmd || continue`, and `[ -n "$(cmd)" ]`
-discard the status outright. In every case a scan that never completed is
-reported as one that completed and found nothing — and because these are gates,
-"found nothing" is the passing answer. The gate goes green over content it never
-read.
+discard the status outright. Wherever no later check re-reads the same bytes, a
+scan that never completed is then reported as one that completed and found
+nothing — and because these are gates, "found nothing" is the passing answer.
+The gate goes green over content it never read.
 
 Reachability varies by site. The git-object witnesses can fault against a
 damaged object store or a bad ref in ordinary use; the scans over base-ref
@@ -93,11 +93,11 @@ establish.
   extraction can empty the base record list and so disarm `E-COUNT-FLOOR`; that
   is a pipeline site, owned by issue #63. `resolve_tracker`'s repository and
   `AGENTS.md` probes fail open to the default tracker: both test for *absence*
-  rather than scanning content, absence is the ordinary case, and no reporting
-  channel exists before the tracker is resolved — accepted exceptions, not
-  oversights.
+  rather than scanning content, and absence is the ordinary case — accepted
+  exceptions, not oversights.
 - **Nothing enforces this record.** It shapes fixes; it does not prevent the
-  next recurrence, because no gate checks for the idiom.
+  next recurrence, because no gate checks for the idiom. Whether one should, and
+  in which shape, is owned by issue #66.
 
 ## Considered & rejected
 
@@ -105,20 +105,19 @@ establish.
 option, and what happened after #25. A spec is scoped to one issue: #25's could
 not have governed #55's idiom, and #55's cannot govern #63's.
 
-**Set `set -o pipefail` globally and rely on it.** It does not address these
-idioms: `|| true` discards a status pipefail already computed, and pipefail's
-rightmost-nonzero rule still returns grep's `1` when an upstream stage faults
-and grep then reads empty input. It would also change the status of every
-existing pipeline in three scripts at once — a far larger blast radius than the
-defect.
+**Rely on `set -o pipefail`.** All three scripts already set it, which is what
+settles this: `|| true` discards a status pipefail has already computed, and
+pipefail's rightmost-nonzero rule still returns grep's `1` when an upstream
+stage faults and grep then reads empty input. The option is necessary and not
+sufficient.
 
 **Convert only the git-object witnesses and accept the rest.** The tempting
 half-measure, since Context concedes those are the sites that fault in ordinary
-use while the base-ref copies fault only under a stubbed tool. Rejected: a rule
-applied to half its sites is not a rule, and the reader of the next `|| true`
-has no way to tell which half they are in. The stub-only sites cost one test
-each, against seven codes, nine conversions and two mirrors for the whole sweep
-— the marginal cost of the unreachable half is the smallest part of the change.
+use while the base-ref copies fault only under a stubbed tool. Rejected because
+the reader of the next `|| true` has no way to tell which half they are in, and
+because the stub-only sites cost one test each against seven codes, nine
+conversions and two mirrors for the whole sweep — the marginal cost of the
+unreachable half is the smallest part of the change.
 
 **Add a CI guard that greps for the idiom.** Rejected for now, not on principle.
 The objection is to a *central allowlist*: `check-records.sh` discards a status
