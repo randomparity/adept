@@ -463,9 +463,21 @@ records_in_ref() {
 # has ever examined one, and for an ADR the H1 *is* the decision statement. Every heading line
 # present in the base-ref blob must still be present, verbatim, somewhere in the tree version.
 check_headings_intact() {
-  local tmp=$1 path=$2 heading grep_status
-  # Fed by a process substitution on `done`, so err_full runs in the current shell rather than
-  # a piped subshell, where the assignment to `failed` would be discarded.
+  local tmp=$1 path=$2 heading grep_status list_status=0 headings
+  # The listing runs before the loop rather than inside a process substitution on `done`: with
+  # `|| true` there, a grep that faulted produced an empty list, the loop ran zero times, and
+  # the whole heading-intactness rule passed over content it never scanned.
+  headings=$(grep -E '^#+ ' "$tmp") || list_status=$?
+  case $list_status in
+  # 1 is "the base ref's version had no headings at all", which is a legitimate answer.
+  0 | 1) ;;
+  *)
+    err_full "E-HEADING-LIST-SCAN: $path: could not list the base ref's headings (grep exit $list_status)"
+    return 0
+    ;;
+  esac
+  # Fed by a herestring, so err_full runs in the current shell rather than a piped subshell,
+  # where the assignment to `failed` would be discarded.
   while IFS= read -r heading; do
     [ -n "$heading" ] || continue
     # grep exits 1 for "no match" and 2 or more for a fault it hit while
@@ -479,7 +491,7 @@ check_headings_intact() {
     1) err_full "E-HEADING-REWRITTEN: $path: heading '$heading' is gone from the base ref's version — a heading is the record's claim, not prose" ;;
     *) err_full "E-HEADING-SCAN: $path: could not scan for heading '$heading' (grep exit $grep_status)" ;;
     esac
-  done < <(grep -E '^#+ ' "$tmp" || true)
+  done <<<"$headings"
 }
 
 # The lines between the H1 and the first `## ` belong to no section at all, so section_body
@@ -502,14 +514,25 @@ check_preamble_intact() {
 # record replaces `Open` with a banner, and an append-only rule over the whole file would
 # forbid exactly the edit the format permits.
 check_sections_append_only() {
-  local tmp=$1 path=$2 section removed
+  local tmp=$1 path=$2 section removed list_status=0 all_sections
   # "*" means every level-2 heading the base ref had except ## Status. Level 2 only, matching
   # section_body's `^## ` terminator: a deeper heading is body content inside its enclosing
   # section, and enumerating one as a section of its own would produce overlapping bodies and
   # silently redefine what append-only means.
   local sections=$APPEND_ONLY_SECTIONS
   if [ "$sections" = "*" ]; then
-    sections=$(grep -E '^## ' "$tmp" | grep -vxF '## Status' || true)
+    # Split from the filter below: only this grep reads a file and can fault on one. The
+    # `grep -vxF` that follows reads what this produced, where exit 1 just means every section
+    # was `## Status` -- a pipeline whose stages need telling apart, tracked on #63.
+    all_sections=$(grep -E '^## ' "$tmp") || list_status=$?
+    case $list_status in
+    0 | 1) ;;
+    *)
+      err_full "E-SECTION-LIST-SCAN: $path: could not list the base ref's sections (grep exit $list_status)"
+      return 0
+      ;;
+    esac
+    sections=$(printf '%s\n' "$all_sections" | grep -vxF '## Status') || true
   fi
 
   while IFS= read -r section; do

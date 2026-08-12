@@ -1412,6 +1412,58 @@ EOF
   printf '\nFurther detail found later.\n' >>"$d/docs/debt/0001-valid.md"
   run_case "appending detail is allowed" 0 - "$d" BASE_SHA="$b"
 
+  # The two listings the append-only rules iterate. Both used to trail `|| true`, so a grep
+  # that faulted yielded an empty list, the loop ran zero times, and the rule reported nothing
+  # -- a clean pass over content it never read. Both fixtures append only, so nothing else
+  # fires and the pre-change run is a genuine exit 0; a fixture that removed a line would
+  # report E-REWRITE and pass without the conversion.
+  #
+  # The base-ref copy these read is a mktemp file the checker creates and removes itself, so
+  # no fixture can chmod it. A grep stub that faults on the one listing pattern and defers to
+  # the real grep otherwise reaches the branch deterministically, as the migrator's
+  # section-scan case already does.
+  stub_bin="$SCRATCH/grep-heading-list-bin"
+  mkdir -p "$stub_bin"
+  real_grep=$(command -v grep)
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = '^#+ ' ]; then
+    printf 'grep: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+  fi
+done
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  d=$(case_dir heading_list_scan_fault)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/debt/0001-valid.md"
+  run_case "heading listing faults, not a clean pass" 1 E-HEADING-LIST-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
+  stub_bin="$SCRATCH/grep-section-list-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = '^## ' ]; then
+    printf 'grep: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+  fi
+done
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  # An ADR fixture, not a deferral one: the section listing only runs under
+  # APPEND_ONLY_SECTIONS="*", and the debt profile names a fixed list instead. Only the ADR
+  # profile takes the branch this converts.
+  d=$(adr_dir section_list_scan_fault)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/adr/0001-first.md"
+  run_case "section listing faults, not a clean pass" 1 E-SECTION-LIST-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
+
   d=$(case_dir resolve_in_place)
   b=$(base_of "$d")
   sed 's/^Open$/> **Resolved by PR #7** (2026-02-01)/' "$d/docs/debt/0001-valid.md" >"$d/.t" && mv "$d/.t" "$d/docs/debt/0001-valid.md"
