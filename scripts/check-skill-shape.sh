@@ -36,6 +36,20 @@ report() {
 	status=1
 }
 
+# grep answers three ways for the same reason rg does -- 0 match, 1 no match,
+# >1 the scan could not run -- and both membership loops below would otherwise
+# collapse the third into the second, in opposite directions: rule 3 would read
+# a failed scan as "no collision" and drop a real finding, rule 4 as "no such
+# skill" and invent one. $names is set before either caller runs.
+name_listed() { # name -- 0 listed, 1 not listed, faults when the scan fails
+	local scan_status=0
+	grep -qxF -- "$1" "$names" || scan_status=$?
+	if [ "$scan_status" -gt 1 ]; then
+		fault "membership scan of $names failed (grep exit $scan_status)"
+	fi
+	return "$scan_status"
+}
+
 workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")" ||
 	fault 'could not create a scratch directory'
 
@@ -63,7 +77,7 @@ names="$workspace/names"
 find "$root/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; |
 	sort >"$names" || fault "could not enumerate $root/skills"
 
-count="$(wc -l <"$names" | tr -d ' ')"
+count="$(wc -l <"$names" | tr -d ' ')" || fault "could not count $names"
 if [ "$count" -eq 0 ]; then
 	fault "no skills found under $root/skills"
 fi
@@ -100,7 +114,7 @@ if [ "$reserved_status" -gt 1 ]; then
 	fault "reading the reserved-name list failed (exit $reserved_status)"
 fi
 while IFS= read -r reserved; do
-	if grep -qxF -- "$reserved" "$names"; then
+	if name_listed "$reserved"; then
 		report "$reserved: collides with a reserved harness name"
 	fi
 done <"$workspace/reserved"
@@ -121,9 +135,10 @@ if [ "$refs_status" -gt 1 ]; then
 	fault "scanning invocations failed (rg exit $refs_status)"
 fi
 # shellcheck disable=SC2016 # the $ is a literal to strip, not an expansion
-sed 's/.*`\$//;s/`//' "$workspace/raw" | sort -u >"$workspace/refs"
+sed 's/.*`\$//;s/`//' "$workspace/raw" | sort -u >"$workspace/refs" ||
+	fault 'could not collate the invocation list'
 while IFS= read -r ref; do
-	if ! grep -qxF -- "$ref" "$names"; then
+	if ! name_listed "$ref"; then
 		report "\$$ref is invoked but no such skill exists"
 	fi
 done <"$workspace/refs"
@@ -142,7 +157,8 @@ rg --no-config -o -N --no-filename '\.\./\.\./references/[a-z0-9-]+\.md' "$root"
 if [ "$links_status" -gt 1 ]; then
 	fault "scanning reference links failed (rg exit $links_status)"
 fi
-sort -u "$workspace/rawlinks" >"$workspace/links"
+sort -u "$workspace/rawlinks" >"$workspace/links" ||
+	fault 'could not collate the reference-link list'
 while IFS= read -r rel; do
 	[ -n "$rel" ] || continue
 	# Resolve the link lexically rather than handing `..` to the kernel: only

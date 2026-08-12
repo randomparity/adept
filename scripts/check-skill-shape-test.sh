@@ -248,4 +248,49 @@ absent_output=$("$gate" "$absent_root" 2>&1) || absent_status=$?
 assert_gate 'absent skills directory' 2 'could not enumerate' \
 	"$absent_status" "$absent_output"
 
+# Cases 12-14 cover the scans that decide a verdict from an exit status. Each
+# one collapses "could not run" into an answer if left unguarded, and the two
+# membership loops collapse it in opposite directions -- so a single shim run
+# against two fixtures proves each loop separately.
+grep_shim=$SCRATCH/shim-grep
+mkdir -p "$grep_shim"
+printf '#!/usr/bin/env bash\nexit 2\n' >"$grep_shim/grep"
+chmod +x "$grep_shim/grep"
+
+# Case 12: rule 3's reserved-name loop. A failed scan read as "no collision"
+# drops a finding silently, which is the direction nobody would notice.
+reserved_root=$(new_baseline reserved-scan-fault)
+printf '# Reserved names\nexample-skill\n' >"$reserved_root/scripts/reserved-skill-names.txt"
+reserved_status=0
+reserved_output=$(PATH="$grep_shim:$PATH" "$gate" "$reserved_root" 2>&1) || reserved_status=$?
+assert_gate 'reserved-name scan fault' 2 'membership scan of' \
+	"$reserved_status" "$reserved_output"
+
+# Case 13: rule 4's invocation loop, reached with the reserved list left empty
+# so Case 12's loop does not run first. Here a failed scan read as "no such
+# skill" invents a finding against a skill that is present.
+invocation_root=$(new_baseline invocation-scan-fault)
+cat >>"$invocation_root/skills/example-skill/SKILL.md" <<'SKILL'
+
+This one invokes `$example-skill`, which does exist.
+SKILL
+invocation_status=0
+invocation_output=$(PATH="$grep_shim:$PATH" "$gate" "$invocation_root" 2>&1) || invocation_status=$?
+assert_gate 'invocation scan fault' 2 'membership scan of' \
+	"$invocation_status" "$invocation_output"
+
+# Case 14: a collating pipeline that could not run. sed is used at exactly one
+# site, so shimming it isolates that guard; the sort at the reference-link
+# collation carries the same clause but no shim reaches it alone, since sort
+# runs in three earlier places.
+sed_shim=$SCRATCH/shim-sed
+mkdir -p "$sed_shim"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$sed_shim/sed"
+chmod +x "$sed_shim/sed"
+collate_root=$(new_baseline collate-fault)
+collate_status=0
+collate_output=$(PATH="$sed_shim:$PATH" "$gate" "$collate_root" 2>&1) || collate_status=$?
+assert_gate 'invocation list cannot be collated' 2 'could not collate the invocation list' \
+	"$collate_status" "$collate_output"
+
 printf 'check-skill-shape-test: ok\n'
