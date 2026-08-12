@@ -99,7 +99,9 @@ tracked files for a shared run over 16 tokens returned ten before the rewrite �
 the six rewritten here, `licenses/superpowers.LICENSE` (deleted), `LICENSE` (163
 tokens of shared MIT text), `skills/forge/SKILL.md` (the excluded 28-token
 idiom), and the migration plan's 51-token quotation (now attributed) — and
-**four after it**, the six having left the list. Nothing else in the
+**four after it** — three once the deleted notice goes at merge, since
+`licenses/superpowers.LICENSE` is one of the four. The six have left the list
+entirely. Nothing else in the
 tree carries one, including the other ten behaviour inventories, whose
 construction is identical to the one that does — the inventory at 2.47% tops out
 at exactly 16 tokens, at the bound rather than over it. So the tree-wide
@@ -149,7 +151,8 @@ the close-out sweep, and the outcome above is then literally true at merge.
   per-file figures survive as the definition of the metric this record and any
   future re-derivation use. One further claim of 0002's does **not** survive: "no
   other shipped file reaches 2%", which does not hold over the candidate set
-  stated above and is replaced by the four-file correction there. A reader
+  stated above and is replaced by the corrected list there — five files as
+  scanned, four of them still shipped once the notice is deleted. A reader
   arriving by 0002's banner should not rely on that sentence.
 - The three templates keep their gated vocabulary, which **differs per file**:
   `task-reviewer-prompt.md` and `code-reviewer.md` keep `Critical` / `Important`
