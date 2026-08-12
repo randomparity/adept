@@ -84,6 +84,35 @@ if ! "$CHECKER" "$HOME_PATH_FIXTURE" >"$SCRATCH/output" 2>&1; then
 	exit 1
 fi
 
+# Filenames may contain every byte except NUL and slash. Newline and a text
+# protocol's field separator must remain path data rather than becoming record
+# structure that leaks into the content check.
+newline_fixture="$HOME_PATH_FIXTURE/"$'line\nbreak.yml'
+separator_fixture="$HOME_PATH_FIXTURE/"$'field\034break.yml'
+printf 'workspace is /ho%s/runner/work/adept/adept\n' 'me' >"$newline_fixture"
+printf 'workspace is /ho%s/linuxbrew/.linuxbrew\n' 'me' >"$separator_fixture"
+if ! "$CHECKER" "$HOME_PATH_FIXTURE" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: filename bytes should not alter matched content\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+leaked_path="/ho$(printf 'me')/example-user/project"
+printf 'private path: %s\n' "$leaked_path" >"$separator_fixture"
+if "$CHECKER" "$HOME_PATH_FIXTURE" >"$SCRATCH/output" 2>"$SCRATCH/error"; then
+	printf 'public-safety-test: hostile filename hid a real home leak\n' >&2
+	exit 1
+fi
+if ! jq -e --arg path "$separator_fixture" --arg content "private path: $leaked_path" \
+	'select(.path.text == $path and .line_number == 1 and
+		.lines.text == ($content + "\n"))' <"$SCRATCH/output" >/dev/null; then
+	printf 'public-safety-test: finding should preserve exact path, line, and content\n' >&2
+	cat "$SCRATCH/output" >&2
+	cat "$SCRATCH/error" >&2
+	exit 1
+fi
+rm -f "$newline_fixture" "$separator_fixture"
+
 # The allowance is per line, not per file: a real home directory beside a
 # published one is still reported, and it is the real one that gets printed.
 printf 'also /ho%s/example-user/project\n' 'me' >>"$SCRATCH/repo/workflow.yml"

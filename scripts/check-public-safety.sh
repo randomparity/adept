@@ -15,6 +15,10 @@ if ! command -v rg >/dev/null 2>&1; then
 	echo "public-safety: rg is required" >&2
 	exit 2
 fi
+if ! command -v jq >/dev/null 2>&1; then
+	echo "public-safety: jq is required" >&2
+	exit 2
+fi
 
 if (($# > 0)); then
 	scan_paths=("$@")
@@ -84,15 +88,10 @@ done
 # constant is not leaking anyone's home directory, and a gate that reddens on it
 # teaches people to route around the gate.
 #
-# The exception is applied to a copy of the matched line, not to a file and not
-# to the scan: every pattern still reads every byte of every tracked file. A
-# line that names /home/runner *and* a real home directory or a token still
-# matches after the redaction, so it is still reported.
-#
-# The name has to end where it is written: the trailing character class is what
-# keeps a person named `runnerbee` a finding.
-public_home='/home/(runner|linuxbrew)[^[:alnum:]_.-]'
-match_separator=$'\034'
+# The exception applies only to exact submatches. A line that names
+# /home/runner and a real home directory or a token still carries a non-exempt
+# submatch and is reported, while a person named `runnerbee` is never exempt.
+public_home_match='^/home/(runner|linuxbrew)$'
 
 status=0
 # --text: ripgrep judges a file binary on one NUL byte and skips it while
@@ -113,42 +112,31 @@ status=0
 # clean, anything else is a fault that stops the run.
 for pattern in "${denied_patterns[@]}"; do
 	rg_status=0
-	matches=$(rg -n --with-filename --field-match-separator="$match_separator" \
-		--hidden --text --encoding none \
+	matches=$(rg --json --hidden --text --encoding none \
 		--glob '!.git' --glob '!.git/**' "$pattern" "${scan_targets[@]}") ||
 		rg_status=$?
 	case $rg_status in
 	0)
 		# The walk and the explicit paths overlap on every tracked file no
-		# ignore rule hides, so each match arrives twice. Report it once: a real
-		# leak is the worst moment to double the output.
-		#
-		# awk is given the pattern rather than a second ripgrep so the re-test
-		# has no exit status to misread: it prints the surviving lines and
-		# nothing else, and an empty result means every match was one of the
-		# published CI paths above.
-		matches=$(printf '%s\n' "$matches" | awk '!seen[$0]++' |
-			awk -v pattern="$pattern" -v allowed="$public_home" \
-				-v separator="$match_separator" '
-			{
-				first = index($0, separator)
-				remainder = substr($0, first + 1)
-				second = index(remainder, separator)
-				content = substr(remainder, second + 1)
-
-				# The trailing space gives a name at end of line the same
-				# delimiter one mid-line has, so a single expression covers
-				# both. Redacting the delimiter with it cannot hide a match:
-				# every pattern here is built from name characters, so none
-				# spans the boundary this consumes.
-				probe = content " "
-				gsub(allowed, "/", probe)
-				if (probe ~ pattern) {
-					path = substr($0, 1, first - 1)
-					line = substr(remainder, 1, second - 1)
-					print path ":" line ":" content
-				}
-			}')
+		# ignore rule hides, so each match arrives twice. Structured records keep
+		# arbitrary filename bytes out of the content decision and preserve the
+		# exact path, line and content in the finding.
+		jq_status=0
+		matches=$(printf '%s\n' "$matches" |
+			jq -sc --arg allowed "$public_home_match" '
+				map(select(.type == "match"))
+				| unique_by([.data.path, .data.line_number, .data.lines])
+				| .[]
+				| select(any(.data.submatches[];
+					((.match.text // (.match.bytes | @base64d))
+					| test($allowed) | not)))
+				| .data
+				| {path, line_number, lines}') || jq_status=$?
+		if [ "$jq_status" -ne 0 ]; then
+			printf 'public-safety: jq could not filter ripgrep output (exit %s)\n' \
+				"$jq_status" >&2
+			exit 2
+		fi
 		[ -n "$matches" ] || continue
 		printf '%s\n' "$matches"
 		printf 'public-safety: denied pattern matched: %s\n' "$pattern" >&2
