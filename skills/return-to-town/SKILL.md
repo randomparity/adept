@@ -49,8 +49,16 @@ When you do merge:
   blocker. Never merge an unmergeable PR on the strength of
   previously-green checks.
 
+**What the completion report covers.** Merging lands the change; it does not
+establish what the merge triggered. A workflow that runs on `BASE_BRANCH` — a
+publish, a release tag, a deploy — fires *after* the merge, and `$deliver`'s
+green CI ran against the pull request head *before* it, so neither covers it.
+Nothing here reads that run. Report the merge landing, not everything
+downstream of it, and where the repository publishes on merge, say plainly that
+the base-branch run is unverified, so the human who owns it knows to look.
+
 **Caller contract.** If invoked inside `$quest`, completing the cleanup
-means the issue is done — end your turn with a summary. If running standalone,
+means the issue is done in that bounded sense — end your turn with a summary. If running standalone,
 the same applies: once cleanup is verified, report and stop.
 
 ## Track state on the operator-merge path (quest-log skill)
