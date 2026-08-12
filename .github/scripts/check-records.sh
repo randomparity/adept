@@ -399,7 +399,7 @@ still_a_record() {
 # here would be a guard that cannot fire — a false guarantee, by the same argument date_to_int
 # makes about its own missing invalid-input branch.
 renumbered_elsewhere() {
-  local base=$1 path=$2 blob_canon candidate tmp cand_status scan_faulted=0
+  local base=$1 path=$2 blob_canon candidate tmp cand_status fault_status=0
   tmp=$(mktemp) || return 1
   if ! git cat-file blob "${base}:${path}" >"$tmp" 2>/dev/null; then
     rm -f "$tmp"
@@ -422,7 +422,7 @@ renumbered_elsewhere() {
     0) continue ;;
     1) ;;
     *)
-      scan_faulted=$path_exists_status
+      fault_status=$path_exists_status
       continue
       ;;
     esac
@@ -443,8 +443,8 @@ $candidate"
   # A positive match returns above, so a fault only decides the answer once every candidate
   # has been tried without one: a witness that genuinely found the copy is not made
   # unreliable by an unrelated candidate's scan failing.
-  if [ "$scan_faulted" -ne 0 ]; then
-    path_exists_status=$scan_faulted
+  if [ "$fault_status" -ne 0 ]; then
+    path_exists_status=$fault_status
     return 2
   fi
   return 1
@@ -753,7 +753,7 @@ gate_known_basenames() {
 # by its caller, which runs after it.
 gate_witness_path=""
 gate_existed_at() {
-  local base=$1 rel name status faulted=0
+  local base=$1 rel name status fault_status=0
 
   gate_witness_path=""
   rel=$(repo_relative "$SELF_DIR")
@@ -766,7 +766,7 @@ gate_existed_at() {
       0) return 0 ;;
       1) ;;
       *)
-        faulted=$path_exists_status
+        fault_status=$path_exists_status
         gate_witness_path="${rel}/${name}"
         ;;
       esac
@@ -783,7 +783,7 @@ gate_existed_at() {
     0) return 0 ;;
     1) ;;
     *)
-      faulted=$status
+      fault_status=$status
       gate_witness_path=".github/workflows (searching for $name)"
       ;;
     esac
@@ -791,8 +791,8 @@ gate_existed_at() {
 
   # A positive witness returns above, so it outranks a fault on any other witness: evidence
   # the gate existed is not weakened by an unrelated probe failing.
-  if [ "$faulted" -ne 0 ]; then
-    path_exists_status=$faulted
+  if [ "$fault_status" -ne 0 ]; then
+    path_exists_status=$fault_status
     return 2
   fi
   return 1
