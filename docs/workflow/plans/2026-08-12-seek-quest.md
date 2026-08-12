@@ -8,11 +8,13 @@ CI-backed structural gate that fails when a skill exists with no mention in
 **Architecture.** One new instruction-only skill file
 (`skills/seek-quest/SKILL.md`, anatomy rule 1 — no script backs its ranking
 logic). One existing gate script (`scripts/check-skill-shape.sh`) grows a
-sixth structural rule and gains a fixture-testable optional root argument, a
-pattern already established by `scripts/check-public-safety.sh`. One new
-test suite (`scripts/check-skill-shape-test.sh`) exercises that gate against
-synthetic fixture trees, following `scripts/check-ripgrep-config-test.sh`'s
-fixture-harness shape. `docs/cheatsheet.md` gains three additive edits.
+sixth structural rule and gains a fixture-testable optional root argument,
+extending the no-args-means-script-relative-default convention
+`scripts/check-public-safety.sh` already established for its own (variadic)
+path argument. One new test suite (`scripts/check-skill-shape-test.sh`)
+exercises that gate against synthetic fixture trees, following
+`scripts/check-ripgrep-config-test.sh`'s fixture-harness shape.
+`docs/cheatsheet.md` gains three additive edits.
 
 **Tech stack.** Bash 3.2, `rg`, `gh`, `git`, `jq` (already project
 dependencies; no new ones added).

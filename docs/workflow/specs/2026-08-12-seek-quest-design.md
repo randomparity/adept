@@ -238,11 +238,15 @@ already built at the top of the script:
 `root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"` — it always inspects
 the real checkout and takes no arguments, so it cannot run against a
 synthetic fixture tree today. `check-public-safety.sh` already establishes
-the pattern this repo uses to make a gate fixture-testable: accept an
-optional root positional argument, falling back to the script-relative
-default when none is given. Apply the same shape here — change the existing
-`root=` assignment to `root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"`
-— so `just shape-check` (called with no arguments) is unaffected, and a test
+the convention this repo uses to make a gate fixture-testable: default to a
+script-relative root when called with no arguments (its variadic
+`scan_paths=("$@")`/`scan_paths=("$ROOT")` shape takes zero-or-more scan
+paths rather than a single root, since it can scan several targets, but the
+no-arguments-means-script-relative-default behavior is the same convention).
+Apply that same no-args-default behavior here, in the simpler single-root
+shape this script needs — change the existing `root=` assignment to
+`root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"` — so
+`just shape-check` (called with no arguments) is unaffected, and a test
 suite can pass a scratch directory. This is a mechanical extension of an
 established convention, not a new one.
 
