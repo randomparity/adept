@@ -248,10 +248,13 @@ absent_output=$("$gate" "$absent_root" 2>&1) || absent_status=$?
 assert_gate 'absent skills directory' 2 'could not enumerate' \
 	"$absent_status" "$absent_output"
 
-# Cases 12-14 cover the scans that decide a verdict from an exit status. Each
+# Cases 12-16 cover the scans that decide a verdict from an exit status. Each
 # one collapses "could not run" into an answer if left unguarded, and the two
 # membership loops collapse it in opposite directions -- so a single shim run
-# against two fixtures proves each loop separately.
+# against two fixtures proves each loop separately. Cases 12 and 13 assert the
+# rule name in the message, not just that something faulted: ADR 0005 wants a
+# fault to say which site stopped, and one shared message would let either loop
+# satisfy both cases.
 grep_shim=$SCRATCH/shim-grep
 mkdir -p "$grep_shim"
 printf '#!/usr/bin/env bash\nexit 2\n' >"$grep_shim/grep"
@@ -263,7 +266,7 @@ reserved_root=$(new_baseline reserved-scan-fault)
 printf '# Reserved names\nexample-skill\n' >"$reserved_root/scripts/reserved-skill-names.txt"
 reserved_status=0
 reserved_output=$(PATH="$grep_shim:$PATH" "$gate" "$reserved_root" 2>&1) || reserved_status=$?
-assert_gate 'reserved-name scan fault' 2 'membership scan of' \
+assert_gate 'reserved-name scan fault' 2 'rule 3 reserved-name scan of' \
 	"$reserved_status" "$reserved_output"
 
 # Case 13: rule 4's invocation loop, reached with the reserved list left empty
@@ -276,7 +279,7 @@ This one invokes `$example-skill`, which does exist.
 SKILL
 invocation_status=0
 invocation_output=$(PATH="$grep_shim:$PATH" "$gate" "$invocation_root" 2>&1) || invocation_status=$?
-assert_gate 'invocation scan fault' 2 'membership scan of' \
+assert_gate 'invocation scan fault' 2 'rule 4 invocation scan of' \
 	"$invocation_status" "$invocation_output"
 
 # Case 14: a collating pipeline that could not run. sed is used at exactly one
@@ -307,5 +310,20 @@ count_status=0
 count_output=$(PATH="$wc_shim:$PATH" "$gate" "$count_root" 2>&1) || count_status=$?
 assert_gate 'skill count cannot be taken' 2 'could not count' \
 	"$count_status" "$count_output"
+
+# Case 16: an rg scan that could not run. rg decides four rules here and all
+# four convert its exit >1 the same way, so one shim pins the conversion; the
+# shim exits 2 at the first site the gate reaches, which is rule 2's frontmatter
+# read. Discriminating the other three would need a shim that faults on one
+# pattern and answers normally on the rest -- more machinery than the shared
+# two-line branch they use is worth.
+rg_shim=$SCRATCH/shim-rg
+mkdir -p "$rg_shim"
+printf '#!/usr/bin/env bash\nexit 2\n' >"$rg_shim/rg"
+chmod +x "$rg_shim/rg"
+rg_root=$(new_baseline rg-scan-fault)
+rg_status=0
+rg_output=$(PATH="$rg_shim:$PATH" "$gate" "$rg_root" 2>&1) || rg_status=$?
+assert_gate 'rg scan fault' 2 'rg exit 2' "$rg_status" "$rg_output"
 
 printf 'check-skill-shape-test: ok\n'

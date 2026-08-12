@@ -23,15 +23,22 @@ set -euo pipefail
 # from running may borrow it: a gate that goes red on a status no message
 # accounts for leaves the operator hunting a violation that does not exist.
 #
-# A fault outranks a finding, deliberately. Where a scan cannot run, the rules it
-# decides are undecided, so the run reports 2 even when an earlier rule already
-# printed a finding -- those findings still reach stderr, and reporting 1 would
-# assert the remaining rules were checked and passed.
+# A *scan* fault outranks a finding, deliberately. Where a scan cannot run, the
+# rules it decides are undecided, so the run reports 2 even when an earlier rule
+# already printed a finding -- those findings still reach stderr, and reporting 1
+# would assert the remaining rules were checked and passed. Cleanup is the one
+# exception and runs the other way: a failed removal reports itself and names the
+# path, but never displaces a status the run had already earned.
 #
-# One residual is left open: the `done <file` redirects below still exit 1 with
-# nothing printed if a redirect fails. `done <file || fault` would misread the
-# loop body's own status instead, and every one of those files is one this script
-# just wrote into its own scratch directory.
+# One residual is left open, and it fails open rather than closed. A `done <file`
+# redirect that cannot be opened prints a bash diagnostic, skips the loop
+# entirely, and lets the run reach `all rules pass` and exit 0 -- measured on
+# bash 3.2.57, this repository's declared floor. `done <file || fault` would read
+# the loop body's status rather than the redirect's, and the honest fix is a
+# readability probe at each of the five loops, which is more than the risk buys
+# here: every one of those files is one this script just wrote inside its own
+# mktemp scratch directory, so the path needs outside interference to fire.
+# Tracked as issue #81.
 
 status=0
 
@@ -56,11 +63,20 @@ fi
 # collapse the third into the second, in opposite directions: rule 3 would read
 # a failed scan as "no collision" and drop a real finding, rule 4 as "no such
 # skill" and invent one. $names is set before either caller runs.
-name_listed() { # name -- 0 listed, 1 not listed, faults when the scan fails
+#
+# The caller names its own rule so a fault says which scan stopped, per ADR 0005:
+# one generic message would leave the operator, and the suite, unable to tell the
+# two loops apart.
+#
+# That ADR's rule 3 has the predicate return a fault value for its caller to
+# report; this one reports and exits instead. The deviation is admissible only
+# because `fault` is terminal, so the double report rule 3 exists to prevent --
+# the scan fault and the rule's own verdict both firing -- cannot happen here.
+name_listed() { # name rule -- 0 listed, 1 not listed, faults when the scan fails
 	local scan_status=0
 	grep -qxF -- "$1" "$names" || scan_status=$?
 	if [ "$scan_status" -gt 1 ]; then
-		fault "membership scan of $names failed (grep exit $scan_status)"
+		fault "$2 scan of $names failed (grep exit $scan_status)"
 	fi
 	return "$scan_status"
 }
@@ -77,6 +93,16 @@ workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")" ||
 # shellcheck disable=SC2329 # run by the EXIT trap; 0.11 stops tracing at the terminal exit
 cleanup() {
 	local exit_status=$?
+	# The prefix guard is defence in depth on the one recursive removal here, the
+	# same shape check-ripgrep-config.sh and test-fixture-helpers.sh carry:
+	# $workspace is what mktemp returned from a fixed template and no code
+	# reassigns it, so this is unreachable by construction rather than a live
+	# check. It is kept because the cost of the one path that would need it is a
+	# directory nobody asked to delete.
+	case $workspace in
+	"${TMPDIR:-/tmp}"/check-skill-shape.*) : ;;
+	*) fault "refusing cleanup outside the scratch root: $workspace" ;;
+	esac
 	# -f so a directory already gone is not reported as one left behind: without
 	# it rm exits 1 on ENOENT, which would name a path that does not exist and
 	# redden an otherwise clean run. A removal that genuinely fails still does.
@@ -132,7 +158,7 @@ if [ "$reserved_status" -gt 1 ]; then
 	fault "reading the reserved-name list failed (exit $reserved_status)"
 fi
 while IFS= read -r reserved; do
-	if name_listed "$reserved"; then
+	if name_listed "$reserved" 'rule 3 reserved-name'; then
 		report "$reserved: collides with a reserved harness name"
 	fi
 done <"$workspace/reserved"
@@ -156,7 +182,7 @@ fi
 sed 's/.*`\$//;s/`//' "$workspace/raw" | sort -u >"$workspace/refs" ||
 	fault 'could not collate the invocation list'
 while IFS= read -r ref; do
-	if ! name_listed "$ref"; then
+	if ! name_listed "$ref" 'rule 4 invocation'; then
 		report "\$$ref is invoked but no such skill exists"
 	fi
 done <"$workspace/refs"
