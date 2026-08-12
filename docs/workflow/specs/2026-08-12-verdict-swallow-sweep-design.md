@@ -43,6 +43,23 @@ with `git cat-file blob` and fail open on any non-zero status, silently
 exempting a record from the append-only rules. Same defect class, different
 function family, and the fix depends on `path_exists_at` landing here first.
 
+## Extent of the sweep
+
+So a later reader can re-run it rather than trust it: every file under
+`.github/scripts/`, `skills/`, and `scripts/` was scanned for the four idioms
+above. The shipped scripts it reached, and their dispositions:
+
+| script | disposition |
+|---|---|
+| `check-records.sh` (+ mirror) | sites 1-5, 8, 9 here; pipeline sites to #63; blob reads to #64 |
+| `profiles/adr.sh` (+ mirror) | site 6 here; two pipeline sites to #63 |
+| `profiles/debt.sh` (+ mirror) | two pipeline sites to #63; comment retarget here |
+| `quest-log/assets/tracker.sh` | site 7 here |
+| `migrate-records.sh` (+ mirror) | five sites, all pipelines — #63. It is a migrator run by hand, not a gate, so none of its sites gate a merge. |
+| `quest-log/assets/profiles/github.sh` | one site, in-memory URL extraction with an explicit empty-result handler — no fix |
+| `quest-log/assets/cleared-dependencies.sh` | one `&& return 0`, on a tracker API error string rather than a scan of external bytes — outside this goal's definition |
+| `bounty/scripts/create-verified-issue.sh` | one site, same in-memory URL extraction — no fix |
+
 ## Findings that shaped the design
 
 Established by probing git directly in this repository, not from documentation:
@@ -79,6 +96,19 @@ Predicates that can now fault become three-valued and their callers `case` on
 the result, reporting the scan fault **instead of** the ordinary negative
 verdict, never alongside it (ADR 0005 decision 3).
 
+Two rules bind every three-valued predicate here:
+
+- **A positive answer outranks a fault.** Where the predicate loops over several
+  candidates or witnesses, a fault is remembered and returned only once the loop
+  has exhausted every candidate without a positive answer. A witness that
+  genuinely found evidence is not made unreliable by a sibling probe failing.
+- **Scan faults report through `err_full`, not `err`.** `err` is collected in
+  the base-ref pass and downgraded to `W-LEGACY-SHAPE` for a grandfathered
+  record, so a scan fault reported through it can leave the gate at exit 0 —
+  which is the silent pass this change exists to remove. `adr.sh`'s existing
+  `E-INDEX-SCAN` already uses `err_full` for this reason. The rule's own
+  verdicts (`E-TITLE-MISMATCH`, `E-GONE`) keep whichever channel they use today.
+
 ## Sites and their behaviour
 
 Each row is a distinct converted site. `.github/scripts/**` has a byte-identical
@@ -114,28 +144,50 @@ Required behaviour per site:
    `>= 2`, `E-SECTION-LIST-SCAN` names the path and status and the function
    returns.
 3. **`renumbered_elsewhere`** — returns `0` renumbered, `1` not renumbered, `2`
-   fault. Its caller reports `E-RENUMBER-SCAN` on `2` and suppresses its own
-   `E-GONE` for that record, because a scan that did not run establishes
+   fault. It loops over candidate records, so a fault on one candidate is
+   remembered and returned only if no later candidate matches; a positive match
+   outranks it. Its caller reports `E-RENUMBER-SCAN` on `2` and suppresses its
+   own `E-GONE` for that record, because a scan that did not run establishes
    neither.
-4. **`check_gate_files`** — the per-path base-ref witness reports `E-GATE-SCAN`
-   on a fault instead of skipping the path. A skipped path is silently
-   unprotected, which is the condition the whole self-protection rule exists to
-   detect.
-5. **`gate_existed_at`** — returns `0` existed, `1` did not, `2` fault. The
-   `git grep` witness captures its own status; `1` is an honest miss and `>= 2`
-   is a fault. On `2` the caller reports `E-GATE-WITNESS-SCAN` and emits
-   neither `E-GATE-EMPTY-SET` nor `I-GATE-BOOTSTRAP`.
+4. **`check_gate_files`** — on a fault witnessing one protected path, the loop
+   reports `E-GATE-SCAN` and skips that path's body, so no `E-GATE-GONE` is
+   attributed to a path whose base-ref presence is unknown. It still counts the
+   path toward `gate_path_count`, so the empty-set branch below cannot report
+   `I-GATE-BOOTSTRAP` — "no gate existed here" — off the back of a witness that
+   never ran. Skipping the path silently, as today, leaves it unprotected, which
+   is the condition the self-protection rule exists to detect.
+5. **`gate_existed_at`** — returns `0` existed, `1` did not, `2` fault. Both
+   witnesses capture their own status; for `git grep`, `1` is an honest miss and
+   `>= 2` is a fault. It runs two loops over several basenames, so the same
+   positive-outranks-fault rule applies: a fault is returned only when no
+   witness found anything. On `2` the caller reports `E-GATE-WITNESS-SCAN` and
+   emits neither `E-GATE-EMPTY-SET` nor `I-GATE-BOOTSTRAP`.
 6. **`check_title_number`** — on `>= 2`, `E-TITLE-SCAN` names the file and
-   status and the function returns, so no `E-TITLE-MISMATCH` is emitted against
-   a title that was never read. Removing that spurious second finding is called
-   for by name in issue #55.
+   status **through `err_full`** and the function returns, so no
+   `E-TITLE-MISMATCH` is emitted against a title that was never read. Removing
+   that spurious second finding is called for by name in issue #55. `err_full`
+   is required rather than incidental: this rule runs in both passes, and `err`
+   would let the base-ref pass collect the fault silently and a grandfathered
+   record downgrade it to a warning, leaving the gate green on a scan that never
+   ran.
 7. **`resolve_tracker`** — an `rg -c` fault exits with the usage status and a
    message naming the file and the status, matching the loose-probe branch
    directly below it. It must not fall through to `matches=0`, which routes a
    write to the default tracker.
+
+   `EXIT_USAGE` labels an I/O fault as a usage error, and `tracker.sh` does
+   define an `EXIT_TRANSPORT`. Matching the adjacent branch is still the choice
+   here: PR #54 established `EXIT_USAGE` for exactly this fault three lines
+   away, and re-classing both branches is a contract change for `tracker.sh`'s
+   callers that belongs in its own change, not smuggled into a sweep.
 8. **`gate_paths`** — the profile pathspec is computed into a variable and the
    listing runs only when it is non-empty, matching the `[ -n "$rel" ]` guard
-   the surrounding emissions already use.
+   the surrounding emissions already use. This closes the reachable trigger, not
+   every trigger: `git ls-tree` can still fault against a damaged object store,
+   and `gate_paths` runs inside a process substitution where it has no reporting
+   channel (ADR 0005 decision 1). That residual is accepted here and stated
+   rather than claimed closed — giving this one function a fault channel means
+   the sentinel protocol ADR 0005 rejects.
 9. **`dir_in_ref`** — already uses `git ls-tree`, but discards its status inside
    a command substitution and tests only emptiness, so a fault reads as "the
    record directory did not exist at the base ref". It returns `0` existed, `1`
@@ -172,8 +224,29 @@ the suite already uses for the migrator's section-scan test. Site 7 stubs `rg`
 the same way against `tracker-test.sh`'s existing sandbox.
 
 Sites 3, 4, 5 and 9 read git objects rather than files, so they use a
-PATH-stubbed `git` that faults only on the `ls-tree`/`grep` invocation under
-test and defers otherwise.
+PATH-stubbed `git` that faults only on the invocation under test and defers
+otherwise. Which invocation each stub keys on has to be stated, because several
+sites issue argument-similar calls:
+
+- Site 3 keys on an `ls-tree` naming a **candidate** record path, in a fixture
+  where a record was renumbered so `renumbered_elsewhere` actually reaches its
+  candidate loop.
+- Site 4 keys on an `ls-tree` naming a **protected gate file** path.
+- Site 5 cannot be isolated by the `ls-tree` witness — its arguments are of the
+  same shape as site 4's, and it only runs at all once site 4's loop found
+  nothing. It is driven through the **workflow witness** instead: a fixture
+  where the `SELF_DIR` witness legitimately finds nothing (the moved-directory
+  shape the suite already fixtures) plus a stub faulting only on
+  `git grep ... -- .github/workflows`.
+- Site 9 keys on an `ls-tree` naming the **record directory**.
+
+Site 7's fixture needs care for a different reason: with an `AGENTS.md` that
+*does* declare a tracker, `resolve_tracker` exits non-zero both before and after
+the conversion — the loose probe PR #54 already fixed catches the fault first —
+so such a test passes without the change and proves nothing. The fixture is a
+git root whose `AGENTS.md` contains **no** `issue-tracker:` line, with `rg`
+stubbed to fault only on the strict `-c` pattern. Before the conversion that
+run exits 0 and prints `github`; after it, exit 1 naming the file and status.
 
 Site 8's guard is proven by the existing `E-GATE-UNLOCATABLE` path: with the
 script outside the repo, `repo_relative` returns empty and the listing must not
@@ -184,8 +257,9 @@ revert — before it counts.
 
 ## Acceptance criteria
 
-1. Every site above branches on a captured status and reports a coded fault on
-   `>= 2` (or, for site 8, cannot reach a fault at all).
+1. Sites 1-7 and 9 branch on a captured status and report a fault on `>= 2`
+   through the channel item 6 names. Site 8 instead guards the input that made
+   its fault reachable; its residual is recorded above, not closed.
 2. No site reports a scan fault *and* its rule's own negative verdict for the
    same condition.
 3. A regression test per site, each verified to fail when its conversion is
