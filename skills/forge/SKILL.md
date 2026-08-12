@@ -220,18 +220,26 @@ names its default branch anything else.
 Then produce the two paths and check them:
 
 1. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It prints a
-   commit count and a byte count; both must be non-zero before you dispatch.
-   This is artifact validation and not a workaround — any generation step can
-   fail, and this file is the reviewer's entire input. On a zero count, report
-   it and stop: do not dispatch.
+   commit count and a byte count, and they answer different questions: the
+   commit count is whether there is anything to review, and the byte count is
+   whether the file was written at all — it comes back *empty*, not zero, when
+   the destination write failed, because the script measures the file it just
+   wrote. Neither may be missing or zero before you dispatch. This is artifact
+   validation and not a workaround: any generation step can fail, and this file
+   is the reviewer's entire input. Report and stop rather than dispatching.
 2. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
    directory `scripts/sdd-workspace` prints. Remove anything already at that
    path before dispatching, so that a file there afterwards is this dispatch's
    and not a leftover from a resumed session.
 3. After the reviewer returns, that path must exist and be non-empty. If you
-   passed a non-empty `[MINOR_LEDGER]`, read that file's triage section whatever
-   the verdict — the section, not the whole file — because on a `Yes` nothing
-   else would ever read the answer you asked for.
+   passed a non-empty `[MINOR_LEDGER]`, read its `#### Minor triage` heading
+   whatever the verdict — that heading, not the whole file — because on a `Yes`
+   nothing else would ever read the answer you asked for.
+4. Append one line to the ledger when the phase closes: the review file's path
+   and the verdict, in the shape the per-task lines use. Step 2 clears that path
+   unconditionally, so without this a resumed controller cannot tell a phase
+   that already ran from one that never did, and would delete a finished review
+   to re-run it.
 
 A missing or empty file means the return is not evidence: discard it and
 re-dispatch once, then stop and report. That single blind retry is for a
@@ -359,7 +367,13 @@ carries a finding to a subagent instructed to hand it straight back.
 
 Order the two triggers: a non-zero `plan-mandated` count goes to the human
 **before** the fix wave is dispatched, and the human's answer decides which
-labelled findings that wave carries. You no longer read the review, so you
+labelled findings that wave carries. Read those labelled findings out of
+`[REVIEW_FILE]` first — that subset, the same bounded read the Minor triage
+gets, not the whole file — and put each one in front of the human beside the
+plan text it disputes. A count alone asks them to rule on something they have
+not been shown, and leaves you nothing to name in the dispatch afterwards.
+
+You no longer read the review, so you
 cannot interleave the question and the wave by judgment as you could when a list
 passed through your hands. A wave sent first would already have changed the code
 the human was being asked about — overruling, by sequence, a call reserved for

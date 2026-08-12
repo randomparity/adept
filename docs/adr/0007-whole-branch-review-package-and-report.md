@@ -143,8 +143,12 @@ alone. The residual is that a review is destroyed by a re-review of the same
 range, which nothing in this design reads twice.
 
 **Let a reviewer that cannot write the file return its review inline instead.**
-Rejected: it saves one re-dispatch and opens a standing escape hatch from the
-budget, on the exact path where a reviewer has the most to say.
+Rejected: it opens a standing escape hatch from the budget, on the exact path
+where a reviewer has the most to say. The cost accepted in exchange is not one
+extra re-dispatch — a named write failure stops the phase, so the branch loses
+its whole-branch review outright and goes on to the rest of the pipeline
+without one. That is the price of refusing the hatch, and it is worth stating
+plainly rather than letting the rejection read as cheaper than it is.
 
 **Keep the inherited package-missing rebuild clause and disclose when it fires**
 — a line in the review file naming which diff the reviewer had, and a controller

@@ -120,10 +120,11 @@ Subagent (general-purpose):
     #### Minor (Nice to Have)
     [Naming, polish, a stale comment, an optimisation worth recording]
 
+    #### Minor triage
     Triage the Minor findings carried over from earlier tasks, listed in
-    [MINOR_LEDGER], here against the merge bar. Where that placeholder is empty,
-    say so in one line rather than omitting the section — the controller reads
-    this section, and an absent one is indistinguishable from a skipped triage.
+    [MINOR_LEDGER], against the merge bar. Where that placeholder is empty, say
+    so in one line rather than omitting this heading — the controller reads it
+    by name, and an absent heading is indistinguishable from a skipped triage.
 
     Each entry gives its `file:line`, the defect, the reason it matters, and —
     where that is not already obvious — the remedy.
