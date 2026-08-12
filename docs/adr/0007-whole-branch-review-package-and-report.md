@@ -68,7 +68,12 @@ which can be corrected as they drift.
 - **The reviewer's input grows.** The package's wide context is strictly more
   than a default `git diff`, on the most capable model in the pipeline. What
   this change buys is a bounded, non-accumulating controller context and a
-  deterministic range — not fewer tokens overall.
+  deterministic range — not fewer tokens overall. Nothing bounds the package
+  either: on a large branch the reviewer may read part of it and report on what
+  it read, and no check here can tell that apart from a complete reading. The
+  controller sees the byte count `review-package` prints, and this decision does
+  not give it a threshold to act on — a number nobody could defend would be
+  worse than none.
 - **The review reaches the controller by assertion.** The file checks discharge
   the crude failures; they are checks, not proofs, and a truncated or shallow
   report passes them. The plan-fault count is the weakest link — the reviewer's

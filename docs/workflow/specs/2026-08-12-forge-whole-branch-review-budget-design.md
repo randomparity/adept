@@ -73,6 +73,14 @@ three rules the task reviewer's equivalent section carries: open the package
 once, treat its wide context lines as the files as they now stand, and rebuild
 with `git diff --stat` / `git diff` only if the package is missing.
 
+Those three are delivery rules, and only those three cross over. The task
+reviewer's *scoping* rule — "Stay out of the rest of the codebase" — does not,
+and the section says so. This is the one review whose value is seeing what a
+task-scoped reviewer could not: the plan it was built against, the call sites of
+a contract the branch changed, the documentation that went stale. Importing the
+package while quietly importing task scope with it would narrow the review this
+change is supposed to leave intact.
+
 The `## Read-Only Review` section stays but gains one clause. It is a safety
 rule about the checkout, not about diff delivery, and the worktree escape hatch
 is the sanctioned way to lay another revision out on disk — but as written it
@@ -140,9 +148,20 @@ is a question to a human rather than a fix dispatch — invisible in a merge
 verdict and a severity count. A controller seeing a non-zero count opens the
 file, which it has to do anyway to put the finding and the plan side by side.
 
+### The template's trailing blocks
+
+`code-reviewer.md` ends with three blocks that describe the dispatch from
+outside it, and all three go stale under R1–R3 unless the same change edits
+them: the `**Placeholders:**` list gains `[DIFF_FILE]` and `[REVIEW_FILE]` and
+keeps `[BASE_SHA]` / `[HEAD_SHA]`, which the rebuild clause still needs;
+`**What comes back:**` is rewritten to the bounded return; and `## Example
+Output` is labelled as what lands in the review file, since after this change it
+is no longer an example of what comes back. A template whose footer contradicts
+its body is worse than one that never had a footer.
+
 ### The controller side (R4)
 
-Five edits in `skills/forge/SKILL.md`:
+Six edits in `skills/forge/SKILL.md`:
 
 1. The final-review dispatch instruction (currently "After the last task,
    dispatch the whole-branch review with `code-reviewer.md`, on the most capable
@@ -168,12 +187,15 @@ Five edits in `skills/forge/SKILL.md`:
    applies the same discipline to implementer reports ("Confirm the report has
    all three before re-dispatching the reviewer").
 3. The final-fix instruction (currently "send **one** fix subagent with the
-   complete list") hands over the review-file path instead of a list, and tells
-   that subagent to return a labelled plan-fault finding rather than fix it.
-   After this change the fix subagent is the only party that reads the findings,
-   and `SKILL.md` reserves the plan-versus-finding call for the human ("put both
-   in front of the human and ask which holds") — an obligation that previously
-   sat with a controller who had read the review.
+   complete list") hands over the review-file path instead of a list, and says
+   what in that file binds the subagent: Critical and Important findings are to
+   be fixed, Minor findings and Recommendations are not — Recommendations are
+   the template's own "not defects, and not obligations" — and a finding
+   labelled as a plan fault is returned to the controller rather than fixed.
+   The list the controller used to hand over carried that filtering implicitly,
+   because the controller had read the review and chose what to send. A path
+   carries none of it, and `SKILL.md` reserves the plan-versus-finding call for
+   the human ("put both in front of the human and ask which holds").
 4. "Every reviewer dispatch ends with the same report contract, so you get a
    bounded verdict rather than the whole review" narrows to what will be true:
    the whole-branch reviewer returns a bounded verdict and a path, while the task
@@ -184,6 +206,14 @@ Five edits in `skills/forge/SKILL.md`:
 5. The `### Never` bullet "Dispatch a task reviewer without a review-package
    file" widens to any reviewer, since after this change both reviewer
    dispatches require one.
+6. The `### Durable progress` section adds the branch base to what the ledger
+   records, written before the first task is dispatched. The final review's
+   package is keyed to that base, and nothing currently writes it down: the
+   per-task loop notes a base per task, and the ledger's completion lines carry
+   per-task ranges. Recovering it from Task 1's line is inference, and the whole
+   point of that section is that a controller which lost its conversation memory
+   reads the ledger instead of remembering. A base recovered wrongly produces a
+   package that looks plausible and shows the reviewer the wrong branch.
 
 ### Testing (R5)
 
