@@ -218,4 +218,75 @@ grep -qF 'git reported no local env vars' "$SCRATCH/child.out" ||
 ! grep -qF reached "$SCRATCH/child.out" ||
 	abort 'clear_git_env returned having cleared nothing'
 
+# The `-f` on the cleanup `rm`. A git fixture holds mode-444 loose objects, and
+# without `-f` rm asks to override each one whenever it has a terminal, so the
+# trap fails and the suite reddens for a developer running it by hand while
+# passing under `just verify`. run_child cannot reach this: it closes stdin
+# deliberately, and with stdin closed rm removes an unwritable file without
+# asking, so the case would pass with or without the flag. Hence the pty.
+#
+# script(1) has two incompatible argument orders and neither host is guaranteed
+# to have it, so probe with a command that must succeed and skip loudly rather
+# than redden somewhere it is missing.
+#
+# Every script(1) call closes its own stdin. script forwards its stdin to the
+# pty it allocates, so the child still sees a terminal and the case still bites;
+# what closing prevents is script draining the caller's stdin. `just test` feeds
+# the suite list to a `while read` loop on stdin, and a script that inherits it
+# swallows the remaining suites -- the run then reports the suites it reached
+# and exits 0, which is a green board for a test pass that never happened.
+pty_style=none
+if script -q /dev/null true >/dev/null 2>&1 </dev/null; then
+	pty_style=bsd
+elif script -q -e -c true /dev/null >/dev/null 2>&1 </dev/null; then
+	pty_style=util-linux
+fi
+
+if [ "$pty_style" != none ]; then
+	pty_child=$SCRATCH/pty-child.sh
+	{
+		printf '#!/usr/bin/env bash\nset -euo pipefail\n'
+		printf '. %q\n' "$helper"
+		cat <<CHILD
+fixture_init sample
+printf '%s\n' "\$SCRATCH" >$(q "$SCRATCH/pty-path")
+mkdir "\$SCRATCH/objects"
+printf 'object\n' >"\$SCRATCH/objects/loose"
+chmod 444 "\$SCRATCH/objects/loose"
+CHILD
+	} >"$pty_child"
+
+	# The child's own exit status is what this case turns on, and script(1)
+	# reports it only on util-linux and only with -e. A wrapper that records it
+	# needs neither flag nor version.
+	pty_wrapper=$SCRATCH/pty-wrapper.sh
+	cat >"$pty_wrapper" <<WRAPPER
+#!/usr/bin/env bash
+TMPDIR=$(q "$child_tmp") bash $(q "$pty_child") >$(q "$SCRATCH/pty-child.out") 2>&1
+printf '%s\n' "\$?" >$(q "$SCRATCH/pty-status")
+WRAPPER
+	chmod +x "$pty_wrapper"
+
+	case $pty_style in
+	bsd) script -q /dev/null "$pty_wrapper" >/dev/null 2>&1 </dev/null || : ;;
+	util-linux) script -q -c "$pty_wrapper" /dev/null >/dev/null 2>&1 </dev/null || : ;;
+	esac
+
+	[ -s "$SCRATCH/pty-status" ] ||
+		abort 'the child under a terminal never reported its status'
+	pty_path=$(cat "$SCRATCH/pty-path")
+	case $pty_path in
+	"$child_tmp"/sample.*) : ;;
+	*) abort "child did not report its scratch directory: $pty_path" ;;
+	esac
+	[ "$(cat "$SCRATCH/pty-status")" -eq 0 ] ||
+		abort "a read-only fixture should not redden a suite run from a terminal: $(cat "$SCRATCH/pty-child.out")"
+	[ ! -e "$pty_path" ] ||
+		abort "cleanup under a terminal stranded the read-only fixture at $pty_path"
+else
+	printf 'test-fixture-helpers-test: SKIP terminal-cleanup case: no usable\n'
+	printf 'test-fixture-helpers-test: script(1) on this host, so a pty could not\n'
+	printf 'test-fixture-helpers-test: be allocated. This run did not check it.\n'
+fi
+
 printf 'test-fixture-helpers-test: ok\n'
