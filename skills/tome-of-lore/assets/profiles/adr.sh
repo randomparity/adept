@@ -118,10 +118,17 @@ profile_migrate_markers() {
 # has any bearing on a file that is not a record. The record list the engine passes is unused
 # here; the hook takes it because a directory rule may need it.
 profile_check_directory() {
-  local readme="$RECORD_DIR/README.md"
+  local readme="$RECORD_DIR/README.md" grep_status=0
   [ -f "$readme" ] || return 0
   [ "${ADR_INDEX_POLICY:-directory}" = required ] && return 0
-  if grep -qE '^\|[[:space:]]*\[?[0-9]{4}' "$readme"; then
-    warn_full "W-INDEX-TABLE: $readme: numbered record rows duplicate the directory index"
-  fi
+  # grep exits 1 for "no match" and 2 or more for a fault it hit while scanning --
+  # an unreadable file, a bad encoding. A bare `if` collapses those into "no
+  # match", so W-INDEX-TABLE would silently go unreported on a scan that never
+  # actually completed. Branch on the captured status instead.
+  grep -qE '^\|[[:space:]]*\[?[0-9]{4}' "$readme" || grep_status=$?
+  case $grep_status in
+  0) warn_full "W-INDEX-TABLE: $readme: numbered record rows duplicate the directory index" ;;
+  1) ;;
+  *) err_full "E-INDEX-SCAN: $readme: could not scan for the directory index table (grep exit $grep_status)" ;;
+  esac
 }

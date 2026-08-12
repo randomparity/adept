@@ -49,7 +49,7 @@ available_profiles() {
 # session would route a write to the wrong tracker silently, which the tracker
 # abstraction record forbids.
 resolve_tracker() {
-	local root agents matches
+	local root agents matches loose_status
 	root=$(git rev-parse --show-toplevel 2>/dev/null) || {
 		printf 'github\n'
 		return 0
@@ -69,10 +69,23 @@ resolve_tracker() {
 	if ((matches == 0)); then
 		# A line that opens the declaration but fails the grammar is a typo,
 		# not an absence. Treating it as absence is a wrong-tracker write.
-		if rg -q '^issue-tracker:' "$agents"; then
+		# rg exits 1 for "no match" and 2 or more for a fault it hit while
+		# scanning -- an unreadable file, a bad encoding. A bare `if` here
+		# reads a fault the same as "no declaration", silently changing which
+		# tracker gets written to. Branch on the captured status instead.
+		loose_status=0
+		rg -q '^issue-tracker:' "$agents" || loose_status=$?
+		case $loose_status in
+		0)
 			die "$EXIT_USAGE" usage \
 				"malformed issue-tracker declaration in $agents"
-		fi
+			;;
+		1) ;;
+		*)
+			die "$EXIT_USAGE" usage \
+				"could not scan $agents for an issue-tracker declaration (rg exit $loose_status)"
+			;;
+		esac
 		printf 'github\n'
 		return 0
 	fi

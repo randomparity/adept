@@ -1335,6 +1335,37 @@ EOF
     chmod 755 "$d/docs/debt"
   fi
 
+  # grep exits 1 for "no match" and 2 or more for a fault it hit while scanning -- an
+  # unreadable file, a bad encoding. check_sections and check_headings_intact used to fold
+  # that fault into "no match", reporting a spurious E-SECTION-MISSING/E-HEADING-REWRITTEN
+  # (or, downstream of the same collapse, staying silent) instead of naming the scan that
+  # never completed. A record made unreadable in place drives both through the same grep
+  # call the checker makes on the working tree, on the same skip guard as the case above.
+  if [ "$(id -u)" -eq 0 ]; then
+    printf '  skip %-44s running as root; chmod 000 does not deny access\n' "record unreadable (section scan)"
+    printf '  skip %-44s running as root; chmod 000 does not deny access\n' "record unreadable (heading scan)"
+  else
+    d=$(case_dir unreadable_record)
+    b=$(base_of "$d")
+    chmod 000 "$d/docs/debt/0001-valid.md"
+    run_case "record unreadable (section scan)" 1 E-SECTION-SCAN "$d" BASE_SHA="$b"
+    run_case "record unreadable (heading scan)" 1 E-HEADING-SCAN "$d" BASE_SHA="$b"
+    chmod 644 "$d/docs/debt/0001-valid.md"
+  fi
+
+  # The same fault, once per profile rather than once per record: profile_check_directory's
+  # grep over the ADR index README used to fold a scan fault into "no numbered rows", so
+  # W-INDEX-TABLE would silently go unreported on a scan that never completed.
+  if [ "$(id -u)" -eq 0 ]; then
+    printf '  skip %-44s running as root; chmod 000 does not deny access\n' "ADR README unreadable (index scan)"
+  else
+    d=$(adr_dir index_scan_unreadable)
+    b=$(base_of "$d")
+    chmod 000 "$d/docs/adr/README.md"
+    run_case "ADR README unreadable (index scan)" 1 E-INDEX-SCAN "$d" BASE_SHA="$b" RECORD_PROFILES=adr
+    chmod 644 "$d/docs/adr/README.md"
+  fi
+
   d=$(case_dir corrupt_base_tree)
   b=$(base_of "$d")
   # Delete the tree objects the base commit needs, so git ls-tree fails on a ref that
@@ -2149,6 +2180,34 @@ SH
     failed=$((failed + 1))
     printf 'FAIL%s\n' "$verdict"
   fi
+
+  # report_leftovers' section-existence grep, the same shape as check_sections above: exit 1
+  # is "no match", exit 2 or more is a scan that never completed, and folding the two used to
+  # report a section as missing on a scan that faulted rather than one that actually ran. The
+  # file it reads is a scratch copy this process creates and removes itself, so there is no
+  # path a fixture can chmod ahead of time the way the checker cases above do. A grep stub
+  # that faults only on the one pattern this call passes -- the literal '## Status' heading,
+  # with -qxF -- and defers to the real grep for every other call in the same run reaches the
+  # same branch deterministically, the way the suite already stubs `gh` for the tracker.
+  d=$(migrator_dir migrate_section_scan_fault)
+  stub_bin="$SCRATCH/grep-fault-bin"
+  mkdir -p "$stub_bin"
+  real_grep=$(command -v grep)
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = "## Status" ]; then
+    printf 'grep: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+  fi
+done
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator section scan faults, not silently skipped" 1 E-SECTION-SCAN "$d"
+  PATH=$saved_path
 
   # The migrator's own profile resolution. A profile that satisfies the checker still has to
   # supply the migration hook, or the migrator would silently reuse the previous profile's.

@@ -108,6 +108,26 @@ status=0
 assert_exit 1 "$status" 'resolve with malformed declaration'
 assert_contains 'malformed' "$sandbox/err"
 
+# rg exits 1 for "no match" and 2 or more for a fault it hit while scanning --
+# an unreadable file, a bad encoding. A bare `if rg` used to read that fault
+# the same as "no declaration", silently changing which tracker a write
+# reaches. chmod 000 does not stop root, so this case would prove nothing
+# there rather than asserting something the environment cannot produce.
+if [[ $(id -u) -eq 0 ]]; then
+	printf 'tracker-test: skip unreadable AGENTS.md; running as root, which chmod 000 does not deny\n'
+else
+	mkdir -p "$sandbox/unreadablerepo"
+	git -C "$sandbox/unreadablerepo" init -q
+	printf 'issue-tracker: github\n' >"$sandbox/unreadablerepo/AGENTS.md"
+	chmod 000 "$sandbox/unreadablerepo/AGENTS.md"
+	status=0
+	(cd "$sandbox/unreadablerepo" && "$tracker" resolve) >"$sandbox/out" 2>"$sandbox/err" ||
+		status=$?
+	chmod 644 "$sandbox/unreadablerepo/AGENTS.md"
+	assert_exit 1 "$status" 'resolve with an unreadable AGENTS.md'
+	assert_contains 'could not scan' "$sandbox/err"
+fi
+
 # More than one declaration is an error rather than first-wins.
 mkdir -p "$sandbox/duprepo"
 git -C "$sandbox/duprepo" init -q

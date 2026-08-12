@@ -247,13 +247,26 @@ marker_only_change() {
 }
 
 check_sections() {
-  local file=$1 label=$2 section body
+  local file=$1 label=$2 section body grep_status
   while IFS= read -r section; do
     [ -n "$section" ] || continue
-    if ! grep -qxF "$section" "$file"; then
+    # grep exits 1 for "no match" and 2 or more for a fault it hit while
+    # scanning -- an unreadable file, a bad encoding. Negating a bare `if`
+    # reads a fault the same as "missing", a false E-SECTION-MISSING on a scan
+    # that never actually completed. Branch on the captured status instead.
+    grep_status=0
+    grep -qxF "$section" "$file" || grep_status=$?
+    case $grep_status in
+    0) ;;
+    1)
       err "E-SECTION-MISSING: $label: missing required section '$section'"
       continue
-    fi
+      ;;
+    *)
+      err "E-SECTION-SCAN: $label: could not scan $file for section '$section' (grep exit $grep_status)"
+      continue
+      ;;
+    esac
     body=$(section_body "$file" "$section" | tr -d '[:space:]')
     if [ -z "$body" ]; then
       err "E-SECTION-EMPTY: $label: section '$section' is empty — a heading with no content is not a record"
@@ -431,14 +444,22 @@ records_in_ref() {
 # has ever examined one, and for an ADR the H1 *is* the decision statement. Every heading line
 # present in the base-ref blob must still be present, verbatim, somewhere in the tree version.
 check_headings_intact() {
-  local tmp=$1 path=$2 heading
+  local tmp=$1 path=$2 heading grep_status
   # Fed by a process substitution on `done`, so err_full runs in the current shell rather than
   # a piped subshell, where the assignment to `failed` would be discarded.
   while IFS= read -r heading; do
     [ -n "$heading" ] || continue
-    if ! grep -qxF "$heading" "$path"; then
-      err_full "E-HEADING-REWRITTEN: $path: heading '$heading' is gone from the base ref's version — a heading is the record's claim, not prose"
-    fi
+    # grep exits 1 for "no match" and 2 or more for a fault it hit while
+    # scanning -- an unreadable file, a bad encoding. Negating a bare `if`
+    # reads a fault the same as "gone", a false E-HEADING-REWRITTEN on a scan
+    # that never actually completed. Branch on the captured status instead.
+    grep_status=0
+    grep -qxF "$heading" "$path" || grep_status=$?
+    case $grep_status in
+    0) ;;
+    1) err_full "E-HEADING-REWRITTEN: $path: heading '$heading' is gone from the base ref's version — a heading is the record's claim, not prose" ;;
+    *) err_full "E-HEADING-SCAN: $path: could not scan for heading '$heading' (grep exit $grep_status)" ;;
+    esac
   done < <(grep -E '^#+ ' "$tmp" || true)
 }
 
