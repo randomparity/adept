@@ -17,6 +17,13 @@ set -euo pipefail
 # broke, not that nothing needs checking. A tracked file that cannot be opened
 # is one this script cannot classify, and dropping it would leave it out of an
 # inventory whose whole purpose is that no script escapes the gates.
+#
+# The second one applies to every tracked file, not only to scripts, because
+# whether a file is a script is exactly what an unopenable one does not say. So
+# deleting a tracked file without staging the deletion reds `just lint`,
+# `just format-check` and the `commit-check` hook until it is staged or the file
+# is restored. That is the intended reading of an inventory that cannot be
+# trusted, not a broken gate -- the diagnostic names which of the two it is.
 
 mode='tabs'
 nul=0
@@ -89,9 +96,18 @@ while IFS= read -r -d '' path; do
 	case $source_status in
 	0) ;;
 	1) continue ;;
+	# Two remedies, so two messages. The fault is the same either way -- this
+	# script cannot say what the file is -- but "restore it" and "fix its
+	# permissions" are not the same instruction, and one message covering both
+	# reads as a broken gate to whoever hits the common one.
 	*)
-		printf 'list-shell-sources: cannot open %s to classify it; dropping it would leave a tracked script neither linted nor format-checked\n' \
-			"$path" >&2
+		if [[ -e $path ]]; then
+			printf 'list-shell-sources: cannot open %s to classify it; check the permissions on it and on its parent directories\n' \
+				"$path" >&2
+		else
+			printf 'list-shell-sources: %s is tracked but nothing is there to open; restore it, or stage the deletion\n' \
+				"$path" >&2
+		fi
 		exit 1
 		;;
 	esac

@@ -115,6 +115,8 @@ status=0
 out=$(listing "$missing" --tabs 2>&1) || status=$?
 [ "$status" -ne 0 ] ||
 	fail "missing: a tracked path absent from the worktree was dropped at exit 0: $out"
+printf '%s\n' "$out" | grep -q '^list-shell-sources: scripts/hook is tracked but nothing is there' ||
+	fail "missing: the diagnostic does not point at the deletion: $out"
 
 # A submodule's gitlink is the one non-file git emits here as a matter of
 # course, and it is a directory. It is the ordinary negative, not a fault: with
@@ -183,6 +185,8 @@ echo hi
 	chmod 644 "$unreadable_empty/scripts/hook"
 	[ "$status" -ne 0 ] ||
 		fail "unreadable_empty: an unreadable empty file was dropped at exit 0: $out"
+	printf '%s\n' "$out" | grep -q '^list-shell-sources: cannot open scripts/hook' ||
+		fail "unreadable_empty: no diagnostic naming the file: $out"
 
 	# An unsearchable parent, where the file is intact and the path to it is
 	# not. Distinct from the cases above because no permission bit on the file
@@ -197,6 +201,8 @@ echo hi
 	chmod 755 "$unsearchable/scripts/nested"
 	[ "$status" -ne 0 ] ||
 		fail "unsearchable: a file behind an unsearchable directory was dropped at exit 0: $out"
+	printf '%s\n' "$out" | grep -q '^list-shell-sources: .*scripts/nested/hook' ||
+		fail "unsearchable: no diagnostic naming the file: $out"
 fi
 
 # The lister's exit status only reaches a verdict if its consumers read it, and
