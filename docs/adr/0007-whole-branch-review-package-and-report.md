@@ -183,10 +183,10 @@ controller's remaining context decides whether the rest of the build survives.
 
 Decided while designing the implementation of issue #46
 (`docs/workflow/specs/2026-08-12-forge-whole-branch-review-budget-design.md`).
-Numbered 0007 rather than the next free number on `main`:
-`origin/feat/release-stage-decision-50` already carries an unmerged `0005`, and
-issue #66 records a second unmerged `0005` from issue #55's branch. The number
-assumes those two resolve to 0005 and 0006 as they merge; if one never lands,
-`docs/adr/` carries a gap until this record is renumbered down. Issue #72 owns
-that reconciliation — it is nobody's by default, which is why it is written down
-here rather than left as an inference.
+Numbered 0007 rather than the next free number on `main` at the time of writing.
+Two records were then contending for 0005 — issue #55's and issue #50's, the
+collision issue #66 recorded and issue #72 owns. Both have since resolved the way
+this number assumed: #55's merged as
+[0005](0005-scan-faults-are-reported-not-collapsed.md), and #50's branch
+renumbered itself to 0006. The sequence is contiguous, and the assumption is
+recorded here as one because it was made before either resolved.

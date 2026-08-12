@@ -2,6 +2,11 @@
 
 The dispatch template for handing one plan task to an implementer.
 
+Its flaky-test wording restates the policy in `references/true-seeing.md`
+instead of linking it. That duplication is deliberate: this text is pasted into
+a subagent working in the target repository, where a relative link into this
+repo's `references/` would not resolve. Do not collapse it into a link.
+
 ```
 Subagent (general-purpose):
   description: "Task N — [task name]"
@@ -43,6 +48,29 @@ Subagent (general-purpose):
 
     Run the focused test for whatever you are changing as you go. Run the full
     suite once, before you commit — not after every edit.
+
+    ## When the suite fails on something you did not touch
+
+    Do not re-run it until it comes up green. Run it once more, changing
+    nothing, and report what happened.
+
+    If it fails and then passes, the test is nondeterministic — a determinism
+    defect in its own right, and evidence of nothing in either direction: the
+    green run does not clear your code and the red run does not condemn it.
+    Report it with both outcomes and the test's name. Fixing or filing it is
+    the controller's call, not yours.
+
+    If it fails both times and you can see that your change caused it, that is
+    ordinary work: fix it, or report BLOCKED. Do not commit past it.
+
+    If it fails both times and you cannot see how your change reaches it, stop
+    there. Report the test's name and whether you touched anything it covers,
+    and say you did not classify it. Do not go hunting through the history to
+    prove it was already broken — the controller has the base commit and the
+    plan, and settling it costs far less there than here.
+
+    Whatever happened, never write "tests pass" on the strength of a re-run. A
+    suite you had to run twice is a suite you have to say you ran twice.
 
     ## Keeping the code organised
 
@@ -113,6 +141,9 @@ Subagent (general-purpose):
 
     - what you built, or attempted, if you could not finish;
     - what you tested, and what the tests said;
+    - **any test you ran more than once**, whatever the reason — both outcomes,
+      the test's name. A test that
+      failed and then passed is the one the reviewer most needs told about;
     - **TDD evidence**, where the task required TDD — the RED command with the
       failing output it produced and why that failure was the expected one, then
       the GREEN command with its passing output;
@@ -125,7 +156,8 @@ Subagent (general-purpose):
 
     - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
     - the commits you made, short SHA and subject
-    - one line on the tests, e.g. "14/14 passing, output pristine"
+    - one line on the tests, e.g. "14/14 passing, output pristine" — and name
+      any test that flaked, however clean the final run looked
     - your concerns, if you have any
     - where the report file is
 

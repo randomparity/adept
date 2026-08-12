@@ -50,10 +50,42 @@ Evidence for one claim is not evidence for a different one:
 | The bug is fixed | The original symptom, exercised, gone | The code changed in the right place |
 | Requirements met | The plan, walked line by line | The test suite being green |
 | Green and mergeable | Guardrails exit 0 **and** a clean `git status --porcelain` | Green checks with untracked files |
+| The merge published | The base-branch run's conclusion, read | The merge landing; the pull request's own green checks |
 | A subagent finished | The diff, read by you | The subagent's report saying it succeeded |
+| A red run was a fluke | The nondeterminism found, and fixed or filed | The same test passing on re-run |
 
-The last row is the one that costs most. A subagent reporting success is
+The subagent row is the one that costs most. A subagent reporting success is
 describing its intent; the diff is what it did. Read the diff.
+
+## Flaky tests
+
+A test that fails and then passes with nothing changed in between has told you
+exactly one thing: it is nondeterministic. It has not told you whether the code
+works.
+
+**A flake is a determinism defect. Fix it or report it — never spend it as
+evidence, in either direction.** The green run does not clear the code and the
+red run does not condemn it, because a test whose result turns on timing,
+ordering, or environment was not measuring the code on either pass.
+
+So when a run goes red and the next one goes green:
+
+- **Do not re-run to green.** Repeating a command until it returns the answer
+  you want is not verification, it is selecting the output. Running it again to
+  find out whether the failure repeats is diagnosis, and legitimate; reporting
+  the second result *as* the result is not.
+- **Say that it flaked.** "Tests pass" after a red run is a false claim about a
+  suite you now know to be unreliable. Report both runs and name the test.
+- **Give it an owner.** Either fix the nondeterminism — `$detect-curse` finds
+  the cause, and waiting on a condition rather than on a clock is the usual
+  repair — or file it. An unfixed flake nobody wrote down is rediscovered from
+  scratch by the next person, who will also lose an afternoon to it.
+
+A flake carries no verdict for anything else either. It is not a dependency
+defect, not a merge conflict, and not an implementer's failure to finish. Each
+of those needs its own evidence, and filing nondeterminism under one of them
+buries a real defect beneath a wrong diagnosis — the flake stays, and the thing
+you blamed gets rejected for nothing.
 
 ## Regression tests
 

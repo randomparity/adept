@@ -8,32 +8,17 @@ set -euo pipefail
 # skill inventory or cheat sheet.
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=SCRIPTDIR/test-fixture-helpers.sh
+. "$script_dir/test-fixture-helpers.sh"
+
+fixture_init check-skill-shape-test
 gate=$script_dir/check-skill-shape.sh
-tmp_prefix=${TMPDIR:-/tmp}/check-skill-shape-test.
-tmp_root=$(mktemp -d "$tmp_prefix"'XXXXXX')
-
-cleanup() {
-	case $tmp_root in
-	"$tmp_prefix"*) rm -R -- "$tmp_root" ;;
-	*)
-		printf 'check-skill-shape-test: refusing to remove unsafe path: %s\n' \
-			"$tmp_root" >&2
-		return 1
-		;;
-	esac
-}
-trap cleanup EXIT
-
-fail() {
-	printf 'check-skill-shape-test: %s\n' "$*" >&2
-	exit 1
-}
 
 # A fixture with one minimal, valid skill and a matching cheat-sheet mention.
 # Every case below starts from this baseline and adds exactly the one
 # variation the case is testing, so a failure localizes to that variation.
 new_baseline() { # name -> prints fixture root
-	local root=$tmp_root/$1
+	local root=$SCRATCH/$1
 	mkdir -p "$root/skills/example-skill" "$root/scripts" "$root/docs"
 	cat >"$root/skills/example-skill/SKILL.md" <<'SKILL'
 ---
@@ -157,7 +142,7 @@ assert_passes 'substring-adjacent names, all documented' "$collision_root"
 # `quest` would false-match inside the `quest-log`/`seek-quest` tokens' own
 # backtick-delimited text and wrongly pass; backtick-anchoring on both ends
 # is what keeps `quest` correctly flagged as undocumented.
-partial_collision_root=$tmp_root/partial-collision
+partial_collision_root=$SCRATCH/partial-collision
 cp -R "$collision_root" "$partial_collision_root"
 cat >"$partial_collision_root/docs/cheatsheet.md" <<'SHEET'
 # Cheat sheet

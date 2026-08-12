@@ -85,7 +85,11 @@ confirmation at any phase.
   `PASS` verdict (approve, then merge with `$MERGE_FLAG` per Phase 4a).
   **Never merge `WARN` or `FAIL`** — those go to the final report for human
   review (Phase 4b). Re-test each unit on the updated default branch before
-  merging it; if it then fails, mark it `SKIPPED` and do not merge.
+  merging it; if it then fails **and the failure repeats**, mark it `SKIPPED`
+  and do not merge. A failure that does not repeat is a flake, not a conflict:
+  that unit becomes `WARN` and is not merged either, but calling it `SKIPPED`
+  would pin a determinism defect on a PR that did nothing wrong (Phase 4a
+  step 5).
 - **Never `--admin`.** Do not pass `--admin` (or otherwise bypass branch
   protection) on any merge. It skips **required status checks**, not just
   approvals, so it would merge a PR whose CI is red on the strength of this
@@ -94,7 +98,8 @@ confirmation at any phase.
   dependabot is the PR author, so the Phase 4a approval counts. A refused merge is
   a `BLOCKED` outcome to report, never a reason to retry with `--admin`.
 - **Stop conditions.** **Abort the whole run** if the default-branch baseline
-  build or tests fail (Phase 1c — fix the default branch first), the repo allows
+  build or tests fail, or a baseline test flakes (Phase 1c — fix the default
+  branch first), the repo allows
   no merge method at all, or there are no open dependabot PRs (Phase 1a).
   Otherwise honor the turn budget below: at **75%** of turns, stop launching
   evaluations and merge already-`PASS` PRs (summary only); at **90%**, print the
@@ -219,9 +224,17 @@ Verify the default branch is healthy before evaluating any PR.
 3. Run the build command. If it fails, **stop the entire command**
    and report: "`$DEFAULT_BRANCH` build is broken. Fix it before
    processing dependabot PRs." Include the error output.
-4. Run the test command. If tests fail, **stop the entire command**
-   and report: "`$DEFAULT_BRANCH` tests are failing. Fix them before
-   processing dependabot PRs." Include which tests fail.
+4. Run the test command. If tests fail, run the failing tests once more
+   before reporting, and stop the entire command either way — but say
+   which of the two it was. A repeatable failure reports:
+   "`$DEFAULT_BRANCH` tests are failing. Fix them before processing
+   dependabot PRs." A failure that does not repeat reports:
+   "`$DEFAULT_BRANCH` has a flaky test: {name}. Fix the determinism
+   before processing dependabot PRs." The run still aborts, because
+   every dependency verdict below is a comparison against this
+   baseline and a baseline that cannot answer the same way twice makes
+   all of them worthless. Include which tests fail, with both outcomes
+   for a flake.
 5. Record the baseline:
    - Full dependency tree from lockfile(s) (`pip freeze`,
      `cargo tree`, `npm ls --all`, `go list -m all`, etc.)
@@ -445,8 +458,18 @@ If tests fail, check whether the same tests also fail on the
 `{default_branch}` baseline. Pre-existing failures do not count against
 this PR.
 
-If there are new test failures (pass on `{default_branch}`, fail on this
-PR), report FAIL with the failing test names and error output.
+Then check that the failure repeats. Run the failing tests once more on
+this PR's checkout, changing nothing. A test that fails and then passes
+is flaky: neither run is evidence, so it settles nothing about the
+dependency bump. Do not attribute it either — a bump can introduce
+nondeterminism as readily as expose it, and you have not tested which.
+Record it under Concerns with both outcomes and the test's name; Step 6
+assigns the verdict. Never re-run a suite until it comes up green and
+then report that as a pass.
+
+If there are new test failures that repeat (pass on `{default_branch}`,
+fail on this PR both times), report FAIL with the failing test names and
+error output.
 
 **STEP 5 — Build matrix gap analysis**
 
@@ -474,19 +497,21 @@ configuration build."
 
 **PASS** — all conditions met:
 - Build succeeds
-- All tests pass (or only pre-existing failures)
+- All tests pass (or only pre-existing failures), none of them flaking
 - No transitive dependency flags (downgrades, major bumps)
 - No high-risk matrix gaps
 
-**WARN** — build and tests pass, but concerns exist:
+**WARN** — the build succeeded and no test failed deterministically, but
+concerns exist:
 - New transitive dependencies introduced
 - Transitive dep crossed a major version boundary
 - High-risk matrix gaps
+- A test flaked, so the suite gave no deterministic answer
 - List each specific concern
 
 **FAIL** — any of:
 - Build fails
-- New test failures
+- New test failures that repeat
 - Merge conflicts
 
 Format the final report:
@@ -675,10 +700,24 @@ For each work unit with a **PASS** verdict, in order:
    git checkout pr-{next_number}
    git merge "$DEFAULT_BRANCH" --no-edit
    ```
-   Re-run the build and test commands. If the re-test fails, mark **that
-   next work unit** as **SKIPPED** with reason: "Passed independent
-   evaluation but failed after merging prior PRs. Likely conflicts
-   with: {previously merged PR numbers}." Continue past it to the
+   Re-run the build and test commands. If the re-test fails, run the failing
+   tests once more before concluding anything. This unit already passed the
+   same suite on its own, so a failure that does not repeat is a flake and not
+   a conflict — and "likely conflicts with" would then put a wrong diagnosis on
+   the record, against a PR that did nothing wrong. See
+   [true-seeing](../../references/true-seeing.md), *Flaky tests*.
+
+   If the failure does not repeat, do not mark the unit `SKIPPED`: neither run
+   is evidence, so there is no deterministic result to merge on. Mark the unit
+   `WARN` instead — same outcome for the merge, correct diagnosis on the record
+   — and put the flake in the summary table's Notes column for that PR, with
+   both outcomes and the test's name, so it reaches 5c along with the other
+   `WARN` units. The Phase 3 evaluation report is already written by now and is
+   not the place for it.
+
+   If it does repeat, mark **that next work unit** as **SKIPPED** with reason:
+   "Passed independent evaluation but failed after merging prior PRs. Likely
+   conflicts with: {previously merged PR numbers}." Continue past it to the
    following work unit.
 
 For **batched** work units, merge each PR in the batch
@@ -741,4 +780,6 @@ For each WARN, FAIL, SKIPPED, or BLOCKED PR, print the full evaluation
 report from the subagent so the user has all context needed to
 decide or fix the issue. For a BLOCKED PR, add the merge refusal message
 from Phase 4a step 3 — the evaluation report alone says `PASS` and does not
-explain why the merge did not happen.
+explain why the merge did not happen. For a `WARN` assigned at Phase 4a
+step 5, add the flake evidence — both outcomes and the test's name — for
+the same reason.

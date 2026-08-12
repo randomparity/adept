@@ -30,9 +30,10 @@ Subagent (general-purpose):
     The branch runs from [BASE_SHA] to [HEAD_SHA], packaged in [DIFF_FILE].
 
     Before you open it, create [REVIEW_FILE] empty — *Where your review goes*
-    says what that is for. Open the package once. Inside are the commits, a per-file stat, and every
-    hunk with generous context around it, and those context lines *are* the
-    files as they now stand. The package is the diff for this range: do not
+    says what that is for. Open the package once. Inside are the commits, a
+    per-file stat, and every hunk with generous context around it, and those
+    context lines *are* the files as they now stand. The package is the diff
+    for this range: do not
     re-derive it, and do not fall back to running `git diff` yourself. If the
     package is not there, you have nothing to review: send back
     `PACKAGE_MISSING` and stop.
@@ -80,7 +81,8 @@ Subagent (general-purpose):
     - Do the tests exercise real behaviour rather than the mocks around it?
     - Are the edge cases covered?
     - Where components have to work together, is that pairing tested?
-    - Is the suite green?
+    - Is the suite green, and green on the first run? A suite that needed a
+      second attempt is a finding, not a pass.
 
     **Production readiness:**
     - If a schema moved, how does the data already out there get across?
