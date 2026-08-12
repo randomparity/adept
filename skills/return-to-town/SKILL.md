@@ -55,11 +55,10 @@ publish, a release tag, a deploy — fires *after* the merge, and `$deliver`'s
 green CI ran against the pull request head *before* it, so neither covers it.
 Nothing here reads that run. Report the merge landing, not everything
 downstream of it, and say plainly that the base-branch run the merge triggered
-is unverified, so whoever owns it knows to look. Say it whatever the repository
-appears to publish: nothing establishes that it does not, and a line spent on a
-repository that publishes nothing costs less than the silence does on one that
-does. See [true-seeing](../../references/true-seeing.md), *Every claim needs
-its own command*.
+is unverified, so whoever owns it knows to look. Say it even where the
+repository looks like it publishes nothing — nothing here establishes that it
+does not. See [true-seeing](../../references/true-seeing.md), *Every claim
+needs its own command*.
 
 **Caller contract.** If invoked inside `$quest`, completing the cleanup means
 the issue is done — the change landed, and what the merge triggered on
