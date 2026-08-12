@@ -30,7 +30,10 @@ requirements implicitly include this section.
 - **`rg` in any committed script passes `--no-config`.**
 - **Guardrail:** `just verify` green at every commit, run **bare** — no pipes, no
   `|| true`. `just commit-check` runs on every commit via prek.
-- **Never `rm -rf`.** Use `git rm` for tracked deletions.
+- **Never `rm -rf` against the checkout or as an interactive command**; use
+  `git rm` for tracked deletions and `trash` for scratch trees. A fixture's own
+  `mktemp -d` teardown is the exception and follows
+  `tests/fixtures/forge/sdd-workspace-test.sh:29`.
 - **Public repo.** No absolute host paths in committed files; plans and specs name
   the checkout root as `$WORK`. `scripts/check-public-safety.sh` enforces it.
 - **Threshold:** below **2% containment** and **no shared run over 16 tokens**,
@@ -199,8 +202,17 @@ skills/forge/scripts/review-package BASE HEAD [OUTFILE]
 ```
 
 `tests/fixtures/forge/sdd-workspace-test.sh` is the shape to follow: it clears
-the local Git environment, builds a scratch repo under `mktemp -d`, and cleans up
-on exit. Read it before writing these.
+the local Git environment (`git rev-parse --local-env-vars`), builds a fresh repo
+per case under `mktemp -d`, and cleans up on exit. Read it before writing these.
+
+**Every case in both suites runs with cwd inside its own fixture repository** —
+built the way that suite's `new_repo` builds one at lines 43-56: `mktemp -d`,
+`git init -q`, explicit `user.email` and `user.name`, a seed commit, and
+`pwd -P` because git reports a resolved toplevel and macOS `TMPDIR` sits under a
+symlink. No case runs any of the three scripts from the checkout root.
+`review-package` resolves `BASE` and `HEAD` from ambient git state, so a case
+that forgets this passes or fails on adept's own history rather than the
+fixture's.
 
 ### What the suites may assert
 
@@ -221,9 +233,8 @@ wording. Assert:
   heading depth matches;
 - **the default-`OUTFILE` case**, one per suite, invoked with two arguments only:
   the resolved path equals `<sdd-workspace stdout>/task-<N>-brief.md` and
-  `<sdd-workspace stdout>/review-<base7>..<head7>.diff` respectively. Run it with
-  cwd inside the scratch repository and Git's local environment cleared — it is
-  the only case that writes `.agent/` state, and Tasks 3 and 4 both carry a
+  `<sdd-workspace stdout>/review-<base7>..<head7>.diff` respectively. It is the
+  only case that writes `.agent/` state, and Tasks 3 and 4 both carry a
   default-path acceptance criterion that nothing else covers;
 - **that `task-brief` exit 3 leaves an empty `OUTFILE`.** The awk redirect at
   `skills/forge/scripts/task-brief:36` runs before the emptiness test at `:38`,
@@ -296,6 +307,9 @@ they land in the candidate set and are held to the same containment bar.
   are written down.
 - No assertion references a diagnostic message's text.
 - Both are registered in `scripts/git-fixture-isolation-test.sh`.
+- Both suites still pass when the harness itself is invoked from outside any
+  repository (`cd / && $WORK/tests/fixtures/forge/<suite>`) — the cheapest proof
+  that no case reads ambient git state.
 - `just verify` green.
 
 ---
@@ -604,17 +618,24 @@ the only step that exercises the dispatch contract rather than inspecting it.
 
 ### Steps
 
-1. **Build the smoke fixtures.** `git init $SCRATCH/smoke-repo`, two commits, and
-   a plan file containing two tasks. Then run the *rewritten* scripts there to
-   produce the inputs — which doubles as an end-to-end check of Tasks 3 and 4:
+1. **Build the smoke fixtures.** `git init $SCRATCH/smoke-repo`, set
+   `user.email` and `user.name` on it, and make two commits — the second adding a
+   `plan.md` containing two tasks. Then, **with cwd `$SCRATCH/smoke-repo`**, run
+   the *rewritten* scripts by absolute path, which doubles as an end-to-end check
+   of Tasks 3 and 4:
 
-       skills/forge/scripts/task-brief     $SCRATCH/smoke-repo/plan.md 1 $SCRATCH/brief.md
-       skills/forge/scripts/review-package HEAD~1 HEAD $SCRATCH/review.diff
+       cd $SCRATCH/smoke-repo
+       $WORK/skills/forge/scripts/task-brief     plan.md 1 $SCRATCH/brief.md
+       $WORK/skills/forge/scripts/review-package HEAD~1 HEAD $SCRATCH/review.diff
 
-   Fill `[BRIEF_FILE]` with `$SCRATCH/brief.md`, `[DIFF_FILE]` with
-   `$SCRATCH/review.diff`, `[REPORT_FILE]` with a path under `$SCRATCH`,
-   `[GLOBAL_CONSTRAINTS]` with this plan's *Global Constraints* section, and
-   `[MODEL]` with whatever model the session dispatches.
+   Then **derive the placeholder set rather than working from a list** — re-run
+   `rg -o --no-config '\[[A-Z_]{2,}\]' skills/forge/task-reviewer-prompt.md | sort -u`
+   against the *rewritten* file and fill every token it prints. As of now that is
+   seven: `[BRIEF_FILE]` → `$SCRATCH/brief.md`; `[DIFF_FILE]` →
+   `$SCRATCH/review.diff`; `[REPORT_FILE]` → a path under `$SCRATCH`;
+   `[GLOBAL_CONSTRAINTS]` → this plan's *Global Constraints* section; `[MODEL]` →
+   the dispatching model; and `[BASE_SHA]` / `[HEAD_SHA]` → the smoke repo's two
+   commit SHAs.
 2. Dispatch one implementer subagent with the rewritten
    `skills/forge/implementer-prompt.md` on the throwaway task. Require: its final
    message carries exactly one of `DONE` / `DONE_WITH_CONCERNS` / `BLOCKED` /
@@ -633,6 +654,8 @@ the only step that exercises the dispatch contract rather than inspecting it.
 ### Acceptance criteria
 
 - Both dispatches produced parseable output against the gated vocabulary.
+- The dispatched prompt text contains no remaining `[A-Z_]{2,}` bracket token —
+  an unfilled placeholder makes the smoke prove nothing.
 - Whole-tree scan recorded, with the file count and every above-2% file named.
 - If any of the six missed, **stop**: the spec's §2 fallback applies, Task 9's
   first two bullets do not happen, and ADR 0003 is revised to say so.
@@ -683,9 +706,13 @@ measurement exists.
    columns from Task 8. **Also update the candidate-set count** — the record says
    "every tracked file — 129 of them", and this change adds two fixtures, so that
    number is stale. Set it to what Task 8 step 4 recorded, and re-check the "Five
-   files sit above the line" sentence against the same sweep. `skills/gauntlet/`
-   and the README and `CLAUDE.md` edits land after the scan, but all three are
-   first-party prose *removal* and cannot raise a figure. Drop the exemption column entirely if no exemption was
+   files sit above the line" sentence against the same sweep. Then append one sentence to that paragraph **naming the deltas that
+   land after the scan** — the deleted `licenses/superpowers.LICENSE`, the README,
+   `CLAUDE.md` and `skills/gauntlet/SKILL.md` edits, and the table fill itself —
+   and say whether the recorded count is the as-scanned (pre-deletion) figure or
+   the post-deletion one. The spec requires this; the prose edits are first-party
+   *removal* and the deletion is a deletion, so none can raise a figure, but a
+   reader cannot verify that without knowing which tree was counted. Drop the exemption column entirely if no exemption was
    needed. Change `## Status` from `Proposed` to `Accepted (2026-08-11)` and
    remove the staging paragraph beneath it.
 6. **Close-out sweep:** `rg -n --no-config -i 'superpowers|licenses/'`. A hit in
@@ -731,9 +758,13 @@ because "R4 does not happen" is not an instruction anyone can follow.
    any of the six keeps its citation" paragraph is replaced by what happened —
    which files kept their citation and why — so the merged record states an
    outcome rather than a branch.
-5. Re-title the record if the title no longer describes it. "Close the upstream
-   attribution" is wrong for a partial close; `git mv` to a title that fits,
-   keeping the `0003-` number.
+5. **Do not rename the file.** "Close the upstream attribution" reads wrong for a
+   partial close, but ADR 0002's supersession banner names
+   `0003-close-the-upstream-attribution.md` by path, and the `adr` profile's
+   `check_supersede_link` resolves it — a `git mv` dangles that banner and fails
+   `E-SUPERSEDE-DANGLING` in the very `just records` run step 6 performs. Say what
+   happened in the H1's wording and the record's own prose instead; the filename
+   is a path, not a claim.
 6. Close-out sweep, `just verify` bare, and
    `BASE_SHA=$(git rev-parse origin/main) just records`.
 7. Commit: `feat: narrow the upstream attribution to the files that kept it`.
@@ -743,6 +774,8 @@ because "R4 does not happen" is not an instruction anyone can follow.
 - Every file that missed is still cited in both the README and ADR 0003, and the
   notice is still present.
 - ADR 0003 carries no conditional and no `*pending*` cell.
+- `BASE_SHA=... just records` reports no `E-SUPERSEDE-DANGLING`: ADR 0002's
+  banner still resolves.
 - `just verify` green.
 
 ---
@@ -750,9 +783,18 @@ because "R4 does not happen" is not an instruction anyone can follow.
 ## Cleanup
 
 `$SCRATCH` holds the upstream clone, the checker, the mutant copies and the smoke
-repository. Remove it with `trash` (never `rm -rf`) once ADR 0003's table is
-filled, and confirm nothing from it reached the checkout: `git status` clean, and
-no `containment.py`, `runs.py`, `sweep.py`, `upstream-sp/`, `mutants/` or
+repository.
+
+**Keep it until the pull request merges.** Branch review, `$detect-evil`, CI and
+the merge itself can all force a change to one of the six, and any such change
+re-measures that file — against the surviving instrument if it is still there, or
+by re-running Task 0 in full, seven-figure validation included, if it is not.
+Deleting the checker at Task 9 makes the cheap path unavailable exactly when it is
+most likely to be needed.
+
+After the merge, remove it with `trash` (never `rm -rf` as an interactive
+command), and confirm nothing from it reached the checkout: `git status` clean,
+and no `containment.py`, `runs.py`, `sweep.py`, `upstream-sp/`, `mutants/` or
 `smoke-repo/` anywhere under the repository root.
 
 ## Rollback
@@ -761,10 +803,10 @@ The hazard is one-directional: Task 9's deletion of the notice is licensed by
 Tasks 2–7's measurement, so the notice must never outlive the rewrite that
 justified removing it.
 
-**Pre-merge and unpushed.** Revert in reverse task order, Task 9 first —
-ordinary history editing on a feature branch. **Once the branch is pushed**, both
-force pushes (including `--force-with-lease`) and `git reset --hard` are denied by
-settings policy: revert forward with `git revert` in reverse task order instead.
+**Pre-merge.** `git revert` in reverse task order, Task 9 first — whether or not
+the branch has been pushed. There is no unpushed carve-out: `git reset --hard`
+and every force-push form, `--force-with-lease` included, are denied
+unconditionally by settings policy. Revert forward, always.
 
 **Post-merge.** Revert the merge commit as a unit — `git revert -m 1 <merge>` —
 which restores the rewrites and the notice together. Reverting a single rewrite
