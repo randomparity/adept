@@ -407,12 +407,17 @@ re-run suites, and one real session's final-review wave cost more than all its
 tasks combined.
 
 Say in that dispatch what binds it, because a path carries none of the filtering
-a hand-picked list did: Critical and Important findings are to be fixed, Minor
-findings and Recommendations are not, and a finding labelled `plan-mandated` is
-returned to you rather than fixed — unless you name it in the dispatch as one
-the human has already upheld, in which case it is fixed like any other. Without
-that qualifier the two rules deadlock: the wave carries an upheld finding to a
-subagent instructed to hand it straight back.
+a hand-picked list did: Critical and Important findings are to be fixed;
+Recommendations are not; and Minor findings are not *unless you name them in the
+dispatch*, which is what you have just read the triage section to decide. A
+finding labelled `plan-mandated` is likewise returned to you rather than fixed,
+unless you name it as one the human has already upheld.
+
+Both "unless you name it" clauses exist for the same reason. The list you used
+to hand over was composed after you read the whole review, so a triage-promoted
+Minor finding or a human-upheld plan fault could ride along in it. A path
+carries neither, and without the escape the two rules deadlock — the wave
+carries a finding to a subagent instructed to hand it straight back.
 
 Order the two triggers: a non-zero `plan-mandated` count goes to the human
 **before** the fix wave is dispatched, and the human's answer decides which

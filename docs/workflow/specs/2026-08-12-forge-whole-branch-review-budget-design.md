@@ -272,12 +272,19 @@ Five edits in `skills/forge/SKILL.md`:
    complete list") hands over the review-file path instead of a list, and says
    what in that file binds the subagent: Critical and Important findings are to
    be fixed, Minor findings and Recommendations are not — Recommendations are
-   the template's own "not defects, and not obligations" — and a finding
-   labelled `plan-mandated` is returned to the controller rather than fixed,
-   *unless the dispatch names it as one the human has already upheld*. That
-   qualifier is what keeps the rule and the ordering below from deadlocking:
-   without it the wave carries an upheld finding to a subagent instructed to
-   hand it straight back.
+   the template's own "not defects, and not obligations" — and Minor findings
+   are not *unless the dispatch names them*, which is what the controller has
+   just read the triage section to decide. A finding labelled `plan-mandated` is
+   likewise returned rather than fixed, *unless the dispatch names it as one the
+   human has already upheld*.
+
+   Both escapes exist for one reason. The hand-picked list was composed after
+   the controller read the whole review, so a triage-promoted Minor finding or a
+   human-upheld plan fault could ride along in it; a path carries neither.
+   Without the escapes the rules deadlock, and the design would have preserved
+   the *reading* of the Minor triage while dropping any way to act on it — the
+   same failure one step further along. Setting a merge-bar policy is no part of
+   this change.
    The list the controller used to hand over carried that filtering implicitly,
    because the controller had read the review and chose what to send. A path
    carries none of it, and `SKILL.md` reserves the plan-versus-finding call for

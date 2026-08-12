@@ -99,7 +99,10 @@ which can be corrected as they drift.
   would rather say so than let it read as one.
 - The final review is destroyed with the worktree, where an inline review
   persisted in the session transcript. Its readers during the run can reach it
-  while the worktree exists.
+  while the worktree exists, and no automated consumer reads it at all —
+  `WORK:REVIEW` is built from `$trial-loop`'s summary, not this file. This is a
+  regression this decision causes rather than inherits, so it gets an owner
+  rather than a line here: issue #75.
 - The two reviewer templates still return different shapes — the branch reviewer
   a verdict and a path, the task reviewer its whole review. `SKILL.md`'s claim
   that every reviewer dispatch returns a bounded verdict is narrowed to what is
