@@ -1,32 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=scripts/test-fixture-helpers.sh
+. "$script_dir/test-fixture-helpers.sh"
+
 # Hooks export repository-local selectors that override every fixture's `git -C`.
 # Clear Git's reported set before this suite creates or inspects a disposable repository.
-while IFS= read -r variable; do
-	[[ -n $variable ]] && unset "$variable"
-done < <(git rev-parse --local-env-vars)
+clear_git_env
+fixture_init verify-push-test
 
-ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+ROOT=$(cd "$script_dir/.." && pwd)
 VERIFIER="$ROOT/scripts/verify-push.sh"
-SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/verify-push-test.XXXXXX")
 REPO="$SCRATCH/repo"
 BIN="$SCRATCH/bin"
 LOG="$SCRATCH/just.log"
 JUST_REAL=$(command -v just)
-
-cleanup() {
-	case $SCRATCH in
-	"${TMPDIR:-/tmp}"/verify-push-test.*) rm -R "$SCRATCH" ;;
-	*) printf 'verify-push-test: refusing cleanup: %s\n' "$SCRATCH" >&2 ;;
-	esac
-}
-trap cleanup EXIT
-
-fail() {
-	printf 'verify-push-test: %s\n' "$*" >&2
-	exit 1
-}
 
 assert_hook_env_isolation() {
 	local hook_repo hook_index child_status
