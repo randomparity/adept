@@ -1,5 +1,7 @@
 # adept
 
+![adept](docs/assets/adept-logo-grimoire.png)
+
 Development-workflow skills for Claude Code and Codex, distributed as a plugin.
 This repository is its own marketplace: `.claude-plugin/marketplace.json` declares
 one plugin whose source is `./`, and Codex reads the same file.
