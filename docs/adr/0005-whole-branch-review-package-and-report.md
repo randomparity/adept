@@ -28,64 +28,100 @@ one without reading the review.
 ## Decision
 
 The whole-branch reviewer is handed a `[DIFF_FILE]` built by
-`scripts/review-package BASE HEAD` and a `[REPORT_FILE]` under the
+`scripts/review-package BASE HEAD` and a `[REVIEW_FILE]` under the
 `scripts/sdd-workspace` directory, both keyed to the abbreviated commit range so
 a re-review after a fix wave writes new files rather than over the ones it
-should be compared against. The full review goes to the report file with its
+should be compared against. The full review goes to `[REVIEW_FILE]` with its
 rubric, severity vocabulary, and section structure unchanged.
+
+The slot is `[REVIEW_FILE]`, not `[REPORT_FILE]`. Both sibling templates already
+use `[REPORT_FILE]`, and in `task-reviewer-prompt.md` it means *the implementer's
+report you read*. A controller filling all three templates would otherwise meet
+one placeholder name carrying two opposite obligations.
 
 The return message is capped at fifteen lines — the same number
 `implementer-prompt.md` uses, so the skill states one cap rather than two — and
-carries exactly five things: the merge verdict; the finding counts by grade; one
-line per Critical finding, or none where there are none; one line for any place
-the fault lies in the plan rather than the code; and the report path. Where the
-Critical lines alone would breach the cap, the reviewer names the two most
-severe, counts the rest, and says it truncated.
+carries exactly four things: the merge verdict; the finding counts by grade; one
+line for any place the fault lies in the plan rather than in the code following
+it; and the review-file path. No per-finding lines: the party that acts on a
+finding is the fix subagent, which is handed the path.
 
-The controller hands the report path to the fix subagent rather than a findings
-list it had to read first.
+The plan-fault line is the reason the return is a fixed shape rather than a line
+budget the reviewer fills as it sees fit. It is the only one of the controller's
+three next actions whose trigger is not recoverable from a verdict and a count,
+and the only one whose answer is a question to a human rather than a dispatch.
 
-The plan-fault line is the reason the return is a fixed five-item shape rather
-than a line budget the reviewer fills as it sees fit. It is the only outcome
-whose next action is a question to a human, and it is not recoverable from a
-verdict and a count.
+The controller hands the review-file path to the fix subagent rather than a
+findings list it had to read first — and confirms the file exists and is
+non-empty before doing so, because a review that arrives as a path plus a count
+is a review the controller has not seen.
 
 ## Consequences
 
 - The controller's post-review context is a verdict, two counts, and two paths.
   The findings reach the party that acts on them — the fix subagent — by path.
-- The final review is no longer readable from the transcript. It is in the
-  gitignored workspace, which does not survive the worktree. This is a real
-  loss, and a small one: an inline review did not survive a compaction either,
-  and the report file survives one.
-- `code-reviewer.md` and `task-reviewer-prompt.md` become structurally parallel,
-  leaving task-scope-versus-branch-scope as the only difference a reader carries.
+- **The review now reaches the controller by assertion.** A reviewer that
+  returns `Critical 2` and writes nothing is indistinguishable, from the
+  controller's side, from one that wrote a full report; an inline review could
+  not fail that way. The existence-and-non-empty check in the Decision is what
+  discharges this, and it is a check, not a proof: a truncated or shallow report
+  still passes it.
+- The final review is no longer readable from the transcript, and the loss is
+  larger than a straight move. An inline review persisted in the session
+  transcript; the review file is destroyed with the worktree, since the `$forge`
+  workspace is gitignored and local. Accepted on the grounds that the final
+  review's readers are the fix subagent and, if anyone, a human during the run —
+  both of whom can reach the file while the worktree exists — and that nobody
+  reads a final review after the branch merges.
+- `code-reviewer.md` and `task-reviewer-prompt.md` converge on the same package
+  section and keep the same read-only rule, but their **return shapes now
+  differ**: the branch reviewer writes a file and returns a verdict, while the
+  task reviewer's message still is its review. That is deliberate — the task
+  review is already bounded by its scope — and it leaves two near-duplicate
+  templates that are kept in sync by reading rather than by any mechanism.
+  Merging them would mean editing `task-reviewer-prompt.md`, which issue #46
+  excludes.
 - A reviewer that ignores the cap is not detected by anything. Anatomy rule 4
   forbids a gate that asserts on prose, and the cap is prose in a template. The
   identical cap in `implementer-prompt.md` has the same property.
 
 ## Considered & rejected
 
-**Cap the return but keep the inline `git diff`.** Rejected: it fixes the
-controller's cost and leaves the reviewer's. An unbounded diff with no context
-around the hunks is what sends the reviewer into the tree to see a hunk's end —
-the specific waste the `-U10` package exists to remove, and the more expensive
-half, since this dispatch runs on the most capable model.
+**Cap the return but keep the inline `git diff`.** Rejected: it leaves the
+reviewer resolving its own range and reading a `-U3` diff, where a hunk whose end
+it cannot see costs a tree excursion. The package is not a token saving on the
+reviewer's side — `-U10` is strictly more input than `git diff`'s default — it
+trades input tokens for determinism and fewer round trips: the controller's own
+known-good range rather than whatever the reviewer types, commits and per-file
+stat alongside the hunks, and a stated rebuild path when the package is missing.
+It is also the delivery mechanism the task reviewer already uses, so keeping a
+second one buys a divergence and nothing else.
 
-**Package the diff but keep the review inline.** Rejected for the mirror reason:
-the review is the part that stays resident in the controller's context and is
-re-read on every later turn of the build. The reviewer's cost is paid once; the
-controller's is paid repeatedly.
+**Package the diff but keep the review inline.** Rejected: the review is the part
+that stays resident in the controller's context and is re-read on every later
+turn of the build. The reviewer's cost is paid once; the controller's is paid
+repeatedly.
 
 **Let the reviewer return whatever fits in fifteen lines.** Rejected: a line
 budget with no shape loses the plan-fault case, which reads like an ordinary
 finding and is the one outcome the controller must not answer with a fix
-dispatch. Naming the five items costs nothing and makes the omission visible.
+dispatch. Naming the four items costs nothing and makes the omission visible.
+
+**Include one line per Critical finding in the return.** Rejected: it is the one
+item of the shape that no controller decision needs — the fix dispatch reads the
+file — and it is the only unbounded one, which would put the cap and the shape in
+conflict on exactly the branches that have the most to report.
 
 **Have the reviewer return the full review and let the controller write it to a
 file.** Rejected: the review passes through the controller's context on the way,
 which is the entire cost being removed. Report-file indirection only works when
 the subagent writes it.
+
+**Do nothing.** Rejected, but it is the cheapest option and worth stating why it
+loses: the cost is invisible per-run — the build still works, and nothing goes
+red — so it is paid on every party-mode run forever, on the most expensive
+dispatch, in the phase where the controller's remaining context decides whether
+the rest of the build survives.
 
 **Drop the whole-branch review; `$trial-loop` reviews the branch at `$quest`
 step 6 anyway.** Rejected: it is not this issue's question, and the two are not
@@ -93,11 +129,11 @@ substitutes — the whole-branch review judges the branch against *the plan it w
 built from*, which `$trial-loop` is never given. Removing a review to avoid
 budgeting it also trades a bounded cost for an unbounded risk.
 
-**Give the report file a fixed name.** Rejected: `review-package` already keys
+**Give the review file a fixed name.** Rejected: `review-package` already keys
 its default destination to the range, and for the stated reason — a re-review
 after a fix wave must not overwrite the reading it is meant to be compared
-against. A second artifact of the same review, keyed differently, would lose
-that on the half that holds the findings.
+against. A second artifact of the same review, keyed differently, would lose that
+on the half that holds the findings.
 
 ## Provenance
 

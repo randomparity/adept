@@ -21,24 +21,25 @@ does: "Hand artifacts over as **files**, not pasted text" and "Every reviewer
 dispatch ends with the same report contract, so you get a bounded verdict rather
 than the whole review."
 
-Two costs follow. The reviewer's own context absorbs an unbounded
-`git diff BASE..HEAD` with no wide context around the hunks, so a hunk whose end
-it cannot see sends it into the tree. And the controller's context absorbs the
-entire review — Strengths, three severity buckets, Recommendations, Assessment —
-which then stays resident and is re-read on every later turn of the build.
+Two costs follow, and they are different in kind. On the reviewer's side the
+diff is whatever range it resolves itself, at `git diff`'s default three lines
+of context, so a hunk whose end it cannot see costs a tree excursion. On the
+controller's side the entire review — Strengths, three severity buckets,
+Recommendations, Assessment — lands in context and stays resident, re-read on
+every later turn of the build.
 
 ## Requirements
 
 - **R1** — The whole-branch reviewer is handed a review-package path produced by
   `skills/forge/scripts/review-package BASE HEAD`, rather than running
   `git diff --stat` and `git diff` itself.
-- **R2** — The whole-branch reviewer writes its detailed review to a report file
-  at a path the controller supplies.
+- **R2** — The whole-branch reviewer writes its detailed review to a file at a
+  path the controller supplies.
 - **R3** — The reviewer's inline return message carries a hard cap, the way
   `implementer-prompt.md` caps its return.
 - **R4** — `SKILL.md`'s final-review dispatch step tells the controller to
   generate the package and supply both paths, and its final-fix dispatch step
-  hands the fix subagent the report path rather than a findings list the
+  hands the fix subagent the review-file path rather than a findings list the
   controller had to read.
 - **R5** — `just verify` is green.
 
@@ -59,6 +60,13 @@ closed. The script keys its default destination to the abbreviated range, so a
 re-review after a fix wave writes a new file rather than overwriting the reading
 it should be compared against.
 
+What this buys is determinism and fewer round trips rather than fewer tokens:
+the range is the controller's own known-good one instead of whatever the
+reviewer types, the commits and per-file stat arrive with the hunks, and `-U10`
+means a hunk's end is visible without opening the tree. `-U10` is strictly more
+input than a default `git diff`; the saving is in what the reviewer does *not*
+have to go and read.
+
 `code-reviewer.md`'s `## Git Range to Review` section becomes
 `## The change you are judging`, naming `[DIFF_FILE]` and carrying the same
 three rules the task reviewer's equivalent section carries: open the package
@@ -69,9 +77,9 @@ The `## Read-Only Review` section stays. It is a safety rule about the checkout,
 not about diff delivery, and the worktree escape hatch is the sanctioned way to
 lay another revision out on disk.
 
-### The report file (R2)
+### The review file (R2)
 
-The controller supplies `[REPORT_FILE]`. Its path lives in the `$forge`
+The controller supplies `[REVIEW_FILE]`. Its path lives in the `$forge`
 workspace that `scripts/sdd-workspace` resolves — the same directory the briefs,
 implementer reports, and review packages already occupy, and the only place a
 write is covered by the self-ignoring `.gitignore` that keeps this phase's
@@ -82,6 +90,12 @@ The path is keyed to the same abbreviated range as the package —
 alongside its predecessor instead of over it, matching what `review-package`
 already does for the same reason.
 
+The slot is named `[REVIEW_FILE]` rather than `[REPORT_FILE]` because both
+sibling templates already use the latter, and in `task-reviewer-prompt.md` it
+means *the implementer's report you read*. One name carrying two opposite
+obligations across three templates a controller fills in the same session is a
+collision worth spending a word on.
+
 Everything the template's `## Output Format` section currently describes —
 Strengths, the three severity buckets, Recommendations, Assessment — goes to
 that file unchanged. This is a change of destination, not of rubric.
@@ -89,32 +103,32 @@ that file unchanged. This is a change of destination, not of rubric.
 ### The bounded return (R3)
 
 Fifteen lines, the same cap `implementer-prompt.md` sets, so the skill states
-one number rather than two. The message carries:
+one number rather than two. The message carries exactly four things:
 
 - the verdict — `Ready to merge? Yes | No | With fixes`;
 - the counts, by grade: `Critical N, Important N, Minor N`;
-- one line per Critical finding — its `file:line` and what is broken — and
-  nothing at all when there are none;
 - one line for any place the fault lies in the plan rather than in the code
-  following it, because that is the finding the controller cannot act on by
-  dispatching a fix;
-- where the report file is.
+  following it;
+- where the review file is.
 
-Where the Critical lines alone would breach fifteen, the reviewer gives the two
-most severe, the count of the rest, and says it truncated — a silent truncation
-would read as a shorter list of Criticals than the branch has.
+No per-finding lines. The controller's next action is one of three — dispatch a
+fix subagent, ask the human which of a finding and the plan holds, or proceed —
+and the party that needs a finding's detail is the fix subagent, which is handed
+the path. A per-Critical list would also be the one unbounded item in a capped
+message, putting the cap and the shape in conflict on exactly the branches with
+the most to report.
 
-The plan-fault line is the one item that is not merely a summary of the report.
+The plan-fault line is the one item that is not a summary of the review.
 `SKILL.md` already singles that case out ("Where a finding and the plan
 disagree, neither one wins by default and neither is yours to overrule: put both
 in front of the human and ask which holds"), and it is the one outcome whose
 next action is a question to a human rather than a fix dispatch. Leaving it only
-in the report would mean the controller could not tell a fix-and-continue from a
-stop-and-ask without opening the file.
+in the file would mean the controller could not tell a fix-and-continue from a
+stop-and-ask without opening it.
 
 ### The controller side (R4)
 
-Three edits in `skills/forge/SKILL.md`:
+Four edits in `skills/forge/SKILL.md`:
 
 1. The final-review dispatch instruction (currently "After the last task,
    dispatch the whole-branch review with `code-reviewer.md`, on the most capable
@@ -122,10 +136,17 @@ Three edits in `skills/forge/SKILL.md`:
    branch base explicitly — the endpoint noted before the *first* task, not the
    per-task base, which is the mistake the per-task loop's own step 5 warns
    about in the other direction.
-2. The final-fix instruction (currently "send **one** fix subagent with the
-   complete list") hands over the report path instead of a list. A list the
+2. The controller confirms the review file exists and is non-empty before acting
+   on the return. The review now reaches it as a path and a count, so a reviewer
+   that wrote nothing is otherwise indistinguishable from one that wrote a full
+   report — the failure mode this change creates, and the one it has to
+   discharge. `SKILL.md` already applies the same discipline to implementer
+   reports ("Confirm the report has all three before re-dispatching the
+   reviewer").
+3. The final-fix instruction (currently "send **one** fix subagent with the
+   complete list") hands over the review-file path instead of a list. A list the
    controller has to hold is exactly the resident cost this change removes.
-3. The `### Never` bullet "Dispatch a task reviewer without a review-package
+4. The `### Never` bullet "Dispatch a task reviewer without a review-package
    file" widens to any reviewer, since after this change both reviewer
    dispatches require one.
 
@@ -144,14 +165,18 @@ reviewer" is a claim only a reader can settle.
   two paths instead of a full review. The findings are not lost; they are one
   file read away, and the party that needs them in full is the fix subagent,
   which reads the file directly.
-- A human who wants to read the final review reads it out of the workspace
-  rather than out of the transcript. That directory is gitignored and local, so
-  the review does not survive the worktree — acceptable, because it never
-  survived a compaction either.
-- `code-reviewer.md` and `task-reviewer-prompt.md` end up structurally parallel:
-  same package section, same read-only rule, same report-and-cap contract. That
-  parallel is what makes the remaining difference — task scope versus branch
-  scope — the only thing a reader has to hold.
+- The review reaches the controller by assertion. The existence-and-non-empty
+  check above is what keeps a reviewer that wrote nothing from reading as a
+  clean run, and it is a check rather than a proof — a shallow report passes it.
+- The final review is destroyed with the worktree, where an inline review
+  persisted in the session transcript. Accepted: its readers are the fix
+  subagent and, if anyone, a human during the run, and both can reach the file
+  while the worktree exists.
+- `code-reviewer.md` and `task-reviewer-prompt.md` end up with the same package
+  section and the same read-only rule, but different return shapes — the branch
+  reviewer writes a file, the task reviewer's message still is its review. The
+  two remain near-duplicate templates kept in sync by reading; merging them
+  would mean editing `task-reviewer-prompt.md`, which this issue excludes.
 
 ## Not an AI-surface change requiring an eval plan
 
@@ -169,6 +194,6 @@ fifteen-line cap, is checked the way the identical cap in
 
 No trust boundary moves. Nothing here parses untrusted input, handles a secret,
 builds a command from a non-literal, changes a dependency, or widens a
-permission. The one adjacent property is that the review package and report file
+permission. The one adjacent property is that the review package and review file
 land in the gitignored `.agent/` workspace rather than in a commit, which
 narrows what reaches a PR diff rather than widening it.
