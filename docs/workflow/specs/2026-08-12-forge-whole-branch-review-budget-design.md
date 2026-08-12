@@ -64,6 +64,12 @@ fork point is what makes this the whole-branch review its own Context and ADR
 0007 describe, and it is the same base `$trial-loop` reviews against at `$quest`
 step 6. `HEAD` is taken after the last task's fix cycle closed.
 
+`BASE_BRANCH` is the value `$attunement` discovered and recorded, which
+`SKILL.md` already treats as the source for the guardrail commands. A controller
+that has no such value asks for it — it does not default to `main`, which is a
+guess that produces a plausible-looking package of the wrong range on every repo
+that names its default branch anything else.
+
 What this buys is determinism and fewer round trips rather than fewer tokens:
 the range is the controller's own known-good one instead of whatever the
 reviewer types, the commits and per-file stat arrive with the hunks, and `-U10`
@@ -109,12 +115,10 @@ write is covered by the self-ignoring `.gitignore` that keeps this phase's
 artifacts out of `git status` and out of the PR diff.
 
 The path is keyed to the same abbreviated range as the package —
-`final-review-<base7>..<head7>.md` — which aligns the review file with the
-package beside it and keeps reviews of different ranges apart. It does not make
-the file non-overwriting: a re-review at an *unchanged* range replaces its
-predecessor, because the controller clears the path before dispatching. Only a
-re-review after a fix wave lands somewhere new, and that is because the fix
-moved `HEAD`, not because of the key.
+`final-review-<base7>..<head7>.md` — so the two artifacts of one dispatch sit
+beside each other under the same name, and a reader who has one can find the
+other. It carries no non-overwriting guarantee: the controller clears the path
+before dispatching, so a second review of an unchanged range replaces the first.
 
 The slot is named `[REVIEW_FILE]` rather than `[REPORT_FILE]` because both
 sibling templates already use the latter, and in `task-reviewer-prompt.md` it
@@ -124,13 +128,27 @@ collision worth spending a word on.
 
 Everything the template's `## Output Format` section currently describes —
 Strengths, the three severity buckets, Recommendations, Assessment — goes to
-that file unchanged. This is a change of destination, not of rubric. The one
-addition is a label on plan-fault findings, so the plan-fault count in the
-return is checkable against the file it summarises. The label is the literal
-string **`plan-mandated`**, reused from `task-reviewer-prompt.md`, which already
-labels its equivalent case that way; the count in the return and the fix
-subagent's instruction both key on that exact string, so all three cannot drift
-apart. A label is not the severity vocabulary the charter freezes.
+that file unchanged, including the triage of the ledger's Minor findings that
+`SKILL.md` already hands the final reviewer — that list is an *input* to the
+dispatch and stays one; only its answer moves. This is a change of destination,
+not of rubric.
+
+Three things are added to the file, all of them disclosures the controller and
+the fix subagent would otherwise have no way to see:
+
+- **A first line naming the delivery used** — the package, or the `git diff`
+  rebuild. The rebuild clause is a silent escape hatch back to the unbounded
+  inline diff, and no before-check can close it, because it fires inside the
+  reviewer after the check has run. A line that says which one was used is what
+  makes the fallback visible at all.
+- **A label on plan-fault findings**, the literal string **`plan-mandated`**,
+  reused from `task-reviewer-prompt.md`, which already labels its equivalent
+  case that way. The count in the return and the fix subagent's instruction both
+  key on that exact string, so the three cannot drift apart. A label is not the
+  severity vocabulary the charter freezes.
+- **The reason for any read beyond the package**, recorded where it is taken.
+  The section that permits the excursion is the one that has to ask for its
+  reason, or the permission is unbounded.
 
 ### The bounded return (R3)
 
@@ -138,9 +156,14 @@ Fifteen lines, the same cap `implementer-prompt.md` sets, so the skill states
 one number rather than two. The message carries exactly three things:
 
 - the verdict — `Ready to merge? Yes | No | With fixes`;
-- the counts — `Critical N, Important N, Minor N`, and how many findings put the
-  fault in the plan rather than in the code following it;
+- the counts — `Critical N, Important N, Minor N, plan-mandated N`;
 - where the review file is.
+
+`plan-mandated N` is a **subset** of the graded counts, not a fourth grade: a
+plan-fault finding is graded like any other and carries the label as well, the
+way `task-reviewer-prompt.md` grades its equivalent Important *and* labels it.
+So the three grades still sum to the finding total, and a return reading
+`Important 2, plan-mandated 2` describes two findings, not four.
 
 A reviewer that could not write the file returns the literal first line
 **`WRITE_FAILED`** and the reason, instead of a verdict — a status token rather
@@ -191,8 +214,12 @@ Six edits in `skills/forge/SKILL.md`:
    falls back to an inline `git diff`, silently restoring exactly what this
    change removes. A failed before-check does not dispatch: the controller
    reports it, and does not fall back. Also before dispatching, the controller
-   removes any file already at the review-file path. **After:** that path exists
-   and is non-empty.
+   recomputes the base rather than trusting the ledger's copy — a rebase moves
+   the fork point and leaves the recorded value pointing at a commit no longer
+   on the branch — and where `BASE_BRANCH` is genuinely unavailable, checks the
+   recorded one with `git merge-base --is-ancestor <BASE> HEAD` and stops if it
+   fails. Then it removes any file already at the review-file path. **After:**
+   that path exists and is non-empty.
    Cleared-before plus present-after is what makes the review this run's rather
    than a leftover from a resumed session at the same range; existence alone
    cannot tell the two apart, and leaving a legitimately occupied path
@@ -218,20 +245,24 @@ Six edits in `skills/forge/SKILL.md`:
    carries none of it, and `SKILL.md` reserves the plan-versus-finding call for
    the human ("put both in front of the human and ask which holds").
 
-   The same item states when the dispatch fires, because the verdict and the
-   counts can disagree: Critical or Important greater than zero sends the fix
-   subagent whatever the merge verdict says; a non-zero `plan-mandated` count
-   goes to the human; and a `No` or `With fixes` carrying no graded findings is
-   a return the controller opens the file for rather than acting on, since the
-   two halves of it cannot both be right.
+   The same item states when the dispatch fires and in what order, because the
+   verdict and the counts can disagree and because the two triggers overlap by
+   construction — `plan-mandated` findings are a subset of the graded ones:
 
-   When the fix subagent reports, the final review is re-run against the new
-   `HEAD` — a fresh package, a fresh review-file path, the same base — rather
-   than the fix wave shipping unreviewed. That is the discipline `SKILL.md`
-   already states for fixes generally ("Confirm the report has all three before
-   re-dispatching the reviewer"); it is spelled out here because the re-review
-   is what the range-keyed paths under R2 exist to keep apart, and a
-   justification whose event nothing instructs is not a justification.
+   - a non-zero `plan-mandated` count goes to the human **first**, and the fix
+     wave waits on the answer, because a fix dispatched before it would be the
+     controller overruling a call `SKILL.md` reserves for the human;
+   - Critical or Important greater than zero then sends one fix subagent,
+     against the unlabelled findings only, whatever the merge verdict says;
+   - a `No` or `With fixes` carrying no graded findings is a return the
+     controller opens the file for rather than acting on, since the two halves
+     of it cannot both be right.
+
+   What happens after the fix subagent reports is `SKILL.md`'s existing business
+   and this change does not touch it. An earlier draft mandated a re-review here
+   in order to justify the range-keyed filename under R2 — reasoning backwards
+   from a naming choice to a new full dispatch nothing in the charter asks for.
+   The filename stands on the reason given there instead.
 4. "Every reviewer dispatch ends with the same report contract, so you get a
    bounded verdict rather than the whole review" narrows to what will be true:
    the whole-branch reviewer returns a bounded verdict and a path, while the task
