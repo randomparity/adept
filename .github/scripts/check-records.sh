@@ -748,9 +748,14 @@ gate_known_basenames() {
 # Neither witness used to capture its status, so a scan fault was indistinguishable from every
 # witness genuinely finding nothing — and the caller reported that as I-GATE-BOOTSTRAP, an
 # exit-0 informational line, instead of the fatal E-GATE-EMPTY-SET an undeclared rename owes.
+# The path whose witness faulted, for the caller's diagnostic: a scan fault a reader cannot
+# locate is barely better than a silent one. Set on every gate_existed_at entry, and read only
+# by its caller, which runs after it.
+gate_witness_path=""
 gate_existed_at() {
   local base=$1 rel name status faulted=0
 
+  gate_witness_path=""
   rel=$(repo_relative "$SELF_DIR")
   if [ -n "$rel" ]; then
     while IFS= read -r name; do
@@ -760,7 +765,10 @@ gate_existed_at() {
       case $status in
       0) return 0 ;;
       1) ;;
-      *) faulted=$path_exists_status ;;
+      *)
+        faulted=$path_exists_status
+        gate_witness_path="${rel}/${name}"
+        ;;
       esac
     done < <(gate_known_basenames)
   fi
@@ -774,7 +782,10 @@ gate_existed_at() {
     case $status in
     0) return 0 ;;
     1) ;;
-    *) faulted=$status ;;
+    *)
+      faulted=$status
+      gate_witness_path=".github/workflows (searching for $name)"
+      ;;
     esac
   done < <(gate_known_basenames)
 
@@ -837,7 +848,7 @@ check_gate_files() {
     case $existed_status in
     0) err "E-GATE-EMPTY-SET: no gate file from the base ref is protected — a rename must declare its predecessors in GATE_PREDECESSORS" ;;
     1) info "I-GATE-BOOTSTRAP: no gate existed at $base — this is the change installing it" ;;
-    *) err_full "E-GATE-WITNESS-SCAN: could not determine whether a gate existed at $base (git exit $path_exists_status)" ;;
+    *) err_full "E-GATE-WITNESS-SCAN: $gate_witness_path: could not determine whether a gate existed at $base (git exit $path_exists_status)" ;;
     esac
   fi
 }

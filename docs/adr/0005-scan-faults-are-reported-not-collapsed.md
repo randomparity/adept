@@ -73,6 +73,13 @@ establish.
 
 - Each new `E-*-SCAN` code names the file and the exit status. The codes are
   stable because the test suite asserts on them by name.
+- Reporting goes through `err_full` rather than `err`, so a scan fault cannot be
+  downgraded to `W-LEGACY-SHAPE` for a record that was already non-conforming —
+  a fault describes the scan, not the record. Both helpers are suppressed in the
+  base-ref `collect` pass, which discards findings by design, so a fault
+  reachable only while scanning the base-ref blob goes unreported there and the
+  record reads as conforming. Accepted rather than fixed: the alternative is a
+  fourth emit mode, which costs more than the case is worth.
 - Predicates that gain a fault value change from two-valued to three-valued, and
   that constrains how they may be called: never under `if !`, and never in an
   `&&`/`||` chain that *branches* on the predicate, both of which collapse `1`
