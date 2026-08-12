@@ -38,6 +38,20 @@ projected token cost.
 The `exa` server reads `EXA_API_KEY` from the session environment at start. A machine
 without the key set gets a failing server it can disable; nothing else depends on it.
 
+## Workflow
+
+![adept quest map](docs/assets/adept-quest-map.png)
+
+`$quest` drives a GitHub issue through the repository's full workflow, end to
+end on a feature branch: preflight (`$attunement`), scope the issue, branch,
+design, a scope audit, build with TDD, adversarial-review the branch, simplify,
+ship it, then hand off or merge if authorized. Each step keeps the guardrails
+green before advancing, and a blocked step parks the issue rather than
+skipping ahead.
+
+See [docs/cheatsheet.md](docs/cheatsheet.md) for the one-page summary of which
+skill to run for a given situation.
+
 ## Working on this repository
 
     just verify     # the guardrail suite: gates, suites, linters, manifests
