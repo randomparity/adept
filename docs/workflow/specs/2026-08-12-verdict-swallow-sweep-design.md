@@ -24,10 +24,16 @@ The four idioms in scope all discard a single command's status outright:
 Explicitly **out of scope**, owned by #63: every pipeline idiom, where the
 status that is lost belongs to a stage upstream of the last command. Recovering
 it needs `${PIPESTATUS[@]}` plus a policy for SIGPIPE/141 from a `| head -1`
-tail, which is a design question with no precedent here. `check-records.sh:865`
-belongs to #63 rather than here despite its trailing `|| true`: the pipeline
-ends in `sed`, which always exits 0, so the `|| true` is already dead and only
-`PIPESTATUS` can recover `git grep`'s status.
+tail, which is a design question with no precedent here.
+
+`check-records.sh:865` is a different case and an earlier draft of this spec got
+its reason wrong. `pipefail` **is** set, so `git grep | sed || true` does
+discard `git grep`'s 128 — the `|| true` is live, not dead, and `|| status=$?`
+would recover it without `PIPESTATUS`, because `sed` is the only other stage and
+does not fail on valid input. It is nonetheless out of scope here for the same
+reason as site 8: it sits inside `gate_paths`, which runs in a process
+substitution and has no reporting channel (ADR 0005 decision 1). It is recorded
+with site 8's residual, not deferred to #63.
 
 Also out of scope, with reasons recorded in the issue's `WORK:SCOPE` charter:
 `check-records.sh:987` (tolerates a repo function's documented `return 1`),
@@ -58,6 +64,13 @@ above. The shipped scripts it reached, and their dispositions:
 | `migrate-records.sh` (+ mirror) | five sites, all pipelines — #63. It is a migrator run by hand, not a gate, so none of its sites gate a merge. |
 | `quest-log/assets/profiles/github.sh` | one site, in-memory URL extraction with an explicit empty-result handler — no fix |
 | `quest-log/assets/cleared-dependencies.sh` | one `&& return 0`, on a tracker API error string rather than a scan of external bytes — outside this goal's definition |
+
+One further residual the sweep found and does not fix: `tracked_in_index`
+(`check-records.sh:371`) wraps `git ls-files --error-unmatch` and collapses a
+fault into "not tracked", which three callers read as authoritative — including
+a literal `tracked_in_index ... || continue` at `renumbered_elsewhere:415`. Same
+class, but converting it requires a separate post-fault decision at each of the
+three callers. Owned by issue **#69**.
 | `bounty/scripts/create-verified-issue.sh` | one site, same in-memory URL extraction — no fix |
 
 ## Findings that shaped the design
@@ -91,6 +104,13 @@ path_exists_at <ref> <path>  ->  0 present | 1 absent | 2 fault
 It runs `git ls-tree -r --name-only "$ref" -- "$path"`, capturing the status. A
 non-zero status yields `2`. A zero status yields `0` when the output is
 non-empty and `1` when it is empty. It emits no diagnostic; callers report.
+
+It keeps `2>/dev/null`, matching the witnesses it replaces and the reason
+`records_in_ref` already gives: a bare `fatal:` from git is not part of the
+gate's interface, and the coded `::error::` line is. The cost is that every git
+fault reaches the caller as the single value `2` and the diagnostic can only
+report that, not git's own message — accepted, because the alternative is
+letting raw git text into the gate's output.
 
 Predicates that can now fault become three-valued and their callers `case` on
 the result, reporting the scan fault **instead of** the ordinary negative
@@ -192,9 +212,14 @@ Required behaviour per site:
    a command substitution and tests only emptiness, so a fault reads as "the
    record directory did not exist at the base ref". It returns `0` existed, `1`
    did not, `2` fault; `run_profile` reports `E-DIR-SCAN` on `2` instead of
-   `E-PROFILE-DIR-MISSING`, which would name the wrong cause. Its two existing
-   fail-open guards — an empty ref, and a ref that is not a commit — are
-   deliberate and keep returning `0`.
+   `E-PROFILE-DIR-MISSING`, which would name the wrong cause, and then
+   `return 1` exactly as the `E-PROFILE-DIR-MISSING` branch does. Continuing
+   instead would run `collect_records` and `E-COUNT-FLOOR` against a base ref it
+   has just failed to read, and `E-COUNT-FLOOR` compares a base record count
+   that would be zero for the same unread reason — disarming the one rule that
+   catches a clean run over nothing. Its two existing fail-open guards — an
+   empty ref, and a ref that is not a commit — are deliberate and keep
+   returning `0`.
 
 Two comments in `profiles/debt.sh` (and its mirror) currently defer their
 pipeline sites to #55. #55 no longer owns them, so they are retargeted to #63.
@@ -228,17 +253,24 @@ PATH-stubbed `git` that faults only on the invocation under test and defers
 otherwise. Which invocation each stub keys on has to be stated, because several
 sites issue argument-similar calls:
 
-- Site 3 keys on an `ls-tree` naming a **candidate** record path, in a fixture
+Every `git` stub keys on **both** the subcommand and the path argument, because
+three of these sites issue an `ls-tree` and a subcommand-only stub fires for
+whichever runs first:
+
+- Site 3 keys on `ls-tree` naming a **candidate record** path, in a fixture
   where a record was renumbered so `renumbered_elsewhere` actually reaches its
   candidate loop.
-- Site 4 keys on an `ls-tree` naming a **protected gate file** path.
-- Site 5 cannot be isolated by the `ls-tree` witness — its arguments are of the
-  same shape as site 4's, and it only runs at all once site 4's loop found
-  nothing. It is driven through the **workflow witness** instead: a fixture
-  where the `SELF_DIR` witness legitimately finds nothing (the moved-directory
-  shape the suite already fixtures) plus a stub faulting only on
-  `git grep ... -- .github/workflows`.
-- Site 9 keys on an `ls-tree` naming the **record directory**.
+- Site 4 keys on `ls-tree` naming a **protected gate file** path.
+- Site 5 needs two cases, because its two witnesses fault independently and the
+  second only runs once the first found nothing:
+  - the `ls-tree` witness, keyed on a path under `SELF_DIR` in a fixture with no
+    gate file at the base ref, so `gate_existed_at` is reached at all; and
+  - the workflow witness, keyed on `git grep ... -- .github/workflows`, in a
+    fixture where the `SELF_DIR` witness legitimately finds nothing.
+
+  Without the first case the `cat-file`-to-`ls-tree` conversion — the change
+  ADR 0005 decision 2 exists for — ships untested.
+- Site 9 keys on `ls-tree` naming the **record directory**.
 
 Site 7's fixture needs care for a different reason: with an `AGENTS.md` that
 *does* declare a tracker, `resolve_tracker` exits non-zero both before and after
@@ -262,8 +294,13 @@ revert — before it counts.
    its fault reachable; its residual is recorded above, not closed.
 2. No site reports a scan fault *and* its rule's own negative verdict for the
    same condition.
-3. A regression test per site, each verified to fail when its conversion is
-   reverted.
+3. A regression test per converted site, each verified to fail when its
+   conversion is reverted. Site 8 is exempt and is the only exemption: it adds a
+   guard rather than a fault branch, its remaining trigger is a damaged object
+   store that no fixture can stage, and the `E-GATE-UNLOCATABLE` path does not
+   reach it. It is covered by inspection and by the existing gate suite staying
+   green, and that limit is recorded rather than papered over with a test that
+   would pass before the change.
 4. `.github/scripts/**` stays byte-identical to `skills/tome-of-lore/assets/**`.
 5. `just verify` is green, run bare.
 6. `git cat-file -e` appears nowhere in `check-records.sh` as an existence
