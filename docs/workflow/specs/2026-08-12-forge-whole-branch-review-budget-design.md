@@ -68,18 +68,23 @@ input than a default `git diff`; the saving is in what the reviewer does *not*
 have to go and read.
 
 `code-reviewer.md`'s `## Git Range to Review` section becomes
-`## The change you are judging`, naming `[DIFF_FILE]` and carrying the same
-three rules the task reviewer's equivalent section carries: open the package
-once, treat its wide context lines as the files as they now stand, and rebuild
-with `git diff --stat` / `git diff` only if the package is missing.
+`## The change you are judging`, naming `[DIFF_FILE]`. What crosses over from
+the task reviewer's equivalent section is the *delivery*, clause by clause, and
+the distinction matters enough to spell out rather than say "the same rules":
 
-Those three are delivery rules, and only those three cross over. The task
-reviewer's *scoping* rule — "Stay out of the rest of the codebase" — does not,
-and the section says so. This is the one review whose value is seeing what a
-task-scoped reviewer could not: the plan it was built against, the call sites of
-a contract the branch changed, the documentation that went stale. Importing the
-package while quietly importing task scope with it would narrow the review this
-change is supposed to leave intact.
+- **Crosses:** open the package once; its wide context lines *are* the files as
+  they now stand; rebuild with `git diff --stat` / `git diff` if the package is
+  missing.
+- **Does not cross:** "it is the whole of what you are judging", "resist opening
+  one on the side", "Leave git alone otherwise", and "Stay out of the rest of the
+  codebase". These read as delivery rules and are scoping rules, which is
+  precisely why importing the section wholesale would be a silent narrowing.
+
+This is the one review whose value is seeing what a task-scoped reviewer could
+not: the plan it was built against, the call sites of a contract the branch
+changed, the documentation that went stale. The section keeps the package as
+where the change is delivered and says outright that this reviewer may read
+beyond it for a named reason, recording the reason when it does.
 
 The `## Read-Only Review` section stays but gains one clause. It is a safety
 rule about the checkout, not about diff delivery, and the worktree escape hatch
@@ -100,9 +105,12 @@ write is covered by the self-ignoring `.gitignore` that keeps this phase's
 artifacts out of `git status` and out of the PR diff.
 
 The path is keyed to the same abbreviated range as the package —
-`final-review-<base7>..<head7>.md` — so a re-review after a fix wave writes
-alongside its predecessor instead of over it, matching what `review-package`
-already does for the same reason.
+`final-review-<base7>..<head7>.md` — which aligns the review file with the
+package beside it and keeps reviews of different ranges apart. It does not make
+the file non-overwriting: a re-review at an *unchanged* range replaces its
+predecessor, because the controller clears the path before dispatching. Only a
+re-review after a fix wave lands somewhere new, and that is because the fix
+moved `HEAD`, not because of the key.
 
 The slot is named `[REVIEW_FILE]` rather than `[REPORT_FILE]` because both
 sibling templates already use the latter, and in `task-reviewer-prompt.md` it
@@ -114,10 +122,11 @@ Everything the template's `## Output Format` section currently describes —
 Strengths, the three severity buckets, Recommendations, Assessment — goes to
 that file unchanged. This is a change of destination, not of rubric. The one
 addition is a label on plan-fault findings, so the plan-fault count in the
-return is checkable against the file it summarises; the template's Calibration
-section already asks for those findings, and `task-reviewer-prompt.md` already
-labels its equivalent ("plan-mandated"). A label is not the severity vocabulary
-the charter freezes.
+return is checkable against the file it summarises. The label is the literal
+string **`plan-mandated`**, reused from `task-reviewer-prompt.md`, which already
+labels its equivalent case that way; the count in the return and the fix
+subagent's instruction both key on that exact string, so all three cannot drift
+apart. A label is not the severity vocabulary the charter freezes.
 
 ### The bounded return (R3)
 
@@ -129,7 +138,9 @@ one number rather than two. The message carries exactly three things:
   fault in the plan rather than in the code following it;
 - where the review file is.
 
-A reviewer that could not write the file returns that instead of a verdict. A
+A reviewer that could not write the file returns the literal first line
+**`WRITE_FAILED`** and the reason, instead of a verdict — a status token rather
+than a fourth verdict value, so it cannot be confused with a merge judgment. A
 shape with no failure value forces a reviewer with nothing to report into
 reporting something.
 
@@ -191,11 +202,18 @@ Six edits in `skills/forge/SKILL.md`:
    what in that file binds the subagent: Critical and Important findings are to
    be fixed, Minor findings and Recommendations are not — Recommendations are
    the template's own "not defects, and not obligations" — and a finding
-   labelled as a plan fault is returned to the controller rather than fixed.
+   labelled `plan-mandated` is returned to the controller rather than fixed.
    The list the controller used to hand over carried that filtering implicitly,
    because the controller had read the review and chose what to send. A path
    carries none of it, and `SKILL.md` reserves the plan-versus-finding call for
    the human ("put both in front of the human and ask which holds").
+
+   The same item states when the dispatch fires, because the verdict and the
+   counts can disagree: Critical or Important greater than zero sends the fix
+   subagent whatever the merge verdict says; a non-zero `plan-mandated` count
+   goes to the human; and a `No` or `With fixes` carrying no graded findings is
+   a return the controller opens the file for rather than acting on, since the
+   two halves of it cannot both be right.
 4. "Every reviewer dispatch ends with the same report contract, so you get a
    bounded verdict rather than the whole review" narrows to what will be true:
    the whole-branch reviewer returns a bounded verdict and a path, while the task
@@ -213,7 +231,11 @@ Six edits in `skills/forge/SKILL.md`:
    per-task ranges. Recovering it from Task 1's line is inference, and the whole
    point of that section is that a controller which lost its conversation memory
    reads the ledger instead of remembering. A base recovered wrongly produces a
-   package that looks plausible and shows the reviewer the wrong branch.
+   package that looks plausible and shows the reviewer the wrong branch. A
+   ledger written before this change has no base line: that means the base is
+   unknown, so the controller stops and asks rather than inferring one — the
+   same discipline the section already applies to a task it cannot confirm is
+   complete.
 
 ### Testing (R5)
 
@@ -235,19 +257,35 @@ still returning different shapes.
 ## Not an AI-surface change requiring an eval plan
 
 These files are dispatch prompt templates, which is an AI surface, and the
-design changes one. There is no eval plan here, and that is deliberate: the
-change alters where the model's output is *written*, not what it is asked to
-judge or how it is graded. The rubric, severity vocabulary, and calibration
-guidance are all explicitly out of scope and unchanged, so the failure modes an
-eval plan would score — grading accuracy, citation quality, verdict
-correctness — have no new exposure. The one new observable behavior, the
-fifteen-line cap, is checked the way the identical cap in
-`implementer-prompt.md` is checked: by reading the return.
+design changes one. There is no eval plan here, and that is deliberate — but the
+reason is not that the change adds no model behavior. It adds four:
+
+| New behavior | How it is checked |
+|---|---|
+| writing the review file at the supplied path | the controller's cleared-before / present-and-non-empty check |
+| labelling plan-fault findings `plan-mandated` | not checked — see below |
+| counting graded and `plan-mandated` findings in the return | not checked against the file |
+| holding the return under the cap | by reading the return, as with `implementer-prompt.md` |
+
+What is unchanged is what an eval plan would actually score: the rubric, the
+severity vocabulary, and the calibration guidance are all out of scope and
+untouched, so grading accuracy, citation quality, and verdict correctness carry
+no new exposure. The two unchecked rows are the honest residual — the label and
+the counts are the reviewer's own classification of its own findings, and ADR
+0007 records that as the weakest link in the design rather than claiming a check
+covers it. An eval harness for a prompt template's self-report would be a larger
+apparatus than the thing it grades, and outside this issue's charter.
 
 ## Not a security-relevant change
 
 No trust boundary moves. Nothing here parses untrusted input, handles a secret,
-builds a command from a non-literal, changes a dependency, or widens a
-permission. The one adjacent property is that the review package and review file
-land in the gitignored `.agent/` workspace rather than in a commit, which
-narrows what reaches a PR diff rather than widening it.
+builds a command from a non-literal, or changes a dependency.
+
+One permission does widen, and it is worth naming rather than waving away: a
+subagent that was previously read-only on the checkout gains a write. It is
+contained by being a single named path — the supplied `[REVIEW_FILE]`, not the
+workspace around it, which is why the read-only rule is amended to that one path
+and not to the directory holding the controller's ledger. The actor is a
+subagent this session dispatched, not an untrusted party, and both the package
+and the review file land in the gitignored `.agent/` workspace rather than in a
+commit, which narrows what reaches a PR diff rather than widening it.
