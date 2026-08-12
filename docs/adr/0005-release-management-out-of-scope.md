@@ -24,26 +24,27 @@ is missing.
 
 ## Decision
 
-**adept ships no release stage, and release management is out of scope for its skills** — no
-tagging, changelog, release-notes, publishing, deployment, or post-deployment verification
-skill for the target repositories the skills operate on. This repository's own case is
-ADR 0001's and is not reopened here. Note that "release" already means two other things in this
-tree — releasing an issue whose blocker closed (`$return-to-town`, `$sort-board`), and a
-protected `release/*` branch pattern (`$clear-map`) — and neither is a software release.
+**adept ships no release stage** — no tagging, changelog, release-notes, publishing,
+deployment, or post-deployment verification skill for the target repositories the skills
+operate on. This repository's own case is ADR 0001's and is not reopened here. Note that
+"release" already means two other things in this tree — releasing an issue whose blocker
+closed (`$return-to-town`, `$sort-board`), and a protected `release/*` branch pattern
+(`$clear-map`) — and neither is a software release.
 
-Two things carry it.
+One thing carries it: **there is nothing to build against.** The checkable evidence says so.
+No skill under `skills/` covers tagging, changelog, or deploy; this repository has no tags and
+no GitHub releases; and issue #50 reports an ambiguity rather than blocked work. The stronger
+claim — that no session has ever driven a release in a target repository — is an observation
+about sessions, not a fact any artifact here can confirm. Either way, an artifact written now
+would take its shape from guesswork rather than from a release anyone has seen.
 
-**Nothing has asked for it.** adept has not been asked to drive a release in any target
-repository even once, so an artifact written now would be designed against an imagined
-consumer: its shape chosen by guesswork, its correctness untestable. The construction rules
-compound that — a release skill that is only instructions reduces to two commands a session
-already runs correctly, and one that adds value would need scripts, which anatomy rule 2
-admits only for work a model cannot do reliably inline.
-
-**Release policy is repository-specific and already owned.** Semver against calver against
-SHA; a changelog handwritten against one generated from commits; publishing by tag-triggered
-workflow against by hand. Purpose-built tools already own the mechanics per ecosystem —
-release-please, semantic-release, changesets, goreleaser, cargo-release.
+That is a decision for want of evidence, not a judgment that release work is foreign to adept's
+purpose. The difference matters, because the arguments that would support the stronger reading
+do not survive this repository: varying per-repository policy is exactly what `$attunement`
+exists to discover at runtime, a purpose-built tool already owning the mechanics is the premise
+`$restock` is built on, and thinness is no objection either — `$deliver` is 91 instruction-only
+lines around `git push` and `gh pr create`, which anatomy rule 1 makes the preferred shape. Each
+of them, turned on a release skill, would condemn something already shipped.
 
 **Revisit condition.** Reopen this the first time adept is actually asked to drive a release in
 a target repository — the point at which the question stops being hypothetical and the missing
@@ -74,31 +75,32 @@ artifact here can confirm.
   both do — that publish is fired by the merge `$return-to-town` itself performs, and nothing
   here reads the workflow run it triggers. A publish that fails on registry auth, a version
   collision, or a missing tag permission goes unobserved while the session reports the issue
-  done. Watching that run would be the machinery this record declines, so it stays the target
-  repository's own to watch.
+  done. That inaccurate report is adept's own and not the target repository's to fix; it is
+  accepted here because watching a foreign workflow run is the machinery this record declines,
+  and it is tracked as issue #65 against `$return-to-town`.
 
 ## Considered & rejected
 
 - **Ship a `$release` skill now — tag, changelog, `gh release create`** — including the
-  deliberately minimal version alongside this record. The issue's first option. Rejected on
-  both grounds above, the first sufficient alone: no target repository's release has been
-  driven from here, so the skill's shape would be imagined. A minimal one is the worst case
-  rather than the safe one, since it would encode the defaults of the only repository available
-  to test it against — this one, which has no releases.
+  deliberately minimal version alongside this record. The issue's first option. Rejected on the
+  ground above: no target repository's release has been driven from here, so the skill's shape
+  would be imagined. A minimal one is the worst case rather than the safe one, since it would
+  encode the defaults of the only repository available to test it against — this one, which has
+  no releases.
 - **Write `references/release.md` instead of a skill.** This repository's other artifact type —
-  a standard consulted rather than a procedure invoked — and the shape that best survives the
-  policy objection, since "read this repository's release documentation and follow it" is
-  legitimate content for a reference where it is degenerate for a skill. Rejected on the first
-  ground alone: with no observed release to describe, its content would be imagined the same way.
+  a standard consulted rather than a procedure invoked — and the cheaper shape, carrying no
+  script pressure and no invocation surface. Rejected on the same ground: with no observed
+  release to describe, its content would be imagined the same way, and a reference nobody
+  consults is upkeep without a reader.
 - **Record the decision only as a line in `README.md` or `docs/cheatsheet.md`, with no record
   here.** The issue's second option, and cheaper. Rejected because a line in a
   which-skill-do-I-run table carries the outcome without the reasoning that makes it a
   decision, and has nowhere to keep the revisit condition. The line itself was not rejected —
   the Consequences take it, pointing here.
 - **A post-merge verification skill only, dropping tagging and changelog.** The narrowest
-  scope-in, and the one least exposed to the policy objection. Rejected on the first ground
-  too — nobody has asked. `$return-to-town` already verifies the merge landed, and watching a
-  deployed system is a capability adept neither has nor claims.
+  scope-in. Rejected on the same ground — nobody has asked — but it is the alternative closest
+  to a real gap, and the part of it that is adept's own is tracked as issue #65 rather than
+  dismissed.
 - **A deferral record under `docs/debt/` rather than a record here.** Rejected because a
   deferral says work is coming later, and this is a decided exclusion. `just records` also
   enables only the `adr` profile, so this would mean turning on `debt` for something that is
