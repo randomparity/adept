@@ -14,8 +14,8 @@ set -euo pipefail
 # --all prints both subsets.
 #
 # Two ways to fail closed, both exit 1. An empty subset list means discovery
-# broke, not that nothing needs checking. A tracked file that cannot be read is
-# one this script cannot classify, and dropping it would leave it out of an
+# broke, not that nothing needs checking. A tracked file that cannot be opened
+# is one this script cannot classify, and dropping it would leave it out of an
 # inventory whose whole purpose is that no script escapes the gates.
 
 mode='tabs'
@@ -40,24 +40,30 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 bash_shebang='^#![[:space:]]*([^[:space:]]*/)?bash([[:space:]]|$)'
 env_bash_shebang='^#![[:space:]]*([^[:space:]]*/)?env[[:space:]]+(-S[[:space:]]+)?bash([[:space:]]|$)'
 
-# 0 a shell source, 1 not one, 2 the file could not be read.
+# 0 a shell source, 1 not one, 2 the file could not be opened.
 #
-# `read` reports a non-zero status three ways that used to collapse into "not a
-# shell source": a clean EOF on an empty file, a clean EOF on a last line with
-# no trailing newline -- where the line is in the variable and the file is a
-# shell source after all -- and a redirection or read that failed outright. Only
-# the third is a fault, and it is separated by the two facts the status does not
-# carry: whether anything was read, and whether there was anything to read.
+# `read` alone cannot answer this. It reports a non-zero status for three
+# unrelated things -- a clean EOF on an empty file, a clean EOF on a last line
+# with no trailing newline (where the line was read and the file may well be a
+# shell source), and a file that could not be opened at all -- and only the last
+# is a fault. Testing that status was how an unreadable file left the inventory
+# silently, and testing it plus the file's content misreads a tracked binary
+# whose first byte is NUL as unreadable, which is a false red on the gates.
+#
+# So the fault comes from the open, which is the operation that can fail and
+# whose status says only whether it did. `read`'s status then decides nothing.
+# The braces rather than a subshell keep the descriptor in this shell, and put
+# bash's own "Permission denied" behind the redirection -- this script's
+# diagnostic is its interface.
 is_shell_source() {
-	local path=$1 first_line='' status=0
+	local path=$1 first_line=''
 	case $path in
 	*.sh) return 0 ;;
 	esac
 	[[ -f $path ]] || return 1
-	IFS= read -r first_line <"$path" || status=$?
-	if ((status != 0)) && [[ -z $first_line && -s $path ]]; then
-		return 2
-	fi
+	{ exec 3<"$path"; } 2>/dev/null || return 2
+	IFS= read -r first_line <&3 || :
+	exec 3<&-
 	[[ $first_line =~ $bash_shebang || $first_line =~ $env_bash_shebang ]]
 }
 
@@ -76,7 +82,7 @@ while IFS= read -r -d '' path; do
 	0) ;;
 	1) continue ;;
 	*)
-		printf 'list-shell-sources: cannot read %s to classify it; dropping it would leave a tracked script neither linted nor format-checked\n' \
+		printf 'list-shell-sources: cannot open %s to classify it; dropping it would leave a tracked script neither linted nor format-checked\n' \
 			"$path" >&2
 		exit 1
 		;;
