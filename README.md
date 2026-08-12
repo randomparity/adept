@@ -30,7 +30,7 @@ available.
 
 Claude Code:
 
-    claude plugin update adept
+    claude plugin update adept@randomparity
 
 Codex CLI:
 
