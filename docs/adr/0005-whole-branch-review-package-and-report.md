@@ -39,22 +39,34 @@ use `[REPORT_FILE]`, and in `task-reviewer-prompt.md` it means *the implementer'
 report you read*. A controller filling all three templates would otherwise meet
 one placeholder name carrying two opposite obligations.
 
+That write is the one exemption to the template's `## Read-Only Review` rule, and
+the template says so. The rule's scope is the tracked checkout — working tree,
+index, HEAD, branches — and the gitignored `.agent/` workspace is outside it.
+Left unreconciled, the template would carry an instruction to write and a rule
+forbidding it, and which one a reviewer honours is not something this decision
+should leave to chance.
+
 The return message is capped at fifteen lines — the same number
 `implementer-prompt.md` uses, so the skill states one cap rather than two — and
-carries exactly four things: the merge verdict; the finding counts by grade; one
-line for any place the fault lies in the plan rather than in the code following
-it; and the review-file path. No per-finding lines: the party that acts on a
+carries exactly three things: the merge verdict; the counts, by grade and of
+findings that put the fault in the plan rather than the code; and the
+review-file path. No per-finding lines of any kind: the party that acts on a
 finding is the fix subagent, which is handed the path.
 
-The plan-fault line is the reason the return is a fixed shape rather than a line
-budget the reviewer fills as it sees fit. It is the only one of the controller's
-three next actions whose trigger is not recoverable from a verdict and a count,
-and the only one whose answer is a question to a human rather than a dispatch.
+The plan-fault count is the reason the return is a fixed shape rather than a
+line budget the reviewer fills as it sees fit. It is the only one of the
+controller's three next actions whose trigger is invisible in a merge verdict
+and a severity count, and the only one whose answer is a question to a human
+rather than a dispatch. A count rather than a line keeps the shape bounded; the
+controller that sees a non-zero one opens the file, which it must do anyway to
+put both the finding and the plan in front of the human.
 
 The controller hands the review-file path to the fix subagent rather than a
 findings list it had to read first — and confirms the file exists and is
-non-empty before doing so, because a review that arrives as a path plus a count
-is a review the controller has not seen.
+non-empty before acting on the return at all, because a review that arrives as a
+path plus a count is a review the controller has not seen. A missing or empty
+file means the return is discarded and the reviewer re-dispatched; the counts are
+never acted on without the file behind them.
 
 ## Consequences
 
@@ -66,6 +78,11 @@ is a review the controller has not seen.
   not fail that way. The existence-and-non-empty check in the Decision is what
   discharges this, and it is a check, not a proof: a truncated or shallow report
   still passes it.
+- On a clean merge verdict the review file has no reader. That is also where
+  `SKILL.md`'s Minor-triage obligation lands — the final reviewer triages the
+  ledger's accumulated Minor findings against the merge bar, and on a `Yes` its
+  triage said none of them hold, so those ledger entries close on the verdict
+  alone. Accepted: a triage whose answer is "no action" needs no reader.
 - The final review is no longer readable from the transcript, and the loss is
   larger than a straight move. An inline review persisted in the session
   transcript; the review file is destroyed with the worktree, since the `$forge`
@@ -105,29 +122,24 @@ repeatedly.
 **Let the reviewer return whatever fits in fifteen lines.** Rejected: a line
 budget with no shape loses the plan-fault case, which reads like an ordinary
 finding and is the one outcome the controller must not answer with a fix
-dispatch. Naming the four items costs nothing and makes the omission visible.
+dispatch. Naming the three items costs nothing and makes the omission visible.
 
-**Include one line per Critical finding in the return.** Rejected: it is the one
-item of the shape that no controller decision needs — the fix dispatch reads the
-file — and it is the only unbounded one, which would put the cap and the shape in
-conflict on exactly the branches that have the most to report.
+**Enumerate findings in the return — one line per Critical, or per plan fault.**
+Rejected: no controller decision needs the detail, since the fix dispatch reads
+the file, and an enumeration is the only unbounded thing that could sit in a
+capped message — it would put the cap and the shape in conflict on exactly the
+branches with the most to report.
 
 **Have the reviewer return the full review and let the controller write it to a
 file.** Rejected: the review passes through the controller's context on the way,
-which is the entire cost being removed. Report-file indirection only works when
-the subagent writes it.
+which is the entire cost being removed. The indirection only works when the
+subagent does the writing.
 
 **Do nothing.** Rejected, but it is the cheapest option and worth stating why it
 loses: the cost is invisible per-run — the build still works, and nothing goes
 red — so it is paid on every party-mode run forever, on the most expensive
 dispatch, in the phase where the controller's remaining context decides whether
 the rest of the build survives.
-
-**Drop the whole-branch review; `$trial-loop` reviews the branch at `$quest`
-step 6 anyway.** Rejected: it is not this issue's question, and the two are not
-substitutes — the whole-branch review judges the branch against *the plan it was
-built from*, which `$trial-loop` is never given. Removing a review to avoid
-budgeting it also trades a bounded cost for an unbounded risk.
 
 **Give the review file a fixed name.** Rejected: `review-package` already keys
 its default destination to the range, and for the stated reason — a re-review

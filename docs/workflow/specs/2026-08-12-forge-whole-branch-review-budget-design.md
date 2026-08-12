@@ -73,9 +73,14 @@ three rules the task reviewer's equivalent section carries: open the package
 once, treat its wide context lines as the files as they now stand, and rebuild
 with `git diff --stat` / `git diff` only if the package is missing.
 
-The `## Read-Only Review` section stays. It is a safety rule about the checkout,
-not about diff delivery, and the worktree escape hatch is the sanctioned way to
-lay another revision out on disk.
+The `## Read-Only Review` section stays but gains one clause. It is a safety
+rule about the checkout, not about diff delivery, and the worktree escape hatch
+is the sanctioned way to lay another revision out on disk — but as written it
+says the working tree stays exactly as found, and R2 now asks the reviewer to
+write a file into it. The rule names the review file as its one exemption and
+states its own scope: the tracked checkout, which the gitignored `.agent/`
+workspace is not part of. Left as it is, the template would carry an instruction
+to write and a rule forbidding it.
 
 ### The review file (R2)
 
@@ -103,28 +108,27 @@ that file unchanged. This is a change of destination, not of rubric.
 ### The bounded return (R3)
 
 Fifteen lines, the same cap `implementer-prompt.md` sets, so the skill states
-one number rather than two. The message carries exactly four things:
+one number rather than two. The message carries exactly three things:
 
 - the verdict — `Ready to merge? Yes | No | With fixes`;
-- the counts, by grade: `Critical N, Important N, Minor N`;
-- one line for any place the fault lies in the plan rather than in the code
-  following it;
+- the counts — `Critical N, Important N, Minor N`, and how many findings put the
+  fault in the plan rather than in the code following it;
 - where the review file is.
 
-No per-finding lines. The controller's next action is one of three — dispatch a
-fix subagent, ask the human which of a finding and the plan holds, or proceed —
-and the party that needs a finding's detail is the fix subagent, which is handed
-the path. A per-Critical list would also be the one unbounded item in a capped
-message, putting the cap and the shape in conflict on exactly the branches with
-the most to report.
+No per-finding lines of any kind. The controller's next action is one of three —
+dispatch a fix subagent, ask the human which of a finding and the plan holds, or
+proceed — and the party that needs a finding's detail is the fix subagent, which
+is handed the path. An enumeration would also be the one unbounded item in a
+capped message, putting the cap and the shape in conflict on exactly the
+branches with the most to report.
 
-The plan-fault line is the one item that is not a summary of the review.
-`SKILL.md` already singles that case out ("Where a finding and the plan
-disagree, neither one wins by default and neither is yours to overrule: put both
-in front of the human and ask which holds"), and it is the one outcome whose
-next action is a question to a human rather than a fix dispatch. Leaving it only
-in the file would mean the controller could not tell a fix-and-continue from a
-stop-and-ask without opening it.
+The plan-fault count is the one number that is not a summary of severity.
+`SKILL.md` singles that case out ("Where a finding and the plan disagree,
+neither one wins by default and neither is yours to overrule: put both in front
+of the human and ask which holds"), and it is the one outcome whose next action
+is a question to a human rather than a fix dispatch — invisible in a merge
+verdict and a severity count. A controller seeing a non-zero count opens the
+file, which it has to do anyway to put the finding and the plan side by side.
 
 ### The controller side (R4)
 
@@ -137,12 +141,13 @@ Four edits in `skills/forge/SKILL.md`:
    per-task base, which is the mistake the per-task loop's own step 5 warns
    about in the other direction.
 2. The controller confirms the review file exists and is non-empty before acting
-   on the return. The review now reaches it as a path and a count, so a reviewer
-   that wrote nothing is otherwise indistinguishable from one that wrote a full
-   report — the failure mode this change creates, and the one it has to
-   discharge. `SKILL.md` already applies the same discipline to implementer
-   reports ("Confirm the report has all three before re-dispatching the
-   reviewer").
+   on the return at all, and on a missing or empty file discards the return and
+   re-dispatches the reviewer rather than acting on the counts. The review now
+   reaches the controller as a path and a count, so a reviewer that wrote
+   nothing is otherwise indistinguishable from one that wrote a full report —
+   the failure mode this change creates, and the one it has to discharge.
+   `SKILL.md` already applies the same discipline to implementer reports
+   ("Confirm the report has all three before re-dispatching the reviewer").
 3. The final-fix instruction (currently "send **one** fix subagent with the
    complete list") hands over the review-file path instead of a list. A list the
    controller has to hold is exactly the resident cost this change removes.
@@ -161,22 +166,10 @@ reviewer" is a claim only a reader can settle.
 
 ## Consequences
 
-- The controller's context after the final review holds a verdict, counts, and
-  two paths instead of a full review. The findings are not lost; they are one
-  file read away, and the party that needs them in full is the fix subagent,
-  which reads the file directly.
-- The review reaches the controller by assertion. The existence-and-non-empty
-  check above is what keeps a reviewer that wrote nothing from reading as a
-  clean run, and it is a check rather than a proof — a shallow report passes it.
-- The final review is destroyed with the worktree, where an inline review
-  persisted in the session transcript. Accepted: its readers are the fix
-  subagent and, if anyone, a human during the run, and both can reach the file
-  while the worktree exists.
-- `code-reviewer.md` and `task-reviewer-prompt.md` end up with the same package
-  section and the same read-only rule, but different return shapes — the branch
-  reviewer writes a file, the task reviewer's message still is its review. The
-  two remain near-duplicate templates kept in sync by reading; merging them
-  would mean editing `task-reviewer-prompt.md`, which this issue excludes.
+Recorded in [ADR 0005](../../adr/0005-whole-branch-review-package-and-report.md),
+which owns them — the review reaching the controller by assertion, the review
+file having no reader on a clean merge verdict, its destruction with the
+worktree, and the two templates staying near-duplicates kept in sync by reading.
 
 ## Not an AI-surface change requiring an eval plan
 
