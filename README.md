@@ -55,6 +55,8 @@ and that nothing automated asserts on prose.
 
 MIT — see [LICENSE](LICENSE).
 
-Every skill here is first-party. That is a measurement, not an estimate —
-[ADR 0003](docs/adr/0003-close-the-upstream-attribution.md) records the method,
-the numbers, and what the check found.
+Every skill here is first-party expression, measured rather than assumed.
+[ADR 0003](docs/adr/0003-close-the-upstream-attribution.md) records the numbers,
+what the check found, and the one measured technical idiom it leaves excluded.
+The method is [ADR 0002](docs/adr/0002-narrow-the-upstream-attribution.md)'s,
+which 0003 supersedes in its conclusions rather than its measurement.
