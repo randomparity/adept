@@ -49,6 +49,9 @@ ship it, then hand off or merge if authorized. Each step keeps the guardrails
 green before advancing, and a blocked step parks the issue rather than
 skipping ahead.
 
+The pipeline ends there. There is no release stage — no tagging, changelog, or
+deploy — see [ADR 0005](docs/adr/0005-release-management-out-of-scope.md) for why.
+
 See [docs/cheatsheet.md](docs/cheatsheet.md) for the one-page summary of which
 skill to run for a given situation.
 

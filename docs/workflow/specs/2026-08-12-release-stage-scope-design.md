@@ -8,8 +8,12 @@ the target repositories its skills operate on? Either answer closes the issue, o
 and one as a recorded decision.
 
 The answer is **scope-out**, recorded in
-[ADR 0005](../../adr/0005-release-management-out-of-scope.md). That record is the entire
-deliverable: one new file under `docs/adr/`, plus this design record and its plan.
+[ADR 0005](../../adr/0005-release-management-out-of-scope.md). The deliverable is that record
+plus a one-line pointer to it from `README.md`'s workflow section — the record answers *why*,
+and the pointer is what a reader who never thought to open `docs/adr/` actually meets. Issue
+#50's "Expected" authorizes both: "an ADR **or** a line in the pipeline docs". Taking both is
+not hedging, because they do different jobs; the record carries the reasoning and the revisit
+condition, and the line carries discoverability.
 
 ## The question, and why it is open
 
@@ -41,9 +45,9 @@ problem `CLAUDE.md` exists to prevent.
   it neither supersedes it nor amends it, so 0001 takes no supersession banner.
 - No skill is added and no existing skill is edited. `$return-to-town` and `$clear-map` keep
   their current endings, which ADR 0005 records as complete rather than truncated.
-- `docs/cheatsheet.md` and `README.md` are not touched. The cheat sheet is a which-skill-do-I-run
-  table and there is no new skill to list; the skill-count line in `README.md` is unchanged for
-  the same reason.
+- `docs/cheatsheet.md` is not touched, and the skill-count line in `README.md` is unchanged.
+  The cheat sheet is a which-skill-do-I-run table and there is no new skill to list. The one
+  `README.md` edit is the pointer above, in the workflow section, and nothing else.
 - No `docs/debt/` deferral record, and no `debt` profile added to `just records`. This is a
   decided exclusion, not deferred work.
 
@@ -53,8 +57,8 @@ problem `CLAUDE.md` exists to prevent.
 |---|---|---|
 | 1 | Issue #50 "Proposed approach" — decide scope-in or scope-out first | The Decision above, argued in ADR 0005 |
 | 2 | Issue #50 "Expected" — a stated decision that release management is out of scope for adept, **and why** | ADR 0005 `## Decision` and `## Considered & rejected` |
-| 3 | Issue #50 "Problem" — the omission must stop reading as a gap | ADR 0005 `## Context`, which names the ambiguity and closes it |
-| 4 | Issue #50 "Proposed approach" — one PR | Three files, one PR, no code change |
+| 3 | Issue #50 "Problem" — the omission must stop reading as a gap | ADR 0005 `## Context` names the ambiguity and closes it; the `README.md` pointer is what puts the answer where the reader looks |
+| 4 | Issue #50 "Proposed approach" — one PR | Four files, one PR, no code change |
 | 5 | `CLAUDE.md` "Verifying a change" | `just verify` green |
 
 ## Guardrail interactions
@@ -80,8 +84,15 @@ answers.
 
 ## Risk
 
-The decision can be wrong, and the honest mitigation is not more argument but the revisit
-condition in ADR 0005: three hand-driven releases in target repositories, sharing enough policy
-that one instruction file would have served them. That makes the decision falsifiable by
-observation rather than by opinion, and it is cheap to reverse — a superseding record and the
-skill the evidence then specifies.
+The decision can be wrong. The mitigation is the revisit condition in ADR 0005 — three
+hand-driven releases in target repositories, sharing enough policy that one instruction file
+would have served them — which makes it falsifiable by observation rather than by opinion, and
+cheap to reverse: a superseding record and the skill that evidence then specifies.
+
+The mitigation is weaker than it first reads, and the record says so rather than implying
+otherwise. Nothing in this repository counts those three releases: they happen elsewhere,
+`$warding` sweeps `docs/debt/` review-by dates rather than ADRs, and no other sweep watches
+this record. Reopening depends on a reader raising it. Building a counter would cost more than
+the risk it removes, so the residual is stated and accepted instead — which is also why the
+`README.md` pointer matters more than it looks: it is the only thing that puts the condition in
+front of a reader who was not looking for it.
