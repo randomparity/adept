@@ -423,9 +423,11 @@ still_a_record() {
 # E-RECORD-SYMLINK and skipping every symlink, so no candidate can be a link. A `[ ! -L ]` test
 # here would be a guard that cannot fire — a false guarantee, by the same argument date_to_int
 # makes about its own missing invalid-input branch.
-# The file whose scan faulted, for the caller's diagnostic. The three origins reach the caller
+# What could not be scanned, for the caller's diagnostic. The three origins reach the caller
 # through one status, so without this the message could name only the vanished record — which is
-# the one file that was read successfully.
+# the one file that was read successfully — and the status alone is unattributable, since the
+# three come from three different git commands. Phrased as the thing that could not be read
+# rather than as a bare path, the way gate_witness_path already is.
 renumber_fault_path=""
 renumbered_elsewhere() {
   local base=$1 path=$2 blob_canon candidate tmp cand_status blob_status=0 fault_status=0 fault_path=""
@@ -442,12 +444,12 @@ renumbered_elsewhere() {
   # returning 1 reported E-GONE off a search that never ran. The status travels in
   # path_exists_status because that is the variable the caller's diagnostic reads; this fault,
   # a candidate witness's, and a candidate index query's all reach the caller through it —
-  # which is why renumber_fault_path carries the file each one was reading, the way
-  # gate_witness_path does for the gate-existence witness.
+  # which is why renumber_fault_path names what each one was reading, the way gate_witness_path
+  # does for the gate-existence witness.
   *)
     rm -f "$tmp"
     path_exists_status=$base_blob_status
-    renumber_fault_path=$path
+    renumber_fault_path="the base-ref copy of $path"
     return 2
     ;;
   esac
@@ -468,7 +470,7 @@ renumbered_elsewhere() {
     1) continue ;;
     *)
       fault_status=$tracked_in_index_status
-      fault_path=$candidate
+      fault_path="the index entry for $candidate"
       continue
       ;;
     esac
@@ -482,7 +484,7 @@ renumbered_elsewhere() {
     1) ;;
     *)
       fault_status=$path_exists_status
-      fault_path=$candidate
+      fault_path="$candidate at the base ref"
       continue
       ;;
     esac
@@ -736,9 +738,9 @@ check_no_disappearances() {
       # could not be established — by a candidate witness that did not run, by a candidate the
       # index could not be read for, or by the record's own base-ref copy being unreadable,
       # which aborts before any candidate is tried. The record stays the subject, because it is
-      # the record the verdict is about; renumber_fault_path names the file that could not be
-      # scanned, which is rarely the same one.
-      *) err_full "E-RENUMBER-SCAN: $record: could not determine whether it was renumbered at $base (scan of $renumber_fault_path, exit $path_exists_status)" ;;
+      # the record the verdict is about; renumber_fault_path names what could not be read, which
+      # is rarely that same file and is read by a different git command in each of the three.
+      *) err_full "E-RENUMBER-SCAN: $record: could not determine whether it was renumbered at $base (could not read $renumber_fault_path, exit $path_exists_status)" ;;
       esac
       ;;
     # Neither branch above is safe on a record whose index entry could not be read: the first

@@ -1691,16 +1691,16 @@ STUB
     passed=$((passed + 1))
     printf 'ok   E-GONE suppressed\n'
   fi
-  # Three fault origins reach that one code, and the record named as its subject is the one
-  # file the search *did* read. Without the scanned path the operator is pointed at the wrong
-  # file on every one of them.
-  printf '  %-4s %-44s ' "" "the message names the file that faulted"
-  if grep -q 'scan of docs/debt/0003-b.md, ' "$d/.err"; then
+  # Three fault origins reach that one code by three different git commands, and the record
+  # named as its subject is the one file the search *did* read. Without naming what could not
+  # be read, the operator is pointed at the wrong file and a bare exit status is unattributable.
+  printf '  %-4s %-44s ' "" "the message names what could not be read"
+  if grep -q 'could not read the index entry for docs/debt/0003-b.md, ' "$d/.err"; then
     passed=$((passed + 1))
-    printf 'ok   candidate named\n'
+    printf 'ok   candidate index entry named\n'
   else
     failed=$((failed + 1))
-    printf 'FAIL the scanned path is not in the message\n'
+    printf 'FAIL the faulting read is not named in the message\n'
   fi
 
   # The other half of that caller's decision: a fault on one candidate must not outrank a
