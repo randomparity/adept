@@ -445,8 +445,18 @@ If tests fail, check whether the same tests also fail on the
 `{default_branch}` baseline. Pre-existing failures do not count against
 this PR.
 
-If there are new test failures (pass on `{default_branch}`, fail on this
-PR), report FAIL with the failing test names and error output.
+Then check that the failure repeats. Run the failing tests once more on
+this PR's checkout, changing nothing. A test that fails and then passes
+is flaky — a determinism defect in the repo's own suite, and no verdict
+at all on the dependency bump. It counts as neither a pass nor a failure:
+leave it out of the verdict, judge the PR on the tests that behaved
+deterministically, and name it under Concerns with both outcomes and the
+test's name. Never re-run a suite until it comes up green and then report
+that as a pass.
+
+If there are new test failures that repeat (pass on `{default_branch}`,
+fail on this PR both times), report FAIL with the failing test names and
+error output.
 
 **STEP 5 — Build matrix gap analysis**
 
@@ -474,7 +484,7 @@ configuration build."
 
 **PASS** — all conditions met:
 - Build succeeds
-- All tests pass (or only pre-existing failures)
+- All tests pass (or only pre-existing failures), none of them flaking
 - No transitive dependency flags (downgrades, major bumps)
 - No high-risk matrix gaps
 
@@ -482,11 +492,12 @@ configuration build."
 - New transitive dependencies introduced
 - Transitive dep crossed a major version boundary
 - High-risk matrix gaps
+- A test flaked, so the suite gave no deterministic answer
 - List each specific concern
 
 **FAIL** — any of:
 - Build fails
-- New test failures
+- New test failures that repeat
 - Merge conflicts
 
 Format the final report:
@@ -675,10 +686,20 @@ For each work unit with a **PASS** verdict, in order:
    git checkout pr-{next_number}
    git merge "$DEFAULT_BRANCH" --no-edit
    ```
-   Re-run the build and test commands. If the re-test fails, mark **that
-   next work unit** as **SKIPPED** with reason: "Passed independent
-   evaluation but failed after merging prior PRs. Likely conflicts
-   with: {previously merged PR numbers}." Continue past it to the
+   Re-run the build and test commands. If the re-test fails, run the failing
+   tests once more before concluding anything. This unit already passed the
+   same suite on its own, so a failure that does not repeat is a flake and not
+   a conflict — and "likely conflicts with" would then put a wrong diagnosis on
+   the record, against a PR that did nothing wrong. See
+   [true-seeing](../../references/true-seeing.md), *Flaky tests*.
+
+   If the failure does not repeat, do not mark the unit `SKIPPED`. Record the
+   flake under Concerns with both outcomes and the test's name, and judge the
+   unit on the run that was deterministic.
+
+   If it does repeat, mark **that next work unit** as **SKIPPED** with reason:
+   "Passed independent evaluation but failed after merging prior PRs. Likely
+   conflicts with: {previously merged PR numbers}." Continue past it to the
    following work unit.
 
 For **batched** work units, merge each PR in the batch

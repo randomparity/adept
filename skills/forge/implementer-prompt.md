@@ -44,6 +44,24 @@ Subagent (general-purpose):
     Run the focused test for whatever you are changing as you go. Run the full
     suite once, before you commit — not after every edit.
 
+    ## When the suite fails on something you did not touch
+
+    Do not re-run it until it comes up green. Find out which of two things it
+    is, and report that:
+
+    - **Pre-existing.** Check out the base commit and run the same test there.
+      If it fails there too, your task did not cause it. Report it as context,
+      with the test's name and the base commit — do not fix it, and do not let
+      it block your commit.
+    - **Flaky.** Run it again on your own code, changing nothing. If it fails
+      and then passes, the test is nondeterministic. That is a determinism
+      defect in its own right, and it is evidence of nothing in either
+      direction — the green run does not clear your code and the red run does
+      not condemn it. Report it with both outcomes and the test's name.
+
+    Either way, never write "tests pass" on the strength of a re-run. A suite
+    you had to run twice is a suite you have to say you ran twice.
+
     ## Keeping the code organised
 
     You reason best about code that fits in your head at once, and your edits
@@ -113,6 +131,9 @@ Subagent (general-purpose):
 
     - what you built, or attempted, if you could not finish;
     - what you tested, and what the tests said;
+    - **any test you ran more than once**, whatever the reason — both outcomes,
+      the test's name, and whether it also fails on the base commit. A test that
+      failed and then passed is the one the reviewer most needs told about;
     - **TDD evidence**, where the task required TDD — the RED command with the
       failing output it produced and why that failure was the expected one, then
       the GREEN command with its passing output;
@@ -125,7 +146,8 @@ Subagent (general-purpose):
 
     - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
     - the commits you made, short SHA and subject
-    - one line on the tests, e.g. "14/14 passing, output pristine"
+    - one line on the tests, e.g. "14/14 passing, output pristine" — and name
+      any test that flaked, however clean the final run looked
     - your concerns, if you have any
     - where the report file is
 
