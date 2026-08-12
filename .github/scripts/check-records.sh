@@ -942,16 +942,43 @@ count_lines() {
   printf '%s\n' "$1" | grep -c .
 }
 
+# Existence at a ref, with a scan fault distinguishable from an absence: 0 present, 1 absent,
+# 2 the scan could not run. `git cat-file -e` cannot answer this — it exits 128 both for a path
+# absent from a valid ref and for a bad ref, so its normal absent case is already the fault code.
+# `git ls-tree` exits 0 with empty output for an absent path and non-zero only for a real fault.
+#
+# The predicate's own 2 is a sentinel, so git's real status is left in path_exists_status for
+# the caller's diagnostic: reporting "git exit 2" would name a status git never returned.
+#
+# stderr is suppressed for the reason records_in_ref gives: a bare `fatal:` from git is not this
+# gate's interface, its coded ::error:: lines are.
+path_exists_status=0
+path_exists_at() {
+  local ref=$1 path=$2 out status=0
+  path_exists_status=0
+  out=$(git ls-tree -r --name-only "$ref" -- "$path" 2>/dev/null) || status=$?
+  if [ "$status" -ne 0 ]; then
+    path_exists_status=$status
+    return 2
+  fi
+  [ -n "$out" ] || return 1
+  return 0
+}
+
 # Whether the directory existed at the base ref. An absent-from-both-refs directory is a
 # misconfiguration; one that existed at base and is gone now is erasure, and must keep
 # reporting E-GONE per record — `no_dir` deletes docs/debt wholesale and asserts exactly that.
 # With no base ref, absence is not an error: `no_records_no_base` removes the only record,
 # which leaves git deleting the emptied directory, and expects exit 0.
+#
+# Three-valued like path_exists_at, which it delegates to. The two guards below stay fail-open
+# on purpose: with no base ref, or one that is not a commit, there is nothing to have existed.
 dir_in_ref() {
-  local ref=$1 dir=$2
+  local ref=$1 dir=$2 status=0
   [ -n "$ref" ] || return 0
   git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null || return 0
-  [ -n "$(git ls-tree -r --name-only "$ref" -- "$dir" 2>/dev/null)" ]
+  path_exists_at "$ref" "$dir" || status=$?
+  return "$status"
 }
 
 # Base-ref validity, split out of check_no_disappearances so it reports once rather than
@@ -970,10 +997,25 @@ run_profile() {
   local name=$1
   load_profile "$name" || return 1
 
-  local records="" record_count base_records="" base_count
-  if [ ! -d "$RECORD_DIR" ] && ! dir_in_ref "${BASE_SHA:-}" "$RECORD_DIR"; then
-    err "E-PROFILE-DIR-MISSING: profile '$name' is enabled but $RECORD_DIR exists at neither the base ref nor the tree"
-    return 1
+  local records="" record_count base_records="" base_count dir_status=0
+  # `if ! dir_in_ref` would collapse "absent at base" and "could not tell" into one branch,
+  # which is the defect this rule was converted to remove. Branch on the captured status.
+  if [ ! -d "$RECORD_DIR" ]; then
+    dir_in_ref "${BASE_SHA:-}" "$RECORD_DIR" || dir_status=$?
+    case $dir_status in
+    0) ;;
+    1)
+      err "E-PROFILE-DIR-MISSING: profile '$name' is enabled but $RECORD_DIR exists at neither the base ref nor the tree"
+      return 1
+      ;;
+    *)
+      # Returning rather than continuing: E-COUNT-FLOOR below compares against a base record
+      # count that would be zero for the same unreadable-ref reason, so carrying on would
+      # disarm the one rule that catches a clean run over nothing.
+      err_full "E-DIR-SCAN: $RECORD_DIR: could not check the record directory at ${BASE_SHA:-} (git exit $path_exists_status)"
+      return 1
+      ;;
+    esac
   fi
 
   collect_records
