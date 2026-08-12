@@ -412,8 +412,8 @@ renumbered_elsewhere() {
     ;;
   # Whether the record moved is exactly what an unreadable base copy leaves undetermined, so
   # returning 1 reported E-GONE off a search that never ran. The status travels in
-  # path_exists_status because that is what the caller's diagnostic reads, and the fault it
-  # names is the same one either half of the read can raise.
+  # path_exists_status because that is the variable the caller's diagnostic reads; both this
+  # fault and a candidate witness's reach the caller through it.
   *)
     rm -f "$tmp"
     path_exists_status=$base_blob_status
