@@ -211,7 +211,8 @@ file, which it has to do anyway to put the finding and the plan side by side.
 `code-reviewer.md` ends with three blocks that describe the dispatch from
 outside it, and all three go stale under R1–R3 unless the same change edits
 them: the `**Placeholders:**` list gains `[DIFF_FILE]` and `[REVIEW_FILE]` and
-keeps `[BASE_SHA]` / `[HEAD_SHA]`, which the rebuild clause still needs;
+keeps `[BASE_SHA]` / `[HEAD_SHA]`, which the template still needs to name the
+range it is judging — not for any rebuild, which this design declines to carry;
 `**What comes back:**` is rewritten to the bounded return; and `## Example
 Output` is labelled as what lands in the review file, since after this change it
 is no longer an example of what comes back. A template whose footer contradicts
@@ -235,7 +236,14 @@ Five edits in `skills/forge/SKILL.md`:
    exits 0 when its destination write fails, which issue #36 owns; that fix will
    not retire this check. A failed before-check does not dispatch: the
    controller reports it. Then it removes any file already at the review-file
-   path. **After:** that path exists and is non-empty.
+   path. **After:** that path exists and is non-empty. And where the ledger
+   carried Minor findings, the controller opens it whatever the verdict:
+   `SKILL.md` hands that list to the final reviewer to triage against the merge
+   bar, and on a `Yes` nothing else would ever read the answer — "a summary
+   nobody is directed to read is indistinguishable from having thrown the
+   findings away" is that instruction's own reasoning, and this change would
+   otherwise make it true of itself. One conditional read, and no growth in the
+   return.
    Cleared-before plus present-after is what makes the review this run's rather
    than a leftover from a resumed session at the same range; existence alone
    cannot tell the two apart, and leaving a legitimately occupied path
@@ -286,15 +294,15 @@ Five edits in `skills/forge/SKILL.md`:
    from a naming choice to a new full dispatch nothing in the charter asks for.
    The filename stands on the reason given there instead.
 4. "Every reviewer dispatch ends with the same report contract, so you get a
-   bounded verdict rather than the whole review" narrows to what will be true of
-   the dispatch this change touches: the whole-branch reviewer returns a bounded
-   verdict and a path, and neither reviewer hands the controller a review to
-   hold. The sentence is already overstated today; this change makes the
-   overstatement load-bearing, since it is the rule the whole-branch template is
-   being brought under. The narrowed version says nothing new about what bounds
-   the *task* reviewer — characterizing that, and reconciling the two return
-   shapes, is issue #45's, and this change should not settle a fragment of it in
-   passing.
+   bounded verdict rather than the whole review" narrows to the one dispatch this
+   change touches, and says nothing at all about the other: the whole-branch
+   reviewer returns a bounded verdict and a path rather than the review itself.
+   The sentence is already overstated today; this change makes the overstatement
+   load-bearing, since it is the rule the whole-branch template is being brought
+   under. Silence about the task reviewer is the point — its message *is* its
+   report (`task-reviewer-prompt.md`: "What you send back *is* the report"), so
+   any claim that neither reviewer returns a review would be false, and
+   characterizing what bounds it belongs to issue #45.
 5. The `### Never` bullet "Dispatch a task reviewer without a review-package
    file" widens to any reviewer, since after this change both reviewer
    dispatches require one.

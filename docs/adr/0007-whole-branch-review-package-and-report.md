@@ -38,11 +38,12 @@ the review-file path. No per-finding lines of any kind.
 It has two failure values instead of a verdict, one for each end of the
 arrangement: the reviewer could not write its file, or the package it was handed
 was not there. A shape with no failure value forces a party with nothing to
-report into reporting something, and the two ends need it symmetrically. The
-inherited "rebuild the diff yourself if the package is missing" clause is
-**removed** rather than kept and disclosed: it is a standing hatch back to the
-unbounded inline diff, on the input side, of exactly the kind this record rejects
-on the output side. A reviewer with no package has nothing to review and says so.
+report into reporting something, and the two ends need it symmetrically. The task
+reviewer's "rebuild the diff yourself if the package is missing" clause is **not
+carried across** with the rest of its package handling: it is a standing hatch
+back to the unbounded inline diff, on the input side, of exactly the kind this
+record rejects on the output side. A reviewer with no package has nothing to
+review and says so.
 
 The plan-fault count is why the return is a fixed shape rather than a line budget
 the reviewer fills as it sees fit. What it buys is narrow and worth naming: on a
@@ -85,12 +86,13 @@ which can be corrected as they drift.
   the crude failures; they are checks, not proofs, and a truncated or shallow
   report passes them. The plan-fault count is the weakest link — the reviewer's
   own classification, which no controller check verifies against the file.
-- On a `Yes` verdict nobody reads the review file, so `SKILL.md`'s Minor-triage
-  obligation produces an answer nobody sees: the ledger's Minor findings and the
-  reviewer's triage of them are discarded unread. Accepted rather than explained
-  away — the alternative is a fourth return item, which is the shape growth this
-  decision spent its argument bounding, for findings that by definition do not
-  hold a merge.
+- On a `Yes` verdict nobody would otherwise read the review file, which would
+  strand `SKILL.md`'s Minor-triage obligation: its answer would be produced and
+  never seen, the precise thing that instruction exists to prevent ("a summary
+  nobody is directed to read is indistinguishable from having thrown the
+  findings away"). So the controller opens the file on any verdict when the
+  ledger carried Minor findings. That is a conditional read, not a fourth return
+  item — the return shape stays as argued above.
 - The final review is destroyed with the worktree, where an inline review
   persisted in the session transcript. Its readers during the run can reach it
   while the worktree exists.

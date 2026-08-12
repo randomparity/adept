@@ -364,7 +364,10 @@ Then produce the two paths and check them:
    directory `scripts/sdd-workspace` prints. Remove anything already at that
    path before dispatching, so that a file there afterwards is this dispatch's
    and not a leftover from a resumed session.
-3. After the reviewer returns, that path must exist and be non-empty.
+3. After the reviewer returns, that path must exist and be non-empty. If the
+   ledger carried Minor findings, open it whatever the verdict — you handed that
+   list to the reviewer to triage against the merge bar, and on a `Yes` nothing
+   else would read the answer.
 
 A missing or empty file means the return is not evidence: discard it and
 re-dispatch once, then stop and report. That single blind retry is for a
@@ -425,13 +428,15 @@ Replace with:
 
 ```
 The whole-branch reviewer returns a bounded verdict and a path rather than the
-review itself. Neither reviewer hands you a review to hold.
+review itself.
 ```
 
 That sentence is overstated as it stands, and this change makes the
 overstatement load-bearing — it is the rule the whole-branch template is being
-brought under. Say nothing new about what bounds the *task* reviewer:
-characterizing that, and reconciling the two return shapes, is issue #45's.
+brought under. Say nothing whatever about the *task* reviewer. Its message **is**
+its report, so a sentence claiming neither reviewer returns a review would be
+false; characterizing what bounds it, and reconciling the two return shapes, is
+issue #45's.
 
 ### Step 2.4 — widen the `Never` bullet
 
@@ -470,13 +475,14 @@ git commit -m "feat(forge): produce and verify the whole-branch review's paths"
   no-`BASE_BRANCH` and no-default-to-`main` rules stated.
 - It requires a non-zero commit and byte count on the package before dispatch,
   clears `[REVIEW_FILE]` before dispatch, and checks existence and non-emptiness
-  afterwards.
+  afterwards — plus a conditional read when the ledger carried Minor findings.
 - The failure paths are stated: one blind retry for a silent failure, an
   immediate stop on `WRITE_FAILED` or `PACKAGE_MISSING`, and a stop that says
   outright the branch has no whole-branch review.
 - The final-fix dispatch passes the path, states what binds the subagent, and
   orders the human question ahead of the fix wave.
-- The report-contract sentence describes both dispatches truthfully.
+- The report-contract sentence describes the whole-branch dispatch and makes no
+  claim about the task reviewer.
 - The `Never` bullet covers any reviewer.
 - `just verify` exits 0.
 
