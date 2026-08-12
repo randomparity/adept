@@ -298,7 +298,7 @@ Five edits in `skills/forge/SKILL.md`:
 5. The `### Never` bullet "Dispatch a task reviewer without a review-package
    file" widens to any reviewer, since after this change both reviewer
    dispatches require one.
-There is deliberately no seventh edit adding the branch base to the progress
+There is deliberately no sixth edit adding the branch base to the progress
 ledger. An earlier draft had one, on the reasoning that a controller which lost
 its conversation memory must read the base rather than remember it — sound, but
 answered better by recomputing it, which is what R1 now specifies. A recorded
@@ -326,7 +326,7 @@ still returning different shapes.
 
 These files are dispatch prompt templates, which is an AI surface, and the
 design changes one. There is no eval plan here, and that is deliberate — but the
-reason is not that the change adds no model behavior. It adds six:
+reason is not that the change adds no model behavior. It adds seven:
 
 | New behavior | How it is checked |
 |---|---|
