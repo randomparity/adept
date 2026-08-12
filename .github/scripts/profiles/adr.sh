@@ -67,10 +67,25 @@ profile_check_status() {
 # bytes and the path — so it runs in both passes, which is why the hook takes the logical path
 # separately from the file it reads.
 check_title_number() {
-  local file=$1 label=$2 name num title
+  local file=$1 label=$2 name num title title_status=0
   name=${label##*/}
   num=${name%%-*}
-  title=$(grep -m1 '^# ' "$file" || true)
+  # grep exits 1 for "no match" and 2 or more for a fault it hit while scanning. `|| true`
+  # folded the two together, so an unreadable file yielded an empty title and this rule then
+  # reported E-TITLE-MISMATCH against a title it never read -- a second, factually wrong
+  # finding alongside the honest one check_sections already reports.
+  #
+  # err_full, not err: this rule runs in both passes, and err would let the base-ref pass
+  # collect the fault silently and a grandfathered record downgrade it to a warning, leaving
+  # the gate at exit 0 over a scan that never completed.
+  title=$(grep -m1 '^# ' "$file") || title_status=$?
+  case $title_status in
+  0 | 1) ;;
+  *)
+    err_full "E-TITLE-SCAN: $label: could not read the title line (grep exit $title_status)"
+    return 0
+    ;;
+  esac
   if ! printf '%s' "$title" | grep -qE "^# ${num} "; then
     err "E-TITLE-MISMATCH: $label: title '$title' does not begin '# $num ' — the H1's number is the record's number"
   fi

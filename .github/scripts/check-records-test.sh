@@ -1464,6 +1464,35 @@ STUB
   run_case "section listing faults, not a clean pass" 1 E-SECTION-LIST-SCAN "$d" \
     BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
 
+  # The ADR title read. `|| true` made an unreadable file yield an empty title, and the rule
+  # then reported E-TITLE-MISMATCH against a title it never read -- a spurious second finding
+  # beside the honest scan fault. The fault must replace that verdict, not accompany it.
+  stub_bin="$SCRATCH/grep-title-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = '^# ' ]; then
+    printf 'grep: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+  fi
+done
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  d=$(adr_dir title_scan_fault)
+  b=$(base_of "$d")
+  run_case "ADR title read faults, no spurious mismatch" 1 E-TITLE-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "scan fault replaces E-TITLE-MISMATCH"
+  if grep -q 'E-TITLE-MISMATCH: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL E-TITLE-MISMATCH also fired for a title never read\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-TITLE-MISMATCH suppressed\n'
+  fi
+
   d=$(case_dir resolve_in_place)
   b=$(base_of "$d")
   sed 's/^Open$/> **Resolved by PR #7** (2026-02-01)/' "$d/docs/debt/0001-valid.md" >"$d/.t" && mv "$d/.t" "$d/docs/debt/0001-valid.md"
