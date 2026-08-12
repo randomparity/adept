@@ -36,12 +36,17 @@ closed witness set exists to prevent.
 
 ## Decision
 
-**1. A scan whose result feeds a verdict captures its own exit status and
-branches three ways** — matched, did not match, could not run — and never lets
-the third fall into the second. The fault is reported through whatever channel
-that script already fails through, naming the file it was reading and the exit
-status it got. In the record-gate scripts that channel is a coded `::error::`
-line, so a fault gets an `E-<RULE>-SCAN` code; `tracker.sh` has no code channel
+**1. A scan that reads external bytes — a file on disk or a git object — and
+whose result feeds a verdict captures its own exit status and branches three
+ways** — matched, did not match, could not run — and never lets the third fall
+into the second. A command reading only in-memory input, such as `printf` over a
+shell variable, is outside this rule: its failure modes are not the
+scan-could-not-run case. The fault is reported through whatever channel that
+script already fails through, naming the file it was reading and the exit status
+it got. In the record-gate scripts that channel is a coded `::error::` line, so a
+fault gets an `E-<RULE>-SCAN` code — per rule rather than one generic `E-SCAN`,
+so a test can assert *which* site faulted and not merely that one did.
+`tracker.sh` has no code channel
 and reports through its usage exit. Issue #55 asked for a coded diagnostic at
 every site, and this is a deliberate deviation from that wording: the rule is
 "report through the channel that exists", not "invent one". A scan inside a
@@ -68,9 +73,10 @@ establish.
 
 - Each new `E-*-SCAN` code names the file and the exit status. The codes are
   stable because the test suite asserts on them by name.
-- Predicates that gain a fault value change from two-valued to three-valued.
-  Their callers are in the current shell, so the caller-reports rule costs
-  nothing.
+- Predicates that gain a fault value change from two-valued to three-valued, and
+  that constrains how they may be called: never under `if !`, and never in an
+  `&&`/`||` chain, both of which collapse `1` and `2` back into one branch and
+  reinstate the defect. Every caller `case`s on the status.
 - `git cat-file -e` is no longer used as an existence witness in
   `check-records.sh`.
 - **Two classes of site remain outside this rule and are recorded, not
@@ -97,9 +103,18 @@ and grep then reads empty input. It would also change the status of every
 existing pipeline in three scripts at once — a far larger blast radius than the
 defect.
 
+**Convert only the git-object witnesses and accept the rest.** The tempting
+half-measure, since Context concedes those are the sites that fault in ordinary
+use while the base-ref copies fault only under a stubbed tool. Rejected: a rule
+applied to half its sites is not a rule, and the reader of the next `|| true`
+has no way to tell which half they are in. The stub-only sites cost one test
+each, against seven codes, nine conversions and two mirrors for the whole sweep
+— the marginal cost of the unreachable half is the smallest part of the change.
+
 **Add a CI guard that greps for the idiom.** Rejected for now, not on principle.
-`check-records.sh` discards a status deliberately in at least two places — one
-so a profile's failure cannot hide another profile's findings — so any such
-guard needs an allowlist, and an allowlist that drifts is how a gate starts
-passing over the thing it checks. Worth revisiting once #55, #63 and #64 have
-settled what the legitimate exceptions actually are.
+The objection is to a *central allowlist*: `check-records.sh` discards a status
+deliberately in at least two places — one so a profile's failure cannot hide
+another profile's findings — and an allowlist that drifts is how a gate starts
+passing over the thing it checks. A diff-scoped guard, or an inline pragma at
+each deliberate discard, avoids that failure and is worth revisiting once #55,
+#63 and #64 have settled what the legitimate exceptions actually are.
