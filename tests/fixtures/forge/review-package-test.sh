@@ -57,10 +57,18 @@ new_repo() {
 	git -C "$dir" config user.name 'Test'
 	printf 'seed\n' >"$dir/README.md"
 	git -C "$dir" add README.md
+	# A file long enough for the context width to be observable. The edit below
+	# lands on ledger-15, so ten lines of context reaches ledger-05 and three
+	# lines does not -- which is what lets a case distinguish -U10 from a
+	# narrower setting instead of merely asserting a diff body exists.
+	seq -f 'ledger-%02g' 1 30 >"$dir/ledger.txt"
+	git -C "$dir" add README.md ledger.txt
 	git -C "$dir" commit -qm 'seed'
 	printf 'second\n' >>"$dir/README.md"
 	printf 'new file\n' >"$dir/added.txt"
-	git -C "$dir" add README.md added.txt
+	sed 's/^ledger-15$/ledger-15-CHANGED/' "$dir/ledger.txt" >"$dir/ledger.next"
+	mv "$dir/ledger.next" "$dir/ledger.txt"
+	git -C "$dir" add README.md added.txt ledger.txt
 	git -C "$dir" commit -qm 'second commit'
 	printf '%s\n' "$dir"
 }
@@ -121,12 +129,22 @@ case_package_carries_the_range_content() {
 		fail "$name" 'the commit subject is absent'
 		return
 	fi
-	if ! grep -qF 'added.txt' "$out"; then
-		fail "$name" 'the changed file is absent'
+	# A summary line only --stat emits. Asserting the filename instead would
+	# pass on a package with no stat at all, because the diff body names every
+	# changed file too.
+	if ! grep -qE '^[[:space:]]*[0-9]+ files? changed' "$out"; then
+		fail "$name" 'the diffstat summary is absent'
 		return
 	fi
 	if ! grep -q '^+new file' "$out"; then
 		fail "$name" 'the diff body is absent'
+		return
+	fi
+	# Ten lines of context either side of the ledger-15 edit reaches ledger-05.
+	# This is the only case that fails if the context width narrows, and the
+	# width is the whole reason the script passes -U10 rather than defaulting.
+	if ! grep -qE '^[ +-]ledger-05$' "$out"; then
+		fail "$name" 'the wide context is absent -- did -U10 change?'
 		return
 	fi
 	ok "$name"
