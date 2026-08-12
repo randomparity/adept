@@ -62,7 +62,10 @@ frames carry no decision value, only the terminal states do.
 2. If a required check fails, inspect the failure, fix it, run relevant local
    guardrails, push, and restart the loop. **Never re-run a failed check hoping
    for green** — see [true-seeing](../../references/true-seeing.md), *Flaky
-   tests*. Two cases, and they are not the same act:
+   tests*. Two cases, and they are not the same act. Read the failure log to
+   tell them apart: an assertion or error raised by the repo's own test is the
+   first, and a runner, network, registry, or cache error that fired before the
+   tests ran is the second.
    - **The failure is in the repo's own suite.** Fix the determinism defect. If
      you file it instead, that is a terminal state for this loop, not a step in
      it: the required check stays red, so there is no exit condition to reach.

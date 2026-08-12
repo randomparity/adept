@@ -459,8 +459,10 @@ this PR.
 
 Then check that the failure repeats. Run the failing tests once more on
 this PR's checkout, changing nothing. A test that fails and then passes
-is flaky — a determinism defect in the repo's own suite, and no verdict
-at all on the dependency bump. It counts as neither a pass nor a failure:
+is flaky: neither run is evidence, so it settles nothing about the
+dependency bump. Do not attribute it either — a bump can introduce
+nondeterminism as readily as expose it, and you have not tested which.
+It counts as neither a pass nor a failure:
 leave it out of the verdict, judge the PR on the tests that behaved
 deterministically, and name it under Concerns with both outcomes and the
 test's name. Never re-run a suite until it comes up green and then report
@@ -779,4 +781,6 @@ For each WARN, FAIL, SKIPPED, or BLOCKED PR, print the full evaluation
 report from the subagent so the user has all context needed to
 decide or fix the issue. For a BLOCKED PR, add the merge refusal message
 from Phase 4a step 3 — the evaluation report alone says `PASS` and does not
-explain why the merge did not happen.
+explain why the merge did not happen. For a `WARN` assigned at Phase 4a
+step 5, add the flake evidence — both outcomes and the test's name — for
+the same reason.
