@@ -150,18 +150,23 @@ Five edits in `skills/forge/SKILL.md`:
    branch base explicitly — the endpoint noted before the *first* task, not the
    per-task base, which is the mistake the per-task loop's own step 5 warns
    about in the other direction.
-2. The same step adds the two file checks. **Before dispatching:** the package is
+2. The same step adds the file checks. **Before dispatching:** the package is
    non-empty, because `review-package` reports success and exits 0 when its
    destination write fails (issue #36) and the template's rebuild clause then
    falls back to an inline `git diff` — silently restoring exactly what this
-   change removes. Also before dispatching: nothing already sits at the
-   review-file path. **After:** that path exists and is non-empty. Absence-before
-   plus presence-after is what makes the review this run's rather than a leftover
-   from a resumed session; existence alone cannot tell the two apart. On either
-   check failing after the dispatch, the controller discards the return and
-   re-dispatches once, then stops and reports rather than dispatching again.
-   `SKILL.md` already applies the same discipline to implementer reports
-   ("Confirm the report has all three before re-dispatching the reviewer").
+   change removes. Also before dispatching, the controller removes any file
+   already at the review-file path. **After:** that path exists and is non-empty.
+   Cleared-before plus present-after is what makes the review this run's rather
+   than a leftover from a resumed session at the same range; existence alone
+   cannot tell the two apart, and leaving a legitimately occupied path
+   undefined would be worse than either. On the after-check failing, the
+   controller discards the return and re-dispatches once, then stops and reports
+   rather than dispatching again. That blind retry is for the *silent* failure;
+   a reviewer that returned the write-failure value has already named the
+   problem, so the controller changes something — a different path, or it stops
+   and reports — rather than re-running an identical dispatch. `SKILL.md` already
+   applies the same discipline to implementer reports ("Confirm the report has
+   all three before re-dispatching the reviewer").
 3. The final-fix instruction (currently "send **one** fix subagent with the
    complete list") hands over the review-file path instead of a list, and tells
    that subagent to return a labelled plan-fault finding rather than fix it.
