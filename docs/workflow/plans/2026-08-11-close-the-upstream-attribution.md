@@ -592,8 +592,15 @@ then write the replacement from the contract *and* that inventory.
 4. Re-run the placeholder command → identical set.
 5. Run the four word-bounded literal checks from *Global Constraints* → each ≥ 1,
    and `\bDONE\b` exactly as before. Then the two non-uppercase slots:
-   `rg -c --no-config -F 'Work from:'` and
-   `rg -c --no-config -F "session's most expensive one"` → both ≥ 1.
+   `rg -c --no-config -F 'Work from:'` and `rg -c --no-config -F 'MODEL — REQUIRED'`
+   → both ≥ 1.
+
+   **Not** the warning's upstream wording. An earlier draft checked
+   `-F "session's most expensive one"`, which would have required preserving the
+   exact sentence this change exists to stop reusing. What must survive is the
+   warning's substance — that leaving the model unset silently inherits the
+   session's, at the highest cost — and that is verified by reading, like every
+   other instruction in the inventory.
 6. Measure. Target **< 2%, run ≤ 16**.
 7. `just verify` bare.
 8. Commit: `refactor: re-author the implementer prompt from its dispatch contract`.
