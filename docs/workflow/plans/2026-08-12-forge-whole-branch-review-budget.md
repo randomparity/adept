@@ -42,14 +42,15 @@ the exact values.
      rather than the code. Reused from `task-reviewer-prompt.md`.
    - `WRITE_FAILED` — the return's first line when the reviewer could not write
      the review file.
-   - `delivery: package` / `delivery: rebuilt diff` — the review file's first
-     line, naming which diff the reviewer actually had.
+   - `PACKAGE_MISSING` — the return's first line when the package the reviewer
+     was handed was not there. There is deliberately no rebuild-it-yourself
+     fallback; see Step 1.2.
 5. **The return cap is fifteen lines**, the same number
    `implementer-prompt.md` already states.
 6. **Placeholders in `code-reviewer.md`** after this change:
    `[DESCRIPTION]`, `[PLAN_OR_REQUIREMENTS]`, `[DIFF_FILE]`, `[REVIEW_FILE]`,
    `[BASE_SHA]`, `[HEAD_SHA]`, `[SHA]`. `[BASE_SHA]` and `[HEAD_SHA]` stay
-   because the package-missing rebuild clause needs them.
+   because the template still names the range it is judging.
 7. **The base is the fork point.** Wherever `SKILL.md` names the whole-branch
    review's base, it is `git merge-base HEAD <BASE_BRANCH>`, recomputed at
    dispatch time, with `BASE_BRANCH` being the value `$attunement` recorded.
@@ -85,9 +86,8 @@ instructions refer to placeholders this task defines.
 
 - *Consumes from earlier tasks:* nothing; this is the first task.
 - *Provides to Task 2:* the placeholder names `[DIFF_FILE]` and `[REVIEW_FILE]`,
-  the literal `WRITE_FAILED`, the literal `plan-mandated`, and the review file's
-  first-line forms `delivery: package` and `delivery: rebuilt diff`. Task 2's
-  `SKILL.md` text refers to all of these by exactly these spellings.
+  and the literals `WRITE_FAILED`, `PACKAGE_MISSING`, and `plan-mandated`.
+  Task 2's `SKILL.md` text refers to all of these by exactly these spellings.
 
 ### Step 1.1 — read the current template and its sibling
 
@@ -128,11 +128,9 @@ Replace it with:
     Open that package once. Inside are the commits, a per-file stat, and every
     hunk with generous context around it, and those context lines *are* the
     files as they now stand. The package is the diff for this range: do not
-    re-derive it. If the package is missing, rebuild it —
-    `git diff --stat [BASE_SHA]..[HEAD_SHA]`, then
-    `git diff [BASE_SHA]..[HEAD_SHA]` — and say so on the first line of your
-    review file. A rebuilt diff carries narrower context than the package, and
-    whoever reads the review needs to know which one you had.
+    re-derive it, and do not fall back to running `git diff` yourself. If the
+    package is not there, you have nothing to review: send back
+    `PACKAGE_MISSING` and stop.
 
     Unlike a task review, you are not confined to the package. This pass exists
     for what a task-scoped reviewer could not see: the plan the branch was built
@@ -193,9 +191,7 @@ insert this immediately under the new heading, before the existing `###
 Strengths` line:
 
 ```
-    Write the review to [REVIEW_FILE]. Its first line names the delivery you
-    had — `delivery: package` or `delivery: rebuilt diff` — and the review
-    follows under it, in the sections below.
+    Write the review to [REVIEW_FILE], in the sections below.
 ```
 
 Leave `### Strengths`, `### Issues`, the three severity buckets, `###
@@ -230,9 +226,11 @@ insert a new section:
     Nothing else. No findings, no summary of them, no preamble, no account of
     your method. Whoever acts on a finding reads the file.
 
-    If you could not write the review file, send back `WRITE_FAILED` as the
-    first line and the reason on the second, instead of a verdict. Do not report
-    a verdict whose evidence you were unable to record.
+    Two things replace the verdict rather than joining it. If you could not
+    write the review file, send back `WRITE_FAILED` as the first line and the
+    reason on the second. If the package was not at [DIFF_FILE], send back
+    `PACKAGE_MISSING` the same way. Never report a verdict whose evidence you
+    could not read, or could not record.
 ```
 
 ### Step 1.7 — update the three trailing blocks
@@ -261,7 +259,8 @@ Replace the `**What comes back:**` line with:
 ```
 **What comes back:** at most fifteen lines — a merge verdict, the finding counts
 by grade plus the `plan-mandated` subset, and the review file's path. Or
-`WRITE_FAILED` and a reason. The review itself is in `[REVIEW_FILE]`.
+`WRITE_FAILED` / `PACKAGE_MISSING` and a reason. The review itself is in
+`[REVIEW_FILE]`.
 ```
 
 Change the `## Example Output` heading to `## Example review file`, and add
@@ -291,8 +290,7 @@ adds none.
 Read the whole file once more and confirm: no `[REPORT_FILE]` anywhere (that
 placeholder belongs to the sibling templates and means the opposite thing); the
 four-space indentation is unbroken inside the fenced block; and no
-`git diff [BASE_SHA]..[HEAD_SHA]` survives outside the package-missing rebuild
-clause.
+`git diff [BASE_SHA]..[HEAD_SHA]` invocation survives anywhere in the file.
 
 ```sh
 git add skills/forge/code-reviewer.md
@@ -302,12 +300,10 @@ git commit -m "feat(forge): budget the whole-branch reviewer's diff and return"
 **Acceptance criteria.**
 
 - `skills/forge/code-reviewer.md` names `[DIFF_FILE]` as the diff's source and
-  contains no instruction to run `git diff` other than the package-missing
-  rebuild.
-- It instructs the reviewer to write the review to `[REVIEW_FILE]`, first line
-  `delivery: package` or `delivery: rebuilt diff`.
+  contains no instruction to run `git diff` at all.
+- It instructs the reviewer to write the review to `[REVIEW_FILE]`.
 - It caps the return at fifteen lines carrying exactly three items, and defines
-  `WRITE_FAILED`.
+  both `WRITE_FAILED` and `PACKAGE_MISSING`.
 - It labels plan-fault findings `plan-mandated` and counts them as a subset.
 - The read-only rule exempts `[REVIEW_FILE]` alone, not its directory.
 - `Critical` / `Important` / `Minor` are unchanged.
@@ -327,8 +323,8 @@ changes the controller that dispatches it, so the two agree.
 **Interfaces.**
 
 - *Consumes from Task 1:* the placeholders `[DIFF_FILE]` and `[REVIEW_FILE]`,
-  and the literals `WRITE_FAILED`, `plan-mandated`, `delivery: package`,
-  `delivery: rebuilt diff` — all spelled exactly as Task 1 wrote them.
+  and the literals `WRITE_FAILED`, `PACKAGE_MISSING`, and `plan-mandated` — all
+  spelled exactly as Task 1 wrote them.
 - *Provides to later tasks:* nothing; this is the last task.
 
 ### Step 2.1 — rewrite the final-review dispatch instruction
@@ -361,25 +357,22 @@ Then produce the two paths and check them:
 
 1. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It prints a
    commit count and a byte count; both must be non-zero before you dispatch.
-   The script exits 0 even when its destination write fails, and the template's
-   package-missing clause would then have the reviewer rebuild the diff
-   inline — restoring the cost this whole arrangement removes. On a zero count,
-   report it and stop; do not dispatch and do not fall back.
+   This is artifact validation and not a workaround — any generation step can
+   fail, and this file is the reviewer's entire input. On a zero count, report
+   it and stop: do not dispatch.
 2. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
    directory `scripts/sdd-workspace` prints. Remove anything already at that
    path before dispatching, so that a file there afterwards is this dispatch's
    and not a leftover from a resumed session.
-3. After the reviewer returns, that path must exist, be non-empty, and open with
-   `delivery: package`. `delivery: rebuilt diff` means the reviewer never had
-   the package — record that in the ledger, because it changes what the review
-   was able to see.
+3. After the reviewer returns, that path must exist and be non-empty.
 
 A missing or empty file means the return is not evidence: discard it and
-re-dispatch once, then stop and report. That single blind retry is for a silent
-failure. A reviewer that returned `WRITE_FAILED` has already named a reason:
-where it names the path, retry once at a second path in the same workspace
-directory and nowhere else; where it names the directory or a permission, a
-different path cannot help, so stop and report the workspace as the blocker. A
+re-dispatch once, then stop and report. That single blind retry is for a
+*silent* failure, where nothing says what went wrong. A reviewer that returned
+`WRITE_FAILED` or `PACKAGE_MISSING` has already named the problem — stop on the
+first one and report it. Do not retry at a second path: that would ask you to
+classify the reviewer's free-text reason, and would hand it a second writable
+location, which is the containment the template's read-only rule rests on. A
 stop here means the branch goes on to the rest of the pipeline with no
 whole-branch review, and you say so rather than closing the phase quietly.
 ```
@@ -408,20 +401,15 @@ a hand-picked list did: Critical and Important findings are to be fixed, Minor
 findings and Recommendations are not, and a finding labelled `plan-mandated` is
 returned to you rather than fixed.
 
-Order the two triggers, because they overlap — a `plan-mandated` finding is
-graded like any other and carries the label as well:
+Order the two triggers: a non-zero `plan-mandated` count goes to the human
+**before** the fix wave is dispatched, and the human's answer decides which
+labelled findings that wave carries.
 
-1. A non-zero `plan-mandated` count goes to the human first, and the fix wave
-   waits on the answer. Dispatching a fix before it would be you overruling a
-   call reserved for the human.
-2. That answer partitions the labelled findings: the upheld ones join the wave,
-   the overruled ones are dropped and recorded as overruled.
-3. Then one fix subagent, against the unlabelled findings plus the upheld
-   labelled ones, graded Critical or Important — and only if that set is
-   non-empty.
-
-A `No` or `With fixes` carrying no graded findings at all is a return to open the
-file for rather than act on: its two halves cannot both be right.
+You no longer read the review, so you cannot interleave the question and the
+wave by judgment as you could when a list passed through your hands. A wave sent
+first would already have changed the code the human was being asked about —
+overruling, by sequence, a call reserved for them. Nothing beyond the ordering
+is prescribed here; the rest stays your judgment.
 ```
 
 ### Step 2.3 — narrow the overstated report-contract claim
@@ -436,14 +424,14 @@ verdict rather than the whole review.
 Replace with:
 
 ```
-The whole-branch reviewer returns a bounded verdict and a path; the task
-reviewer's message is still its report, bounded instead by the single task it
-covers. Neither hands you a review to hold.
+The whole-branch reviewer returns a bounded verdict and a path rather than the
+review itself. Neither reviewer hands you a review to hold.
 ```
 
 That sentence is overstated as it stands, and this change makes the
 overstatement load-bearing — it is the rule the whole-branch template is being
-brought under.
+brought under. Say nothing new about what bounds the *task* reviewer:
+characterizing that, and reconciling the two return shapes, is issue #45's.
 
 ### Step 2.4 — widen the `Never` bullet
 
@@ -481,13 +469,13 @@ git commit -m "feat(forge): produce and verify the whole-branch review's paths"
 - The final-review dispatch names the fork point, recomputed, with the
   no-`BASE_BRANCH` and no-default-to-`main` rules stated.
 - It requires a non-zero commit and byte count on the package before dispatch,
-  clears `[REVIEW_FILE]` before dispatch, and checks existence, non-emptiness
-  and the `delivery:` line afterwards.
-- The failure paths are stated: one blind retry for a silent failure, a
-  reason-gated retry for `WRITE_FAILED`, and an explicit stop that says the
-  branch has no whole-branch review.
+  clears `[REVIEW_FILE]` before dispatch, and checks existence and non-emptiness
+  afterwards.
+- The failure paths are stated: one blind retry for a silent failure, an
+  immediate stop on `WRITE_FAILED` or `PACKAGE_MISSING`, and a stop that says
+  outright the branch has no whole-branch review.
 - The final-fix dispatch passes the path, states what binds the subagent, and
-  orders the human question ahead of the fix wave with the partition rule.
+  orders the human question ahead of the fix wave.
 - The report-contract sentence describes both dispatches truthfully.
 - The `Never` bullet covers any reviewer.
 - `just verify` exits 0.

@@ -91,9 +91,8 @@ the task reviewer's equivalent section is the *delivery*, clause by clause, and
 the distinction matters enough to spell out rather than say "the same rules":
 
 - **Crosses:** open the package once; its wide context lines *are* the files as
-  they now stand; the package **is** the diff, so do not re-derive it — the
-  package-missing rebuild below is the only sanctioned exception, and it is
-  disclosed.
+  they now stand; the package **is** the diff, so do not re-derive it — with no
+  exception, which is where this parts company with the task reviewer.
 - **Does not cross:** "it is the whole of what you are judging", "resist opening
   one on the side", and "Stay out of the rest of the codebase". These read as
   delivery rules and are scoping rules, which is precisely why importing the
@@ -103,6 +102,17 @@ The first list's third clause is what makes R1 falsifiable. Removing the
 *instruction* to run `git diff` is not the same as removing the *permission*:
 without a clause saying the package is the diff, a reviewer that ran one anyway
 would be breaking nothing.
+
+The task reviewer's package-missing rebuild clause does **not** cross either, and
+it is the one omission worth arguing for, since it is the only place this design
+declines to copy the file the charter names as the correct contrast state. A
+rebuild clause is a standing permission to run the unbounded inline diff — the
+thing issue #46 was filed against — and no check can close it, because it fires
+inside the reviewer after every check has run. The reviewer instead returns
+`PACKAGE_MISSING` and stops, the way it returns `WRITE_FAILED` at the other end.
+The asymmetry with the task reviewer is deliberate and bounded: a task review
+that falls back re-derives one task's diff; this one would re-derive the whole
+branch, on the most capable model.
 
 This is the one review whose value is seeing what a task-scoped reviewer could
 not: the plan it was built against, the call sites of a contract the branch
@@ -147,14 +157,9 @@ that file unchanged, including the triage of the ledger's Minor findings that
 dispatch and stays one; only its answer moves. This is a change of destination,
 not of rubric.
 
-Three things are added to the file, all of them disclosures the controller and
+Two things are added to the file, both of them disclosures the controller and
 the fix subagent would otherwise have no way to see:
 
-- **A first line naming the delivery used** — the package, or the `git diff`
-  rebuild. The rebuild clause is a silent escape hatch back to the unbounded
-  inline diff, and no before-check can close it, because it fires inside the
-  reviewer after the check has run. A line that says which one was used is what
-  makes the fallback visible at all.
 - **A label on plan-fault findings**, the literal string **`plan-mandated`**,
   reused from `task-reviewer-prompt.md`, which already labels its equivalent
   case that way. The count in the return and the fix subagent's instruction both
@@ -179,11 +184,12 @@ way `task-reviewer-prompt.md` grades its equivalent Important *and* labels it.
 So the three grades still sum to the finding total, and a return reading
 `Important 2, plan-mandated 2` describes two findings, not four.
 
-A reviewer that could not write the file returns the literal first line
-**`WRITE_FAILED`** and the reason, instead of a verdict — a status token rather
-than a fourth verdict value, so it cannot be confused with a merge judgment. A
-shape with no failure value forces a reviewer with nothing to report into
-reporting something.
+Two failure values replace the verdict rather than joining it, one for each end
+of the arrangement: **`WRITE_FAILED`** when the reviewer could not write its
+file, **`PACKAGE_MISSING`** when the package it was handed was not there. Both
+are first-line status tokens followed by the reason, so neither can be mistaken
+for a merge judgment. A shape with no failure value forces a party with nothing
+to report into reporting something.
 
 No per-finding lines of any kind. The controller's next action is one of three —
 dispatch a fix subagent, ask the human which of a finding and the plan holds, or
@@ -223,30 +229,25 @@ Five edits in `skills/forge/SKILL.md`:
    direction.
 2. The same step adds the file checks. **Before dispatching:** the package is
    real, judged on what `review-package` prints — a non-zero commit count and a
-   non-zero byte count — because it reports success and exits 0 when its
-   destination write fails (issue #36), and the template's rebuild clause then
-   falls back to an inline `git diff`, silently restoring exactly what this
-   change removes. A failed before-check does not dispatch: the controller
-   reports it, and does not fall back. Then it removes any file already at the
-   review-file path. **After:** that path exists, is non-empty, and its first
-   line names the delivery the reviewer used. The controller is already at the
-   path to stat it, so reading one line costs one line of context and makes the
-   `git diff` fallback visible on every verdict rather than only when something
-   else happens to open the file — a disclosure nobody is directed to read is
-   not a disclosure.
+   non-zero byte count. This is artifact validation, not a workaround: any
+   generation step can fail, and this file is the reviewer's entire input. It
+   happens to matter more today because `review-package` reports success and
+   exits 0 when its destination write fails, which issue #36 owns; that fix will
+   not retire this check. A failed before-check does not dispatch: the
+   controller reports it. Then it removes any file already at the review-file
+   path. **After:** that path exists and is non-empty.
    Cleared-before plus present-after is what makes the review this run's rather
    than a leftover from a resumed session at the same range; existence alone
    cannot tell the two apart, and leaving a legitimately occupied path
    undefined would be worse than either. On the after-check failing, the
    controller discards the return and re-dispatches once, then stops and reports
-   rather than dispatching again. That blind retry is for the *silent* failure.
-   A reviewer that returned `WRITE_FAILED` has already named a reason, and the
-   reason decides: where it names the path, the controller retries once at a
-   second path inside the same `scripts/sdd-workspace` directory — and nowhere
-   else, or the single-named-path containment the read-only rule rests on stops
-   being true on the retry. Where it names the directory or the permission, a
-   different path cannot help, so the controller stops on the first failure and
-   names the workspace as the blocker.
+   rather than dispatching again. That blind retry is for the *silent* failure,
+   where nothing says what went wrong. A reviewer that returned `WRITE_FAILED`
+   or `PACKAGE_MISSING` has already named the problem: the controller stops on
+   the first one and reports it. It does not retry at a second path — that would
+   ask it to classify free-text prose into path-fault and permission-fault, and
+   would hand the reviewer a second writable location, which is the containment
+   the amended read-only rule rests on.
 
    A stop here means the branch reaches the rest of the pipeline with no
    whole-branch review, and the controller says exactly that rather than closing
@@ -264,24 +265,20 @@ Five edits in `skills/forge/SKILL.md`:
    carries none of it, and `SKILL.md` reserves the plan-versus-finding call for
    the human ("put both in front of the human and ask which holds").
 
-   The same item states when the dispatch fires and in what order, because the
-   verdict and the counts can disagree and because the two triggers overlap by
-   construction — `plan-mandated` findings are a subset of the graded ones:
+   The same item orders the two triggers, and only orders them: a non-zero
+   `plan-mandated` count goes to the human **before** the fix wave is
+   dispatched, and the human's answer decides which labelled findings the wave
+   carries.
 
-   - a non-zero `plan-mandated` count goes to the human **first**, and the fix
-     wave waits on the answer, because a fix dispatched before it would be the
-     controller overruling a call `SKILL.md` reserves for the human;
-   - that answer **partitions** the labelled findings: the ones the human
-     upholds join the fix wave, the ones the human overrules are dropped and
-     recorded as overruled. Waiting is what makes the answer usable — a wave
-     that ignored it would leave an upheld Critical unassigned to anybody;
-   - one fix subagent then goes out against the unlabelled findings plus the
-     upheld labelled ones, graded Critical or Important, whatever the merge
-     verdict says — and only if that set is non-empty, since a dispatch with
-     nothing in it still costs a full context build;
-   - a `No` or `With fixes` carrying no graded findings is a return the
-     controller opens the file for rather than acting on, since the two halves
-     of it cannot both be right.
+   That ordering is forced rather than chosen. Before this change the controller
+   had read the review, so it could interleave the human question and the fix
+   wave by judgment; now it sees a count and cannot. Left unordered, a fix wave
+   sent first would already have changed the code the human was being asked
+   about — the controller overruling, by sequence, a call `SKILL.md` reserves
+   for the human. Nothing further is specified here: what the human's answer
+   means for an individual finding, and what to do with a verdict that disagrees
+   with its own counts, are the controller's existing judgment and not this
+   change's to legislate.
 
    What happens after the fix subagent reports is `SKILL.md`'s existing business
    and this change does not touch it. An earlier draft mandated a re-review here
@@ -289,12 +286,15 @@ Five edits in `skills/forge/SKILL.md`:
    from a naming choice to a new full dispatch nothing in the charter asks for.
    The filename stands on the reason given there instead.
 4. "Every reviewer dispatch ends with the same report contract, so you get a
-   bounded verdict rather than the whole review" narrows to what will be true:
-   the whole-branch reviewer returns a bounded verdict and a path, while the task
-   reviewer's message is still its report. The sentence is already overstated
-   today; this change makes the overstatement load-bearing, since it is the rule
-   the whole-branch template is being brought under. Merging the two return
-   shapes belongs to issue #45.
+   bounded verdict rather than the whole review" narrows to what will be true of
+   the dispatch this change touches: the whole-branch reviewer returns a bounded
+   verdict and a path, and neither reviewer hands the controller a review to
+   hold. The sentence is already overstated today; this change makes the
+   overstatement load-bearing, since it is the rule the whole-branch template is
+   being brought under. The narrowed version says nothing new about what bounds
+   the *task* reviewer — characterizing that, and reconciling the two return
+   shapes, is issue #45's, and this change should not settle a fragment of it in
+   passing.
 5. The `### Never` bullet "Dispatch a task reviewer without a review-package
    file" widens to any reviewer, since after this change both reviewer
    dispatches require one.
@@ -326,13 +326,12 @@ still returning different shapes.
 
 These files are dispatch prompt templates, which is an AI surface, and the
 design changes one. There is no eval plan here, and that is deliberate — but the
-reason is not that the change adds no model behavior. It adds seven:
+reason is not that the change adds no model behavior. It adds six:
 
 | New behavior | How it is checked |
 |---|---|
 | writing the review file at the supplied path | the controller's cleared-before / present-and-non-empty check |
-| naming the delivery used on the file's first line | the controller reads that line as part of the after-check |
-| returning `WRITE_FAILED` and a reason instead of a verdict | by reading the return |
+| returning `WRITE_FAILED` or `PACKAGE_MISSING` and a reason instead of a verdict | by reading the return |
 | labelling plan-fault findings `plan-mandated` | not checked |
 | counting graded and `plan-mandated` findings in the return | not checked against the file |
 | recording the reason for a read beyond the package | not checked |
@@ -344,7 +343,7 @@ accuracy, citation quality, verdict correctness — is not being altered by
 design. That is not the same as no exposure, and claiming so would be false: the
 reviewer's *evidence base* does change, from a diff it derives itself to a
 package it is handed, and this design does not measure what that does to the
-findings. Four of the seven rows are unchecked, all of them the reviewer's
+findings. Four of the six rows are unchecked, all of them the reviewer's
 self-report about its own work, which ADR 0007 records as the weakest link
 rather than claiming a check covers it. An eval harness for a prompt template's
 self-report would be a larger apparatus than the thing it grades, and outside

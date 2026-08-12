@@ -33,9 +33,16 @@ labelled there.
 
 The return is bounded and carries three things: the merge verdict; the counts, by
 grade and of findings that put the fault in the plan rather than the code; and
-the review-file path. No per-finding lines of any kind. A reviewer that could not
-write the file returns that instead of a verdict, because a shape with no failure
-value forces a reviewer with nothing to report into reporting something.
+the review-file path. No per-finding lines of any kind.
+
+It has two failure values instead of a verdict, one for each end of the
+arrangement: the reviewer could not write its file, or the package it was handed
+was not there. A shape with no failure value forces a party with nothing to
+report into reporting something, and the two ends need it symmetrically. The
+inherited "rebuild the diff yourself if the package is missing" clause is
+**removed** rather than kept and disclosed: it is a standing hatch back to the
+unbounded inline diff, on the input side, of exactly the kind this record rejects
+on the output side. A reviewer with no package has nothing to review and says so.
 
 The plan-fault count is why the return is a fixed shape rather than a line budget
 the reviewer fills as it sees fit. What it buys is narrow and worth naming: on a
@@ -130,6 +137,16 @@ range, which nothing in this design reads twice.
 Rejected: it saves one re-dispatch and opens a standing escape hatch from the
 budget, on the exact path where a reviewer has the most to say.
 
+**Keep the inherited package-missing rebuild clause and disclose when it fires**
+— a line in the review file naming which diff the reviewer had, and a controller
+check that reads it. Rejected on the same reasoning as the entry above, which it
+mirrors: it is the input-side hatch, and denying one while keeping the other
+would need an argument nobody has. Closing it also deletes the disclosure line,
+the check that reads it, and the ledger note recording it — three mechanisms that
+existed only to make the hatch visible. `task-reviewer-prompt.md` keeps its own
+rebuild clause and this record does not touch it; a task review that falls back
+re-derives one task's diff, where this one re-derives the whole branch.
+
 **Persist the review where it outlives the worktree** — a PR comment, as
 `WORK:REVIEW` does. Rejected on surface, not merit: `$forge` runs before a PR
 exists, and issue #46's charter permits changes to `code-reviewer.md` and
@@ -153,4 +170,8 @@ Decided while designing the implementation of issue #46
 (`docs/workflow/specs/2026-08-12-forge-whole-branch-review-budget-design.md`).
 Numbered 0007 rather than the next free number on `main`:
 `origin/feat/release-stage-decision-50` already carries an unmerged `0005`, and
-issue #66 records a second unmerged `0005` from issue #55's branch.
+issue #66 records a second unmerged `0005` from issue #55's branch. The number
+assumes those two resolve to 0005 and 0006 as they merge; if one never lands,
+`docs/adr/` carries a gap until this record is renumbered down. Issue #72 owns
+that reconciliation — it is nobody's by default, which is why it is written down
+here rather than left as an inference.
