@@ -54,11 +54,15 @@ Out of scope, per the frozen charter on issue #46: the review rubric and its
 ### The package (R1)
 
 The controller already runs `scripts/review-package BASE HEAD` before every task
-review. The final review uses the same call with the branch's own endpoints —
-the base the branch left from, and `HEAD` after the last task's fix cycle
-closed. The script keys its default destination to the abbreviated range, so a
-re-review after a fix wave writes a new file rather than overwriting the reading
-it should be compared against.
+review. The final review uses the same call with the branch's own endpoints, and
+the base is stated once so the two places that need it cannot drift: it is the
+branch's fork point from `BASE_BRANCH` — `git merge-base HEAD <BASE_BRANCH>` —
+not `HEAD` at the moment the build phase started. Those differ whenever anything
+already landed on the branch before the first task, which in this pipeline is
+the normal case: `$spellcraft` commits the spec, ADR, and plan there first. The
+fork point is what makes this the whole-branch review its own Context and ADR
+0007 describe, and it is the same base `$trial-loop` reviews against at `$quest`
+step 6. `HEAD` is taken after the last task's fix cycle closed.
 
 What this buys is determinism and fewer round trips rather than fewer tokens:
 the range is the controller's own known-good one instead of whatever the
@@ -177,24 +181,30 @@ Six edits in `skills/forge/SKILL.md`:
 1. The final-review dispatch instruction (currently "After the last task,
    dispatch the whole-branch review with `code-reviewer.md`, on the most capable
    model") gains the package-generation step and the two paths, and names the
-   branch base explicitly — the endpoint noted before the *first* task, not the
-   per-task base, which is the mistake the per-task loop's own step 5 warns
-   about in the other direction.
+   branch base as the fork point defined under R1 — not the per-task base, which
+   is the mistake the per-task loop's own step 5 warns about in the other
+   direction.
 2. The same step adds the file checks. **Before dispatching:** the package is
-   non-empty, because `review-package` reports success and exits 0 when its
-   destination write fails (issue #36) and the template's rebuild clause then
-   falls back to an inline `git diff` — silently restoring exactly what this
-   change removes. Also before dispatching, the controller removes any file
-   already at the review-file path. **After:** that path exists and is non-empty.
+   real, judged on what `review-package` prints — a non-zero commit count and a
+   non-zero byte count — because it reports success and exits 0 when its
+   destination write fails (issue #36), and the template's rebuild clause then
+   falls back to an inline `git diff`, silently restoring exactly what this
+   change removes. A failed before-check does not dispatch: the controller
+   reports it, and does not fall back. Also before dispatching, the controller
+   removes any file already at the review-file path. **After:** that path exists
+   and is non-empty.
    Cleared-before plus present-after is what makes the review this run's rather
    than a leftover from a resumed session at the same range; existence alone
    cannot tell the two apart, and leaving a legitimately occupied path
    undefined would be worse than either. On the after-check failing, the
    controller discards the return and re-dispatches once, then stops and reports
    rather than dispatching again. That blind retry is for the *silent* failure;
-   a reviewer that returned the write-failure value has already named the
-   problem, so the controller changes something — a different path, or it stops
-   and reports — rather than re-running an identical dispatch. `SKILL.md` already
+   a reviewer that returned `WRITE_FAILED` has already named the problem, so the
+   controller changes something rather than re-running an identical dispatch —
+   and the only change it may make is a second path inside the same
+   `scripts/sdd-workspace` directory. Anywhere else and the single-named-path
+   containment the read-only rule rests on stops being true on the retry. If
+   that also fails, it stops and reports. `SKILL.md` already
    applies the same discipline to implementer reports ("Confirm the report has
    all three before re-dispatching the reviewer").
 3. The final-fix instruction (currently "send **one** fix subagent with the
@@ -214,6 +224,14 @@ Six edits in `skills/forge/SKILL.md`:
    goes to the human; and a `No` or `With fixes` carrying no graded findings is
    a return the controller opens the file for rather than acting on, since the
    two halves of it cannot both be right.
+
+   When the fix subagent reports, the final review is re-run against the new
+   `HEAD` — a fresh package, a fresh review-file path, the same base — rather
+   than the fix wave shipping unreviewed. That is the discipline `SKILL.md`
+   already states for fixes generally ("Confirm the report has all three before
+   re-dispatching the reviewer"); it is spelled out here because the re-review
+   is what the range-keyed paths under R2 exist to keep apart, and a
+   justification whose event nothing instructs is not a justification.
 4. "Every reviewer dispatch ends with the same report contract, so you get a
    bounded verdict rather than the whole review" narrows to what will be true:
    the whole-branch reviewer returns a bounded verdict and a path, while the task
@@ -265,12 +283,12 @@ reason is not that the change adds no model behavior. It adds four:
 | writing the review file at the supplied path | the controller's cleared-before / present-and-non-empty check |
 | labelling plan-fault findings `plan-mandated` | not checked — see below |
 | counting graded and `plan-mandated` findings in the return | not checked against the file |
-| holding the return under the cap | by reading the return, as with `implementer-prompt.md` |
+| holding the return under the cap | not checked — the cap is prose in a template, as in `implementer-prompt.md` |
 
 What is unchanged is what an eval plan would actually score: the rubric, the
 severity vocabulary, and the calibration guidance are all out of scope and
 untouched, so grading accuracy, citation quality, and verdict correctness carry
-no new exposure. The two unchecked rows are the honest residual — the label and
+no new exposure. The three unchecked rows are the honest residual — the label and
 the counts are the reviewer's own classification of its own findings, and ADR
 0007 records that as the weakest link in the design rather than claiming a check
 covers it. An eval harness for a prompt template's self-report would be a larger
