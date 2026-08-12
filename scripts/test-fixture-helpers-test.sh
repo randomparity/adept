@@ -88,10 +88,32 @@ CHILD
 [ -d "$survivor" ] || abort 'cleanup removed a path outside its registered prefix'
 grep -qF "sample: refusing to remove unsafe path: $survivor" "$SCRATCH/child.out" ||
 	abort "refusal should name the label and the path: $(cat "$SCRATCH/child.out")"
-# The refusal warns; it does not decide the suite's verdict. This is what all
-# five migrated suites did before the extraction, and an `exit` added to the
-# trap is what would break it.
-[ "$status" -eq 0 ] || abort "a refused cleanup should not change the exit status, got $status"
+# A refusal reddens the suite. Three of the five migrated suites already
+# returned 1 here and, under the `set -e` every suite runs, that return is the
+# shell's exit status; the other two only warned, and this unifies them on the
+# stricter answer -- a fixture that could not be removed is not a pass.
+[ "$status" -eq 1 ] || abort "a refused cleanup should redden the suite, got $status"
+
+# One unremovable fixture must not strand the ones registered after it.
+# check-public-safety-test.sh's second fixture lives inside the working tree and
+# is always last, so an abort partway through leaves a directory in the repo.
+blocker_parent=$SCRATCH/blocker
+mkdir -p "$blocker_parent"
+status=0
+run_child <<CHILD || status=$?
+fixture_init sample
+fixture_scratch "$blocker_parent/late."
+late=\$FIXTURE_SCRATCH
+mkdir "\$SCRATCH/child"
+chmod 500 "\$SCRATCH"
+printf '%s\n' "\$late"
+CHILD
+# The child's own line comes first; the trap's diagnostics follow it, because
+# run_child merges stderr into the same file.
+late=$(head -1 "$SCRATCH/child.out")
+chmod 700 "$child_tmp"/sample.* 2>/dev/null || :
+[ "$status" -eq 1 ] || abort "a failed removal should redden the suite, got $status"
+[ ! -e "$late" ] || abort "cleanup stopped at the failure and stranded $late"
 
 # fail prefixes the label and exits 1.
 status=0
@@ -112,5 +134,23 @@ printf '%s %s\n' "${GIT_DIR:-unset}" "${GIT_INDEX_FILE:-unset}"
 CHILD
 [ "$(cat "$SCRATCH/child.out")" = 'unset unset' ] ||
 	abort "clear_git_env left git selectors set: $(cat "$SCRATCH/child.out")"
+
+# A git that cannot answer must stop the suite rather than leave it building
+# fixtures with the ambient selectors still set.
+fake_bin=$SCRATCH/fake-bin
+mkdir -p "$fake_bin"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$fake_bin/git"
+chmod +x "$fake_bin/git"
+status=0
+run_child <<CHILD || status=$?
+PATH=$fake_bin:\$PATH
+clear_git_env
+printf 'reached\n'
+CHILD
+[ "$status" -ne 0 ] || abort 'a git that cannot answer should stop the suite'
+grep -qF 'cannot read git local env vars' "$SCRATCH/child.out" ||
+	abort "expected a diagnostic, got: $(cat "$SCRATCH/child.out")"
+! grep -qF reached "$SCRATCH/child.out" ||
+	abort 'clear_git_env returned after a failing git'
 
 printf 'test-fixture-helpers-test: ok\n'

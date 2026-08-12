@@ -26,11 +26,19 @@ fixture_scratch_paths=()
 fixture_scratch_prefixes=()
 
 clear_git_env() {
-	local variable
+	local variable variables
+	# Reading through process substitution would hide a git that could not
+	# answer: the loop reads nothing, the function returns 0, and the caller
+	# builds fixtures with the ambient GIT_DIR still set -- a scan that could
+	# not run reported as one that found nothing.
+	variables=$(git rev-parse --local-env-vars) || {
+		printf 'test-fixture-helpers: cannot read git local env vars\n' >&2
+		exit 1
+	}
 	while IFS= read -r variable; do
 		[ -n "$variable" ] || continue
 		unset "$variable"
-	done < <(git rev-parse --local-env-vars)
+	done <<<"$variables"
 }
 
 fixture_scratch() { # prefix -- sets FIXTURE_SCRATCH
@@ -39,24 +47,39 @@ fixture_scratch() { # prefix -- sets FIXTURE_SCRATCH
 	fixture_scratch_paths[${#fixture_scratch_paths[@]}]=$FIXTURE_SCRATCH
 }
 
-# A refusal warns and moves on to the next registered path. It cannot change
-# the suite's exit status: bash discards an EXIT trap's return value (checked on
-# 3.2.57 and 5.3.15), so only an explicit `exit` in the trap would, and a
-# cleanup that decides a suite's verdict is not wanted.
+# A fixture this function could not remove reddens the suite. Every sourcing
+# suite runs `set -e`, and under it an EXIT trap's non-zero return becomes the
+# shell's exit status (checked on bash 3.2.57 and 5.3.15; without `set -e` it is
+# discarded instead). So `status` is set at both ends deliberately rather than
+# inherited from whatever the loop's last command returned -- writing the
+# removal as `[ -d "$path" ] && rm -R -- "$path"` would leave the trap returning
+# 1 whenever the last path was already gone, reddening every clean run.
+#
+# Each entry is independent: one failure must not skip the entries after it,
+# because check-public-safety-test.sh registers a fixture inside the working
+# tree and it is always last.
 fixture_cleanup() {
-	local index=0 path prefix
+	local index=0 path prefix status=0
 	while [ "$index" -lt "${#fixture_scratch_paths[@]}" ]; do
 		path=${fixture_scratch_paths[$index]}
 		prefix=${fixture_scratch_prefixes[$index]}
 		index=$((index + 1))
 		case $path in
-		"$prefix"*) [ ! -d "$path" ] || rm -R -- "$path" ;;
+		"$prefix"*)
+			if [ -d "$path" ] && ! rm -R -- "$path"; then
+				printf '%s: cleanup failed for %s\n' \
+					"$FIXTURE_LABEL" "$path" >&2
+				status=1
+			fi
+			;;
 		*)
 			printf '%s: refusing to remove unsafe path: %s\n' \
 				"$FIXTURE_LABEL" "$path" >&2
+			status=1
 			;;
 		esac
 	done
+	return "$status"
 }
 
 fixture_init() { # label
