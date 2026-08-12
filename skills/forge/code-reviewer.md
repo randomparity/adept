@@ -29,7 +29,8 @@ Subagent (general-purpose):
 
     The branch runs from [BASE_SHA] to [HEAD_SHA], packaged in [DIFF_FILE].
 
-    Open that package once. Inside are the commits, a per-file stat, and every
+    Before you open it, create [REVIEW_FILE] empty — *Where your review goes*
+    says what that is for. Open the package once. Inside are the commits, a per-file stat, and every
     hunk with generous context around it, and those context lines *are* the
     files as they now stand. The package is the diff for this range: do not
     re-derive it, and do not fall back to running `git diff` yourself. If the
@@ -105,10 +106,10 @@ Subagent (general-purpose):
 
     Write the review to [REVIEW_FILE], in the sections below.
 
-    Create that file empty **before** you open the package. If you cannot, send
-    `WRITE_FAILED` and stop there — discovering it after the review is written
-    throws away the whole of this dispatch, which is the most expensive one in
-    the build.
+    You created that file empty before opening the package. If you could not,
+    send `WRITE_FAILED` and stop there — discovering an unwritable path after
+    the review is written throws away the whole of this dispatch, which is the
+    most expensive one in the build.
 
     ### Strengths
     [Name what the work got right, concretely.]

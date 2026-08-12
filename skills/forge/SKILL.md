@@ -229,10 +229,10 @@ asked report it as a blocker and return. Never default to `main`.
    `[MINOR_LEDGER]` is the Minor findings you have been accumulating; pass the
    literal `none` when there were none, so an empty triage is a stated result
    rather than a slot you left blank.
-4. That path must exist and be non-empty. If you passed a non-empty
-   `[MINOR_LEDGER]`, read `[REVIEW_FILE]`'s `#### Minor triage` heading whatever
-   the verdict — that heading, not the whole file. On a `Yes` nothing else reads
-   the answer you asked for.
+4. When the reviewer returns, `[REVIEW_FILE]` must exist and be non-empty. If
+   you passed a non-empty `[MINOR_LEDGER]`, read that file's `#### Minor triage`
+   heading whatever the verdict — that heading, not the whole file. On a `Yes`
+   nothing else reads the answer you asked for.
 5. **Append the ledger line once that check passes** — `Final review
    <base7>..<head7>: <verdict> (review <path>)` — and append a second,
    `Final review <base7>..<head7>: closed`, when the fix wave finishes. Two

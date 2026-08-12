@@ -125,8 +125,10 @@ Replace it with:
 
     The branch runs from [BASE_SHA] to [HEAD_SHA], packaged in [DIFF_FILE].
 
-    Open that package once. Inside are the commits, a per-file stat, and every
-    hunk with generous context around it, and those context lines *are* the
+    Before you open it, create [REVIEW_FILE] empty — *Where your review goes*
+    says what that is for. Open the package once. Inside are the commits, a
+    per-file stat, and every hunk with generous context around it, and those
+    context lines *are* the
     files as they now stand. The package is the diff for this range: do not
     re-derive it, and do not fall back to running `git diff` yourself. If the
     package is not there, you have nothing to review: send back
@@ -192,20 +194,36 @@ Strengths` line:
 
 ```
     Write the review to [REVIEW_FILE], in the sections below.
+
+    You created that file empty before opening the package. If you could not,
+    send `WRITE_FAILED` and stop there — discovering an unwritable path after
+    the review is written throws away the whole of this dispatch, which is the
+    most expensive one in the build.
 ```
+
+The write is attempted first so an unwritable path costs nothing; the
+instruction that makes it happen lives in Step 1.2's section, because that is
+where the reviewer reaches it in time to obey. This paragraph states why, and a
+reviewer reading top-down has already done it.
 
 Leave `### Strengths`, `### Issues`, the three severity buckets, `###
 Recommendations`, `### Assessment`, and the `**Ready to merge?**` /
 `**Reasoning:**` lines exactly as they are. The rubric is frozen by Global
 Constraint 3.
 
-Then, under the `#### Minor (Nice to Have)` bucket's existing description, add:
+Then, after the `#### Minor (Nice to Have)` bucket and the `file:line` sentence
+that follows the three buckets, add a fourth heading — a heading rather than a
+paragraph under `#### Minor`, because the controller reads it by name:
 
 ```
+    #### Minor triage
     Triage the Minor findings carried over from earlier tasks, listed in
-    [MINOR_LEDGER], here against the merge bar. Where that placeholder is empty,
-    say so in one line rather than omitting the section — the controller reads
-    this section and an absent one is indistinguishable from a skipped triage.
+    [MINOR_LEDGER], against the merge bar. Where that placeholder is empty, say
+    so in one line rather than omitting this heading — the controller reads it
+    by name, and an absent heading is indistinguishable from a skipped triage.
+
+    These are carried over, not found by you: they do not count toward
+    `Minor N`, which is your own findings on this branch.
 ```
 
 ### Step 1.6 — add the bounded return
@@ -374,10 +392,10 @@ Then produce the two paths and check them:
    findings you have been accumulating; pass the literal `none` when there were
    none, so an empty triage is a stated result rather than a slot you left
    blank.
-3. After the reviewer returns, that path must exist and be non-empty. If you
-   passed a non-empty `[MINOR_LEDGER]`, read that file's triage section whatever
-   the verdict — the section, not the whole file — because on a `Yes` nothing
-   else would ever read the answer you asked for.
+3. When the reviewer returns, `[REVIEW_FILE]` must exist and be non-empty. If
+   you passed a non-empty `[MINOR_LEDGER]`, read that file's triage section
+   whatever the verdict — the section, not the whole file — because on a `Yes`
+   nothing else would ever read the answer you asked for.
 
 A missing or empty file means the return is not evidence: discard it and
 re-dispatch once, then stop and report. That single blind retry is for a
