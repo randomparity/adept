@@ -230,7 +230,7 @@ its body is worse than one that never had a footer.
 
 ### The controller side (R4)
 
-Five edits in `skills/forge/SKILL.md`:
+Six edits in `skills/forge/SKILL.md`:
 
 1. The final-review dispatch instruction (currently "After the last task,
    dispatch the whole-branch review with `code-reviewer.md`, on the most capable
@@ -335,13 +335,17 @@ Five edits in `skills/forge/SKILL.md`:
 5. The `### Never` bullet "Dispatch a task reviewer without a review-package
    file" widens to any reviewer, since after this change both reviewer
    dispatches require one.
-6. The dispatch step opens by reading the ledger and closes by appending to it:
-   a final-review line already there means the phase ran, and the step stops
-   rather than regenerating. Without it the clear-before-dispatch rule in item 2
-   deletes a finished review on any resumed run — the rule is what creates the
+6. The dispatch step opens by reading the ledger and appends to it as soon as
+   the reviewer returns, closing the line when the fix wave finishes. Step 1
+   reads three states: no line means dispatch, an open verdict means resume at
+   the fix wave without clearing, a closed verdict means the phase is done.
+   Writing the line on return rather than at the end is what covers a run that
+   dies mid-fix-wave. Without any of this the clear-before-dispatch rule in item
+   3 deletes a finished review on a resumed run — that rule is what creates the
    need, so the fix belongs beside it.
-There is deliberately no sixth edit adding the branch base to the progress
-ledger. An earlier draft had one, on the reasoning that a controller which lost
+**On recording the base.** There is deliberately no edit adding the branch base
+to the progress ledger — a separate question from item 6's ledger read, which
+concerns the review's own completion rather than the base value. An earlier draft had one, on the reasoning that a controller which lost
 its conversation memory must read the base rather than remember it — sound, but
 answered better by recomputing it, which is what R1 now specifies. A recorded
 base is a copy that can go stale; a recomputed one cannot, and it needs no

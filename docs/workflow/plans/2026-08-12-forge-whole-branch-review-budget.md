@@ -469,6 +469,41 @@ Replace with:
 - Dispatch any reviewer without a review-package file.
 ```
 
+### Step 2.4a — make the phase resumable through the ledger
+
+The dispatch step in Step 2.1 clears `[REVIEW_FILE]` before dispatching. On a
+resumed run that deletes a finished review in order to re-run it, so the same
+step has to be able to tell a phase that already ran from one that never did.
+
+Give the numbered list a first item that reads the ledger and a later one that
+writes it:
+
+```
+1. **Read the ledger first.** No final-review line for this range: dispatch. A
+   line with an open verdict: the review ran, so resume at the fix wave —
+   do not regenerate, do not clear, do not re-dispatch. A line with a closed
+   verdict: the phase is done.
+```
+
+```
+4. **Append the ledger line as soon as the reviewer returns** — the review
+   file's path and the verdict, in the shape the per-task lines use — and close
+   it when the fix wave finishes. Write it then, not at the end: a run that dies
+   mid-fix-wave otherwise leaves no line, and step 1 would clear a finished
+   review to re-run it.
+```
+
+Three states, not two. A line written only at the very end leaves the fix-wave
+window unprotected, which is the window a long final review is most likely to
+die in.
+
+**Acceptance criteria.**
+
+- Step 2.1's list opens with a ledger read distinguishing three states and
+  contains an append that happens on the reviewer's return, not at the end.
+- Nothing else in `SKILL.md`'s `### Durable progress` section changes; the
+  per-task ledger lines keep their existing shape.
+
 ### Step 2.5 — verify and commit
 
 ```sh
@@ -520,6 +555,9 @@ reads either file except a `$forge` run in progress.
 | R4 — controller generates, verifies, and routes | 2.1, 2.2, 2.3, 2.4 |
 | R5 — `just verify` green | 1.8, 2.5 |
 
-Spec items with no task, checked deliberately: the spec's "no sixth edit adding
-the branch base to the ledger" is a statement that nothing is to be done, and
-correctly has no task.
+| Spec §R4 item 6 — the ledger read and append | 2.4a |
+
+Spec items with no task, checked deliberately: the spec's "On recording the
+base" paragraph is a statement that nothing is to be done, and correctly has no
+task. It is a different subject from item 6, which is about the review's own
+completion rather than the base value.

@@ -211,11 +211,14 @@ reviews are task-scoped by design and cannot see a defect that spans tasks.
 Its base is the branch's fork point — `git merge-base HEAD <BASE_BRANCH>`,
 recomputed here rather than carried forward, because a rebase moves it. Not the
 commit the build phase started from: a spec and plan committed before Task 1
-belong to the branch this review judges. If `BASE_BRANCH` is unknown, ask; do
-not default to `main`.
+belong to the branch this review judges. `BASE_BRANCH` is the value
+`$attunement` recorded; if you do not have it, ask, and where nobody can be
+asked report it as a blocker and return. Never default to `main`.
 
-1. **If the ledger already closes a final review for this range, the phase is
-   done.** Do not regenerate, do not clear, do not re-dispatch.
+1. **Read the ledger first.** No final-review line for this range: dispatch. A
+   line with an open verdict: the review ran, so resume at the fix wave —
+   do not regenerate, do not clear, do not re-dispatch. A line with a closed
+   verdict: the phase is done.
 2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
    and print a non-zero commit count and a non-zero byte count. Report and stop
    rather than dispatching: this file is the reviewer's whole input, and a
@@ -223,12 +226,15 @@ not default to `main`.
 3. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
    directory `scripts/sdd-workspace` prints. Remove anything already at that
    path before dispatching, so a file there afterwards is this dispatch's.
-4. After the reviewer returns, that path must exist and be non-empty. If you
-   passed a non-empty `[MINOR_LEDGER]`, read its `#### Minor triage` heading
-   whatever the verdict — that heading, not the whole file. On a `Yes` nothing
-   else reads the answer you asked for.
-5. Append one line to the ledger when the phase closes: the review file's path
-   and the verdict, in the shape the per-task lines use. Step 1 reads it.
+4. **Append the ledger line as soon as the reviewer returns** — the review
+   file's path and the verdict, in the shape the per-task lines use — and close
+   it when the fix wave finishes. Write it then, not at the end: a run that dies
+   mid-fix-wave otherwise leaves no line, and step 1 would clear a finished
+   review to re-run it.
+5. That path must exist and be non-empty. If you passed a non-empty
+   `[MINOR_LEDGER]`, read `[REVIEW_FILE]`'s `#### Minor triage` heading whatever
+   the verdict — that heading, not the whole file. On a `Yes` nothing else reads
+   the answer you asked for.
 
 A missing or empty file means the return is not evidence: discard it and
 re-dispatch **once**, then stop and report. That blind retry is for a silent
@@ -346,19 +352,12 @@ dispatch*, which is what you have just read the triage section to decide. A
 finding labelled `plan-mandated` is likewise returned to you rather than fixed,
 unless you name it as one the human has already upheld.
 
-Both escapes exist because the list you used to hand over was composed after you
-read the whole review, so a triage-promoted Minor finding or a human-upheld plan
-fault could ride along in it. A path carries neither, and without them the rules
-deadlock — the wave carries a finding to a subagent told to hand it back.
-
 Order the two triggers: a non-zero `plan-mandated` count goes to the human
 **before** the fix wave. Read those labelled findings out of `[REVIEW_FILE]`
 first — that subset, not the whole file — and put each in front of the human
 beside the plan text it disputes; a count alone asks them to rule on work they
 have not seen. Then carry their answer into the dispatch by naming the upheld
-findings, since you cannot edit the reviewer's file to record the ruling. A wave
-sent before the answer would already have changed the code in question,
-overruling by sequence a call reserved for them. Nothing further is prescribed.
+findings. Nothing further is prescribed.
 
 Put Minor findings in the ledger as they arrive, and hand the final review that
 list to triage against the merge bar. A summary nobody is directed to read is
