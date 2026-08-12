@@ -2,6 +2,11 @@
 
 The dispatch template for handing one plan task to an implementer.
 
+Its flaky-test wording restates the policy in `references/true-seeing.md`
+instead of linking it. That duplication is deliberate: this text is pasted into
+a subagent working in the target repository, where a relative link into this
+repo's `references/` would not resolve. Do not collapse it into a link.
+
 ```
 Subagent (general-purpose):
   description: "Task N — [task name]"
@@ -49,10 +54,14 @@ Subagent (general-purpose):
     Do not re-run it until it comes up green. Find out which of two things it
     is, and report that:
 
-    - **Pre-existing.** Check out the base commit and run the same test there.
-      If it fails there too, your task did not cause it. Report it as context,
-      with the test's name and the base commit — do not fix it, and do not let
-      it block your commit.
+    - **Pre-existing.** Your work is not committed yet, so `HEAD` is the tree
+      without it. Run the same test against `HEAD` in a throwaway worktree —
+      `git worktree add <tmp> HEAD`, run it there, then remove the worktree.
+      Never `git checkout` the base over your own uncommitted work: git will
+      either refuse or carry your changes across, and a base run carrying your
+      changes is not a base run. If the test fails there too, your task did not
+      cause it — report it as context with the test's name, do not fix it, and
+      do not let it block your commit.
     - **Flaky.** Run it again on your own code, changing nothing. If it fails
       and then passes, the test is nondeterministic. That is a determinism
       defect in its own right, and it is evidence of nothing in either
