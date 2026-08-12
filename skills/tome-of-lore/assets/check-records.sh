@@ -363,19 +363,41 @@ present_as_real_file() {
   [ -f "$path" ]
 }
 
-# Tracked in the index. Checked alongside the filesystem because the two can disagree,
-# and each gap is a way to lose a record: one removed from git but left on disk as an
-# untracked file passes a filesystem test while being gone from the repository, and one
-# deleted from the working tree passes a git test while being gone from the checkout.
-# The index rather than HEAD, so a staged deletion is caught before it is committed.
+# Tracked in the index: 0 tracked, 1 not tracked, 2 the query could not run. Checked alongside
+# the filesystem because the two can disagree, and each gap is a way to lose a record: one
+# removed from git but left on disk as an untracked file passes a filesystem test while being
+# gone from the repository, and one deleted from the working tree passes a git test while being
+# gone from the checkout. The index rather than HEAD, so a staged deletion is caught before it
+# is committed.
+#
+# `git ls-files --error-unmatch` exits 1 for an untracked or absent path and 128 for a real
+# fault, so unlike `git cat-file` it separates the two on its own and needs no second witness
+# (ADR 0005 decision 2). Discarding that status made every caller read a damaged index as an
+# untracked path, which is the passing half of each caller's question.
+#
+# git's status is left in tracked_in_index_status for the callers' diagnostics, for the reason
+# path_exists_at leaves its own there: this predicate's 2 is a sentinel, and reporting it would
+# name a status git never returned.
+tracked_in_index_status=0
 tracked_in_index() {
-  local path=$1
-  git ls-files --error-unmatch -- "$path" >/dev/null 2>&1
+  local path=$1 status=0
+  tracked_in_index_status=0
+  git ls-files --error-unmatch -- "$path" >/dev/null 2>&1 || status=$?
+  case $status in
+  0) return 0 ;;
+  1) return 1 ;;
+  esac
+  tracked_in_index_status=$status
+  return 2
 }
 
+# Three-valued like tracked_in_index, which it delegates its second half to. The filesystem test
+# stays two-valued: `[ -f ]` reports no reason, so only the index query contributes a fault.
 still_a_record() {
-  local path=$1
-  present_as_real_file "$path" && tracked_in_index "$path"
+  local path=$1 status=0
+  present_as_real_file "$path" || return 1
+  tracked_in_index "$path" || status=$?
+  return "$status"
 }
 
 # A record whose path is gone may have been renumbered rather than erased. Accept it when its
@@ -394,7 +416,8 @@ still_a_record() {
 # from check_no_disappearances through bash's dynamic scoping, so a candidate can excuse only
 # one vanished base path. A temp-file failure returns 1 and lets E-GONE speak instead: the record
 # is gone from its path either way, and that much the gate did establish — unlike an unreadable
-# base copy or a faulted candidate witness, which return 2 and replace E-GONE with the fault.
+# base copy, a faulted candidate witness, or a candidate the index could not be read for, all
+# three of which return 2 and replace E-GONE with the fault.
 #
 # Candidates come from `records`, which collect_records builds only after reporting
 # E-RECORD-SYMLINK and skipping every symlink, so no candidate can be a link. A `[ ! -L ]` test
@@ -412,8 +435,8 @@ renumbered_elsewhere() {
     ;;
   # Whether the record moved is exactly what an unreadable base copy leaves undetermined, so
   # returning 1 reported E-GONE off a search that never ran. The status travels in
-  # path_exists_status because that is the variable the caller's diagnostic reads; both this
-  # fault and a candidate witness's reach the caller through it.
+  # path_exists_status because that is the variable the caller's diagnostic reads; this fault,
+  # a candidate witness's, and a candidate index query's all reach the caller through it.
   *)
     rm -f "$tmp"
     path_exists_status=$base_blob_status
@@ -427,7 +450,19 @@ renumbered_elsewhere() {
   while IFS= read -r candidate; do
     [ -n "$candidate" ] || continue
     [ -f "$candidate" ] || continue
-    tracked_in_index "$candidate" || continue
+    # An untracked candidate is not a destination. `tracked_in_index ... || continue` used to
+    # drop a faulted one the same way, so a damaged index removed the real destination from the
+    # search and the record below then reported E-GONE.
+    cand_status=0
+    tracked_in_index "$candidate" || cand_status=$?
+    case $cand_status in
+    0) ;;
+    1) continue ;;
+    *)
+      fault_status=$tracked_in_index_status
+      continue
+      ;;
+    esac
     # A candidate that already existed at the base ref is not a renumber destination. The
     # witness can also fail to run, which used to read the same as "did not exist" and so
     # let a faulted scan promote a candidate silently.
@@ -660,7 +695,7 @@ evaluate_base_conformance() {
 }
 
 check_no_disappearances() {
-  local base=$1 tree record renumbered_to="" used_renumber_targets="" renum_status
+  local base=$1 tree record renumbered_to="" used_renumber_targets="" renum_status still_status
   if ! tree=$(records_in_ref "$base"); then
     err "E-BASE-TREE: could not read $RECORD_DIR at $base — cannot check for removed records"
     return 0
@@ -670,9 +705,16 @@ check_no_disappearances() {
     [ -n "$record" ] || continue
     if [ -L "$record" ]; then
       err "E-GONE-SYMLINK: $record was replaced by a symlink — a record is a real file, and a link is not one"
-    elif present_as_real_file "$record" && tracked_in_index "$record"; then
-      check_not_rewritten "$base" "$record"
-    elif ! still_a_record "$record"; then
+      continue
+    fi
+    # One predicate, evaluated once. The two branches used to spell it out separately —
+    # `present_as_real_file && tracked_in_index` against `! still_a_record` — which is the shape
+    # that collapses a three-valued answer, since neither can express the third case.
+    still_status=0
+    still_a_record "$record" || still_status=$?
+    case $still_status in
+    0) check_not_rewritten "$base" "$record" ;;
+    1)
       renumbered_to=""
       renum_status=0
       renumbered_elsewhere "$base" "$record" || renum_status=$?
@@ -680,12 +722,18 @@ check_no_disappearances() {
       0) info "note: $record was renumbered to $renumbered_to (content unchanged)" ;;
       1) err "E-GONE: $record is no longer a record at that path (deleted, moved, untracked, or renamed with its content changed) — resolve records in place with a '> **Resolved by ...**' banner" ;;
       # Reported instead of E-GONE, never alongside it: whether the record moved is exactly what
-      # could not be established — by a candidate witness that did not run, or by the record's
-      # own base-ref copy being unreadable, which aborts before any candidate is tried. The
-      # message names neither, because the two reach here through the same status.
+      # could not be established — by a candidate witness that did not run, by a candidate the
+      # index could not be read for, or by the record's own base-ref copy being unreadable,
+      # which aborts before any candidate is tried. The message names none of them, because
+      # they reach here through the same status.
       *) err_full "E-RENUMBER-SCAN: $record: could not determine whether it was renumbered at $base (exit $path_exists_status)" ;;
       esac
-    fi
+      ;;
+    # Neither branch above is safe on a record whose index entry could not be read: the first
+    # would run the append-only rules over a record the gate cannot say is still in the
+    # repository, and the second reported E-GONE for one sitting untouched in the tree.
+    *) err_full "E-TRACKED-SCAN: $record: could not read the index entry for it, so the append-only rules did not run (git exit $tracked_in_index_status)" ;;
+    esac
   done <<<"$tree"
 }
 
@@ -858,7 +906,7 @@ gate_existed_at() {
 # profile — a repo with more than one profile would otherwise print every gate finding once
 # per profile in RECORD_PROFILES.
 check_gate_files() {
-  local base=$1 self successor successor_path gate_path_count=0 self_status
+  local base=$1 self successor successor_path gate_path_count=0 self_status still_status succ_status
   while IFS= read -r self; do
     [ -n "$self" ] || continue
     self_status=0
@@ -878,17 +926,37 @@ check_gate_files() {
     gate_path_count=$((gate_path_count + 1))
     if [ -L "$self" ]; then
       err "E-GATE-SYMLINK: $self is a symlink — a gate file swapped for a link no longer contains the gate"
-    elif ! still_a_record "$self"; then
-      successor=$(predecessor_successor "$self") || successor=""
-      successor_path=""
-      [ -n "$successor" ] && successor_path=$(gate_predecessor_path "$successor")
-      if [ -n "$successor_path" ] && [ -f "$successor_path" ] && [ ! -L "$successor_path" ] &&
-        tracked_in_index "$successor_path"; then
-        info "note: $self was renamed to $successor_path"
-      else
-        err "E-GATE-GONE: $self was deleted or untracked — the gate cannot be removed by the change it gates"
-      fi
+      continue
     fi
+    still_status=0
+    still_a_record "$self" || still_status=$?
+    case $still_status in
+    0) continue ;;
+    1) ;;
+    # E-GATE-GONE accuses the change of removing a gate file. An index the gate could not read
+    # cannot support that accusation about a file that is sitting right there.
+    *)
+      err_full "E-GATE-TRACKED-SCAN: $self: could not read the index entry for the gate file (git exit $tracked_in_index_status)"
+      continue
+      ;;
+    esac
+
+    successor=$(predecessor_successor "$self") || successor=""
+    successor_path=""
+    [ -n "$successor" ] && successor_path=$(gate_predecessor_path "$successor")
+    # The exemption turns on the successor really being tracked, so the whole test is folded
+    # into one three-valued status: no declared successor and an untracked one are both the
+    # ordinary negative, and only an index query that could not run is the third case.
+    succ_status=1
+    if [ -n "$successor_path" ] && [ -f "$successor_path" ] && [ ! -L "$successor_path" ]; then
+      succ_status=0
+      tracked_in_index "$successor_path" || succ_status=$?
+    fi
+    case $succ_status in
+    0) info "note: $self was renamed to $successor_path" ;;
+    1) err "E-GATE-GONE: $self was deleted or untracked — the gate cannot be removed by the change it gates" ;;
+    *) err_full "E-GATE-SUCCESSOR-SCAN: $successor_path: could not read the index entry for $self's declared successor, so the rename is unverified (git exit $tracked_in_index_status)" ;;
+    esac
   done < <(gate_paths "$base" | sort -u)
 
   # An empty protected set means self-protection is off. That is the correct state for the

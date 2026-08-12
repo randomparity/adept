@@ -223,6 +223,31 @@ case_dir() {
 
 base_of() { git -C "$1" rev-parse HEAD; }
 
+# A `git` stub in <dir> that faults on `ls-files` for the one <path> and defers everything else
+# to the real git, for the fixtures that exercise a failed index query.
+#
+# Keyed on the path as well as the subcommand: tracked_in_index is the checker's only
+# `git ls-files` caller, so a stub keyed on the subcommand alone would fault at whichever of its
+# call sites ran first rather than the one the fixture is aimed at.
+write_ls_files_stub() { # dir path
+  local dir=$1 path=$2 real_git
+  real_git=$(command -v git)
+  mkdir -p "$dir"
+  cat >"$dir/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-files ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = $path ]; then
+      printf 'fatal: fixture-fault: simulated index read error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$dir/git"
+}
+
 # An ADR fixture: docs/adr/ instead of docs/debt/, both profiles installed, and a README.md in
 # the record directory, which is the exempt non-record the ADR convention puts there.
 new_adr_repo() {
@@ -1617,6 +1642,128 @@ STUB
   b=$(base_of "$d")
   sed 's/^Open$/> **Resolved by PR #7** (2026-02-01)/' "$d/docs/debt/0001-valid.md" >"$d/.t" && mv "$d/.t" "$d/docs/debt/0001-valid.md"
   run_case "resolving in place is allowed" 0 - "$d" BASE_SHA="$b"
+
+  # `tracked_in_index` ran `git ls-files --error-unmatch` with its status discarded, so
+  # "not tracked" and "the index could not be read" were one answer and every caller reported
+  # an ordinary negative verdict off a query that never ran. Measured on git
+  # 2.50.1: --error-unmatch exits 1 for an untracked or absent path and 128 for a fault, so its
+  # own status separates the two and no second witness is needed the way git cat-file needed
+  # one (ADR 0005 decision 2).
+  printf -- '-- an index query that could not run --\n'
+
+  # check_no_disappearances. A record sitting untouched in the tree read as gone, which skipped
+  # check_not_rewritten -- every anti-erasure rule off at once -- and then reported E-GONE, a
+  # verdict the gate had not established.
+  d=$(case_dir tracked_scan_fault)
+  b=$(base_of "$d")
+  stub_bin="$SCRATCH/git-tracked-fault-bin"
+  write_ls_files_stub "$stub_bin" docs/debt/0001-valid.md
+  run_case "index query faults, record not reported gone" 1 E-TRACKED-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "index fault replaces E-GONE"
+  if grep -q '::error::E-GONE: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL E-GONE also fired for a query that never ran\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-GONE suppressed\n'
+  fi
+
+  # renumbered_elsewhere. `tracked_in_index "$candidate" || continue` -- the literal
+  # `cmd || continue` ADR 0005's Context names -- dropped a faulted candidate out of the
+  # renumber search, so a genuinely renumbered record reported E-GONE off a search that never
+  # looked at its destination.
+  d=$(case_dir renumber_index_scan_fault)
+  write_record "$d" "0002-b.md"
+  git -C "$d" add -A
+  git -C "$d" commit -qm "two records"
+  b=$(base_of "$d")
+  git -C "$d" mv docs/debt/0002-b.md docs/debt/0003-b.md
+  stub_bin="$SCRATCH/git-renumber-index-bin"
+  write_ls_files_stub "$stub_bin" docs/debt/0003-b.md
+  run_case "renumber candidate index query faults" 1 E-RENUMBER-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "index fault replaces E-GONE"
+  if grep -q '::error::E-GONE: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL E-GONE also fired for a candidate never checked\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-GONE suppressed\n'
+  fi
+
+  # The other half of that caller's decision: a fault on one candidate must not outrank a
+  # positive match on another, so it is remembered and returned only once the loop exhausts.
+  # collect_records sorts, so the faulting candidate (0002-c) is tried before the real renumber
+  # destination (0006-b) and a fix that returned 2 at the first fault would redden this case.
+  # Green before the conversion and after it; what it guards is the fix overshooting.
+  d=$(case_dir renumber_match_outranks_fault)
+  write_record "$d" "0005-b.md"
+  git -C "$d" add -A
+  git -C "$d" commit -qm "two records"
+  b=$(base_of "$d")
+  git -C "$d" mv docs/debt/0005-b.md docs/debt/0006-b.md
+  write_record "$d" "0002-c.md"
+  git -C "$d" add -A
+  stub_bin="$SCRATCH/git-renumber-outrank-bin"
+  write_ls_files_stub "$stub_bin" docs/debt/0002-c.md
+  run_case "a real renumber outranks a candidate fault" 0 - "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
+  # check_gate_files, on the gate file itself. A gate file present and tracked read as removed,
+  # which reported E-GATE-GONE -- the gate accusing the change of deleting a file that is
+  # sitting there, off an index query that never ran.
+  d=$(case_dir gate_tracked_scan_fault)
+  b=$(base_of "$d")
+  stub_bin="$SCRATCH/git-gate-tracked-bin"
+  write_ls_files_stub "$stub_bin" .github/scripts/check-records.sh
+  run_case "gate file index query faults" 1 E-GATE-TRACKED-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "index fault replaces E-GATE-GONE"
+  if grep -q '::error::E-GATE-GONE: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL E-GATE-GONE also fired for a query that never ran\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-GATE-GONE suppressed\n'
+  fi
+
+  # check_gate_files, on a declared rename's successor. The exemption turns on the successor
+  # being really tracked; a faulted query read as "not tracked" and reported E-GATE-GONE for a
+  # rename the gate could not verify either way. Run by hand rather than through run_case: the
+  # checker has been renamed, so it is no longer at the path run_case invokes.
+  d=$(case_dir gate_successor_scan_fault)
+  b=$(base_of "$d")
+  git -C "$d" mv .github/scripts/check-records.sh .github/scripts/check-gate.sh
+  ins="check-records.sh	check-gate.sh"
+  awk -v ins="$ins" '
+    /^GATE_PREDECESSORS="/ && !seen {
+      print "GATE_PREDECESSORS=\"" ins
+      sub(/^GATE_PREDECESSORS="/, "")
+      seen = 1
+    }
+    { print }
+  ' "$d/.github/scripts/check-gate.sh" >"$d/.chk"
+  mv "$d/.chk" "$d/.github/scripts/check-gate.sh"
+  chmod +x "$d/.github/scripts/check-gate.sh"
+  git -C "$d" add -A
+  stub_bin="$SCRATCH/git-gate-successor-bin"
+  write_ls_files_stub "$stub_bin" .github/scripts/check-gate.sh
+  printf '  %-4s %-44s ' "" "rename successor index query faults"
+  if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$b" \
+    PATH="$stub_bin:$PATH" ./.github/scripts/check-gate.sh) >"$d/.o" 2>"$d/.e"; then
+    failed=$((failed + 1))
+    printf 'FAIL passed with an unverified rename\n'
+  elif ! grep -q '::error::E-GATE-SUCCESSOR-SCAN: ' "$d/.e"; then
+    failed=$((failed + 1))
+    printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
+  elif grep -q '::error::E-GATE-GONE: ' "$d/.e"; then
+    failed=$((failed + 1))
+    printf 'FAIL E-GATE-GONE also fired for a rename never verified\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   exit=1 E-GATE-SUCCESSOR-SCAN\n'
+  fi
 
   # The gate's own location. Reaching the repo through a symlink used to switch
   # self-protection off silently, because git reports a physical path and the script
