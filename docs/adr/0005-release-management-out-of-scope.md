@@ -47,15 +47,14 @@ workflow against by hand. Purpose-built tools already own the mechanics per ecos
 release-please, semantic-release, changesets, goreleaser, cargo-release.
 
 **Revisit condition.** Reopen this the first time adept is actually asked to drive a release in
-a target repository. That is when the question stops being hypothetical and the evidence this
-decision lacks starts to exist, and reopening is not building: one real need settles what an
-artifact would have to do, and whether that generalises is the superseding record's question.
-Nothing here will notice on its own — those releases happen in other repositories and leave no
-trace in this one, `$warding`'s review-by sweep reads `docs/debt/` rather than `docs/adr/`, and
-the issue that produced this record closes with it. A sighting is therefore worth a new issue
-citing this record. The gap runs the other way too, and is worth saying plainly: the premise
-that no such release has been driven is an observation about sessions, not a fact any artifact
-here can confirm.
+a target repository — the point at which the question stops being hypothetical and the missing
+evidence starts to exist. Reopening is not building: one real need settles what an artifact
+would have to do, and whether that generalises is the superseding record's question. Nothing
+here will notice on its own — those releases happen elsewhere, `$warding`'s review-by sweep
+reads `docs/debt/` rather than `docs/adr/`, and the issue that produced this record closes with
+it — so a sighting is worth a new issue citing this record. The premise runs on the same
+shortage: that no such release has been driven is an observation about sessions, not a fact any
+artifact here can confirm.
 
 ## Consequences
 
@@ -78,18 +77,16 @@ here can confirm.
 ## Considered & rejected
 
 - **Ship a `$release` skill now — tag, changelog, `gh release create`** — including the
-  deliberately minimal version of it alongside this record. The issue's first option, and the
-  reading that treats the gap as real. Rejected on both grounds above, the first sufficient
-  alone: there is no target repository whose release this one has been asked to drive, so the
-  skill's shape would be imagined. A minimal one is the worst case rather than the safe one,
-  because it would encode the defaults of the only repository available to test it against —
-  this one, which has no releases.
-- **Write `references/release.md` instead of a skill.** This repository's other artifact type,
-  a standard consulted while doing something else rather than a procedure invoked, and the
-  shape that best survives the policy objection: "read this repository's release documentation
-  and follow it" is legitimate content for a reference where it is degenerate content for a
-  skill. Rejected on the first ground alone — with no observed release to describe, its content
-  would be imagined the same way.
+  deliberately minimal version alongside this record. The issue's first option. Rejected on
+  both grounds above, the first sufficient alone: no target repository's release has been
+  driven from here, so the skill's shape would be imagined. A minimal one is the worst case
+  rather than the safe one, since it would encode the defaults of the only repository available
+  to test it against — this one, which has no releases.
+- **Write `references/release.md` instead of a skill.** This repository's other artifact type —
+  a standard consulted rather than a procedure invoked — and the shape that best survives the
+  policy objection, since "read this repository's release documentation and follow it" is
+  legitimate content for a reference where it is degenerate for a skill. Rejected on the first
+  ground alone: with no observed release to describe, its content would be imagined the same way.
 - **Record the decision only as a line in `README.md` or `docs/cheatsheet.md`, with no record
   here.** The issue's second option, and cheaper. Rejected because a line in a
   which-skill-do-I-run table carries the outcome without the reasoning that makes it a
