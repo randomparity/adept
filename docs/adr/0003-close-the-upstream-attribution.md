@@ -91,7 +91,19 @@ recorded here as a judgment rather than as a measurement result.
 | `skills/forge/scripts/task-brief` | 95.27% / 127 | *pending* | *pending* | *pending* |
 | `skills/forge/scripts/sdd-workspace` | 11.60% / 45 | *pending* | *pending* | *pending* |
 
-The candidate set is **every tracked file — 129 of them**. ADR 0002 never stated
+**The run bound was checked tree-wide, not just on the six.** Containment alone
+would not have answered it: a 40-token verbatim run inside a 7,500-token document
+is 0.44% containment and invisible to any percentage threshold. Scanning all 130
+tracked files for a shared run over 16 tokens returns exactly ten — the six
+rewritten here, `licenses/superpowers.LICENSE` (deleted), `LICENSE` (163 tokens
+of shared MIT text), `skills/forge/SKILL.md` (the excluded 28-token idiom), and
+the migration plan's 51-token quotation (now attributed). Nothing else in the
+tree carries one, including the other ten behaviour inventories, whose
+construction is identical to the one that does — the inventory at 2.51% tops out
+at exactly 16 tokens, at the bound rather than over it. So the tree-wide
+consequence below rests on a tree-wide measurement.
+
+The candidate set is **every tracked file — 130 of them**. ADR 0002 never stated
 its own, and its claim that "no other shipped file reaches 2%" does not hold over
 that set. Five files sit above the line and none creates an obligation. The first
 is `licenses/superpowers.LICENSE` at 100.00% / run 170 — it *is* the upstream

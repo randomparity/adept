@@ -57,7 +57,10 @@ identically constructed instrument.
 
 ### The candidate set, and what else is in it
 
-The scan covers **every tracked file — 129 of them**. ADR 0002 never stated its
+The scan covers **every tracked file**, and it covers **both bounds**. Computing
+longest runs only for files above some containment floor would miss the case the
+run bound exists for — a 40-token run in a 7,500-token document is 0.44%
+containment. So the run scan is unconditional across the tree. ADR 0002 never stated its
 candidate set, and its claim that "no other shipped file reaches 2%" does not
 hold over that set. **Five** tracked files sit above it, not four: the first is
 `licenses/superpowers.LICENSE` itself at 100.00% / run 170 — it *is* the upstream
