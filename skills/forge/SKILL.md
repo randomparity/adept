@@ -303,7 +303,15 @@ verdict rather than the whole review.
 Every fix dispatch carries the implementer contract: re-run the tests covering
 the change and report the command and its output. Name the covering test files —
 a one-line fix does not need the whole suite. Confirm the report has all three
-before re-dispatching the reviewer. If the **final** review returns findings,
+before re-dispatching the reviewer.
+
+One finding cannot take that contract: a flaked test. Re-running it is exactly
+the evidence the flake policy under *Guardrails* rejects, so a fix dispatch
+answering one reports either the determinism fix or the reference of the issue
+it filed — never a green re-run. A filed flake is a complete disposition and the
+re-review may approve on it. Without this the reviewer raises a finding the
+controller has no legitimate way to close, and the loop closes it the one way
+that is left. If the **final** review returns findings,
 send **one** fix subagent with the complete list; per-finding fixers each rebuild
 context and re-run suites, and one real session's final-review wave cost more
 than all its tasks combined.
@@ -416,11 +424,10 @@ the limitation in the PR body.
 
 If a guardrail fails, stop and fix it. Do not commit with red guardrails.
 
-A guardrail that fails once and passes on re-run has not gone green — it has
-identified itself as nondeterministic. See
-[true-seeing](../../references/true-seeing.md), *Flaky tests*: a flake is a
-determinism defect to fix or report, never evidence in either direction. Fix it
-or file it, and say in the commit or the PR body that it flaked.
+A guardrail that fails once and passes on re-run has not gone green — see
+[true-seeing](../../references/true-seeing.md), *Flaky tests*. Do not commit on
+it either: fix the determinism or file it, and say in the commit or the PR body
+that it flaked.
 
 ## Context checkpoint
 

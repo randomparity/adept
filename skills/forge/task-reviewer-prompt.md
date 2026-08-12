@@ -7,6 +7,11 @@ what was asked for, and whether it is well built.
 **Purpose:** confirm one task's implementation does what its requirements say,
 no less and no more, and that the result is clean, tested and maintainable.
 
+Its flaky-test wording restates the policy in `references/true-seeing.md`
+instead of linking it. That duplication is deliberate: this text is pasted into
+a subagent working in the target repository, where a relative link into this
+repo's `references/` would not resolve. Do not collapse it into a link.
+
 ```
 Subagent (general-purpose):
   description: "Task N review — spec and quality"
