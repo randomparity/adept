@@ -865,7 +865,7 @@ repo_relative() {
 # where an err would set failed=1 in a subshell and lose it — the same shape that once let a
 # stray file print an error and still exit 0. The caller checks locatability itself.
 gate_paths() {
-  local base=$1 rel profile old key new needle
+  local base=$1 rel profile old key new needle profiles_rel
   rel=$(repo_relative "$SELF_FILE")
   [ -n "$rel" ] && printf '%s\n' "$rel"
 
@@ -902,11 +902,25 @@ gate_paths() {
   # enabled profile names: by-name derivation would let one change drop a profile from the
   # list *and* delete its file with nothing firing, because the deleted file was never in
   # the set.
-  while IFS= read -r profile; do
-    [ -n "$profile" ] || continue
-    rel=$(repo_relative "$SELF_DIR/profiles/${profile##*/}")
-    [ -n "$rel" ] && printf '%s\n' "$rel"
-  done < <(git ls-tree -r --name-only "$base" -- "$(repo_relative "$SELF_DIR/profiles")" 2>/dev/null || true)
+  # The pathspec is guarded rather than interpolated inline: empty is what repo_relative
+  # returns when this script sits outside the repo, and `git ls-tree -- ''` is a fatal
+  # pathspec error rather than an empty listing, so the `|| true` below would have swallowed
+  # it and left every profile silently unprotected. A directory merely absent from the ref
+  # exits 0 with no output, so that case never needed the guard.
+  #
+  # The `|| true` stays. gate_paths runs inside a process substitution, where err's
+  # assignment to `failed` lands in a discarded subshell -- it emits paths only, and its
+  # callers report. A damaged object store is therefore an accepted residual here rather than
+  # an oversight; giving this one function a fault channel means a private sentinel protocol
+  # between it and its caller, which ADR 0005 weighed and rejected.
+  profiles_rel=$(repo_relative "$SELF_DIR/profiles")
+  if [ -n "$profiles_rel" ]; then
+    while IFS= read -r profile; do
+      [ -n "$profile" ] || continue
+      rel=$(repo_relative "$SELF_DIR/profiles/${profile##*/}")
+      [ -n "$rel" ] && printf '%s\n' "$rel"
+    done < <(git ls-tree -r --name-only "$base" -- "$profiles_rel" 2>/dev/null || true)
+  fi
 
   # The workflow template, when it ships beside the scripts. It is part of the gate in the
   # publishing layout, and an adopting repo simply has no such sibling.
