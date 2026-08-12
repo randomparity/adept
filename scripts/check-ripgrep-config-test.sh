@@ -12,7 +12,7 @@ set -euo pipefail
 # discovery report this repository instead.
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=scripts/test-fixture-helpers.sh
+# shellcheck source=SCRIPTDIR/test-fixture-helpers.sh
 . "$script_dir/test-fixture-helpers.sh"
 
 clear_git_env

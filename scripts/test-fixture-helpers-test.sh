@@ -7,7 +7,7 @@ set -euo pipefail
 # from outside the shell that installed them.
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=scripts/test-fixture-helpers.sh
+# shellcheck source=SCRIPTDIR/test-fixture-helpers.sh
 . "$script_dir/test-fixture-helpers.sh"
 
 clear_git_env
@@ -142,6 +142,16 @@ CHILD
 	# because run_child merges stderr into the same file.
 	late=$(head -1 "$SCRATCH/child.out")
 	chmod 700 "$child_tmp"/sample.* 2>/dev/null || :
+	# Pin what the child reported before trusting it. A child that died at
+	# fixture_scratch, mkdir or chmod also exits 1 and also leaves no
+	# directory at whatever text landed on line 1, so without these the case
+	# reports green having exercised nothing.
+	case $late in
+	"$blocker_parent"/late.*) : ;;
+	*) abort "child did not report its late fixture: $(cat "$SCRATCH/child.out")" ;;
+	esac
+	grep -qF 'sample: cleanup failed for' "$SCRATCH/child.out" ||
+		abort "cleanup should report the failure: $(cat "$SCRATCH/child.out")"
 	[ "$status" -eq 1 ] ||
 		abort "a failed removal should redden the suite, got $status"
 	[ ! -e "$late" ] || abort "cleanup stopped at the failure and stranded $late"

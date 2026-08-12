@@ -59,6 +59,10 @@ clear_git_env() {
 
 fixture_scratch() { # prefix -- sets FIXTURE_SCRATCH
 	FIXTURE_SCRATCH=$(mktemp -d "$1"'XXXXXX')
+	# The two registries are parallel and must only ever be appended together
+	# here: fixture_cleanup bounds its loop on the paths array and indexes the
+	# prefixes array with it, so a divergence dereferences an unset index under
+	# `set -u` inside an EXIT trap and aborts cleanup mid-loop.
 	fixture_scratch_prefixes[${#fixture_scratch_prefixes[@]}]=$1
 	fixture_scratch_paths[${#fixture_scratch_paths[@]}]=$FIXTURE_SCRATCH
 }
