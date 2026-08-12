@@ -4,7 +4,8 @@
 
 Development-workflow skills for Claude Code and Codex, distributed as a plugin.
 This repository is its own marketplace: `.claude-plugin/marketplace.json` declares
-one plugin whose source is `./`, and Codex reads the same file.
+one plugin whose source is `./`. Both clients read that marketplace; Codex loads
+the plugin contents through `.codex-plugin/plugin.json`.
 
 There is no install script and there will not be one. The harness owns install,
 update, uninstall, and caching — see
@@ -19,21 +20,32 @@ Claude Code:
 
 Codex CLI:
 
-    codex plugin marketplace add git@github.com:randomparity/adept.git
+    codex plugin marketplace add randomparity/adept
     codex plugin add adept@randomparity
+
+Start a new Codex session after installation so the bundled skills and tools are
+available.
 
 ## Update
 
-`claude plugin update adept`, or in the background without being asked. Manifests
-carry no `version` field: updates track the git SHA, so every merge to `main` is an
-update.
+Claude Code:
+
+    claude plugin update adept
+
+Codex CLI:
+
+    codex plugin marketplace upgrade randomparity
+
+Start a new Codex session after updating. Manifests carry no `version` field:
+updates track the git SHA, so every merge to `main` is an update.
 
 ## What ships
 
-26 skills covering design, TDD, adversarial review, shipping, and campaign
+27 skills covering design, TDD, adversarial review, shipping, and campaign
 orchestration, plus 3 references the skills consult and 2 MCP servers (`context7`,
-`exa`). `claude plugin details adept` prints the current inventory and its
-projected token cost.
+`exa`). `claude plugin details adept` prints the current Claude inventory and its
+projected token cost. `codex plugin list --json` confirms that
+`adept@randomparity` is installed and enabled in Codex.
 
 The `exa` server reads `EXA_API_KEY` from the session environment at start. A machine
 without the key set gets a failing server it can disable; nothing else depends on it.
@@ -57,11 +69,21 @@ skill to run for a given situation.
     just verify     # the guardrail suite: gates, suites, linters, manifests
     just hooks      # once per clone: installs prek and the pre-push hook
 
-To try un-pushed changes without installing anything:
+To try un-pushed changes in Claude Code without installing anything:
 
     claude --plugin-dir ./
 
 `/reload-plugins` picks up edits inside a running session.
+
+For Codex CLI, add the checkout as a local marketplace and install it:
+
+    codex plugin marketplace add ./
+    codex plugin add adept@randomparity
+
+Rerun `codex plugin add adept@randomparity` after edits to refresh Codex's cached
+copy, then test in a new session. See the
+[OpenAI plugin documentation](https://learn.chatgpt.com/docs/plugins) for the
+current Codex plugin workflow.
 
 `CLAUDE.md` carries the rules that govern what may ship here — in particular that a
 skill is instructions rather than a program, that no skill runs a long-lived process,
