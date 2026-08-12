@@ -329,4 +329,34 @@ rg_status=0
 rg_output=$(PATH="$rg_shim:$PATH" "$gate" "$rg_root" 2>&1) || rg_status=$?
 assert_gate 'rg scan fault' 2 'rg exit 2' "$rg_status" "$rg_output"
 
+# Case 17: a run that has both a finding and a scan fault. The header states the
+# precedence as deliberate -- a scan fault outranks a finding, because the rules
+# the failed scan decides are undecided -- and nothing else asserts it, so a
+# later change making the finding win would pass every other case here.
+#
+# Rule 2 reports first (a second skill whose name: disagrees with its directory),
+# then rule 3's loop runs against a non-empty reserved list and the grep shim
+# faults it. The finding must still be printed and the status must be the fault.
+precedence_root=$(new_baseline fault-outranks-finding)
+mkdir -p "$precedence_root/skills/mislabelled"
+cat >"$precedence_root/skills/mislabelled/SKILL.md" <<'SKILL'
+---
+name: not-the-directory-name
+description: "A fixture skill whose frontmatter disagrees with its directory."
+---
+# Mislabelled
+SKILL
+cat >>"$precedence_root/docs/cheatsheet.md" <<'SHEET'
+
+Also `mislabelled`, so rule 6 is not what decides this case.
+SHEET
+printf '# Reserved names\nexample-skill\n' >"$precedence_root/scripts/reserved-skill-names.txt"
+precedence_status=0
+precedence_output=$(PATH="$grep_shim:$PATH" "$gate" "$precedence_root" 2>&1) || precedence_status=$?
+assert_gate 'fault outranks finding, status' 2 'rule 3 reserved-name scan of' \
+	"$precedence_status" "$precedence_output"
+assert_gate 'fault outranks finding, finding still printed' 2 \
+	'mislabelled: SKILL.md declares name: not-the-directory-name' \
+	"$precedence_status" "$precedence_output"
+
 printf 'check-skill-shape-test: ok\n'

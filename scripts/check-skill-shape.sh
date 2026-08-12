@@ -30,11 +30,7 @@ set -euo pipefail
 # exception and runs the other way: a failed removal reports itself and names the
 # path, but never displaces a status the run had already earned.
 #
-# Two residuals are left open. The smaller: a failed write on the closing
-# `all rules pass` line exits 1 with no finding, which is accepted because it
-# takes a closed or broken stdout to reach.
-#
-# The larger fails open rather than closed. A `done <file`
+# One residual is left open, and it fails open rather than closed. A `done <file`
 # redirect that cannot be opened prints a bash diagnostic, skips the loop
 # entirely, and lets the run reach `all rules pass` and exit 0 -- measured on
 # bash 3.2.57, this repository's declared floor. `done <file || fault` would read
@@ -98,25 +94,33 @@ workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")" ||
 # else will, and the path is the only way to reclaim it.
 #
 # shellcheck disable=SC2329 # run by the EXIT trap; 0.11 stops tracing at the terminal exit
+# Both branches report and then fall into one shared tail, so neither can
+# displace a status the run already earned.
+#
+# The prefix guard is defence in depth on the one recursive removal here, the
+# same shape check-ripgrep-config.sh and test-fixture-helpers.sh carry:
+# $workspace is what mktemp returned from a fixed template and no code reassigns
+# it, so it is unreachable by construction rather than a live check. It is kept
+# because the cost of the one path that would need it is a directory nobody
+# asked to delete.
+#
+# -f so a directory already gone is not reported as one left behind: without it
+# rm exits 1 on ENOENT, which would name a path that does not exist and redden
+# an otherwise clean run. A removal that genuinely fails still does.
 cleanup() {
 	local exit_status=$?
-	# The prefix guard is defence in depth on the one recursive removal here, the
-	# same shape check-ripgrep-config.sh and test-fixture-helpers.sh carry:
-	# $workspace is what mktemp returned from a fixed template and no code
-	# reassigns it, so this is unreachable by construction rather than a live
-	# check. It is kept because the cost of the one path that would need it is a
-	# directory nobody asked to delete.
 	case $workspace in
-	"${TMPDIR:-/tmp}"/check-skill-shape.*) : ;;
-	*) fault "refusing cleanup outside the scratch root: $workspace" ;;
+	"${TMPDIR:-/tmp}"/check-skill-shape.*)
+		if rm -Rf -- "$workspace"; then
+			exit "$exit_status"
+		fi
+		printf 'check-skill-shape: retained scratch path: %s\n' "$workspace" >&2
+		;;
+	*)
+		printf 'check-skill-shape: refusing cleanup outside the scratch root: %s\n' \
+			"$workspace" >&2
+		;;
 	esac
-	# -f so a directory already gone is not reported as one left behind: without
-	# it rm exits 1 on ENOENT, which would name a path that does not exist and
-	# redden an otherwise clean run. A removal that genuinely fails still does.
-	if rm -Rf -- "$workspace"; then
-		exit "$exit_status"
-	fi
-	printf 'check-skill-shape: retained scratch path: %s\n' "$workspace" >&2
 	if [ "$exit_status" -eq 0 ]; then
 		exit 2
 	fi
@@ -240,6 +244,7 @@ while IFS= read -r name; do
 done <"$names"
 
 if [ "$status" -eq 0 ]; then
-	printf 'check-skill-shape: %s skills, all rules pass\n' "$count"
+	printf 'check-skill-shape: %s skills, all rules pass\n' "$count" ||
+		fault 'could not write the summary line'
 fi
 exit "$status"
