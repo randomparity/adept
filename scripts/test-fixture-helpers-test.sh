@@ -226,8 +226,18 @@ grep -qF 'git reported no local env vars' "$SCRATCH/child.out" ||
 # asking, so the case would pass with or without the flag. Hence the pty.
 #
 # script(1) has two incompatible argument orders and neither host is guaranteed
-# to have it, so probe with a command that must succeed and skip loudly rather
-# than redden somewhere it is missing.
+# to have it, so probe and skip loudly rather than redden somewhere it is
+# missing. The probe turns on a marker the probed command writes, never on an
+# exit status: util-linux before 2.39 takes the first positional as its
+# typescript file and silently discards the rest, so the BSD form there runs an
+# interactive shell instead of the command and still exits 0. Classifying on
+# that status would redden every such host -- Ubuntu 22.04, Debian 12, RHEL 9 --
+# with a message naming a cleanup defect that does not exist.
+#
+# The util-linux form is tried first for the same reason. It is the one whose
+# misfire is harmless: macOS script has no -c and exits on the unknown option
+# without spawning anything, whereas the BSD form's misfire is the interactive
+# shell above, which a login file setting `ignoreeof` turns into a hang.
 #
 # Every script(1) call closes its own stdin. script forwards its stdin to the
 # pty it allocates, so the child still sees a terminal and the case still bites;
@@ -235,11 +245,25 @@ grep -qF 'git reported no local env vars' "$SCRATCH/child.out" ||
 # the suite list to a `while read` loop on stdin, and a script that inherits it
 # swallows the remaining suites -- the run then reports the suites it reached
 # and exits 0, which is a green board for a test pass that never happened.
+pty_marker=$SCRATCH/pty-probe-marker
+pty_probe=$SCRATCH/pty-probe.sh
+cat >"$pty_probe" <<PROBE
+#!/usr/bin/env bash
+: >$(q "$pty_marker")
+PROBE
+chmod +x "$pty_probe"
+
 pty_style=none
-if script -q /dev/null true >/dev/null 2>&1 </dev/null; then
-	pty_style=bsd
-elif script -q -e -c true /dev/null >/dev/null 2>&1 </dev/null; then
+# util-linux re-parses this argument through \$SHELL -c, so the path is quoted
+# for that shell the way every other generated path in this file is.
+script -q -c "$(q "$pty_probe")" /dev/null >/dev/null 2>&1 </dev/null || :
+if [ -e "$pty_marker" ]; then
 	pty_style=util-linux
+else
+	script -q /dev/null "$pty_probe" >/dev/null 2>&1 </dev/null || :
+	if [ -e "$pty_marker" ]; then
+		pty_style=bsd
+	fi
 fi
 
 if [ "$pty_style" != none ]; then
@@ -258,7 +282,8 @@ CHILD
 
 	# The child's own exit status is what this case turns on, and script(1)
 	# reports it only on util-linux and only with -e. A wrapper that records it
-	# needs neither flag nor version.
+	# needs neither flag nor version, and reports through the same marker-file
+	# evidence the probe above relies on.
 	pty_wrapper=$SCRATCH/pty-wrapper.sh
 	cat >"$pty_wrapper" <<WRAPPER
 #!/usr/bin/env bash
@@ -269,7 +294,9 @@ WRAPPER
 
 	case $pty_style in
 	bsd) script -q /dev/null "$pty_wrapper" >/dev/null 2>&1 </dev/null || : ;;
-	util-linux) script -q -c "$pty_wrapper" /dev/null >/dev/null 2>&1 </dev/null || : ;;
+	util-linux)
+		script -q -c "$(q "$pty_wrapper")" /dev/null >/dev/null 2>&1 </dev/null || :
+		;;
 	esac
 
 	[ -s "$SCRATCH/pty-status" ] ||
