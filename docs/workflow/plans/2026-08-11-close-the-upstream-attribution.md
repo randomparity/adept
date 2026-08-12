@@ -34,7 +34,13 @@ requirements implicitly include this section.
   `git rm` for tracked deletions and `trash` for scratch trees. A fixture's own
   `mktemp -d` teardown is the exception and follows
   `tests/fixtures/forge/sdd-workspace-test.sh:29`.
-- **Public repo.** No absolute host paths in committed files; plans and specs name
+- **Public repo, and that extends to the pull-request body.** Transcripts and
+  measurement output pasted there substitute `$SCRATCH` and `$WORK` for the real
+  paths, the same convention committed files follow —
+  `scripts/check-public-safety.sh` scans the tree only, so nothing catches a leak
+  in a PR comment. Applies to Task 1's mutation results and Task 8's three
+  transcripts.
+- No absolute host paths in committed files; plans and specs name
   the checkout root as `$WORK`. `scripts/check-public-safety.sh` enforces it.
 - **Threshold:** below **2% containment** and **no shared run over 16 tokens**,
   measured against `obra/superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99`.
@@ -91,7 +97,18 @@ rg -c --no-config '\bCritical\b'          skills/forge/task-reviewer-prompt.md #
 
 …and the same for `Important` / `Minor` in both reviewer prompts.
 
-Derive each template's placeholders mechanically before and after, never by hand:
+**The `[A-Z_]{2,}` derivation is a floor, not the inventory.** Each template also
+carries fill slots that are not uppercase tokens, and the mechanical check cannot
+see them — `implementer-prompt.md:42` has `Work from: [directory]`, and both
+prompts carry at `:8-9` and `:13-14` the model slot with its warning that *an
+omitted model silently inherits the session's most expensive one*.
+`code-reviewer.md` carries a dozen descriptive slots such as
+`[Yes | No | With fixes]` and `[What's well done? Be specific.]`. Enumerate each
+template's non-uppercase slots **by hand, once, before its rewrite**, and carry
+that list beside the derived one.
+
+Derive each template's uppercase placeholders mechanically before and after,
+never by hand:
 
 ```sh
 rg -o --no-config '\[[A-Z_]{2,}\]' <template> | sort -u
@@ -132,11 +149,17 @@ repository. Nothing in the tree.
 5. Add the `sweep` capability: run containment over every tracked file
    (`git ls-files`), sorted descending, with longest runs computed for anything
    above 1%.
-6. **Validate before trusting it.** Measure the six baseline files and
-   `skills/forge/SKILL.md` **as of the merge base**, not the working tree —
-   `git show "$(git merge-base HEAD origin/main)":<path>` — so the validation
-   reproduces at any point in the branch's life, including after the rewrites
-   land. It must reproduce ADR 0002 exactly:
+6. **Materialise the baseline as a tree**, so validation reproduces at any point
+   in the branch's life and `containment.py`'s `<repo-root> <path>` signature can
+   express it. For each of the seven paths:
+
+       base=$(git merge-base HEAD origin/main)
+       mkdir -p "$SCRATCH/baseline/$(dirname <path>)"
+       git show "$base:<path>" > "$SCRATCH/baseline/<path>"
+
+7. **Validate before trusting it:**
+   `python3 $SCRATCH/containment.py $SCRATCH/upstream-sp $SCRATCH/baseline <path>...`
+   It must reproduce ADR 0002 exactly:
 
    | File | Containment | Longest run |
    |---|---|---|
@@ -148,7 +171,11 @@ repository. Nothing in the tree.
    | `skills/forge/scripts/sdd-workspace` | 11.60% | 45 |
    | `skills/forge/SKILL.md` (excluded from the bar) | 1.82% | 28 |
 
-7. **Stop rule.** If any figure differs, the rebuild is measuring something other
+8. **Stop rule.** If the clone fails, or the pinned SHA does not resolve
+   (`git -C $SCRATCH/upstream-sp cat-file -e d884ae04^{commit}`), stop the change
+   and go to the operator — nothing is measured against any other ref, and no
+   later task proceeds on an unvalidated instrument. Likewise if any figure
+   differs, the rebuild is measuring something other
    than what ADR 0002 measured. Do not proceed to Task 1 — the discrepancy is the
    finding, and it goes to the operator. Note that this run's corpus is 171
    upstream files against ADR 0002's reported 140; because containment rises with
@@ -157,8 +184,9 @@ repository. Nothing in the tree.
 
 ### Acceptance criteria
 
-- The clone is at the pinned SHA.
-- All seven figures reproduce exactly.
+- The clone is at the pinned SHA and `cat-file -e` resolves it.
+- `$SCRATCH/baseline` holds all seven files as of the merge base.
+- All seven figures reproduce exactly against that baseline tree.
 - `$SCRATCH` is outside the repository and `git status` is clean.
 
 ---
@@ -278,20 +306,33 @@ they land in the candidate set and are held to the same containment bar.
        SCRIPT="${FORGE_SCRIPT_DIR:-$SCRIPT_DIR/../../../skills/forge/scripts}/task-brief"
 
    The default is the real path, so the committed suite behaves identically and
-   the mechanism costs nothing. Then `cp -R skills/forge/scripts $SCRATCH/mutants`,
-   mutate one file there, and run
-   `FORGE_SCRIPT_DIR=$SCRATCH/mutants ./tests/fixtures/forge/<suite>` to confirm
-   the expected case reddens.
+   the mechanism costs nothing. **One fresh tree per mutation**, because a single
+   reused directory accumulates every prior mutation and stops isolating anything
+   after the first round:
 
-   Mutations for `task-brief`: swap `exit 2` → `exit 0` on each of the two exit-2
-   paths; swap `exit 3` → `exit 0`; drop the arity guard; write to the wrong path;
-   remove the empty-file check so exit 3 never fires; and corrupt the awk boundary
-   so `Task 1` also matches `Task 10` — that last is the extraction semantic Task 3
-   is most likely to break.
+       mutant=$(mktemp -d "$SCRATCH/mutant.XXXXXX")
+       cp -R skills/forge/scripts/. "$mutant"
+       # apply exactly one mutation inside "$mutant"
+       FORGE_SCRIPT_DIR=$mutant ./tests/fixtures/forge/<suite>
+
+   The trailing `/.` makes the copy behave the same whether or not the destination
+   exists. Record which mutation produced which red.
+
+   Mutations for `task-brief`, one per assertion class so the criterion below is
+   actually reachable: swap `exit 2` → `exit 0` on each of the two exit-2 paths;
+   swap `exit 3` → `exit 0`; drop the arity guard; write to the wrong path; remove
+   the empty-file check so exit 3 never fires; corrupt the awk boundary so `Task 1`
+   also matches `Task 10`; drop the `!infence` guard so a fenced `# Task N` counts
+   as a heading; change `^#+` to `^##` so heading depth stops matching; stop
+   resetting `intask` so a body runs past the next heading; redirect a diagnostic
+   to stdout so stderr is empty on an error path; and change the default-path
+   construction (`task-<N>-brief.md` → `task<N>-brief.md`).
 
    Mutations for `review-package`: swap each of the three `exit 2`s; drop one
    `git rev-parse --verify`; write to the wrong path; drop one written-file
-   heading; add a second stdout line.
+   heading; add a second stdout line; redirect a diagnostic to stdout; and build
+   the default filename by slicing seven characters instead of calling
+   `git rev-parse --short`.
 
    A test that cannot redden is not a regression check. Record the results for the
    pull-request body.
@@ -513,6 +554,11 @@ contract, not from its wording.
 - The literals `DONE`, `DONE_WITH_CONCERNS`, `BLOCKED`, `NEEDS_CONTEXT`, in a
   `Status:` line the controller can parse.
 - The placeholders `[BRIEF_FILE]` and `[REPORT_FILE]`.
+- The `Work from: [directory]` directive (`:42`) — an implementer dispatched
+  without a working directory mutates whatever tree it happens to be in.
+- The model slot at `:8-9`, **including its warning** that an omitted model
+  silently inherits the session's most expensive one. Dropping the warning is a
+  cost regression nothing else catches.
 - The instruction to write a report file rather than return prose inline.
 
 ### Steps
@@ -523,7 +569,9 @@ contract, not from its wording.
 3. Re-author the file.
 4. Re-run the placeholder command → identical set.
 5. Run the four word-bounded literal checks from *Global Constraints* → each ≥ 1,
-   and `\bDONE\b` exactly as before.
+   and `\bDONE\b` exactly as before. Then the two non-uppercase slots:
+   `rg -c --no-config -F 'Work from:'` and
+   `rg -c --no-config -F "session's most expensive one"` → both ≥ 1.
 6. Measure. Target **< 2%, run ≤ 16**.
 7. `just verify` bare.
 8. Commit: `refactor: re-author the implementer prompt from its dispatch contract`.
@@ -643,18 +691,21 @@ the only step that exercises the dispatch contract rather than inspecting it.
        $WORK/skills/forge/scripts/task-brief     plan.md 1 $SCRATCH/brief.md
        $WORK/skills/forge/scripts/review-package HEAD~1 HEAD $SCRATCH/review.diff
 
-   Then **derive the placeholder set rather than working from a list** — re-run
-   `rg -o --no-config '\[[A-Z_]{2,}\]' skills/forge/task-reviewer-prompt.md | sort -u`
-   against the *rewritten* file and fill every token it prints. As of now that is
+   Then **derive the placeholder set rather than working from a list** — run
+   `rg -o --no-config '\[[A-Z_]{2,}\]' <template> | sort -u` against each of the
+   *three* rewritten templates and fill every token each prints. As of now that is
    seven: `[BRIEF_FILE]` → `$SCRATCH/brief.md`; `[DIFF_FILE]` →
    `$SCRATCH/review.diff`; `[REPORT_FILE]` → a path under `$SCRATCH`;
    `[GLOBAL_CONSTRAINTS]` → this plan's *Global Constraints* section; `[MODEL]` →
    the dispatching model; and `[BASE_SHA]` / `[HEAD_SHA]` → the smoke repo's two
    commit SHAs.
 2. Dispatch one implementer subagent with the rewritten
-   `skills/forge/implementer-prompt.md` on the throwaway task. Require: its final
-   message carries exactly one of `DONE` / `DONE_WITH_CONCERNS` / `BLOCKED` /
-   `NEEDS_CONTEXT` in the `Status:` position.
+   `skills/forge/implementer-prompt.md` on the throwaway task. **Fill
+   `Work from:` with `$SCRATCH/smoke-repo` and dispatch with that as cwd** — this
+   is the one dispatch that writes files, and an unpinned working directory means
+   it edits the adept checkout. Require: its final message carries exactly one of
+   `DONE` / `DONE_WITH_CONCERNS` / `BLOCKED` / `NEEDS_CONTEXT` in the `Status:`
+   position.
 3. Dispatch one task reviewer with the rewritten
    `skills/forge/task-reviewer-prompt.md` against `$SCRATCH/review.diff`.
    Require: both verdicts present, and at least one finding graded `Critical`,
@@ -675,9 +726,16 @@ the only step that exercises the dispatch contract rather than inspecting it.
 
 ### Acceptance criteria
 
-- Both dispatches produced parseable output against the gated vocabulary.
-- The dispatched prompt text contains no remaining `[A-Z_]{2,}` bracket token —
-  an unfilled placeholder makes the smoke prove nothing.
+- All **three** dispatches produced parseable output against the gated
+  vocabulary — including the whole-branch reviewer's `**Ready to merge?**` verdict
+  line and at least one finding under a `Critical` / `Important` / `Minor`
+  heading.
+- No dispatched prompt text contains an unfilled bracket token. Check with
+  `\[[^]\n]{2,}\]`, not the uppercase pattern, and allow only the output-format
+  exemplars meant to survive into the prompt: `[Yes | No | With fixes]`,
+  `[Approved | Needs fixes]`, `[1-2 sentence technical assessment]`,
+  `[What's well done? Be specific.]`, and `code-reviewer.md`'s four issue-bucket
+  descriptions. Every other bracket token must be filled.
 - Whole-tree scan recorded, with the file count and every above-2% file named.
 - If any of the six missed, **Task 9 does not run at all** — go to Task 9b, which
   holds the whole fallback in one place.
@@ -689,8 +747,9 @@ the only step that exercises the dispatch contract rather than inspecting it.
 ### When the smoke does not pass
 
 - **It runs and the output is off-contract** — a missing status literal, one
-  verdict instead of two, an ungraded finding. Send the work back to Task 5 or
-  Task 6 with the transcript attached. Task 9 is blocked until a re-run passes,
+  verdict instead of two, an ungraded finding. Send the work back to Task 5,
+  Task 6 or Task 7 as the failing template dictates, with the transcript
+  attached. Task 9 is blocked until a re-run passes,
   and the re-run is recorded alongside the first.
 - **It cannot be run at all** — reserved for a genuine absence of dispatch
   capability in the session, never for a missing fixture, which step 1 creates.
@@ -820,6 +879,8 @@ repository.
 the merge itself can all force a change to one of the six, and any such change
 re-measures that file — against the surviving instrument if it is still there, or
 by re-running Task 0 in full, seven-figure validation included, if it is not.
+`$SCRATCH/baseline` is what makes that re-validation possible after the rewrites
+land — keep it alongside the checker.
 Deleting the checker at Task 9 makes the cheap path unavailable exactly when it is
 most likely to be needed.
 
@@ -843,14 +904,17 @@ rewrites and the notice together. Under `--rebase` there is no merge commit:
 revert the range in reverse task order instead. The repository forbids squash for
 code, so those are the only two shapes.
 
-**Either way the revert must not delete ADR 0003.** Once the record is in the base
-ref, `check-records.sh` reports `E-GONE` for a record present at the base and
-absent from the tree, so a wholesale revert fails CI. Restore it in the same
-commit — `git checkout <merge> -- docs/adr/` — and append the reversal to its
-`## Consequences`. The record is append-only once merged, so that is a new
-paragraph, never an edit to the table.
+**Either way the revert must leave `docs/adr/` intact.** State the requirement as
+an outcome, because two different errors fire: `E-GONE` if the record is deleted,
+and `E-REWRITE` — which trips first and is easier to cause — if the revert merely
+rolls the *After* table back to `*pending*`. So after any revert, `docs/adr/` must
+be byte-identical to the base ref **plus** appended `## Consequences` text.
+Restore it from the commit before the revert, which exists under both merge
+shapes: `git restore --source=<sha-before-revert> -- docs/adr/`. Naming `<merge>`
+does not work under `--rebase`.
 
 Reverting a single rewrite commit is the dangerous case: it puts back upstream
 expression while `licenses/superpowers.LICENSE` stays deleted. If one genuinely
 must come out alone, the *same* commit restores the licence file and that file's
-README entry.
+README entry — and appends to ADR 0003's `## Consequences`, because its *After*
+column now describes a file that no longer exists in that form.
