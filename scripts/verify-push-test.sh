@@ -272,6 +272,15 @@ run_hooks() {
 	)
 }
 
+run_hooks_with_ripgrep_config() {
+	local config=$1
+	(
+		cd "$HOOK_REPO"
+		PATH="$HOOK_BIN:$PATH" RIPGREP_CONFIG_PATH="$config" \
+			"$JUST_REAL" --working-directory "$HOOK_REPO" --justfile "$ROOT/Justfile" hooks
+	)
+}
+
 hook_path() {
 	git -C "$HOOK_REPO" rev-parse --path-format=absolute --git-path hooks/pre-push
 }
@@ -333,6 +342,25 @@ set -e
 [[ $foreign_status -ne 0 && $foreign_output == *'foreign pre-push hook'* ]] ||
 	fail 'foreign hook should block installation'
 cmp -s "$SCRATCH/foreign-hook-before" "$HOOK_PATH" || fail 'foreign hook changed'
+
+# Pins Justfile:19's `--no-config` on the `rg` call that decides foreign-hook
+# refusal. Without it, `RIPGREP_CONFIG_PATH` applies its contents as arguments
+# ahead of the call's own flags, and `--invert-match` there flips the marker
+# check: a foreign hook (no marker line) now reads as a match, the refusal
+# never fires, and the recipe overwrites a hand-written hook. This test does
+# not touch the developer's real hook directory or ripgrep config -- both the
+# hostile config file and the hook destination live under $SCRATCH.
+HOSTILE_RIPGREP_CONFIG="$SCRATCH/hostile-ripgreprc"
+printf -- '--invert-match\n' >"$HOSTILE_RIPGREP_CONFIG"
+cp "$HOOK_PATH" "$SCRATCH/foreign-hook-hostile-before"
+set +e
+hostile_output=$(run_hooks_with_ripgrep_config "$HOSTILE_RIPGREP_CONFIG" 2>&1)
+hostile_status=$?
+set -e
+[[ $hostile_status -ne 0 && $hostile_output == *'foreign pre-push hook'* ]] ||
+	fail 'foreign hook should block installation under a hostile RIPGREP_CONFIG_PATH'
+cmp -s "$SCRATCH/foreign-hook-hostile-before" "$HOOK_PATH" ||
+	fail 'foreign hook changed under a hostile RIPGREP_CONFIG_PATH'
 
 rm -f "$HOOK_PATH"
 ln -s target "$HOOK_PATH"
