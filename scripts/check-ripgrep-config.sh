@@ -26,6 +26,20 @@ set -euo pipefail
 # is covered with no edit here. There is no exemption list: a file that never
 # runs ripgrep produces no invocation and is never asked for the statement.
 #
+# Justfile recipe bodies are out of scope for that discovery: list-shell-sources.sh
+# finds tracked files named *.sh or opening with a Bash shebang, and Justfile is
+# named for `just` and opens with `set shell := [...]`, so it matches neither and
+# the `rg --no-config` call in the `hooks` recipe (around line 19) is invisible
+# here. Bringing Justfile recipe bodies under this discovery would mean parsing
+# `just`'s own recipe syntax -- multiple recipes per file, each an optional
+# shebang line, mixed with plain non-shebang recipes this scanner has no reason
+# to open -- which is a second file format for a scanner that only claims to read
+# shell text (see the strip/runs_ripgrep comment below). scripts/verify-push-test.sh
+# instead pins that one call site directly: it runs the `hooks` recipe under a
+# hostile RIPGREP_CONFIG_PATH and asserts the foreign-hook refusal still fires,
+# so removing `--no-config` from Justfile reddens that test even though this gate
+# cannot see the call.
+#
 # Exit 0 clean, 1 on a finding naming file:line, 2 on a fault.
 
 fault() {
