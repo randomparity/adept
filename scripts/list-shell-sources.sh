@@ -5,8 +5,8 @@ set -euo pipefail
 # with -z). A tracked file is a shell source when its name ends in .sh or its
 # first line is a Bash shebang, which covers extensionless executables such as
 # scripts/pre-push-hook and the sdd-workspace helpers. The lint and format-check
-# recipes consume this list, so wiring a new script into the gates requires no
-# recipe edit.
+# recipes and the ripgrep-config gate consume this list, so wiring a new script
+# into the gates requires no recipe edit.
 #
 # --tabs (default) prints the sources formatted at the repository default.
 # --two-space prints the subset formatted with `shfmt -i 2`: .github/scripts/
@@ -55,12 +55,20 @@ env_bash_shebang='^#![[:space:]]*([^[:space:]]*/)?env[[:space:]]+(-S[[:space:]]+
 # The braces rather than a subshell keep the descriptor in this shell, and put
 # bash's own "Permission denied" behind the redirection -- this script's
 # diagnostic is its interface.
+#
+# There is no `[[ -f $path ]]` guard ahead of it, and its absence is the point.
+# git lists the path, so something is meant to be there; a test that answers
+# "not a regular file" collapses a tracked file missing from the worktree, one
+# behind an unsearchable directory, and a broken symlink into the same silent
+# negative as a text file, which is the defect one line further down. Let the
+# open report each of them. A submodule's gitlink is the one ordinary non-file
+# git emits here, and it is a directory, so it is named rather than opened.
 is_shell_source() {
 	local path=$1 first_line=''
 	case $path in
 	*.sh) return 0 ;;
 	esac
-	[[ -f $path ]] || return 1
+	[[ -d $path ]] && return 1
 	{ exec 3<"$path"; } 2>/dev/null || return 2
 	IFS= read -r first_line <&3 || :
 	exec 3<&-
