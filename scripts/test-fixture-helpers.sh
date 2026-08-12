@@ -39,8 +39,12 @@ fixture_scratch() { # prefix -- sets FIXTURE_SCRATCH
 	fixture_scratch_paths[${#fixture_scratch_paths[@]}]=$FIXTURE_SCRATCH
 }
 
+# A refusal warns and moves on to the next registered path. It cannot change
+# the suite's exit status: bash discards an EXIT trap's return value (checked on
+# 3.2.57 and 5.3.15), so only an explicit `exit` in the trap would, and a
+# cleanup that decides a suite's verdict is not wanted.
 fixture_cleanup() {
-	local index=0 path prefix status=0
+	local index=0 path prefix
 	while [ "$index" -lt "${#fixture_scratch_paths[@]}" ]; do
 		path=${fixture_scratch_paths[$index]}
 		prefix=${fixture_scratch_prefixes[$index]}
@@ -50,11 +54,9 @@ fixture_cleanup() {
 		*)
 			printf '%s: refusing to remove unsafe path: %s\n' \
 				"$FIXTURE_LABEL" "$path" >&2
-			status=1
 			;;
 		esac
 	done
-	return "$status"
 }
 
 fixture_init() { # label
