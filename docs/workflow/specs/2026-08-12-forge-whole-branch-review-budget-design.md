@@ -77,10 +77,11 @@ The `## Read-Only Review` section stays but gains one clause. It is a safety
 rule about the checkout, not about diff delivery, and the worktree escape hatch
 is the sanctioned way to lay another revision out on disk — but as written it
 says the working tree stays exactly as found, and R2 now asks the reviewer to
-write a file into it. The rule names the review file as its one exemption and
-states its own scope: the tracked checkout, which the gitignored `.agent/`
-workspace is not part of. Left as it is, the template would carry an instruction
-to write and a rule forbidding it.
+write a file into it. The rule names the exemption as the supplied
+`[REVIEW_FILE]` path and nothing else, tracked or ignored: the same directory
+holds the controller's own progress ledger, so exempting the workspace rather
+than the one path would hand a reviewer write access to it. Left as it is, the
+template would instead carry an instruction to write and a rule forbidding it.
 
 ### The review file (R2)
 
@@ -103,7 +104,12 @@ collision worth spending a word on.
 
 Everything the template's `## Output Format` section currently describes —
 Strengths, the three severity buckets, Recommendations, Assessment — goes to
-that file unchanged. This is a change of destination, not of rubric.
+that file unchanged. This is a change of destination, not of rubric. The one
+addition is a label on plan-fault findings, so the plan-fault count in the
+return is checkable against the file it summarises; the template's Calibration
+section already asks for those findings, and `task-reviewer-prompt.md` already
+labels its equivalent ("plan-mandated"). A label is not the severity vocabulary
+the charter freezes.
 
 ### The bounded return (R3)
 
@@ -114,6 +120,10 @@ one number rather than two. The message carries exactly three things:
 - the counts — `Critical N, Important N, Minor N`, and how many findings put the
   fault in the plan rather than in the code following it;
 - where the review file is.
+
+A reviewer that could not write the file returns that instead of a verdict. A
+shape with no failure value forces a reviewer with nothing to report into
+reporting something.
 
 No per-finding lines of any kind. The controller's next action is one of three —
 dispatch a fix subagent, ask the human which of a finding and the plan holds, or
@@ -141,8 +151,9 @@ Four edits in `skills/forge/SKILL.md`:
    per-task base, which is the mistake the per-task loop's own step 5 warns
    about in the other direction.
 2. The controller confirms the review file exists and is non-empty before acting
-   on the return at all, and on a missing or empty file discards the return and
-   re-dispatches the reviewer rather than acting on the counts. The review now
+   on the return at all. On a missing or empty file it discards the return and
+   re-dispatches the reviewer once; a second failure stops and is reported,
+   rather than dispatching again. The review now
    reaches the controller as a path and a count, so a reviewer that wrote
    nothing is otherwise indistinguishable from one that wrote a full report —
    the failure mode this change creates, and the one it has to discharge.
@@ -167,9 +178,10 @@ reviewer" is a claim only a reader can settle.
 ## Consequences
 
 Recorded in [ADR 0005](../../adr/0005-whole-branch-review-package-and-report.md),
-which owns them — the review reaching the controller by assertion, the review
-file having no reader on a clean merge verdict, its destruction with the
-worktree, and the two templates staying near-duplicates kept in sync by reading.
+which owns them — the review reaching the controller by assertion, the Minor
+triage discarded unread on a `Yes` verdict, the review file's destruction with
+the worktree, and the two templates staying near-duplicates kept in sync by
+reading.
 
 ## Not an AI-surface change requiring an eval plan
 

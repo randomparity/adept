@@ -29,29 +29,29 @@ one without reading the review.
 
 The whole-branch reviewer is handed a `[DIFF_FILE]` built by
 `scripts/review-package BASE HEAD` and a `[REVIEW_FILE]` under the
-`scripts/sdd-workspace` directory, both keyed to the abbreviated commit range so
-a re-review after a fix wave writes new files rather than over the ones it
-should be compared against. The full review goes to `[REVIEW_FILE]` with its
-rubric, severity vocabulary, and section structure unchanged.
+`scripts/sdd-workspace` directory, both keyed to the abbreviated commit range, so
+the review file is named the way the package beside it already is. The slot is
+`[REVIEW_FILE]` rather than the siblings' `[REPORT_FILE]`, which in
+`task-reviewer-prompt.md` means *the implementer's report you read* — one name
+for two opposite obligations across three templates a controller fills in the
+same session. The full review goes to `[REVIEW_FILE]` with its rubric, severity
+vocabulary, and section structure unchanged, and plan-fault findings are labelled
+there so the count below is checkable against the file it summarises.
 
-The slot is `[REVIEW_FILE]`, not `[REPORT_FILE]`. Both sibling templates already
-use `[REPORT_FILE]`, and in `task-reviewer-prompt.md` it means *the implementer's
-report you read*. A controller filling all three templates would otherwise meet
-one placeholder name carrying two opposite obligations.
-
-That write is the one exemption to the template's `## Read-Only Review` rule, and
-the template says so. The rule's scope is the tracked checkout — working tree,
-index, HEAD, branches — and the gitignored `.agent/` workspace is outside it.
+Writing `[REVIEW_FILE]` is the single write the template's `## Read-Only Review`
+rule exempts, and the template says so: that exact supplied path, and nothing
+else in the checkout — tracked or ignored, the controller's own ledger included.
 Left unreconciled, the template would carry an instruction to write and a rule
-forbidding it, and which one a reviewer honours is not something this decision
-should leave to chance.
+forbidding it.
 
 The return message is capped at fifteen lines — the same number
 `implementer-prompt.md` uses, so the skill states one cap rather than two — and
 carries exactly three things: the merge verdict; the counts, by grade and of
 findings that put the fault in the plan rather than the code; and the
 review-file path. No per-finding lines of any kind: the party that acts on a
-finding is the fix subagent, which is handed the path.
+finding is the fix subagent, which is handed the path. A reviewer that could not
+write the file returns that instead of a verdict, since a shape with no failure
+value forces a reviewer with nothing to report into reporting something.
 
 The plan-fault count is the reason the return is a fixed shape rather than a
 line budget the reviewer fills as it sees fit. It is the only one of the
@@ -65,8 +65,8 @@ The controller hands the review-file path to the fix subagent rather than a
 findings list it had to read first — and confirms the file exists and is
 non-empty before acting on the return at all, because a review that arrives as a
 path plus a count is a review the controller has not seen. A missing or empty
-file means the return is discarded and the reviewer re-dispatched; the counts are
-never acted on without the file behind them.
+file means the return is discarded and the reviewer re-dispatched **once**;
+a second failure stops and is reported, rather than dispatching again.
 
 ## Consequences
 
@@ -75,29 +75,25 @@ never acted on without the file behind them.
 - **The review now reaches the controller by assertion.** A reviewer that
   returns `Critical 2` and writes nothing is indistinguishable, from the
   controller's side, from one that wrote a full report; an inline review could
-  not fail that way. The existence-and-non-empty check in the Decision is what
-  discharges this, and it is a check, not a proof: a truncated or shallow report
-  still passes it.
-- On a clean merge verdict the review file has no reader. That is also where
-  `SKILL.md`'s Minor-triage obligation lands — the final reviewer triages the
-  ledger's accumulated Minor findings against the merge bar, and on a `Yes` its
-  triage said none of them hold, so those ledger entries close on the verdict
-  alone. Accepted: a triage whose answer is "no action" needs no reader.
-- The final review is no longer readable from the transcript, and the loss is
-  larger than a straight move. An inline review persisted in the session
-  transcript; the review file is destroyed with the worktree, since the `$forge`
-  workspace is gitignored and local. Accepted on the grounds that the final
-  review's readers are the fix subagent and, if anyone, a human during the run —
-  both of whom can reach the file while the worktree exists — and that nobody
-  reads a final review after the branch merges.
+  not fail that way. The existence check discharges this, and it is a check, not
+  a proof: a truncated or shallow report still passes it. The plan-fault count is
+  the weakest link — it is the reviewer's own classification, and no controller
+  check covers whether it matches the labelled findings in the file.
+- On a `Yes` verdict nobody reads the review file, so `SKILL.md`'s Minor-triage
+  obligation produces an answer nobody sees: the ledger's Minor findings and the
+  reviewer's triage of them are discarded unread. Accepted rather than
+  explained away — the alternative is a fourth return item, which is the shape
+  growth this decision spent its argument bounding, for findings that by
+  definition do not hold a merge.
+- The final review is destroyed with the worktree, where an inline review
+  persisted in the session transcript. Its readers during the run — the fix
+  subagent, and a human who opens it — can reach it while the worktree exists.
 - `code-reviewer.md` and `task-reviewer-prompt.md` converge on the same package
-  section and keep the same read-only rule, but their **return shapes now
-  differ**: the branch reviewer writes a file and returns a verdict, while the
-  task reviewer's message still is its review. That is deliberate — the task
-  review is already bounded by its scope — and it leaves two near-duplicate
-  templates that are kept in sync by reading rather than by any mechanism.
-  Merging them would mean editing `task-reviewer-prompt.md`, which issue #46
-  excludes.
+  section and read-only rule, but their **return shapes now differ**: the branch
+  reviewer writes a file and returns a verdict, while the task reviewer's message
+  still is its review. That leaves two near-duplicate templates kept in sync by
+  reading rather than by any mechanism; merging them would mean editing
+  `task-reviewer-prompt.md`, which issue #46 excludes.
 - A reviewer that ignores the cap is not detected by anything. Anatomy rule 4
   forbids a gate that asserts on prose, and the cap is prose in a template. The
   identical cap in `implementer-prompt.md` has the same property.
@@ -114,38 +110,32 @@ stat alongside the hunks, and a stated rebuild path when the package is missing.
 It is also the delivery mechanism the task reviewer already uses, so keeping a
 second one buys a divergence and nothing else.
 
-**Package the diff but keep the review inline.** Rejected: the review is the part
-that stays resident in the controller's context and is re-read on every later
-turn of the build. The reviewer's cost is paid once; the controller's is paid
-repeatedly.
+**Keep the review inline** — either wholesale, or by having the reviewer return
+it and the controller write the file. Rejected in both variants: the review is
+the part that stays resident in the controller's context and is re-read on every
+later turn of the build, and it stays resident whether or not the controller then
+saves it. Report-file indirection only works when the subagent does the writing.
 
-**Let the reviewer return whatever fits in fifteen lines.** Rejected: a line
-budget with no shape loses the plan-fault case, which reads like an ordinary
-finding and is the one outcome the controller must not answer with a fix
-dispatch. Naming the three items costs nothing and makes the omission visible.
+**Let the reviewer return whatever fits in fifteen lines**, or conversely
+**enumerate findings in it** — one line per Critical, or per plan fault.
+Rejected at both ends: a line budget with no shape loses the plan-fault case,
+which reads like an ordinary finding and is the one outcome the controller must
+not answer with a fix dispatch; an enumeration is the only unbounded thing that
+could sit in a capped message, and would put cap and shape in conflict on exactly
+the branches with the most to report. Naming three items costs nothing and makes
+an omission visible.
 
-**Enumerate findings in the return — one line per Critical, or per plan fault.**
-Rejected: no controller decision needs the detail, since the fix dispatch reads
-the file, and an enumeration is the only unbounded thing that could sit in a
-capped message — it would put the cap and the shape in conflict on exactly the
-branches with the most to report.
-
-**Have the reviewer return the full review and let the controller write it to a
-file.** Rejected: the review passes through the controller's context on the way,
-which is the entire cost being removed. The indirection only works when the
-subagent does the writing.
+**Persist the review where it outlives the worktree** — a PR comment, the way
+`WORK:REVIEW` already carries a review summary. Rejected on surface, not on
+merit: `$forge` runs before a PR exists, and issue #46's charter permits changes
+to `code-reviewer.md` and `SKILL.md` only. It is the right question for a later
+issue.
 
 **Do nothing.** Rejected, but it is the cheapest option and worth stating why it
 loses: the cost is invisible per-run — the build still works, and nothing goes
 red — so it is paid on every party-mode run forever, on the most expensive
 dispatch, in the phase where the controller's remaining context decides whether
 the rest of the build survives.
-
-**Give the review file a fixed name.** Rejected: `review-package` already keys
-its default destination to the range, and for the stated reason — a re-review
-after a fix wave must not overwrite the reading it is meant to be compared
-against. A second artifact of the same review, keyed differently, would lose that
-on the half that holds the findings.
 
 ## Provenance
 
