@@ -7,18 +7,15 @@ set -euo pipefail
 unset RIPGREP_CONFIG_PATH
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# shellcheck source=SCRIPTDIR/../../../scripts/test-fixture-helpers.sh
+. "$script_dir/../../../scripts/test-fixture-helpers.sh"
+
 # The suite lives in tests/fixtures/ so it is excluded from the installed
 # payload. Everything it exercises does ship, so resolve those from the skill
 # root once rather than counting `..` at each use.
 skill_root=$(cd -- "$script_dir/../../../skills/bounty" && pwd -P)
 helper="$skill_root/scripts/create-verified-issue.sh"
-fixture=$(mktemp -d "${TMPDIR:-/tmp}/create-verified-issue-test.XXXXXX")
-trap 'rm -rf -- "$fixture"' EXIT
-
-fail() {
-	printf 'create-verified-issue-test: %s\n' "$*" >&2
-	exit 1
-}
+fixture_init create-verified-issue-test
 
 assert_contains() {
 	local needle=$1 file=$2
@@ -33,9 +30,9 @@ assert_count() {
 		fail "expected $expected matches for '$pattern' in $file, got $actual"
 }
 
-mkdir -p "$fixture/bin"
-printf '%s\n' '#!/usr/bin/env bash' >"$fixture/bin/gh"
-cat >>"$fixture/bin/gh" <<'FAKE_GH'
+mkdir -p "$SCRATCH/bin"
+printf '%s\n' '#!/usr/bin/env bash' >"$SCRATCH/bin/gh"
+cat >>"$SCRATCH/bin/gh" <<'FAKE_GH'
 set -euo pipefail
 printf '%q ' "$@" >>"$GH_CALL_LOG"
 printf '\n' >>"$GH_CALL_LOG"
@@ -130,9 +127,9 @@ fi
 printf 'unexpected gh call: %s\n' "$*" >&2
 exit 2
 FAKE_GH
-chmod +x "$fixture/bin/gh"
+chmod +x "$SCRATCH/bin/gh"
 
-body_file="$fixture/body.md"
+body_file="$SCRATCH/body.md"
 cat >"$body_file" <<'BODY'
 ## Problem
 P
@@ -146,32 +143,32 @@ BODY
 
 run_case() {
 	local scenario=$1
-	: >"$fixture/calls"
-	GH_SCENARIO=$scenario GH_CALL_LOG="$fixture/calls" PATH="$fixture/bin:$PATH" \
+	: >"$SCRATCH/calls"
+	GH_SCENARIO=$scenario GH_CALL_LOG="$SCRATCH/calls" PATH="$SCRATCH/bin:$PATH" \
 		"$helper" --repo example/repo --title 'Confirmed title' --body-file "$body_file" \
-		--label bug --label status:ready --parent 42 >"$fixture/stdout" 2>"$fixture/stderr"
+		--label bug --label status:ready --parent 42 >"$SCRATCH/stdout" 2>"$SCRATCH/stderr"
 }
 
 run_ordinary_case() {
 	local scenario=$1
-	: >"$fixture/calls"
-	GH_SCENARIO=$scenario GH_CALL_LOG="$fixture/calls" PATH="$fixture/bin:$PATH" \
+	: >"$SCRATCH/calls"
+	GH_SCENARIO=$scenario GH_CALL_LOG="$SCRATCH/calls" PATH="$SCRATCH/bin:$PATH" \
 		"$helper" --repo example/repo --title 'Confirmed title' --body-file "$body_file" \
-		--label bug --label status:ready >"$fixture/stdout" 2>"$fixture/stderr"
+		--label bug --label status:ready >"$SCRATCH/stdout" 2>"$SCRATCH/stderr"
 }
 
 if run_case success; then
-	assert_contains 'https://github.com/example/repo/issues/101' "$fixture/stdout"
-	assert_count 1 '^issue create ' "$fixture/calls"
-	assert_count 1 '^issue view ' "$fixture/calls"
-	assert_contains '--body-file' "$fixture/calls"
+	assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stdout"
+	assert_count 1 '^issue create ' "$SCRATCH/calls"
+	assert_count 1 '^issue view ' "$SCRATCH/calls"
+	assert_contains '--body-file' "$SCRATCH/calls"
 	[[ -s $body_file ]] || fail 'populated body file was not retained'
 else
 	fail 'success scenario failed'
 fi
 
 if run_case ghes; then
-	assert_contains 'https://ghe.example.com/example/repo/issues/101' "$fixture/stdout"
+	assert_contains 'https://ghe.example.com/example/repo/issues/101' "$SCRATCH/stdout"
 else
 	fail 'GHES scenario failed'
 fi
@@ -184,55 +181,55 @@ for scenario in "${failure_scenarios[@]}"; do
 	if run_case "$scenario"; then
 		fail "$scenario unexpectedly passed"
 	fi
-	assert_contains 'https://github.com/example/repo/issues/101' "$fixture/stderr"
-	assert_count 1 '^issue create ' "$fixture/calls"
-	assert_count 1 '^issue view ' "$fixture/calls"
+	assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stderr"
+	assert_count 1 '^issue create ' "$SCRATCH/calls"
+	assert_count 1 '^issue view ' "$SCRATCH/calls"
 done
 
 if run_ordinary_case malformed-parent; then
 	fail 'ordinary malformed parent unexpectedly passed'
 fi
-assert_contains 'https://github.com/example/repo/issues/101' "$fixture/stderr"
-assert_contains 'malformed or incomplete JSON' "$fixture/stderr"
+assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stderr"
+assert_contains 'malformed or incomplete JSON' "$SCRATCH/stderr"
 
 for scenario in wrong-host wrong-url wrong-number; do
 	if run_case "$scenario"; then
 		fail "$scenario unexpectedly passed"
 	fi
-	assert_contains 'https://github.com/example/repo/issues/101' "$fixture/stderr"
-	assert_count 1 '^issue create ' "$fixture/calls"
-	assert_count 1 '^issue view ' "$fixture/calls"
+	assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stderr"
+	assert_count 1 '^issue create ' "$SCRATCH/calls"
+	assert_count 1 '^issue view ' "$SCRATCH/calls"
 done
 run_case wrong-host || true
 expected='url: expected "https://github.com/example/repo/issues/101",'
 expected+=' observed "https://ghe.example.com/example/repo/issues/101"'
-assert_contains "$expected" "$fixture/stderr"
+assert_contains "$expected" "$SCRATCH/stderr"
 run_case wrong-url || true
 expected='url: expected "https://github.com/example/repo/issues/101",'
 expected+=' observed "https://github.com/other/repo/issues/101"'
-assert_contains "$expected" "$fixture/stderr"
+assert_contains "$expected" "$SCRATCH/stderr"
 run_case wrong-number || true
-assert_contains 'number: expected #101, observed #102' "$fixture/stderr"
+assert_contains 'number: expected #101, observed #102' "$SCRATCH/stderr"
 
 if run_case wrong-create-host; then
 	fail 'wrong create host unexpectedly passed'
 fi
-assert_contains 'does not match canonical repository URL' "$fixture/stderr"
-assert_count 0 '^issue view ' "$fixture/calls"
+assert_contains 'does not match canonical repository URL' "$SCRATCH/stderr"
+assert_count 0 '^issue view ' "$SCRATCH/calls"
 
 if run_case create-error-with-url; then
 	fail 'failed create with URL unexpectedly passed'
 fi
-assert_contains 'https://github.com/example/repo/issues/101' "$fixture/stderr"
-assert_contains 'creation command failed with exit 1; creation was not retried' "$fixture/stderr"
-assert_count 1 '^issue create ' "$fixture/calls"
-assert_count 0 '^issue view ' "$fixture/calls"
+assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stderr"
+assert_contains 'creation command failed with exit 1; creation was not retried' "$SCRATCH/stderr"
+assert_count 1 '^issue create ' "$SCRATCH/calls"
+assert_count 0 '^issue view ' "$SCRATCH/calls"
 
 if run_case control-title; then
 	fail 'control-character title unexpectedly passed'
 fi
-assert_contains 'observed "Observed\n::error::forged"' "$fixture/stderr"
-if rg -n '^::error::forged$' "$fixture/stderr" >/dev/null; then
+assert_contains 'observed "Observed\n::error::forged"' "$SCRATCH/stderr"
+if rg -n '^::error::forged$' "$SCRATCH/stderr" >/dev/null; then
 	fail 'title control characters reached diagnostics'
 fi
 
@@ -240,39 +237,39 @@ if run_case control-url; then
 	fail 'control-character URL unexpectedly passed'
 fi
 expected='observed "https://github.com/example/repo/issues/101\n::error::forged"'
-assert_contains "$expected" "$fixture/stderr"
-if rg -n '^::error::forged$' "$fixture/stderr" >/dev/null; then
+assert_contains "$expected" "$SCRATCH/stderr"
+if rg -n '^::error::forged$' "$SCRATCH/stderr" >/dev/null; then
 	fail 'URL control characters reached diagnostics'
 fi
 
 if run_case combined; then
 	fail 'combined mismatch unexpectedly passed'
 fi
-assert_contains 'title: expected "Confirmed title", observed "Observed title"' "$fixture/stderr"
-assert_contains "body: missing section 'Proposed approach'" "$fixture/stderr"
-assert_contains 'label: missing "status:ready"' "$fixture/stderr"
-assert_contains 'parent: expected #42, observed #41' "$fixture/stderr"
+assert_contains 'title: expected "Confirmed title", observed "Observed title"' "$SCRATCH/stderr"
+assert_contains "body: missing section 'Proposed approach'" "$SCRATCH/stderr"
+assert_contains 'label: missing "status:ready"' "$SCRATCH/stderr"
+assert_contains 'parent: expected #42, observed #41' "$SCRATCH/stderr"
 
 if run_case view-error; then
 	fail 'view error unexpectedly passed'
 fi
-assert_contains 'https://github.com/example/repo/issues/101' "$fixture/stderr"
-assert_contains 'read-back failed' "$fixture/stderr"
-assert_count 1 '^issue create ' "$fixture/calls"
-assert_count 1 '^issue view ' "$fixture/calls"
+assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stderr"
+assert_contains 'read-back failed' "$SCRATCH/stderr"
+assert_count 1 '^issue create ' "$SCRATCH/calls"
+assert_count 1 '^issue view ' "$SCRATCH/calls"
 
 if run_case unresolved-create; then
 	fail 'unresolved create unexpectedly passed'
 fi
-assert_contains 'durable issue URL could not be resolved' "$fixture/stderr"
-assert_count 1 '^issue create ' "$fixture/calls"
-assert_count 0 '^issue view ' "$fixture/calls"
+assert_contains 'durable issue URL could not be resolved' "$SCRATCH/stderr"
+assert_count 1 '^issue create ' "$SCRATCH/calls"
+assert_count 0 '^issue view ' "$SCRATCH/calls"
 
-if "$helper" --repo example/repo --title 'Confirmed title' --body-file "$fixture/missing" \
-	>"$fixture/stdout" 2>"$fixture/stderr"; then
+if "$helper" --repo example/repo --title 'Confirmed title' --body-file "$SCRATCH/missing" \
+	>"$SCRATCH/stdout" 2>"$SCRATCH/stderr"; then
 	fail 'missing body file unexpectedly passed'
 fi
-assert_contains 'body file must be a populated regular file' "$fixture/stderr"
+assert_contains 'body file must be a populated regular file' "$SCRATCH/stderr"
 
 # Four SKILL.md phrase assertions and a forbidden-pattern scan stood here.
 # Nothing automated in this repo asserts on prose: pinning a document's wording
@@ -280,21 +277,21 @@ assert_contains 'body file must be a populated regular file' "$fixture/stderr"
 # create an unverified issue is covered by the cases above, which is the
 # behaviour that mattered.
 
-: >"$fixture/decompose-calls"
-: >"$fixture/decompose-report"
+: >"$SCRATCH/decompose-calls"
+: >"$SCRATCH/decompose-report"
 for entry in '101:success' '102:wrong-title' '103:success'; do
 	issue_number=${entry%%:*}
 	scenario=${entry#*:}
 	if ! GH_ISSUE_NUMBER=$issue_number GH_SCENARIO=$scenario \
-		GH_CALL_LOG="$fixture/decompose-calls" PATH="$fixture/bin:$PATH" \
+		GH_CALL_LOG="$SCRATCH/decompose-calls" PATH="$SCRATCH/bin:$PATH" \
 		"$helper" --repo example/repo --title 'Confirmed title' --body-file "$body_file" \
-		--label bug --label status:ready --parent 42 >>"$fixture/decompose-report" 2>&1; then
+		--label bug --label status:ready --parent 42 >>"$SCRATCH/decompose-report" 2>&1; then
 		break
 	fi
 done
-assert_count 2 '^issue create ' "$fixture/decompose-calls"
-assert_contains 'https://github.com/example/repo/issues/102' "$fixture/decompose-report"
+assert_count 2 '^issue create ' "$SCRATCH/decompose-calls"
+assert_contains 'https://github.com/example/repo/issues/102' "$SCRATCH/decompose-report"
 expected='title: expected "Confirmed title", observed "Observed title"'
-assert_contains "$expected" "$fixture/decompose-report"
+assert_contains "$expected" "$SCRATCH/decompose-report"
 
 printf 'create-verified-issue-test: ok\n'

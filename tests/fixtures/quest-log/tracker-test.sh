@@ -6,22 +6,22 @@ set -euo pipefail
 # assertions -- including the ones that count recorded `gh` calls.
 unset RIPGREP_CONFIG_PATH
 
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# shellcheck source=SCRIPTDIR/../../../scripts/test-fixture-helpers.sh
+. "$script_dir/../../../scripts/test-fixture-helpers.sh"
+
 # Hooks export repository-local Git variables that override `git -C`. Clear
 # Git's complete reported set before any fixture repository is discovered.
-while IFS= read -r variable; do
-	[ -n "$variable" ] || continue
-	unset "$variable"
-done < <(git rev-parse --local-env-vars)
+clear_git_env
 
-script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 source_dir=$(cd -- "$script_dir/../../../skills/quest-log/assets" && pwd -P)
+fixture_init tracker-test
 # Resolved physically, because the traversal case near the end of this file
 # counts the path components between the profiles directory and the root, and
 # the engine resolves its own asset directory with `pwd -P`. A TMPDIR reached
 # through a symlink would otherwise be counted one way and walked another,
 # leaving that case passing for the wrong reason.
-sandbox=$(cd -- "$(mktemp -d "${TMPDIR:-/tmp}/tracker-test.XXXXXX")" && pwd -P)
-trap 'rm -rf -- "$sandbox"' EXIT
+sandbox=$(cd -- "$SCRATCH" && pwd -P)
 
 # The suite runs the engine out of an asset tree it assembles here, not the one
 # it sits in. The stub profile is a test asset that reaches no installed tree, so
@@ -35,11 +35,6 @@ cp "$source_dir/profiles/github.sh" "$assets/profiles/github.sh"
 cp "$script_dir/fixture-profile.sh" "$assets/profiles/fixture.sh"
 chmod +x "$assets/tracker.sh"
 tracker="$assets/tracker.sh"
-
-fail() {
-	printf 'tracker-test: %s\n' "$*" >&2
-	exit 1
-}
 
 assert_exit() {
 	local expected=$1 actual=$2 label=$3

@@ -13,14 +13,14 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=SCRIPTDIR/../../../scripts/test-fixture-helpers.sh
+. "$SCRIPT_DIR/../../../scripts/test-fixture-helpers.sh"
+
 # Hooks export repository-local Git variables that override `git -C`. Clear
 # Git's complete reported set before any fixture repository is discovered.
-while IFS= read -r variable; do
-	[ -n "$variable" ] || continue
-	unset "$variable"
-done < <(git rev-parse --local-env-vars)
+clear_git_env
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # The suite lives in tests/fixtures/ so it is excluded from the installed
 # payload; the script it exercises ships under skills/.
 SCRIPT="$SCRIPT_DIR/../../../skills/forge/scripts/task-brief"
@@ -28,14 +28,15 @@ WORKSPACE="$SCRIPT_DIR/../../../skills/forge/scripts/sdd-workspace"
 
 passed=0
 failed=0
-workdir=$(mktemp -d "${TMPDIR:-/tmp}/task-brief-test.XXXXXX")
-trap 'rm -rf "$workdir"' EXIT
+fixture_init task-brief-test
 
 ok() {
 	passed=$((passed + 1))
 	printf '  ok   %s\n' "$1"
 }
 
+# Shadows the helper's fail deliberately: this suite reports every case and
+# totals at the end rather than exiting on the first failure.
 fail() {
 	failed=$((failed + 1))
 	printf '  FAIL %s: %s\n' "$1" "$2"
@@ -50,7 +51,7 @@ fail() {
 # equal what the script prints.
 new_repo() {
 	local dir
-	dir=$(cd "$(mktemp -d "$workdir/repo.XXXXXX")" && pwd -P)
+	dir=$(cd "$(mktemp -d "$SCRATCH/repo.XXXXXX")" && pwd -P)
 	git -C "$dir" init -q
 	git -C "$dir" config user.email test@example.com
 	git -C "$dir" config user.name 'Test'

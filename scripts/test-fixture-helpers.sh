@@ -1,15 +1,15 @@
 # shellcheck shell=bash
 #
-# Scaffold shared by the scripts/*-test.sh suites. Sourced, never executed, so
-# it carries no shebang and is not itself a suite.
+# Scaffold shared by the behaviour suites under scripts/ and tests/fixtures/
+# alike. Sourced, never executed, so it carries no shebang and is not itself a
+# suite.
 #
 # Every suite here builds disposable fixtures in a scratch directory and needs
 # the same three things around them: a directory that is removed however the
 # suite exits, a refusal to remove anything else, and a diagnostic carrying the
-# suite's name. Five suites under scripts/ had grown their own copy.
+# suite's name. Twelve suites had grown their own copy.
 #
-# The suites under tests/fixtures/ still carry theirs and are candidates for the
-# same treatment. Two groups are not. The check-records-test.sh pair cannot be:
+# Two groups stay out. The check-records-test.sh pair cannot join:
 # `just records` compares .github/scripts/ and skills/tome-of-lore/assets/ byte
 # for byte, and the two sit at different depths, so no single relative source
 # path resolves from both. The gates themselves -- check-skill-shape.sh,

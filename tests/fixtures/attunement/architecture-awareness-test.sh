@@ -8,19 +8,13 @@ set -euo pipefail
 unset RIPGREP_CONFIG_PATH
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=SCRIPTDIR/../../../scripts/test-fixture-helpers.sh
+. "$ROOT/scripts/test-fixture-helpers.sh"
+
 DETECTOR="$ROOT/skills/attunement/scripts/detect-host-architecture"
 RESOLVER="$ROOT/skills/attunement/scripts/resolve-architecture-context"
-FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/architecture-awareness-test.XXXXXX")"
 
-cleanup() {
-	rm -R "$FIXTURE"
-}
-trap cleanup EXIT
-
-fail() {
-	printf 'architecture-awareness-test: %s\n' "$1" >&2
-	exit 1
-}
+fixture_init architecture-awareness-test
 
 assert_file() {
 	local expected="$1" actual_file="$2" label="$3" actual
@@ -56,7 +50,7 @@ EOF
 run_case() {
 	local name="$1" mode="$2" value="$3" fake_status="$4"
 	local expected_status="$5" expected_stdout="$6" expected_stderr="$7"
-	local case_dir="$FIXTURE/$name" status=0
+	local case_dir="$SCRATCH/$name" status=0
 	local bin_dir="$case_dir/bin"
 	mkdir -p "$case_dir"
 	make_fake_uname "$bin_dir"
@@ -73,7 +67,7 @@ run_case() {
 }
 
 run_missing_uname() {
-	local case_dir="$FIXTURE/missing-uname" status=0
+	local case_dir="$SCRATCH/missing-uname" status=0
 	mkdir -p "$case_dir/bin"
 	PATH="$case_dir/bin" /bin/bash "$DETECTOR" \
 		>"$case_dir/stdout" 2>"$case_dir/stderr" || status=$?
@@ -127,7 +121,7 @@ assert_resolver_error() {
 	local label="$1" expected="$2" status=0 prefix
 	shift 2
 	((++resolver_error_count))
-	prefix="$FIXTURE/resolver-error-$resolver_error_count"
+	prefix="$SCRATCH/resolver-error-$resolver_error_count"
 	"$RESOLVER" "$@" >"$prefix.stdout" 2>"$prefix.stderr" || status=$?
 	[[ "$status" -eq 64 ]] || fail "$label: expected exit 64, got $status"
 	assert_file '' "$prefix.stdout" "$label stdout"
@@ -166,7 +160,7 @@ assert_context "$(printf '%s\n' $'HOST_ARCHITECTURE\tdetection failed (uname-mis
 	$'ARCHITECTURE_RELATIONSHIP\thost-unresolved')" \
 	detection-failed uname-missing none
 
-later_context="$FIXTURE/later-context"
+later_context="$SCRATCH/later-context"
 "$RESOLVER" ok arm64 declared x86_64 ppc64le >"$later_context"
 later_host=''
 later_relationship=''
@@ -210,7 +204,7 @@ assert_resolver_error 'conflict with one declaration' \
 assert_resolver_error 'target control' \
 	'target declarations must be printable record fields' ok x86_64 declared $'arm\n64'
 
-mutated_resolver="$FIXTURE/mutated-resolver"
+mutated_resolver="$SCRATCH/mutated-resolver"
 cp "$RESOLVER" "$mutated_resolver"
 sed -i.bak 's/relationship=included/relationship=different/' "$mutated_resolver"
 chmod +x "$mutated_resolver"
@@ -219,7 +213,7 @@ if [[ "$mutated_output" == *$'ARCHITECTURE_RELATIONSHIP\tincluded'* ]]; then
 	fail 'relationship mutation unexpectedly preserved the included result'
 fi
 
-priority_mutant="$FIXTURE/priority-mutant"
+priority_mutant="$SCRATCH/priority-mutant"
 awk '
 	index($0, "elif [[ \"$host_status\" != ok ]]") {
 		print "elif [[ \"$target_state\" == none ]]; then"
