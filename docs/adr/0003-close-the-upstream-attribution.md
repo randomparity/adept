@@ -2,11 +2,7 @@
 
 ## Status
 
-Proposed
-
-Filled and flipped to `Accepted (YYYY-MM-DD)` **in this change, before merge** —
-the consequences are licensed by that measurement, and the record must not reach
-`main` with pending cells.
+Accepted (2026-08-11)
 
 ## Context
 
@@ -82,28 +78,34 @@ proof of it. Removing the notice on that evidence is a judgment made by the
 repository owner in [#32](https://github.com/randomparity/adept/issues/32), and
 recorded here as a judgment rather than as a measurement result.
 
-| File | Before | After | Longest run | Exempted constructs |
-|---|---|---|---|---|
-| `skills/forge/task-reviewer-prompt.md` | 100.00% / 1139 | *pending* | *pending* | *pending* |
-| `skills/forge/implementer-prompt.md` | 100.00% / 816 | *pending* | *pending* | *pending* |
-| `skills/forge/code-reviewer.md` | 100.00% / 663 | *pending* | *pending* | *pending* |
-| `skills/forge/scripts/review-package` | 95.98% / 152 | *pending* | *pending* | *pending* |
-| `skills/forge/scripts/task-brief` | 95.27% / 127 | *pending* | *pending* | *pending* |
-| `skills/forge/scripts/sdd-workspace` | 11.60% / 45 | *pending* | *pending* | *pending* |
+| File | Before | After | Longest run |
+|---|---|---|---|
+| `skills/forge/task-reviewer-prompt.md` | 100.00% / 1139 | 0.57% | 11 |
+| `skills/forge/implementer-prompt.md` | 100.00% / 816 | 0.99% | 10 |
+| `skills/forge/code-reviewer.md` | 100.00% / 663 | 1.11% | 13 |
+| `skills/forge/scripts/review-package` | 95.98% / 152 | 0.00% | 6 |
+| `skills/forge/scripts/task-brief` | 95.27% / 127 | 1.40% | 12 |
+| `skills/forge/scripts/sdd-workspace` | 11.60% / 45 | 0.51% | 10 |
+
+No exemption was needed, so the *Exempted constructs* column is absent rather
+than empty, as the paragraph above said it would be. The two behaviour suites
+this change adds measure 0.08% and 0.09%, runs of 8 — they are held to the same
+bar as the six because this change authored them.
 
 **The run bound was checked tree-wide, not just on the six.** Containment alone
 would not have answered it: a 40-token verbatim run inside a 7,500-token document
-is 0.44% containment and invisible to any percentage threshold. Scanning all 130
-tracked files for a shared run over 16 tokens returns exactly ten — the six
-rewritten here, `licenses/superpowers.LICENSE` (deleted), `LICENSE` (163 tokens
-of shared MIT text), `skills/forge/SKILL.md` (the excluded 28-token idiom), and
-the migration plan's 51-token quotation (now attributed). Nothing else in the
+is 0.44% containment and invisible to any percentage threshold. Scanning all 132
+tracked files for a shared run over 16 tokens returned ten before the rewrite —
+the six rewritten here, `licenses/superpowers.LICENSE` (deleted), `LICENSE` (163
+tokens of shared MIT text), `skills/forge/SKILL.md` (the excluded 28-token
+idiom), and the migration plan's 51-token quotation (now attributed) — and
+**four after it**, the six having left the list. Nothing else in the
 tree carries one, including the other ten behaviour inventories, whose
-construction is identical to the one that does — the inventory at 2.51% tops out
+construction is identical to the one that does — the inventory at 2.47% tops out
 at exactly 16 tokens, at the bound rather than over it. So the tree-wide
 consequence below rests on a tree-wide measurement.
 
-The candidate set is **every tracked file — 130 of them**. ADR 0002 never stated
+The candidate set is **every tracked file — 132 of them**. ADR 0002 never stated
 its own, and its claim that "no other shipped file reaches 2%" does not hold over
 that set. Five files sit above the line and none creates an obligation. The first
 is `licenses/superpowers.LICENSE` at 100.00% / run 170 — it *is* the upstream
@@ -114,6 +116,15 @@ retire, at runs of 16 and 51 tokens. That last pair is documentary quotation
 inside records describing what was removed rather than reuse of the software —
 the same owner's judgment as above, not a measurement result — and the 16-token
 bound governs the six rewritten files rather than the tree.
+
+**132 is the as-scanned figure, counted before this change's own close-out
+lands.** Five edits follow the scan: `licenses/superpowers.LICENSE` is deleted,
+taking the tree to 131 tracked files and removing the 100.00% / 170 row above;
+and `README.md`, `CLAUDE.md`, `skills/gauntlet/SKILL.md` and this record's own
+table are edited. None can raise a figure — the deletion removes the single
+highest-scoring file in the tree, and the other four are first-party prose being
+*removed* or first-party numbers being written down. A reader cannot verify that
+from the count alone, which is why the tree it was taken on is named here.
 
 Neither of those two named `obra/superpowers` in its own prose — the inventory
 cited only the retired `agent-config` skill path it was extracted from — which
