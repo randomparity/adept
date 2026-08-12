@@ -721,21 +721,46 @@ gate_known_basenames() {
 # result is checked non-empty before use: unguarded, an empty result makes the git argument
 # "${base}:/name", and depending on git's tree lookup an absolute-looking path can still
 # resolve — checked explicitly rather than relied on to fail closed.
+# Three-valued: 0 a witness found the gate, 1 no witness did, 2 a witness could not run.
+# Neither witness used to capture its status, so a scan fault was indistinguishable from every
+# witness genuinely finding nothing — and the caller reported that as I-GATE-BOOTSTRAP, an
+# exit-0 informational line, instead of the fatal E-GATE-EMPTY-SET an undeclared rename owes.
 gate_existed_at() {
-  local base=$1 rel name
+  local base=$1 rel name status faulted=0
 
   rel=$(repo_relative "$SELF_DIR")
   if [ -n "$rel" ]; then
     while IFS= read -r name; do
       [ -n "$name" ] || continue
-      git cat-file -e "${base}:${rel}/${name}" 2>/dev/null && return 0
+      status=0
+      path_exists_at "$base" "${rel}/${name}" || status=$?
+      case $status in
+      0) return 0 ;;
+      1) ;;
+      *) faulted=$path_exists_status ;;
+      esac
     done < <(gate_known_basenames)
   fi
 
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    git grep --no-color -qF "$name" "$base" -- .github/workflows 2>/dev/null && return 0
+    # git grep exits 1 for "no match" and 128 for a bad ref, so 2 or more is a real fault
+    # here, unlike git cat-file -e where 128 is also the ordinary absent answer.
+    status=0
+    git grep --no-color -qF "$name" "$base" -- .github/workflows 2>/dev/null || status=$?
+    case $status in
+    0) return 0 ;;
+    1) ;;
+    *) faulted=$status ;;
+    esac
   done < <(gate_known_basenames)
+
+  # A positive witness returns above, so it outranks a fault on any other witness: evidence
+  # the gate existed is not weakened by an unrelated probe failing.
+  if [ "$faulted" -ne 0 ]; then
+    path_exists_status=$faulted
+    return 2
+  fi
   return 1
 }
 
@@ -747,10 +772,23 @@ gate_existed_at() {
 # profile — a repo with more than one profile would otherwise print every gate finding once
 # per profile in RECORD_PROFILES.
 check_gate_files() {
-  local base=$1 self successor successor_path gate_path_count=0
+  local base=$1 self successor successor_path gate_path_count=0 self_status
   while IFS= read -r self; do
     [ -n "$self" ] || continue
-    git cat-file -e "${base}:${self}" 2>/dev/null || continue
+    self_status=0
+    path_exists_at "$base" "$self" || self_status=$?
+    case $self_status in
+    0) ;;
+    1) continue ;;
+    *)
+      # Counted but not examined. Skipping the body keeps E-GATE-GONE off a path whose
+      # base-ref presence is unknown; counting it keeps the empty-set branch below from
+      # reporting I-GATE-BOOTSTRAP — "no gate existed here" — off a witness that never ran.
+      err_full "E-GATE-SCAN: $self: could not check the gate file at $base (git exit $path_exists_status)"
+      gate_path_count=$((gate_path_count + 1))
+      continue
+      ;;
+    esac
     gate_path_count=$((gate_path_count + 1))
     if [ -L "$self" ]; then
       err "E-GATE-SYMLINK: $self is a symlink — a gate file swapped for a link no longer contains the gate"
@@ -771,11 +809,13 @@ check_gate_files() {
   # PR that installs the gate in a new repo, and a silent failure for one that renamed it —
   # and the two must be separated by a predicate that is not the emptiness test restated.
   if [ "$gate_path_count" -eq 0 ]; then
-    if gate_existed_at "$base"; then
-      err "E-GATE-EMPTY-SET: no gate file from the base ref is protected — a rename must declare its predecessors in GATE_PREDECESSORS"
-    else
-      info "I-GATE-BOOTSTRAP: no gate existed at $base — this is the change installing it"
-    fi
+    local existed_status=0
+    gate_existed_at "$base" || existed_status=$?
+    case $existed_status in
+    0) err "E-GATE-EMPTY-SET: no gate file from the base ref is protected — a rename must declare its predecessors in GATE_PREDECESSORS" ;;
+    1) info "I-GATE-BOOTSTRAP: no gate existed at $base — this is the change installing it" ;;
+    *) err_full "E-GATE-WITNESS-SCAN: could not determine whether a gate existed at $base (git exit $path_exists_status)" ;;
+    esac
   fi
 }
 
