@@ -92,7 +92,12 @@ Input: an optional caller-supplied risk allowlist and/or effort allowlist
    issue `number` ascending as the final tie-break (`createdAt` is not
    guaranteed unique for batch-created issues; `number` always is).
 
-8. **Empty-queue and winner-revalidation gates.**
+8. **Empty-queue and revalidation gates.** Revalidation here rechecks only
+   status label and `Blocked by #N` resolution — it does not re-fetch
+   assignees, branches, or PRs, so an assignment or a new branch/PR opened
+   against a candidate in the window between Step 6 and this step is not
+   caught here; it surfaces instead as a duplicate-branch conflict if
+   `$quest` is started on that candidate afterward.
    - If the ranked list from Step 7 is empty, direct the user to
      `$sort-board` regardless of whether the untriaged set was empty —
      `$sort-board` also re-evaluates `status:blocked` candidates for

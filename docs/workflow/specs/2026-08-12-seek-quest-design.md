@@ -141,7 +141,12 @@ coverage rule folded into the existing `scripts/check-skill-shape.sh` (per
    tie-break after `createdAt`. `number` is assigned sequentially by GitHub
    and is always unique, making the full ordering total.
 
-8. **Empty-queue and winner-revalidation gates.**
+8. **Empty-queue and revalidation gates.** Revalidation here rechecks only
+   status label and `Blocked by #N` resolution — it does not re-fetch
+   assignees, branches, or PRs, so an assignment or a new branch/PR opened
+   against a candidate in the window between Step 6 and this step is not
+   caught here; it surfaces instead as a duplicate-branch conflict if
+   `$quest` is started on that candidate afterward.
    - If Step 7's ranked list is empty, direct the user to `$sort-board`
      regardless of whether the untriaged set from Step 3 was empty. This is
      how criterion #4 ("`$seek-quest` never selects untriaged, blocked, or

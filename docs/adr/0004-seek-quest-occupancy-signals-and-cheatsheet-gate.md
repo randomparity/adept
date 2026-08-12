@@ -54,12 +54,19 @@ non-epic candidate is excluded from the ranking pool when any of:
 
 The last rule duplicates part of eligibility filtering into revalidation:
 `$seek-quest` applies it once across the whole candidate pool before ranking,
-and applies the same status/dependency check again to the winner alone
-immediately before reporting, because ranking and reporting are not atomic —
-another session could change the winner's state in between. Pool-wide
-filtering keeps an obviously-occupied-or-blocked issue out of the top three
-at all; winner-only revalidation catches a change that happens after ranking
-but before the report is read. Neither substitutes for the other.
+and applies the same status/dependency check again — status label and
+`Blocked by #N` resolution only, not a fresh assignee/branch/PR occupancy
+sweep — to each candidate from the top of the ranked list immediately before
+reporting, backfilling from further down the list when one no longer
+passes, because ranking and reporting are not atomic — another session could
+change a candidate's state in between. Pool-wide filtering keeps an
+obviously-occupied-or-blocked issue out of the top three at all; the
+narrower status/dependency revalidation catches a change that happens after
+ranking but before the report is read (an assignment or a new branch/PR
+opened in that window is not caught here, and surfaces instead as a
+duplicate-branch conflict if `$quest` is then started on it — an accepted,
+cheaply-recoverable gap, not a silent one). Neither pass substitutes for the
+other.
 
 **Cheat-sheet coverage gate.** Extend `scripts/check-skill-shape.sh` with a
 rule 6: every name already collected in its skill inventory (`$names`) must
