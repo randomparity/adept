@@ -153,9 +153,15 @@ cat >"$collision_root/docs/cheatsheet.md" <<'SHEET'
 SHEET
 assert_passes 'substring-adjacent names, all documented' "$collision_root"
 
-# Case 6: same three names, but `quest-log` is left undocumented while
-# `quest` and `seek-quest` are documented -- proving `quest-log` is not
-# falsely satisfied by the substring match against `quest`'s own token.
+# Case 6: same three names, but the *shorter* name (`quest`) is left
+# undocumented while the two longer names that contain it as a substring
+# (`quest-log`, `seek-quest`) are documented -- this is the direction that
+# actually exercises backtick-anchoring: an un-anchored search for `quest`
+# would false-match inside the `quest-log`/`seek-quest` tokens' own
+# backtick-delimited text and wrongly pass. `quest-log` undocumented while
+# `quest`/`seek-quest` are present could never collide either direction
+# (`quest-log` is not a substring of either), so it wouldn't have exercised
+# anchoring at all.
 partial_collision_root=$tmp_root/partial-collision
 cp -R "$collision_root" "$partial_collision_root"
 cat >"$partial_collision_root/docs/cheatsheet.md" <<'SHEET'
@@ -164,10 +170,10 @@ cat >"$partial_collision_root/docs/cheatsheet.md" <<'SHEET'
 | Skill | Does |
 |---|---|
 | `example-skill` | A minimal fixture skill |
-| `quest` | Substring-collision fixture |
+| `quest-log` | Substring-collision fixture |
 | `seek-quest` | Substring-collision fixture |
 SHEET
-assert_fails 'substring-adjacent names, one undocumented' "$partial_collision_root" \
-	'quest-log: not referenced in docs/cheatsheet.md'
+assert_fails 'substring-adjacent names, shorter name undocumented' "$partial_collision_root" \
+	'quest: not referenced in docs/cheatsheet.md'
 
 printf 'check-skill-shape-test: ok\n'

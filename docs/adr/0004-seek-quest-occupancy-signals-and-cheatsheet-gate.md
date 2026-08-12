@@ -91,7 +91,8 @@ ever appear, the exemption question is a decision for that change, not a
   keyword, will not be detected as occupancy. The cost of a miss is a human
   starting `$quest` on an issue someone else already has a branch for, which
   surfaces immediately as a duplicate-branch conflict and costs no data;
-  `$seek-quest`'s winner-only revalidation narrows but does not close this
+  `$seek-quest`'s revalidation pass rechecks status and dependency state, not
+  assignee/branch/PR occupancy, so it narrows but does not close this
   window, and closing it further is not worth a heavier detection rule for a
   cheaply-recoverable mistake.
 - `check-skill-shape.sh` gains one more rule but no new script, no new
@@ -140,7 +141,7 @@ dependency-blocked candidates from the pool, not just from the final winner,
 and the label can be stale between a blocker's reopening and the next
 `$sort-board`/`$resurrection` sweep.
 
-**Do the winner-only revalidation and skip the pool-wide pass, or vice
+**Do only the ranked-list revalidation and skip the pool-wide pass, or vice
 versa.** Rejected for the reason given in the Decision section above: the two
 checks close different windows and neither is a superset of the other.
 
