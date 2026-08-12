@@ -272,6 +272,17 @@ Expect: `check-skill-shape-test: ok` and exit 0 — all four cases pass.
 
 ### Step 1.4 — Confirm the real repo is unaffected
 
+`just test` discovers suites via `git ls-files -z -- '*-test.sh'`, which
+lists only **tracked** files — the new `check-skill-shape-test.sh` from
+Step 1.2 is still untracked at this point, so it must be staged before this
+step's `just test` run or that run silently skips it and passes for the
+wrong reason (the same suite count as before this task, not one more).
+Stage first, then verify:
+
+```
+git add scripts/check-skill-shape.sh scripts/check-skill-shape-test.sh
+```
+
 Run: `just shape-check`
 
 Expect: `check-skill-shape: 26 skills, all rules pass` and exit 0 — unchanged
@@ -280,14 +291,17 @@ mention (verified during design).
 
 Run: `just test`
 
-Expect: every discovered `*-test.sh` suite passes, including the new
-`check-skill-shape-test.sh`, ending with `test: N suites passed` (N one more
-than before this task).
+Expect: every discovered `*-test.sh` suite passes, including the newly
+staged `check-skill-shape-test.sh`, ending with `test: N suites passed` (N
+one more than before this task — confirm by comparing against the count
+`just test` reported before Step 1.2, not by trusting this run alone, since
+a suite silently missing from discovery would still print a passing count).
 
 ### Step 1.5 — Commit
 
+The two files are already staged from Step 1.4:
+
 ```
-git add scripts/check-skill-shape.sh scripts/check-skill-shape-test.sh
 git commit -m "feat: gate skill directories on cheat-sheet coverage"
 ```
 
@@ -550,7 +564,16 @@ git commit -m "docs: add seek-quest to the skill cheat sheet"
 
 Every task is a small number of additive commits on
 `feat/seek-quest-skill-56`; reverting any task's commit(s) with `git revert`
-cleanly undoes it without touching the others, since Task 2 and Task 3 only
-add new file content and Task 1's script edit is additive (a new optional
-argument, a new rule appended after rule 5). No migration, no persisted
-state, and no data to clean up — this is documentation and a CI script.
+is git-mechanically clean and touches no other task's files, since Task 2 and
+Task 3 only add new file content and Task 1's script edit is additive (a new
+optional argument, a new rule appended after rule 5). No migration, no
+persisted state, and no data to clean up — this is documentation and a CI
+script.
+
+A clean revert is not automatically a green one: Task 1's rule 6 and Task
+2's `skills/seek-quest/SKILL.md` are both still present if only Task 3 (the
+cheat-sheet entry) is reverted, which reproduces the exact
+`seek-quest: not referenced in docs/cheatsheet.md` failure Step 2.2
+deliberately demonstrates — `just shape-check` goes red on purpose. Revert
+Task 3 only alongside Task 2 (or Task 1) if the goal is an undocumented
+skill going away entirely, not a documented one going red.
