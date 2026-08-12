@@ -392,19 +392,34 @@ still_a_record() {
 #
 # Assigns `renumbered_to` and reserves that destination in `used_renumber_targets`. Both come
 # from check_no_disappearances through bash's dynamic scoping, so a candidate can excuse only
-# one vanished base path. A temp-file failure returns 1 and lets E-GONE speak instead.
+# one vanished base path. A temp-file failure returns 1 and lets E-GONE speak instead: the record
+# is gone from its path either way, and that much the gate did establish — unlike an unreadable
+# base copy or a faulted candidate witness, which return 2 and replace E-GONE with the fault.
 #
 # Candidates come from `records`, which collect_records builds only after reporting
 # E-RECORD-SYMLINK and skipping every symlink, so no candidate can be a link. A `[ ! -L ]` test
 # here would be a guard that cannot fire — a false guarantee, by the same argument date_to_int
 # makes about its own missing invalid-input branch.
 renumbered_elsewhere() {
-  local base=$1 path=$2 blob_canon candidate tmp cand_status fault_status=0
+  local base=$1 path=$2 blob_canon candidate tmp cand_status blob_status=0 fault_status=0
   tmp=$(mktemp) || return 1
-  if ! git cat-file blob "${base}:${path}" >"$tmp" 2>/dev/null; then
+  read_base_blob "$base" "$path" "$tmp" || blob_status=$?
+  case $blob_status in
+  0) ;;
+  1)
     rm -f "$tmp"
     return 1
-  fi
+    ;;
+  # Whether the record moved is exactly what an unreadable base copy leaves undetermined, so
+  # returning 1 reported E-GONE off a search that never ran. The status travels in
+  # path_exists_status because that is what the caller's diagnostic reads, and the fault it
+  # names is the same one either half of the read can raise.
+  *)
+    rm -f "$tmp"
+    path_exists_status=$base_blob_status
+    return 2
+    ;;
+  esac
   blob_canon=$(canonicalise "$tmp")
   rm -f "$tmp"
   [ -n "$records" ] || return 1
@@ -545,10 +560,28 @@ check_sections_append_only() {
 }
 
 check_not_rewritten() {
-  local base=$1 path=$2 blob tmp
-  blob=$(git cat-file blob "${base}:${path}" 2>/dev/null) || return 0
+  local base=$1 path=$2 tmp blob_status=0
   tmp=$(mktemp) || return 0
-  printf '%s\n' "$blob" >"$tmp"
+  read_base_blob "$base" "$path" "$tmp" || blob_status=$?
+  case $blob_status in
+  0) ;;
+  # Absent at the base ref: there is nothing for the three rules below to compare against, and
+  # they are each defined against a base-ref copy. The sole caller iterates the base ref's own
+  # record listing, so this branch is not reached in practice — it is here because the answer
+  # belongs to the predicate, not because a base record can vanish between two git queries.
+  1)
+    rm -f "$tmp"
+    return 0
+    ;;
+  # Present but unreadable. Returning 0 here exempted the record from check_sections_append_only,
+  # check_headings_intact and check_preamble_intact — every anti-erasure rule off at once,
+  # granted by a read that never completed, on a run that then exited 0.
+  *)
+    rm -f "$tmp"
+    err_full "E-BASE-BLOB-SCAN: $path: could not read the base ref's copy at $base (git exit $base_blob_status)"
+    return 0
+    ;;
+  esac
 
   # The one permitted class of edit to a merged record's protected regions. Checked before
   # any of the three rules rather than inside each, so all three answer to one predicate and
@@ -584,14 +617,31 @@ check_not_rewritten() {
 base_verdict=absent
 
 evaluate_base_conformance() {
-  local base=$1 path=$2 blob tmp saved_mode
+  local base=$1 path=$2 tmp saved_mode blob_status=0
   base_verdict=absent
-  blob=$(git cat-file blob "${base}:${path}" 2>/dev/null) || return 0
   if ! tmp=$(mktemp); then
     err "E-TMPFILE: cannot create a temp file — cannot determine the base-ref shape of $path"
     return 0
   fi
-  printf '%s\n' "$blob" >"$tmp"
+  read_base_blob "$base" "$path" "$tmp" || blob_status=$?
+  case $blob_status in
+  0) ;;
+  # Absent at the base ref, which is what `absent` means: the record is new, so it is neither
+  # grandfathered nor non-conforming and the tree pass judges it at full severity.
+  1)
+    rm -f "$tmp"
+    return 0
+    ;;
+  # Present but unreadable, which used to reach the same `absent` verdict — a record that could
+  # not be read at the base ref was reported as one that was not there. base_verdict stays
+  # `absent` here too, so the tree pass still runs at full severity: a read that never completed
+  # cannot establish the grandfathering a `nonconforming` verdict would grant.
+  *)
+    rm -f "$tmp"
+    err_full "E-BASE-SHAPE-SCAN: $path: could not read the base ref's copy at $base (git exit $base_blob_status)"
+    return 0
+    ;;
+  esac
 
   saved_mode=$EMIT_MODE
   EMIT_MODE=collect
@@ -1073,6 +1123,43 @@ path_exists_at() {
     return 2
   fi
   [ -n "$out" ] || return 1
+  return 0
+}
+
+# The base ref's copy of one record, written to `dest`. Three-valued like path_exists_at, which
+# it delegates the first half to: 0 the copy is in `dest`, 1 the path is absent from the base
+# ref, 2 the read could not run.
+#
+# The split is the whole point. `git cat-file blob` exits 128 both for a path absent from a valid
+# ref and for a bad or damaged one, so on its own it cannot say which happened — and absence is
+# the ordinary case, since a record the change adds has no base copy at all. Every caller below
+# therefore used to read an unreadable blob as an absent one and skip its rule. Presence is
+# witnessed with `git ls-tree` first (ADR 0005 decision 2) and a read that fails for a path git
+# has just listed is a fault, not an absence.
+#
+# git's real status is left in base_blob_status for the caller's diagnostic, for the reason
+# path_exists_at leaves its own there: this predicate's 2 is a sentinel, and reporting it would
+# name a status git never returned.
+base_blob_status=0
+read_base_blob() {
+  local base=$1 path=$2 dest=$3 status=0
+  base_blob_status=0
+  path_exists_at "$base" "$path" || status=$?
+  case $status in
+  0) ;;
+  1) return 1 ;;
+  *)
+    base_blob_status=$path_exists_status
+    return 2
+    ;;
+  esac
+
+  status=0
+  git cat-file blob "${base}:${path}" >"$dest" 2>/dev/null || status=$?
+  if [ "$status" -ne 0 ]; then
+    base_blob_status=$status
+    return 2
+  fi
   return 0
 }
 
