@@ -40,6 +40,13 @@ clear_git_env() {
 		printf 'test-fixture-helpers: cannot read git local env vars\n' >&2
 		exit 1
 	}
+	# Empty output is the same failure wearing a zero exit status: git has
+	# always named at least GIT_DIR here, so nothing to clear means the answer
+	# did not arrive rather than that there was nothing to do.
+	[ -n "$variables" ] || {
+		printf 'test-fixture-helpers: git reported no local env vars\n' >&2
+		exit 1
+	}
 	while IFS= read -r variable; do
 		[ -n "$variable" ] || continue
 		unset "$variable"
@@ -63,6 +70,12 @@ fixture_scratch() { # prefix -- sets FIXTURE_SCRATCH
 # Each entry is independent: one failure must not skip the entries after it,
 # because check-public-safety-test.sh registers a fixture inside the working
 # tree and it is always last.
+#
+# The prefix guard is unreachable by construction -- mktemp returns the template
+# it was handed, and fixture_scratch records that same template as the prefix --
+# so it is defence in depth on the one `rm -R` here, not a live check. The five
+# copies it replaces re-derived the prefix at cleanup time and compared it
+# against a variable suite code could reassign, which is what made theirs live.
 fixture_cleanup() {
 	local index=0 path prefix status=0
 	while [ "$index" -lt "${#fixture_scratch_paths[@]}" ]; do

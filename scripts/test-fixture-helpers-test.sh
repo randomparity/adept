@@ -22,6 +22,12 @@ abort() {
 	exit 1
 }
 
+# Every parent-side path reaching a generated child body goes through this.
+# These paths descend from TMPDIR, so an unquoted one splits the generated line
+# on any whitespace in it -- and a child that dies mid-body can leave a case
+# asserting against a half-built state instead of reddening.
+q() { printf '%q' "$1"; }
+
 helper=$script_dir/test-fixture-helpers.sh
 child_tmp=$SCRATCH/child-tmp
 mkdir -p "$child_tmp"
@@ -67,7 +73,7 @@ mkdir -p "$extra_parent"
 # variables are escaped.
 run_child <<CHILD
 fixture_init sample
-fixture_scratch "$extra_parent/side."
+fixture_scratch $(q "$extra_parent/side.")
 printf '%s\n' "\$FIXTURE_SCRATCH"
 CHILD
 side=$(cat "$SCRATCH/child.out")
@@ -90,7 +96,7 @@ status=0
 run_child <<CHILD || status=$?
 fixture_init sample
 fixture_scratch_prefixes[0]=/nowhere/
-fixture_scratch_paths[0]=$survivor
+fixture_scratch_paths[0]=$(q "$survivor")
 CHILD
 [ -d "$survivor" ] || abort 'cleanup removed a path outside its registered prefix'
 grep -qF "sample: refusing to remove unsafe path: $survivor" "$SCRATCH/child.out" ||
@@ -115,7 +121,7 @@ if [ "$(id -u)" -ne 0 ]; then
 	status=0
 	run_child <<CHILD || status=$?
 fixture_init sample
-fixture_scratch "$blocker_parent/late."
+fixture_scratch $(q "$blocker_parent/late.")
 late=\$FIXTURE_SCRATCH
 mkdir "\$SCRATCH/child"
 chmod 500 "\$SCRATCH"
@@ -147,9 +153,11 @@ CHILD
 
 # clear_git_env unsets the repository-local selectors a caller may have
 # exported, so a fixture's `git -C` is not overridden.
-GIT_DIR=$SCRATCH/ambient.git GIT_INDEX_FILE=$SCRATCH/ambient.index run_child <<'CHILD'
+run_child <<CHILD
+export GIT_DIR=$(q "$SCRATCH/ambient.git")
+export GIT_INDEX_FILE=$(q "$SCRATCH/ambient.index")
 clear_git_env
-printf '%s %s\n' "${GIT_DIR:-unset}" "${GIT_INDEX_FILE:-unset}"
+printf '%s %s\n' "\${GIT_DIR:-unset}" "\${GIT_INDEX_FILE:-unset}"
 CHILD
 [ "$(cat "$SCRATCH/child.out")" = 'unset unset' ] ||
 	abort "clear_git_env left git selectors set: $(cat "$SCRATCH/child.out")"
@@ -162,7 +170,7 @@ printf '#!/usr/bin/env bash\nexit 1\n' >"$fake_bin/git"
 chmod +x "$fake_bin/git"
 status=0
 run_child <<CHILD || status=$?
-PATH=$fake_bin:\$PATH
+PATH=$(q "$fake_bin"):\$PATH
 clear_git_env
 printf 'reached\n'
 CHILD
@@ -171,5 +179,21 @@ grep -qF 'cannot read git local env vars' "$SCRATCH/child.out" ||
 	abort "expected a diagnostic, got: $(cat "$SCRATCH/child.out")"
 ! grep -qF reached "$SCRATCH/child.out" ||
 	abort 'clear_git_env returned after a failing git'
+
+# The same failure wearing a zero exit status: a git that answers with nothing
+# has not told the suite there is nothing to clear.
+printf '#!/usr/bin/env bash\nexit 0\n' >"$fake_bin/git"
+status=0
+run_child <<CHILD || status=$?
+export GIT_DIR=$(q "$SCRATCH/ambient.git")
+PATH=$(q "$fake_bin"):\$PATH
+clear_git_env
+printf 'reached with GIT_DIR=%s\n' "\${GIT_DIR:-unset}"
+CHILD
+[ "$status" -ne 0 ] || abort 'a git that answers with nothing should stop the suite'
+grep -qF 'git reported no local env vars' "$SCRATCH/child.out" ||
+	abort "expected a diagnostic, got: $(cat "$SCRATCH/child.out")"
+! grep -qF reached "$SCRATCH/child.out" ||
+	abort 'clear_git_env returned having cleared nothing'
 
 printf 'test-fixture-helpers-test: ok\n'
