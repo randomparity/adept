@@ -108,6 +108,8 @@ snapshot_state "$tmp_root/before"
 
 suites=(
 	tests/fixtures/forge/sdd-workspace-test.sh
+	tests/fixtures/forge/task-brief-test.sh
+	tests/fixtures/forge/review-package-test.sh
 	tests/fixtures/quest-log/tracker-test.sh
 	.github/scripts/check-records-test.sh
 	skills/tome-of-lore/assets/check-records-test.sh
