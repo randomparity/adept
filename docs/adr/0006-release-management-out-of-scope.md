@@ -1,4 +1,4 @@
-# 0005 — Release management is out of scope
+# 0006 — Release management is out of scope
 
 ## Status
 

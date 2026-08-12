@@ -8,7 +8,7 @@ the target repositories its skills operate on? Either answer closes the issue, o
 and one as a recorded decision.
 
 The answer is **scope-out**, recorded in
-[ADR 0005](../../adr/0005-release-management-out-of-scope.md). The deliverable is that record
+[ADR 0006](../../adr/0006-release-management-out-of-scope.md). The deliverable is that record
 plus a one-line pointer to it from `README.md`'s workflow section — the record answers *why*,
 and the pointer is what a reader who never thought to open `docs/adr/` actually meets. Issue
 #50's "Expected" authorizes both: "an ADR **or** a line in the pipeline docs". Taking both is
@@ -36,7 +36,7 @@ Evidence gathered before deciding:
 ## Decision
 
 Scope-out. The reasoning, the four grounds it rests on, the consequences, and the falsifiable
-revisit condition all live in ADR 0005 and are not restated here — a second copy is the drift
+revisit condition all live in ADR 0006 and are not restated here — a second copy is the drift
 problem `CLAUDE.md` exists to prevent.
 
 ## Non-goals
@@ -44,7 +44,7 @@ problem `CLAUDE.md` exists to prevent.
 - ADR 0001 is not reopened. This record extends its discipline outward to target repositories;
   it neither supersedes it nor amends it, so 0001 takes no supersession banner.
 - No skill is added and no existing skill is edited. `$return-to-town` and `$clear-map` keep
-  their current endings, which ADR 0005 records as complete rather than truncated.
+  their current endings, which ADR 0006 records as complete rather than truncated.
 - `docs/cheatsheet.md` is not touched, and the skill-count line in `README.md` is unchanged.
   The cheat sheet is a which-skill-do-I-run table and there is no new skill to list. The one
   `README.md` edit is the pointer above, in the workflow section, and nothing else.
@@ -55,16 +55,16 @@ problem `CLAUDE.md` exists to prevent.
 
 | # | Source | Satisfied by |
 |---|---|---|
-| 1 | Issue #50 "Proposed approach" — decide scope-in or scope-out first | The Decision above, argued in ADR 0005 |
-| 2 | Issue #50 "Expected" — a stated decision that release management is out of scope for adept, **and why** | ADR 0005 `## Decision` and `## Considered & rejected` |
-| 3 | Issue #50 "Problem" — the omission must stop reading as a gap | ADR 0005 `## Context` names the ambiguity and closes it; the `README.md` pointer is what puts the answer where the reader looks |
+| 1 | Issue #50 "Proposed approach" — decide scope-in or scope-out first | The Decision above, argued in ADR 0006 |
+| 2 | Issue #50 "Expected" — a stated decision that release management is out of scope for adept, **and why** | ADR 0006 `## Decision` and `## Considered & rejected` |
+| 3 | Issue #50 "Problem" — the omission must stop reading as a gap | ADR 0006 `## Context` names the ambiguity and closes it; the `README.md` pointer is what puts the answer where the reader looks |
 | 4 | Issue #50 "Proposed approach" — one PR | Four files, one PR, no code change |
 | 5 | `CLAUDE.md` "Verifying a change" | `just verify` green |
 
 ## Guardrail interactions
 
 - **`just records`** (`adr` profile) is the only gate with an opinion about the new file. It
-  requires the H1 to begin `# 0005 `, the five level-2 sections `## Status`, `## Context`,
+  requires the H1 to begin `# 0006 `, the five level-2 sections `## Status`, `## Context`,
   `## Decision`, `## Consequences`, `## Considered & rejected`, and a `## Status` body matching
   `Accepted (YYYY-MM-DD)`. It also warns `W-INDEX-TABLE` if a numbered-row table appears in
   `docs/adr/README.md` — which is why no index row is added: this repository's ADR index is the
@@ -79,12 +79,12 @@ problem `CLAUDE.md` exists to prevent.
 Nothing automated asserts on prose — `CLAUDE.md` anatomy rule 4 forbids a gate that greps
 Markdown for a sentence, so no test is added and none would be legitimate. The record gate's
 structural checks above are the whole of the automation that touches this change; correctness of
-the decision itself is a reading problem, which the adversarial review of ADR 0005 is what
+the decision itself is a reading problem, which the adversarial review of ADR 0006 is what
 answers.
 
 ## Risk
 
-The decision can be wrong. The mitigation is the revisit condition in ADR 0005: reopen the
+The decision can be wrong. The mitigation is the revisit condition in ADR 0006: reopen the
 first time adept is actually asked to drive a release in a target repository. That is a
 one-occurrence trigger on purpose. An earlier draft set it at three, borrowing the
 third-repetition rule — but that rule governs when to *extract* a utility from code already
