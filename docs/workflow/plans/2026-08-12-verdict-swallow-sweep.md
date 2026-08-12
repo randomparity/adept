@@ -43,15 +43,34 @@ Every task's requirements implicitly include this section.
   runs `cmp -s` on all six.
 - **`rg` in gate scripts passes `--no-config`.**
 - Message form: `E-<RULE>-SCAN: <path>: <what failed> (<tool> exit <status>)`.
+  **`<status>` must be the tool's real exit status, never a predicate's sentinel
+  `2`.** A three-valued predicate collapses every fault to `2`, so each one also
+  records the underlying status in a file-scope variable that its caller
+  interpolates. `check-records.sh` already carries state this way — `records`,
+  `failed`, `renumbered_to`, `base_verdict` are all read through bash's dynamic
+  scoping — so this follows the file's existing convention rather than
+  introducing one.
+- Declare **every** variable a converted function uses on its `local` line.
+  Under `set -u` an undeclared one is not merely untidy; and a `local` line that
+  omits a status variable makes it global by accident, which two functions here
+  would then share.
 - The checkout root is `$WORK`; never write an absolute path into a tracked
   file.
 
-**Guardrail commands.** `just verify` is the full suite. During the build, the
-fast loop is:
+**Guardrail commands.** `just hooks` once per clone, before anything else —
+it installs prek and the managed pre-push hook. `just verify` is the full suite.
+During the build, each task verifies with both of:
 
 ```sh
 BASE_SHA=$(git rev-parse origin/main) just records
+just commit-check
 ```
+
+`just records` runs the gate suite and the mirror `cmp`; `just commit-check`
+runs lint (shellcheck), format-check (shfmt) and public-safety, which `records`
+does not. Both take seconds. Note the mirror `cmp` is the **last** thing
+`records` does, so while the suite is red the mirror check has not run at all —
+a green `records` is the only evidence the mirrors match.
 
 Run gates bare — no pipes, no `|| true`.
 
@@ -90,6 +109,18 @@ path_exists_at <ref> <path>
 1. Add the failing test first. In `check-records-test.sh`, beside the existing
    `E-PROFILE-DIR-MISSING` case, add a case that stubs `git` to fault on an
    `ls-tree` naming the record directory and expects exit 1 with `E-DIR-SCAN`.
+
+   **The fixture has a precondition that is easy to miss.** `dir_in_ref` is only
+   reached when `[ ! -d "$RECORD_DIR" ]` — a directory present in the working
+   tree short-circuits before the witness runs, and the case would pass without
+   the change. Build the fixture the way the existing
+   `E-PROFILE-DIR-MISSING` case does, then remove the record directory from the
+   **working tree only**, leaving it present at the base ref, so the guard is
+   true and the witness is what decides. Read the neighbouring case in the suite
+   and copy its fixture helper and `base_of`/`BASE_SHA` wiring rather than
+   inventing names; the helper names differ between the checker and migrator
+   sections of that file.
+
    The stub keys on subcommand **and** path:
 
    ```sh
@@ -127,12 +158,22 @@ path_exists_at <ref> <path>
    # from git is not this gate's interface, its coded ::error:: lines are.
    path_exists_at() {
      local ref=$1 path=$2 out status=0
+     path_exists_status=0
      out=$(git ls-tree -r --name-only "$ref" -- "$path" 2>/dev/null) || status=$?
-     [ "$status" -eq 0 ] || return 2
+     if [ "$status" -ne 0 ]; then
+       path_exists_status=$status
+       return 2
+     fi
      [ -n "$out" ] || return 1
      return 0
    }
    ```
+
+   Declare `path_exists_status=0` at file scope beside the other engine
+   globals. The predicate's own `2` is a sentinel; `path_exists_status` carries
+   git's real status (128 for a bad ref or a damaged object) and is what every
+   caller's diagnostic interpolates. Without it each `E-*-SCAN` message would
+   report "git exit 2", which is not a status git ever returned.
 4. Rewrite `dir_in_ref` to delegate, keeping both fail-open guards:
 
    ```sh
@@ -159,7 +200,7 @@ path_exists_at <ref> <path>
        return 1
        ;;
      *)
-       err_full "E-DIR-SCAN: $RECORD_DIR: could not check the record directory at ${BASE_SHA:-} (git exit $dir_status)"
+       err_full "E-DIR-SCAN: $RECORD_DIR: could not check the record directory at ${BASE_SHA:-} (git exit $path_exists_status)"
        return 1
        ;;
      esac
@@ -239,6 +280,8 @@ pre-existing `E-PROFILE-DIR-MISSING` case is unchanged; mirrors compare equal.
    esac
    ```
 
+   Declare `renum_status` on `check_no_disappearances`'s `local` line.
+
    `E-GONE` keeps `err` — it is a record-conformance verdict and stays
    downgradable. The scan fault uses `err_full`. The two are alternatives, never
    both, so a fault does not also claim the record is gone.
@@ -267,8 +310,13 @@ could not accept one without the other.
    - site 4: `git` stub faulting on `ls-tree` naming a **protected gate file**
      path; expect exit 1 and `E-GATE-SCAN`;
    - site 5a: a fixture with no gate file at the base ref (so `gate_existed_at`
-     runs) plus a stub faulting on `ls-tree` naming a path under `SELF_DIR`;
-     expect exit 1 and `E-GATE-WITNESS-SCAN`;
+     runs at all) plus a stub faulting on `ls-tree` naming a path under
+     `SELF_DIR`. **The path must be one `gate_paths` does not itself emit**, or
+     the stub fires at site 4 first, reports `E-GATE-SCAN`, and increments
+     `gate_path_count` — which takes `check_gate_files` out of its empty-set
+     branch so `gate_existed_at` never runs. Pin the key to a known basename
+     that reaches the witness but not the protected set, and say in the step
+     which one and why. Expect exit 1 and `E-GATE-WITNESS-SCAN`;
    - site 5b: the same fixture with the `SELF_DIR` witness legitimately finding
      nothing, plus a stub faulting on `git grep ... -- .github/workflows`;
      expect exit 1 and `E-GATE-WITNESS-SCAN`.
@@ -291,6 +339,8 @@ could not accept one without the other.
    esac
    gate_path_count=$((gate_path_count + 1))
    ```
+
+   Declare `self_status` on `check_gate_files`'s `local` line.
 
    Counting the path on a fault is deliberate: the empty-set branch below must
    not report `I-GATE-BOOTSTRAP` — "no gate existed here" — on the strength of a
@@ -371,7 +421,18 @@ and still counts toward `gate_path_count`; all pre-existing gate cases unchanged
    - fault on `^## ` -> expect exit 1 and `E-SECTION-LIST-SCAN`.
 
    Both need a fixture where a merged record is edited, so
-   `check_not_rewritten` runs.
+   `check_not_rewritten` runs — and each needs its own, because the two rules
+   fire on different edits:
+   - Site 1's fixture makes an **addition-only** edit (append a paragraph;
+     remove nothing from any section body, the preamble, or the heading set), so
+     no other rule fires and the pre-change run genuinely exits 0. An edit that
+     also removes a line would report `E-REWRITE` and the case would pass at
+     exit 1 without the change, proving nothing.
+   - Site 2's fixture likewise edits only in a way that leaves `E-REWRITE` and
+     `E-HEADING-REWRITTEN` silent before the change.
+
+   Also confirm `marker_only_change` does not short-circuit the fixture's edit
+   before either rule runs.
 2. Run the suite; both fail, exiting 0 because an empty list means zero loop
    iterations.
 3. Site 1 — in `check_headings_intact`, hoist the listing out of the process
@@ -397,6 +458,13 @@ and still counts toward `gate_path_count`; all pre-existing gate cases unchanged
    `1` is "the base blob had no headings", which is legitimate. The `<<<` feeds
    the loop in the current shell, as the process substitution did, so `err_full`
    still reaches `failed`.
+
+   Rewrite the existing comment above the loop in the same step. It currently
+   explains the *process substitution* — "Fed by a process substitution on
+   `done`, so `err_full` runs in the current shell rather than a piped
+   subshell" — and that construct is gone. The reason is unchanged and the
+   construct is not, so the comment must say herestring; leaving it describes
+   code that is no longer there, and deleting it loses why the shape matters.
 4. Site 2 — in `check_sections_append_only`, split the listing from the filter.
    Only the listing reads a file; the `grep -vxF` filter reads memory and stays
    with #63:
@@ -572,3 +640,9 @@ Expect no matches — ADR 0005 decision 2 removes it as an existence witness.
 Every task is a single commit touching a script and its mirror. Reverting one
 commit restores both halves of a mirror pair together, so no task can leave the
 `cmp` check failing on its own.
+
+Tasks 2, 3 and 1 are ordered by a real dependency: tasks 2 and 3 call
+`path_exists_at`, which task 1 defines. Partial rollback is therefore
+reverse-order only — revert 3 and 2 before 1. Reverting task 1 alone leaves live
+callers of an undefined function, which `set -u` does not catch and which fails
+only on the path that calls it.
