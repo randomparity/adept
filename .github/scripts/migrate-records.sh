@@ -245,13 +245,26 @@ report_status_leftover() {
 # What migration cannot finish. A missing or empty section needs prose, and a placeholder
 # would trade a warning for an E-SECTION-EMPTY error, so it is named rather than stubbed.
 report_leftovers() {
-  local file=$1 label=$2 section body
+  local file=$1 label=$2 section body grep_status
   while IFS= read -r section; do
     [ -n "$section" ] || continue
-    if ! grep -qxF "$section" "$file"; then
+    # grep exits 1 for "no match" and 2 or more for a fault it hit while
+    # scanning -- an unreadable file, a bad encoding. Negating a bare `if`
+    # reads a fault the same as "missing", a false leftover report on a scan
+    # that never actually completed. Branch on the captured status instead.
+    grep_status=0
+    grep -qxF "$section" "$file" || grep_status=$?
+    case $grep_status in
+    0) ;;
+    1)
       leftover "$label: no '$section' section — write one; the migrator does not author content, and it does not move a metadata line into a section either"
       continue
-    fi
+      ;;
+    *)
+      report_failure "E-SECTION-SCAN: $file: could not scan for section '$section' (grep exit $grep_status)"
+      continue
+      ;;
+    esac
     body=$(section_body "$file" "$section" | tr -d '[:space:]')
     if [ -z "$body" ]; then
       leftover "$label: '$section' has no body — a heading with no content is not a record"
