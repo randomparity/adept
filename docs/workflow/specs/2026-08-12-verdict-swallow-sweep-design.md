@@ -18,6 +18,8 @@ The three idioms in scope all discard a single command's status outright:
 - `cmd && return 0` with an unconditional `return 1` fallthrough — every
   non-zero outcome, fault or honest miss, lands on the same `return 1`.
 - `cmd || continue` — the same, one loop iteration at a time.
+- `[ -n "$(cmd)" ]` — the status is discarded by the command substitution and
+  only the output is tested, so a fault reads as empty output.
 
 Explicitly **out of scope**, owned by #63: every pipeline idiom, where the
 status that is lost belongs to a stage upstream of the last command. Recovering
@@ -85,9 +87,13 @@ mirror under `skills/tome-of-lore/assets/**`; every change lands in both.
 | 5 | `gate_existed_at` both witnesses | `check-records.sh` | `E-GATE-WITNESS-SCAN` |
 | 6 | `check_title_number` title read | `profiles/adr.sh` | `E-TITLE-SCAN` |
 | 7 | `resolve_tracker` declaration count | `quest-log/assets/tracker.sh` | usage exit |
+| 9 | `dir_in_ref` record-directory witness | `check-records.sh` | `E-DIR-SCAN` |
 
 Plus site 8, `gate_paths`' profile listing, which takes an input guard and emits
 no code, per ADR 0005 decision 4.
+
+`tracker.sh` carries no coded-error channel, so site 7 reports through the usage
+exit it already fails through, per ADR 0005 decision 1.
 
 Required behaviour per site:
 
@@ -123,6 +129,13 @@ Required behaviour per site:
 8. **`gate_paths`** — the profile pathspec is computed into a variable and the
    listing runs only when it is non-empty, matching the `[ -n "$rel" ]` guard
    the surrounding emissions already use.
+9. **`dir_in_ref`** — already uses `git ls-tree`, but discards its status inside
+   a command substitution and tests only emptiness, so a fault reads as "the
+   record directory did not exist at the base ref". It returns `0` existed, `1`
+   did not, `2` fault; `run_profile` reports `E-DIR-SCAN` on `2` instead of
+   `E-PROFILE-DIR-MISSING`, which would name the wrong cause. Its two existing
+   fail-open guards — an empty ref, and a ref that is not a commit — are
+   deliberate and keep returning `0`.
 
 Two comments in `profiles/debt.sh` (and its mirror) currently defer their
 pipeline sites to #55. #55 no longer owns them, so they are retargeted to #63.
@@ -151,9 +164,9 @@ target call passes and `exec`s the real `grep` for everything else — the shape
 the suite already uses for the migrator's section-scan test. Site 7 stubs `rg`
 the same way against `tracker-test.sh`'s existing sandbox.
 
-Sites 3, 4 and 5 read git objects rather than files, so they use a PATH-stubbed
-`git` that faults only on the `ls-tree`/`grep` invocation under test and defers
-otherwise.
+Sites 3, 4, 5 and 9 read git objects rather than files, so they use a
+PATH-stubbed `git` that faults only on the `ls-tree`/`grep` invocation under
+test and defers otherwise.
 
 Site 8's guard is proven by the existing `E-GATE-UNLOCATABLE` path: with the
 script outside the repo, `repo_relative` returns empty and the listing must not
