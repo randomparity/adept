@@ -51,10 +51,10 @@ BANNER_REPLACES_STATUS=yes
 # so it runs in both passes and takes no notice of which one.
 profile_check_status() {
   local file=$1 label=$2
-  # A pipeline into grep, not a bare `if grep`/`if rg` — issue #25's literal shape and
-  # this PR's fix. Distinguishing the awk stage's own fault from grep's needs
-  # ${PIPESTATUS[@]}, a bigger change than this sweep's four named sites; deferred to
-  # issue #55 (which already tracks this file's sibling idioms) rather than folded in here.
+  # A pipeline into grep, not a bare `if grep`/`if rg` — issue #25's literal shape. Telling
+  # the awk stage's own fault from grep's needs ${PIPESTATUS[@]} plus a policy for the
+  # SIGPIPE a truncating `head` produces; that is issue #63, split out of #55 once #55's
+  # sweep of the single-command discards showed the two need different treatment.
   if section_body "$file" "## Status" | grep -qi '^Open'; then
     return 0
   fi
@@ -106,7 +106,7 @@ check_review_by() {
     return 0
   fi
 
-  # Same deferral as profile_check_status above: a pipeline into grep, tracked on #55.
+  # Same deferral as profile_check_status above: a pipeline into grep, tracked on #63.
   if ! printf '%s' "$review_by" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
     err "E-REVIEWBY-FORM: $label: review-by '$review_by' is not an ISO-8601 date (YYYY-MM-DD)"
     return 0

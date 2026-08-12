@@ -11,36 +11,18 @@ set -euo pipefail
 # GIT_INDEX_FILE would otherwise reach the fixture's `git ls-files` and make
 # discovery report this repository instead.
 
-while IFS= read -r variable; do
-	[ -n "$variable" ] || continue
-	unset "$variable"
-done < <(git rev-parse --local-env-vars)
-
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=SCRIPTDIR/test-fixture-helpers.sh
+. "$script_dir/test-fixture-helpers.sh"
+
+clear_git_env
+fixture_init ripgrep-config-test
+
 gate=$script_dir/check-ripgrep-config.sh
 lister=$script_dir/list-shell-sources.sh
-tmp_prefix=${TMPDIR:-/tmp}/ripgrep-config-test.
-tmp_root=$(mktemp -d "$tmp_prefix"'XXXXXX')
-
-cleanup() {
-	case $tmp_root in
-	"$tmp_prefix"*) rm -R -- "$tmp_root" ;;
-	*)
-		printf 'ripgrep-config-test: refusing to remove unsafe path: %s\n' \
-			"$tmp_root" >&2
-		return 1
-		;;
-	esac
-}
-trap cleanup EXIT
-
-fail() {
-	printf 'ripgrep-config-test: %s\n' "$*" >&2
-	exit 1
-}
 
 new_fixture() { # name
-	local root=$tmp_root/$1
+	local root=$SCRATCH/$1
 	mkdir -p "$root/scripts"
 	cp "$lister" "$root/scripts/list-shell-sources.sh"
 	chmod +x "$root/scripts/list-shell-sources.sh"
@@ -209,7 +191,7 @@ assert_passes 'neutralised wrappers' "$wrapped_ok_root"
 
 # Discovery that cannot run is a fault, not a clean verdict: a gate that reports
 # ok on an empty source list is the silent miss this gate exists to prevent.
-faultless_root=$tmp_root/no-lister
+faultless_root=$SCRATCH/no-lister
 mkdir -p "$faultless_root"
 status=0
 output=$("$gate" "$faultless_root" 2>&1) || status=$?

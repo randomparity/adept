@@ -1,32 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-while IFS= read -r variable; do
-	[ -n "$variable" ] || continue
-	unset "$variable"
-done < <(git rev-parse --local-env-vars)
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=SCRIPTDIR/test-fixture-helpers.sh
+. "$script_dir/test-fixture-helpers.sh"
 
-repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
-tmp_prefix=${TMPDIR:-/tmp}/git-fixture-isolation-test.
-tmp_root=$(mktemp -d "$tmp_prefix"'XXXXXX')
+clear_git_env
+fixture_init git-fixture-isolation-test
 
-cleanup() {
-	case $tmp_root in
-	"$tmp_prefix"*)
-		[ ! -d "$tmp_root" ] || rm -R -- "$tmp_root"
-		;;
-	*)
-		printf 'git-fixture-isolation-test: refusing to remove unsafe path: %s\n' \
-			"$tmp_root" >&2
-		return 1
-		;;
-	esac
-}
-trap cleanup EXIT
+repo_root=$(cd "$script_dir/.." && pwd -P)
 
-ambient=$tmp_root/ambient
-worktree_one=$tmp_root/external-one
-worktree_two=$tmp_root/external-two
+ambient=$SCRATCH/ambient
+worktree_one=$SCRATCH/external-one
+worktree_two=$SCRATCH/external-two
 
 git init -q -b main "$ambient"
 git -C "$ambient" config user.name 'Ambient Developer'
@@ -68,18 +54,13 @@ snapshot_state() {
 		"$destination/external-two"
 }
 
-fail() {
-	printf 'git-fixture-isolation-test: %s\n' "$*" >&2
-	exit 1
-}
-
 run_suite() {
 	local suite=$1 slug before after output state_diff status=0
 	slug=${suite//\//-}
-	before=$tmp_root/before
-	after=$tmp_root/after
-	output=$tmp_root/$slug.output
-	state_diff=$tmp_root/$slug.state-diff
+	before=$SCRATCH/before
+	after=$SCRATCH/after
+	output=$SCRATCH/$slug.output
+	state_diff=$SCRATCH/$slug.state-diff
 
 	if [ -d "$after" ]; then
 		rm -R -- "$after"
@@ -104,7 +85,7 @@ run_suite() {
 	printf '  ok   %s\n' "$suite"
 }
 
-snapshot_state "$tmp_root/before"
+snapshot_state "$SCRATCH/before"
 
 suites=(
 	tests/fixtures/forge/sdd-workspace-test.sh

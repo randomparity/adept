@@ -49,7 +49,7 @@ available_profiles() {
 # session would route a write to the wrong tracker silently, which the tracker
 # abstraction record forbids.
 resolve_tracker() {
-	local root agents matches loose_status
+	local root agents matches loose_status count_status=0
 	root=$(git rev-parse --show-toplevel 2>/dev/null) || {
 		printf 'github\n'
 		return 0
@@ -64,7 +64,20 @@ resolve_tracker() {
 	# \r? throughout: a checkout with CRLF endings would otherwise fail the
 	# strict pattern, match the loose probe, and report a correct declaration
 	# as malformed -- failing every operation in that clone.
-	matches=$(rg -c '^issue-tracker: [a-z0-9-]+\r?$' "$agents" || true)
+	# rg exits 1 for "no match" and 2 or more for a fault it hit while scanning.
+	# `|| true` folded the two together, collapsing matches to 0 and routing the
+	# run into the no-declaration branch -- a wrong-tracker write decided by a
+	# scan that never ran. That the loose probe below happens to catch the same
+	# file's fault first is a coupling between two independently editable lines,
+	# not a guarantee this line can rely on.
+	matches=$(rg -c '^issue-tracker: [a-z0-9-]+\r?$' "$agents") || count_status=$?
+	case $count_status in
+	0 | 1) ;;
+	*)
+		die "$EXIT_USAGE" usage \
+			"could not scan $agents for issue-tracker declarations (rg exit $count_status)"
+		;;
+	esac
 	matches=${matches:-0}
 	if ((matches == 0)); then
 		# A line that opens the declaration but fails the grammar is a typo,

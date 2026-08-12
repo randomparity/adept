@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'BLOCKED: EnterWorktree places worktrees inside .claude/worktrees/, nested in this repo tree, where whole-tree tooling (prek, test discovery, search) would walk another agents in-flight code. Run git worktree add ../adept-worktrees/<branch> and cd there instead.' >&2; exit 2"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ISO=$(jq -r '.tool_input.isolation // empty'); if [ \"$ISO\" = \"worktree\" ]; then echo 'BLOCKED: Agent isolation \"worktree\" places the worktree inside .claude/worktrees/, nested in this repo tree. Have the dispatched agent run git worktree add ../adept-worktrees/<branch> and cd there as its first step instead.' >&2; exit 2; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

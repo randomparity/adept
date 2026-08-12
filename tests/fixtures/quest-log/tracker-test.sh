@@ -128,6 +128,35 @@ else
 	assert_contains 'could not scan' "$sandbox/err"
 fi
 
+# The strict count's own fault, isolated from the loose probe's. The case above
+# cannot prove this line: with a declaration present under chmod 000 both rg
+# calls fault, the loose probe reports first, and the run exits 1 before and
+# after the fix. An AGENTS.md with no declaration at all is the shape that
+# separates them -- the loose probe legitimately finds nothing there, so the
+# strict count is the only line that can report -- and a stubbed rg faulting on
+# the strict pattern alone drives it. Without the fix this run exits 0 printing
+# 'github', which is the wrong-tracker write.
+mkdir -p "$sandbox/countfaultrepo" "$sandbox/countfaultbin"
+git -C "$sandbox/countfaultrepo" init -q
+printf '# Instructions\n\nNothing about trackers here.\n' >"$sandbox/countfaultrepo/AGENTS.md"
+real_rg=$(command -v rg)
+cat >"$sandbox/countfaultbin/rg" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+	if [ "\$arg" = '^issue-tracker: [a-z0-9-]+\r?\$' ]; then
+		printf 'rg: fixture-fault: simulated I/O error\n' >&2
+		exit 2
+	fi
+done
+exec "$real_rg" "\$@"
+STUB
+chmod +x "$sandbox/countfaultbin/rg"
+status=0
+(cd "$sandbox/countfaultrepo" && PATH="$sandbox/countfaultbin:$PATH" "$tracker" resolve) \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'resolve when the declaration count cannot be scanned'
+assert_contains 'could not scan' "$sandbox/err"
+
 # More than one declaration is an error rather than first-wins.
 mkdir -p "$sandbox/duprepo"
 git -C "$sandbox/duprepo" init -q

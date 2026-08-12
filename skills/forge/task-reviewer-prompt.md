@@ -7,6 +7,11 @@ what was asked for, and whether it is well built.
 **Purpose:** confirm one task's implementation does what its requirements say,
 no less and no more, and that the result is clean, tested and maintainable.
 
+Its flaky-test wording restates the policy in `references/true-seeing.md`
+instead of linking it. That duplication is deliberate: this text is pasted into
+a subagent working in the target repository, where a relative link into this
+repo's `references/` would not resolve. Do not collapse it into a link.
+
 ```
 Subagent (general-purpose):
   description: "Task N review — spec and quality"
@@ -74,6 +79,18 @@ Subagent (general-purpose):
 
     Warnings or other noise in the reported test output are themselves findings.
     Test output should be pristine.
+
+    A retry in that output is a finding too. If the report shows a test that
+    failed and then passed with no code change between the two runs, or a suite
+    run twice for a reason it does not give, the evidence backing this task is
+    nondeterministic. Grade it Important and name the test. It is not a pass:
+    the green run does not settle the code and the red one does not condemn it,
+    so the task has no usable test evidence until the flake is dealt with. Do
+    not re-run the test yourself to work out which run was the real one — a
+    re-run cannot distinguish them, which is precisely the defect. Recommend
+    fixing the nondeterminism, or filing it, and say which you think it is. A
+    flake the report already shows fixed, or filed with an issue reference, is
+    dispositioned: note it and do not hold the task verdict on it.
 
     ## Part 1 — does it match the spec?
 

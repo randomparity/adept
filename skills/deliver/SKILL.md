@@ -60,7 +60,22 @@ frames carry no decision value, only the terminal states do.
    context. Skipped integration jobs that require unavailable hardware or external
    services may be expected; wait on required checks.
 2. If a required check fails, inspect the failure, fix it, run relevant local
-   guardrails, push, and restart the loop.
+   guardrails, push, and restart the loop. **Never re-run a failed check hoping
+   for green** — see [true-seeing](../../references/true-seeing.md), *Flaky
+   tests*.
+
+   That rule bites only where the check is actually nondeterministic: the same
+   check passed on an earlier run of this same commit, or passes again with
+   nothing pushed between. Then read the log. A runner, network, registry, or
+   cache error that fired before the tests ran is infrastructure — re-run once
+   and name the external cause in the PR body, because a re-run whose cause you
+   can name is diagnosis, and "it was probably infra" is not. A failure the
+   repo's own test raised is a determinism defect: fix it, or file it and stop.
+   Filing does not turn the check green, so there is no exit condition left to
+   reach — report the PR state and the issue reference to the operator, the
+   same shape as step 8. Note either outcome in the PR body: a PR that went
+   green on a retry looks afterwards exactly like one that went green first
+   time, and only you can still tell them apart.
 3. Poll merge state with `gh pr view <PR> --json mergeable,mergeStateStatus`
    (always request explicit `--json` fields — never a bare `gh pr view`, which
    dumps the full body and comments). Green checks alone are never the exit

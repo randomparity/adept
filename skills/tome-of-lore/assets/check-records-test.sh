@@ -958,6 +958,31 @@ YAML
     printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
   fi
 
+  # The gate's own protected-path witness, unable to run. It used to be `git cat-file -e ... ||
+  # continue`, so a fault silently dropped the path from the protected set — the one condition
+  # the self-protection rule exists to detect. The fault must be named, and the path must still
+  # count, or the empty-set branch would go on to report a bootstrap.
+  d=$(case_dir gate_self_scan_fault)
+  b=$(base_of "$d")
+  stub_bin="$SCRATCH/git-gate-fault-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = .github/scripts/check-records.sh ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "gate file witness faults, not silently unprotected" 1 E-GATE-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
   # A base ref that predates the gate is the adoption PR, and it must not be red — and it
   # must say why, per the same discipline as every other rule: assert both the exit status
   # and which code fired. Bespoke rather than run_case: I-GATE-BOOTSTRAP is informational,
@@ -992,6 +1017,76 @@ YAML
   else
     failed=$((failed + 1))
     printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.err" | head -1)"
+  fi
+
+  # The same bootstrap shape with a witness that cannot run. gate_existed_at is only reached
+  # when the protected set came out empty, which is exactly what the bootstrap fixture
+  # produces, so it is reused for both witnesses below. A fault used to be indistinguishable
+  # from every witness finding nothing, reporting the exit-0 I-GATE-BOOTSTRAP over a scan that
+  # never happened -- the silent pass an undeclared rename would hide behind.
+  #
+  # The SELF_DIR witness. Keyed on `.github/scripts/debt.sh`: gate_known_basenames offers it
+  # (the profiles predecessor mapping retires that basename) but gate_paths never emits it,
+  # because that mapping's key carries a slash and so resolves to its own path rather than a
+  # SELF_DIR sibling. A key gate_paths did emit would fault at the protected-path witness
+  # first, count the path, and take check_gate_files out of the empty-set branch entirely.
+  stub_bin="$SCRATCH/git-witness-selfdir-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = .github/scripts/debt.sh ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  printf '  %-4s %-44s ' "" "SELF_DIR witness faults, not a bootstrap"
+  if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$b" \
+    PATH="$stub_bin:$PATH" ./.github/scripts/check-records.sh) >"$d/.o2" 2>"$d/.e2"; then
+    failed=$((failed + 1))
+    printf 'FAIL exit=0 on a witness that never ran\n'
+  elif grep -q '::error::E-GATE-WITNESS-SCAN: ' "$d/.e2"; then
+    passed=$((passed + 1))
+    printf 'ok   exit=1 E-GATE-WITNESS-SCAN\n'
+  else
+    failed=$((failed + 1))
+    printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e2" | head -1)"
+  fi
+
+  # The workflow witness, reached only once the SELF_DIR witness has found nothing -- which is
+  # this fixture's ordinary state, so no stubbing of the first witness is needed to get here.
+  stub_bin="$SCRATCH/git-witness-workflow-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = grep ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = .github/workflows ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  printf '  %-4s %-44s ' "" "workflow witness faults, not a bootstrap"
+  if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$b" \
+    PATH="$stub_bin:$PATH" ./.github/scripts/check-records.sh) >"$d/.o3" 2>"$d/.e3"; then
+    failed=$((failed + 1))
+    printf 'FAIL exit=0 on a witness that never ran\n'
+  elif grep -q '::error::E-GATE-WITNESS-SCAN: ' "$d/.e3"; then
+    passed=$((passed + 1))
+    printf 'ok   exit=1 E-GATE-WITNESS-SCAN\n'
+  else
+    failed=$((failed + 1))
+    printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e3" | head -1)"
   fi
 
   # gate_existed_at has two witnesses, and `renamed_gate` above happens to satisfy both at
@@ -1228,6 +1323,43 @@ YAML
     printf 'FAIL renumber note missing or names the wrong paths\n'
   fi
 
+  # The same renumber, with the candidate witness unable to run. The witness answers "did
+  # this destination already exist at the base ref"; a fault used to read as "it did not",
+  # which silently promoted an unverified candidate. Reporting E-GONE here would be worse
+  # than silence -- it asserts the record is gone on the strength of a search that never
+  # happened -- so the fault must replace that verdict rather than accompany it.
+  d=$(case_dir renumber_scan_fault)
+  write_record "$d" "0002-b.md"
+  git -C "$d" add -A
+  git -C "$d" commit -qm "two records"
+  b=$(base_of "$d")
+  git -C "$d" mv docs/debt/0002-b.md docs/debt/0003-b.md
+  stub_bin="$SCRATCH/git-renumber-fault-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = docs/debt/0003-b.md ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "renumber candidate scan faults, not reported gone" 1 E-RENUMBER-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "scan fault replaces E-GONE"
+  if grep -q '::error::E-GONE: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL E-GONE also fired for a search that never ran\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-GONE suppressed\n'
+  fi
   d=$(case_dir renumber_with_edit)
   write_record "$d" "0002-b.md"
   git -C "$d" add -A
@@ -1279,6 +1411,87 @@ EOF
   b=$(base_of "$d")
   printf '\nFurther detail found later.\n' >>"$d/docs/debt/0001-valid.md"
   run_case "appending detail is allowed" 0 - "$d" BASE_SHA="$b"
+
+  # The two listings the append-only rules iterate. Both used to trail `|| true`, so a grep
+  # that faulted yielded an empty list, the loop ran zero times, and the rule reported nothing
+  # -- a clean pass over content it never read. Both fixtures append only, so nothing else
+  # fires and the pre-change run is a genuine exit 0; a fixture that removed a line would
+  # report E-REWRITE and pass without the conversion.
+  #
+  # The base-ref copy these read is a mktemp file the checker creates and removes itself, so
+  # no fixture can chmod it. A grep stub that faults on the one listing pattern and defers to
+  # the real grep otherwise reaches the branch deterministically, as the migrator's
+  # section-scan case already does.
+  stub_bin="$SCRATCH/grep-heading-list-bin"
+  mkdir -p "$stub_bin"
+  real_grep=$(command -v grep)
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = '^#+ ' ]; then
+    printf 'grep: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+  fi
+done
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  d=$(case_dir heading_list_scan_fault)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/debt/0001-valid.md"
+  run_case "heading listing faults, not a clean pass" 1 E-HEADING-LIST-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
+  stub_bin="$SCRATCH/grep-section-list-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = '^## ' ]; then
+    printf 'grep: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+  fi
+done
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  # An ADR fixture, not a deferral one: the section listing only runs under
+  # APPEND_ONLY_SECTIONS="*", and the debt profile names a fixed list instead. Only the ADR
+  # profile takes the branch this converts.
+  d=$(adr_dir section_list_scan_fault)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/adr/0001-first.md"
+  run_case "section listing faults, not a clean pass" 1 E-SECTION-LIST-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
+
+  # The ADR title read. `|| true` made an unreadable file yield an empty title, and the rule
+  # then reported E-TITLE-MISMATCH against a title it never read -- a spurious second finding
+  # beside the honest scan fault. The fault must replace that verdict, not accompany it.
+  stub_bin="$SCRATCH/grep-title-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = '^# ' ]; then
+    printf 'grep: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+  fi
+done
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  d=$(adr_dir title_scan_fault)
+  b=$(base_of "$d")
+  run_case "ADR title read faults, no spurious mismatch" 1 E-TITLE-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "scan fault replaces E-TITLE-MISMATCH"
+  if grep -q 'E-TITLE-MISMATCH: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL E-TITLE-MISMATCH also fired for a title never read\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-TITLE-MISMATCH suppressed\n'
+  fi
 
   d=$(case_dir resolve_in_place)
   b=$(base_of "$d")
@@ -1475,6 +1688,36 @@ EOF
   b2=$(base_of "$d")
   run_case "record directory absent at both refs" 1 E-PROFILE-DIR-MISSING "$d" \
     BASE_SHA="$b2" RECORD_PROFILES=debt
+
+  # The same question asked of a base ref that cannot be read. dir_in_ref used to test only
+  # whether `git ls-tree` printed anything, discarding its status, so a scan that never ran
+  # was indistinguishable from a directory that was never there -- and the run reported
+  # E-PROFILE-DIR-MISSING, naming the wrong cause. The directory is removed from the working
+  # tree only, uncommitted: the tree check short-circuits ahead of the witness, so a fixture
+  # that leaves it in place never reaches the code under test.
+  d=$(case_dir dir_scan_fault)
+  b=$(base_of "$d")
+  rm -r "$d/docs/debt"
+  stub_bin="$SCRATCH/git-dir-fault-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+# Keyed on subcommand and pathspec together: three sites in this gate issue an ls-tree, and a
+# stub keyed on the subcommand alone fires at whichever runs first.
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = docs/debt ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "record dir witness faults, not reported absent" 1 E-DIR-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=debt PATH="$stub_bin:$PATH"
 
   printf -- '-- grandfathering --\n'
   # Non-conforming at the base ref, so its structural findings are warnings and the run is

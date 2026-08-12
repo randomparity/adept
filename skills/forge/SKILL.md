@@ -223,6 +223,11 @@ Four statuses, four responses:
 **Never retry an unchanged prompt after `BLOCKED`, and never ignore an
 escalation.** If the implementer says it is stuck, something has to change.
 
+**A reported flake is dispositioned here, before the review package is
+generated** — fix the determinism, or file it and record the reference. Filing
+is yours to do, not the implementer's, and doing it now is what stops the task
+reviewer raising a finding nothing downstream can close.
+
 A task reviewer may also report "⚠️ Cannot verify from diff" — requirements
 living in unchanged code or spanning tasks. The rest of the review proceeds
 around them, but none may be left open when you close the task. Settle each one: the
@@ -303,7 +308,12 @@ verdict rather than the whole review.
 Every fix dispatch carries the implementer contract: re-run the tests covering
 the change and report the command and its output. Name the covering test files —
 a one-line fix does not need the whole suite. Confirm the report has all three
-before re-dispatching the reviewer. If the **final** review returns findings,
+before re-dispatching the reviewer. One finding cannot take that contract: a
+flaked test, where re-running it is the evidence the flake policy under
+*Guardrails* rejects. Dispose of it where reported flakes are dispositioned,
+above, rather than by dispatching a fix that re-runs it.
+
+If the **final** review returns findings,
 send **one** fix subagent with the complete list; per-finding fixers each rebuild
 context and re-run suites, and one real session's final-review wave cost more
 than all its tasks combined.
@@ -415,6 +425,14 @@ unavailable locally; in that case, run the closest local equivalent and state
 the limitation in the PR body.
 
 If a guardrail fails, stop and fix it. Do not commit with red guardrails.
+
+A guardrail that fails once and passes on re-run has not gone green — see
+[true-seeing](../../references/true-seeing.md), *Flaky tests*. The rule above
+holds unchanged: fix the determinism and say in the commit that it flaked. If
+you file it instead of fixing it, that is a stop — report it to the controller
+with the issue reference. Filing does not turn a red guardrail into a green one.
+That is stricter than a flake inside a task's own suite, and deliberately: a red
+guardrail blocks the commit, where a flaked task test does not.
 
 ## Context checkpoint
 

@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=SCRIPTDIR/test-fixture-helpers.sh
+. "$script_dir/test-fixture-helpers.sh"
+
+ROOT="$(cd "$script_dir/.." && pwd)"
 CHECKER="$ROOT/scripts/check-public-safety.sh"
 
 # The cases below hand the gate a hostile RIPGREP_CONFIG_PATH one invocation at
@@ -9,21 +13,11 @@ CHECKER="$ROOT/scripts/check-public-safety.sh"
 # the baseline cases, which assert the gate stays green.
 unset RIPGREP_CONFIG_PATH
 
-SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/public-safety-test.XXXXXX")"
-HOME_PATH_FIXTURE="$(mktemp -d "$ROOT/.public-safety-path-test.XXXXXX")"
-
-cleanup() {
-	case "$SCRATCH" in
-	"${TMPDIR:-/tmp}"/public-safety-test.*) rm -R "$SCRATCH" ;;
-	*) printf 'public-safety-test: refusing cleanup outside scratch root: %s\n' "$SCRATCH" >&2 ;;
-	esac
-	case "$HOME_PATH_FIXTURE" in
-	"$ROOT"/.public-safety-path-test.*) rm -R "$HOME_PATH_FIXTURE" ;;
-	*) printf 'public-safety-test: refusing cleanup outside repository root: %s\n' \
-		"$HOME_PATH_FIXTURE" >&2 ;;
-	esac
-}
-trap cleanup EXIT
+fixture_init public-safety-test
+# The scanner-filename cases below need a checkout-shaped path, so this second
+# fixture cannot live under TMPDIR.
+fixture_scratch "$ROOT/.public-safety-path-test."
+HOME_PATH_FIXTURE=$FIXTURE_SCRATCH
 
 mkdir -p "$SCRATCH/repo"
 printf 'gitdir: /Vol%s/Private Disk/repo/.git/worktrees/example\n' 'umes' >"$SCRATCH/repo/.git"
@@ -298,11 +292,9 @@ rm -f "$SCRATCH/repo/bom.md"
 # printed nothing and exited 0 here, the same answer it gives for a clean tree.
 #
 # The suite unsets git's local environment so a caller's GIT_DIR or
-# GIT_INDEX_FILE cannot reach these fixtures .
-while IFS= read -r variable; do
-	[ -n "$variable" ] || continue
-	unset "$variable"
-done < <(git rev-parse --local-env-vars)
+# GIT_INDEX_FILE cannot reach these fixtures. It happens here rather than at the
+# top of the file because only the cases below build git repositories.
+clear_git_env
 
 hidden_secret="token: $(printf '%s%s' 'ghp' '_abcdefghijklmnopqrstuvwxyz01')"
 

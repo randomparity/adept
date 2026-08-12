@@ -399,7 +399,7 @@ still_a_record() {
 # here would be a guard that cannot fire — a false guarantee, by the same argument date_to_int
 # makes about its own missing invalid-input branch.
 renumbered_elsewhere() {
-  local base=$1 path=$2 blob_canon candidate tmp
+  local base=$1 path=$2 blob_canon candidate tmp cand_status fault_status=0
   tmp=$(mktemp) || return 1
   if ! git cat-file blob "${base}:${path}" >"$tmp" 2>/dev/null; then
     rm -f "$tmp"
@@ -413,7 +413,19 @@ renumbered_elsewhere() {
     [ -n "$candidate" ] || continue
     [ -f "$candidate" ] || continue
     tracked_in_index "$candidate" || continue
-    git cat-file -e "${base}:${candidate}" 2>/dev/null && continue
+    # A candidate that already existed at the base ref is not a renumber destination. The
+    # witness can also fail to run, which used to read the same as "did not exist" and so
+    # let a faulted scan promote a candidate silently.
+    cand_status=0
+    path_exists_at "$base" "$candidate" || cand_status=$?
+    case $cand_status in
+    0) continue ;;
+    1) ;;
+    *)
+      fault_status=$path_exists_status
+      continue
+      ;;
+    esac
     if printf '%s\n' "$used_renumber_targets" | grep -qxF "$candidate"; then
       continue
     fi
@@ -428,6 +440,13 @@ $candidate"
       return 0
     fi
   done <<<"$records"
+  # A positive match returns above, so a fault only decides the answer once every candidate
+  # has been tried without one: a witness that genuinely found the copy is not made
+  # unreliable by an unrelated candidate's scan failing.
+  if [ "$fault_status" -ne 0 ]; then
+    path_exists_status=$fault_status
+    return 2
+  fi
   return 1
 }
 
@@ -444,9 +463,21 @@ records_in_ref() {
 # has ever examined one, and for an ADR the H1 *is* the decision statement. Every heading line
 # present in the base-ref blob must still be present, verbatim, somewhere in the tree version.
 check_headings_intact() {
-  local tmp=$1 path=$2 heading grep_status
-  # Fed by a process substitution on `done`, so err_full runs in the current shell rather than
-  # a piped subshell, where the assignment to `failed` would be discarded.
+  local tmp=$1 path=$2 heading grep_status list_status=0 headings
+  # The listing runs before the loop rather than inside a process substitution on `done`: with
+  # `|| true` there, a grep that faulted produced an empty list, the loop ran zero times, and
+  # the whole heading-intactness rule passed over content it never scanned.
+  headings=$(grep -E '^#+ ' "$tmp") || list_status=$?
+  case $list_status in
+  # 1 is "the base ref's version had no headings at all", which is a legitimate answer.
+  0 | 1) ;;
+  *)
+    err_full "E-HEADING-LIST-SCAN: $path: could not list the base ref's headings (grep exit $list_status)"
+    return 0
+    ;;
+  esac
+  # Fed by a herestring, so err_full runs in the current shell rather than a piped subshell,
+  # where the assignment to `failed` would be discarded.
   while IFS= read -r heading; do
     [ -n "$heading" ] || continue
     # grep exits 1 for "no match" and 2 or more for a fault it hit while
@@ -460,7 +491,7 @@ check_headings_intact() {
     1) err_full "E-HEADING-REWRITTEN: $path: heading '$heading' is gone from the base ref's version — a heading is the record's claim, not prose" ;;
     *) err_full "E-HEADING-SCAN: $path: could not scan for heading '$heading' (grep exit $grep_status)" ;;
     esac
-  done < <(grep -E '^#+ ' "$tmp" || true)
+  done <<<"$headings"
 }
 
 # The lines between the H1 and the first `## ` belong to no section at all, so section_body
@@ -483,14 +514,25 @@ check_preamble_intact() {
 # record replaces `Open` with a banner, and an append-only rule over the whole file would
 # forbid exactly the edit the format permits.
 check_sections_append_only() {
-  local tmp=$1 path=$2 section removed
+  local tmp=$1 path=$2 section removed list_status=0 all_sections
   # "*" means every level-2 heading the base ref had except ## Status. Level 2 only, matching
   # section_body's `^## ` terminator: a deeper heading is body content inside its enclosing
   # section, and enumerating one as a section of its own would produce overlapping bodies and
   # silently redefine what append-only means.
   local sections=$APPEND_ONLY_SECTIONS
   if [ "$sections" = "*" ]; then
-    sections=$(grep -E '^## ' "$tmp" | grep -vxF '## Status' || true)
+    # Split from the filter below: only this grep reads a file and can fault on one. The
+    # `grep -vxF` that follows reads what this produced, where exit 1 just means every section
+    # was `## Status` -- a pipeline whose stages need telling apart, tracked on #63.
+    all_sections=$(grep -E '^## ' "$tmp") || list_status=$?
+    case $list_status in
+    0 | 1) ;;
+    *)
+      err_full "E-SECTION-LIST-SCAN: $path: could not list the base ref's sections (grep exit $list_status)"
+      return 0
+      ;;
+    esac
+    sections=$(printf '%s\n' "$all_sections" | grep -vxF '## Status') || true
   fi
 
   while IFS= read -r section; do
@@ -568,7 +610,7 @@ evaluate_base_conformance() {
 }
 
 check_no_disappearances() {
-  local base=$1 tree record renumbered_to="" used_renumber_targets=""
+  local base=$1 tree record renumbered_to="" used_renumber_targets="" renum_status
   if ! tree=$(records_in_ref "$base"); then
     err "E-BASE-TREE: could not read $RECORD_DIR at $base — cannot check for removed records"
     return 0
@@ -582,11 +624,15 @@ check_no_disappearances() {
       check_not_rewritten "$base" "$record"
     elif ! still_a_record "$record"; then
       renumbered_to=""
-      if renumbered_elsewhere "$base" "$record"; then
-        info "note: $record was renumbered to $renumbered_to (content unchanged)"
-      else
-        err "E-GONE: $record is no longer a record at that path (deleted, moved, untracked, or renamed with its content changed) — resolve records in place with a '> **Resolved by ...**' banner"
-      fi
+      renum_status=0
+      renumbered_elsewhere "$base" "$record" || renum_status=$?
+      case $renum_status in
+      0) info "note: $record was renumbered to $renumbered_to (content unchanged)" ;;
+      1) err "E-GONE: $record is no longer a record at that path (deleted, moved, untracked, or renamed with its content changed) — resolve records in place with a '> **Resolved by ...**' banner" ;;
+      # Reported instead of E-GONE, never alongside it: a search that did not run establishes
+      # neither that the record moved nor that it is gone.
+      *) err_full "E-RENUMBER-SCAN: $record: could not search for a renumbered copy at $base (git exit $path_exists_status)" ;;
+      esac
     fi
   done <<<"$tree"
 }
@@ -698,21 +744,57 @@ gate_known_basenames() {
 # result is checked non-empty before use: unguarded, an empty result makes the git argument
 # "${base}:/name", and depending on git's tree lookup an absolute-looking path can still
 # resolve — checked explicitly rather than relied on to fail closed.
+# Three-valued: 0 a witness found the gate, 1 no witness did, 2 a witness could not run.
+# Neither witness used to capture its status, so a scan fault was indistinguishable from every
+# witness genuinely finding nothing — and the caller reported that as I-GATE-BOOTSTRAP, an
+# exit-0 informational line, instead of the fatal E-GATE-EMPTY-SET an undeclared rename owes.
+# The path whose witness faulted, for the caller's diagnostic: a scan fault a reader cannot
+# locate is barely better than a silent one. Set on every gate_existed_at entry, and read only
+# by its caller, which runs after it.
+gate_witness_path=""
 gate_existed_at() {
-  local base=$1 rel name
+  local base=$1 rel name status fault_status=0
 
+  gate_witness_path=""
   rel=$(repo_relative "$SELF_DIR")
   if [ -n "$rel" ]; then
     while IFS= read -r name; do
       [ -n "$name" ] || continue
-      git cat-file -e "${base}:${rel}/${name}" 2>/dev/null && return 0
+      status=0
+      path_exists_at "$base" "${rel}/${name}" || status=$?
+      case $status in
+      0) return 0 ;;
+      1) ;;
+      *)
+        fault_status=$path_exists_status
+        gate_witness_path="${rel}/${name}"
+        ;;
+      esac
     done < <(gate_known_basenames)
   fi
 
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    git grep --no-color -qF "$name" "$base" -- .github/workflows 2>/dev/null && return 0
+    # git grep exits 1 for "no match" and 128 for a bad ref, so 2 or more is a real fault
+    # here, unlike git cat-file -e where 128 is also the ordinary absent answer.
+    status=0
+    git grep --no-color -qF "$name" "$base" -- .github/workflows 2>/dev/null || status=$?
+    case $status in
+    0) return 0 ;;
+    1) ;;
+    *)
+      fault_status=$status
+      gate_witness_path=".github/workflows (searching for $name)"
+      ;;
+    esac
   done < <(gate_known_basenames)
+
+  # A positive witness returns above, so it outranks a fault on any other witness: evidence
+  # the gate existed is not weakened by an unrelated probe failing.
+  if [ "$fault_status" -ne 0 ]; then
+    path_exists_status=$fault_status
+    return 2
+  fi
   return 1
 }
 
@@ -724,10 +806,23 @@ gate_existed_at() {
 # profile — a repo with more than one profile would otherwise print every gate finding once
 # per profile in RECORD_PROFILES.
 check_gate_files() {
-  local base=$1 self successor successor_path gate_path_count=0
+  local base=$1 self successor successor_path gate_path_count=0 self_status
   while IFS= read -r self; do
     [ -n "$self" ] || continue
-    git cat-file -e "${base}:${self}" 2>/dev/null || continue
+    self_status=0
+    path_exists_at "$base" "$self" || self_status=$?
+    case $self_status in
+    0) ;;
+    1) continue ;;
+    *)
+      # Counted but not examined. Skipping the body keeps E-GATE-GONE off a path whose
+      # base-ref presence is unknown; counting it keeps the empty-set branch below from
+      # reporting I-GATE-BOOTSTRAP — "no gate existed here" — off a witness that never ran.
+      err_full "E-GATE-SCAN: $self: could not check the gate file at $base (git exit $path_exists_status)"
+      gate_path_count=$((gate_path_count + 1))
+      continue
+      ;;
+    esac
     gate_path_count=$((gate_path_count + 1))
     if [ -L "$self" ]; then
       err "E-GATE-SYMLINK: $self is a symlink — a gate file swapped for a link no longer contains the gate"
@@ -748,11 +843,13 @@ check_gate_files() {
   # PR that installs the gate in a new repo, and a silent failure for one that renamed it —
   # and the two must be separated by a predicate that is not the emptiness test restated.
   if [ "$gate_path_count" -eq 0 ]; then
-    if gate_existed_at "$base"; then
-      err "E-GATE-EMPTY-SET: no gate file from the base ref is protected — a rename must declare its predecessors in GATE_PREDECESSORS"
-    else
-      info "I-GATE-BOOTSTRAP: no gate existed at $base — this is the change installing it"
-    fi
+    local existed_status=0
+    gate_existed_at "$base" || existed_status=$?
+    case $existed_status in
+    0) err "E-GATE-EMPTY-SET: no gate file from the base ref is protected — a rename must declare its predecessors in GATE_PREDECESSORS" ;;
+    1) info "I-GATE-BOOTSTRAP: no gate existed at $base — this is the change installing it" ;;
+    *) err_full "E-GATE-WITNESS-SCAN: $gate_witness_path: could not determine whether a gate existed at $base (git exit $path_exists_status)" ;;
+    esac
   fi
 }
 
@@ -779,7 +876,7 @@ repo_relative() {
 # where an err would set failed=1 in a subshell and lose it — the same shape that once let a
 # stray file print an error and still exit 0. The caller checks locatability itself.
 gate_paths() {
-  local base=$1 rel profile old key new needle
+  local base=$1 rel profile old key new needle profiles_rel
   rel=$(repo_relative "$SELF_FILE")
   [ -n "$rel" ] && printf '%s\n' "$rel"
 
@@ -816,11 +913,25 @@ gate_paths() {
   # enabled profile names: by-name derivation would let one change drop a profile from the
   # list *and* delete its file with nothing firing, because the deleted file was never in
   # the set.
-  while IFS= read -r profile; do
-    [ -n "$profile" ] || continue
-    rel=$(repo_relative "$SELF_DIR/profiles/${profile##*/}")
-    [ -n "$rel" ] && printf '%s\n' "$rel"
-  done < <(git ls-tree -r --name-only "$base" -- "$(repo_relative "$SELF_DIR/profiles")" 2>/dev/null || true)
+  # The pathspec is guarded rather than interpolated inline: empty is what repo_relative
+  # returns when this script sits outside the repo, and `git ls-tree -- ''` is a fatal
+  # pathspec error rather than an empty listing, so the `|| true` below would have swallowed
+  # it and left every profile silently unprotected. A directory merely absent from the ref
+  # exits 0 with no output, so that case never needed the guard.
+  #
+  # The `|| true` stays. gate_paths runs inside a process substitution, where err's
+  # assignment to `failed` lands in a discarded subshell -- it emits paths only, and its
+  # callers report. A damaged object store is therefore an accepted residual here rather than
+  # an oversight; giving this one function a fault channel means a private sentinel protocol
+  # between it and its caller, which ADR 0005 weighed and rejected.
+  profiles_rel=$(repo_relative "$SELF_DIR/profiles")
+  if [ -n "$profiles_rel" ]; then
+    while IFS= read -r profile; do
+      [ -n "$profile" ] || continue
+      rel=$(repo_relative "$SELF_DIR/profiles/${profile##*/}")
+      [ -n "$rel" ] && printf '%s\n' "$rel"
+    done < <(git ls-tree -r --name-only "$base" -- "$profiles_rel" 2>/dev/null || true)
+  fi
 
   # The workflow template, when it ships beside the scripts. It is part of the gate in the
   # publishing layout, and an adopting repo simply has no such sibling.
@@ -942,16 +1053,43 @@ count_lines() {
   printf '%s\n' "$1" | grep -c .
 }
 
+# Existence at a ref, with a scan fault distinguishable from an absence: 0 present, 1 absent,
+# 2 the scan could not run. `git cat-file -e` cannot answer this — it exits 128 both for a path
+# absent from a valid ref and for a bad ref, so its normal absent case is already the fault code.
+# `git ls-tree` exits 0 with empty output for an absent path and non-zero only for a real fault.
+#
+# The predicate's own 2 is a sentinel, so git's real status is left in path_exists_status for
+# the caller's diagnostic: reporting "git exit 2" would name a status git never returned.
+#
+# stderr is suppressed for the reason records_in_ref gives: a bare `fatal:` from git is not this
+# gate's interface, its coded ::error:: lines are.
+path_exists_status=0
+path_exists_at() {
+  local ref=$1 path=$2 out status=0
+  path_exists_status=0
+  out=$(git ls-tree -r --name-only "$ref" -- "$path" 2>/dev/null) || status=$?
+  if [ "$status" -ne 0 ]; then
+    path_exists_status=$status
+    return 2
+  fi
+  [ -n "$out" ] || return 1
+  return 0
+}
+
 # Whether the directory existed at the base ref. An absent-from-both-refs directory is a
 # misconfiguration; one that existed at base and is gone now is erasure, and must keep
 # reporting E-GONE per record — `no_dir` deletes docs/debt wholesale and asserts exactly that.
 # With no base ref, absence is not an error: `no_records_no_base` removes the only record,
 # which leaves git deleting the emptied directory, and expects exit 0.
+#
+# Three-valued like path_exists_at, which it delegates to. The two guards below stay fail-open
+# on purpose: with no base ref, or one that is not a commit, there is nothing to have existed.
 dir_in_ref() {
-  local ref=$1 dir=$2
+  local ref=$1 dir=$2 status=0
   [ -n "$ref" ] || return 0
   git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null || return 0
-  [ -n "$(git ls-tree -r --name-only "$ref" -- "$dir" 2>/dev/null)" ]
+  path_exists_at "$ref" "$dir" || status=$?
+  return "$status"
 }
 
 # Base-ref validity, split out of check_no_disappearances so it reports once rather than
@@ -970,10 +1108,25 @@ run_profile() {
   local name=$1
   load_profile "$name" || return 1
 
-  local records="" record_count base_records="" base_count
-  if [ ! -d "$RECORD_DIR" ] && ! dir_in_ref "${BASE_SHA:-}" "$RECORD_DIR"; then
-    err "E-PROFILE-DIR-MISSING: profile '$name' is enabled but $RECORD_DIR exists at neither the base ref nor the tree"
-    return 1
+  local records="" record_count base_records="" base_count dir_status=0
+  # `if ! dir_in_ref` would collapse "absent at base" and "could not tell" into one branch,
+  # which is the defect this rule was converted to remove. Branch on the captured status.
+  if [ ! -d "$RECORD_DIR" ]; then
+    dir_in_ref "${BASE_SHA:-}" "$RECORD_DIR" || dir_status=$?
+    case $dir_status in
+    0) ;;
+    1)
+      err "E-PROFILE-DIR-MISSING: profile '$name' is enabled but $RECORD_DIR exists at neither the base ref nor the tree"
+      return 1
+      ;;
+    *)
+      # Returning rather than continuing: E-COUNT-FLOOR below compares against a base record
+      # count that would be zero for the same unreadable-ref reason, so carrying on would
+      # disarm the one rule that catches a clean run over nothing.
+      err_full "E-DIR-SCAN: $RECORD_DIR: could not check the record directory at ${BASE_SHA:-} (git exit $path_exists_status)"
+      return 1
+      ;;
+    esac
   fi
 
   collect_records
