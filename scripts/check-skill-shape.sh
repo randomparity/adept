@@ -17,7 +17,7 @@ set -euo pipefail
 # rg exits 1 for "no matches" and >1 for a real failure; collapsing those makes
 # a scan that could not run read as a scan that found nothing.
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 status=0
 
 report() {
@@ -127,6 +127,25 @@ while IFS= read -r rel; do
 		report "reference link does not resolve: $rel"
 	fi
 done <"$workspace/links"
+
+# Rule 6: every skill name is referenced in docs/cheatsheet.md. This is what
+# makes a skill added without documentation fail fast instead of going
+# unnoticed -- the same inventory-vs-reference shape as rule 4, pointed at
+# docs/cheatsheet.md instead of at skills/*/SKILL.md. Membership only: no
+# wording, table-shape, or description-text assertion, per repository anatomy
+# rule 4 (nothing here greps for a sentence).
+while IFS= read -r name; do
+	coverage_status=0
+	rg --no-config -qF -- "\`$name\`" "$root/docs/cheatsheet.md" || coverage_status=$?
+	if [ "$coverage_status" -gt 1 ]; then
+		printf 'check-skill-shape: scanning docs/cheatsheet.md failed (rg exit %s)\n' \
+			"$coverage_status" >&2
+		exit 1
+	fi
+	if [ "$coverage_status" -eq 1 ]; then
+		report "$name: not referenced in docs/cheatsheet.md"
+	fi
+done <"$names"
 
 if [ "$status" -eq 0 ]; then
 	printf 'check-skill-shape: %s skills, all rules pass\n' "$count"
