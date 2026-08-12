@@ -20,8 +20,7 @@ skills operate on. Those are not adept — one may publish a crate, another may 
 a tag — so a reader who looks for the release stage finds nothing and cannot tell an omission
 from a decision. Issue #50 reports that ambiguity, not a feature anyone has been blocked by.
 The question it raises is whether a standalone artifact should exist, not which pipeline stage
-is missing: a release batches many merges and fires when a human judges the batch ready, so it
-was never going to sit inside a per-issue run.
+is missing.
 
 ## Decision
 
@@ -69,10 +68,14 @@ artifact here can confirm.
 - `$restock` and `$warding` remain the only version-adjacent surfaces — one merges dependency
   updates, the other reports version drift and advisories. Neither publishes anything, and
   neither changes.
-- There is no post-merge verification stage either. `$return-to-town` confirms the merge landed
-  and reconciles cleared dependents; what happens to the code after it is deployed is the target
-  repository's own responsibility, and adept deliberately claims no visibility into a deployed
-  system.
+- There is no post-merge verification stage either, and the residual starts closer than it
+  looks. `$return-to-town` confirms the merge landed and reconciles cleared dependents, but
+  where a target repository publishes on merge to `main` — release-please and semantic-release
+  both do — that publish is fired by the merge `$return-to-town` itself performs, and nothing
+  here reads the workflow run it triggers. A publish that fails on registry auth, a version
+  collision, or a missing tag permission goes unobserved while the session reports the issue
+  done. Watching that run would be the machinery this record declines, so it stays the target
+  repository's own to watch.
 
 ## Considered & rejected
 
