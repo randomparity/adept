@@ -208,6 +208,45 @@ After the last task, dispatch the whole-branch review with
 [code-reviewer.md](code-reviewer.md), on the most capable model. The per-task
 reviews are task-scoped by design and cannot see a defect that spans tasks.
 
+Its base is the branch's fork point — `git merge-base HEAD <BASE_BRANCH>`,
+recomputed here rather than carried forward, because a rebase moves it. Not the
+commit the build phase started from: a spec and plan committed before Task 1
+belong to the branch this review judges. `BASE_BRANCH` is the value
+`$attunement` recorded; if you do not have it, ask, and where nobody can be
+asked report it as a blocker and return. Never default to `main`.
+
+1. **Read the ledger first.** No `Final review` line for this range: dispatch.
+   A verdict line and no `closed` line: the review ran and its file is on disk,
+   so resume at the fix wave — do not regenerate, do not clear, do not
+   re-dispatch. Both lines: the phase is done.
+2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
+   and print a non-zero commit count and a non-zero byte count. Report and stop
+   rather than dispatching: this file is the reviewer's whole input.
+3. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
+   directory `scripts/sdd-workspace` prints. Remove anything already at that
+   path before dispatching, so a file there afterwards is this dispatch's.
+   `[MINOR_LEDGER]` is the Minor findings you have been accumulating; pass the
+   literal `none` when there were none.
+4. When the reviewer returns, `[REVIEW_FILE]` must exist and be non-empty. If
+   you passed a non-empty `[MINOR_LEDGER]`, read that file's `#### Minor triage`
+   heading whatever the verdict — that heading, not the whole file. On a `Yes`
+   nothing else reads the answer you asked for.
+5. **Append the ledger line once that check passes**, before the fix wave —
+   `Final review <base7>..<head7>: <verdict> (review <path>)` — and a second,
+   `Final review <base7>..<head7>: closed`, when the wave finishes. Two appends,
+   not an edit, as everywhere else in that ledger. Before the wave and not
+   after, because a run that dies mid-wave leaving no line sends the next one
+   through step 1 to clear a finished review. A dispatch ending in a stop gets
+   no line.
+
+A missing or empty file means the return is not evidence: discard it and
+re-dispatch **once**, then stop and report. That blind retry is for a silent
+failure. A reviewer that returned `WRITE_FAILED` or `PACKAGE_MISSING` has named
+the problem — stop on the first one. Do not retry at a second path; the
+template's read-only rule rests on the reviewer having exactly one writable
+path. A stop means the branch goes on to the rest of the pipeline with no
+whole-branch review, and you say so rather than closing the phase quietly.
+
 ### Handling what an implementer reports
 
 Four statuses, four responses:
@@ -302,8 +341,8 @@ dispatches append to the same report file.
 - The implementer already ran the tests and reported the results. Asking for
   that again buys nothing and costs a full run.
 
-Every reviewer dispatch ends with the same report contract, so you get a bounded
-verdict rather than the whole review.
+The whole-branch reviewer returns a bounded verdict and a path rather than the
+review itself.
 
 Every fix dispatch carries the implementer contract: re-run the tests covering
 the change and report the command and its output. Name the covering test files —
@@ -313,10 +352,25 @@ flaked test, where re-running it is the evidence the flake policy under
 *Guardrails* rejects. Dispose of it where reported flakes are dispositioned,
 above, rather than by dispatching a fix that re-runs it.
 
-If the **final** review returns findings,
-send **one** fix subagent with the complete list; per-finding fixers each rebuild
-context and re-run suites, and one real session's final-review wave cost more
-than all its tasks combined.
+If the **final** review returns findings, send **one** fix subagent and give it
+the review file's path rather than a list — a list is the resident context cost
+the review file exists to remove. Per-finding fixers each rebuild context and
+re-run suites, and one real session's final-review wave cost more than all its
+tasks combined.
+
+Say in that dispatch what binds it, because a path carries none of the filtering
+a hand-picked list did: Critical and Important findings are to be fixed;
+Recommendations are not; and Minor findings are not *unless you name them in the
+dispatch*, which is what you have just read the triage section to decide. A
+finding labelled `plan-mandated` is likewise returned to you rather than fixed,
+unless you name it as one the human has already upheld.
+
+Order the two triggers: a non-zero `plan-mandated` count goes to the human
+**before** the fix wave. Read those labelled findings out of `[REVIEW_FILE]`
+first — that subset, not the whole file — and put each in front of the human
+beside the plan text it disputes; a count alone asks them to rule on work they
+have not seen. Then carry their answer into the dispatch by naming the upheld
+findings. Nothing further is prescribed.
 
 Put Minor findings in the ledger as they arrive, and hand the final review that
 list to triage against the merge bar. A summary nobody is directed to read is
@@ -366,7 +420,7 @@ commits they name are on disk whether or not you recall making them.
 - Accept "close enough" on spec compliance, or let an implementer's self-review
   stand in for the task review.
 - Make a subagent read the whole plan file instead of its brief.
-- Dispatch a task reviewer without a review-package file.
+- Dispatch any reviewer without a review-package file.
 
 **Severity mapping.** The task and final reviewers above grade `Critical / Important / Minor`; the
 workflow pipeline's canonical scale is `$gauntlet`'s `critical | high | medium | low`.

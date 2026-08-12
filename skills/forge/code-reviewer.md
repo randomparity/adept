@@ -25,25 +25,36 @@ Subagent (general-purpose):
 
     [PLAN_OR_REQUIREMENTS]
 
-    ## Git Range to Review
+    ## The change you are judging
 
-    The branch starts at [BASE_SHA] and ends at [HEAD_SHA].
+    The branch runs from [BASE_SHA] to [HEAD_SHA], packaged in [DIFF_FILE].
 
-    ```bash
-    # what moved
-    git diff --stat [BASE_SHA]..[HEAD_SHA]
-    # and how
-    git diff [BASE_SHA]..[HEAD_SHA]
-    ```
+    Before you open it, create [REVIEW_FILE] empty — *Where your review goes*
+    says what that is for. Open the package once. Inside are the commits, a
+    per-file stat, and every hunk with generous context around it, and those
+    context lines *are* the files as they now stand. The package is the diff
+    for this range: do not
+    re-derive it, and do not fall back to running `git diff` yourself. If the
+    package is not there, you have nothing to review: send back
+    `PACKAGE_MISSING` and stop.
+
+    Unlike a task review, you are not confined to the package. This pass exists
+    for what a task-scoped reviewer could not see: the plan the branch was built
+    from, the call sites of a contract it changed, the documentation it left
+    stale. Read beyond the package where the work requires it, and record in the
+    review what you read and why.
 
     ## Read-Only Review
 
-    Treat this checkout as read-only: the working tree, the index, HEAD and
-    every branch stay exactly as you found them. Reading history is
-    unrestricted — `git show`, `git diff` and `git log` all leave the checkout
-    alone. When you genuinely need another revision's files laid out on disk,
-    give that revision a directory of its own rather than moving this one:
-    `git worktree add /tmp/review-[SHA] [SHA]`.
+    Treat this checkout as read-only with one exception: the review file at
+    [REVIEW_FILE] is yours to write. Nothing else moves — not the working tree,
+    the index, HEAD or any branch, and not any other file in the directory
+    [REVIEW_FILE] sits in, which holds the controller's own working records.
+    Reading never mutates anything, so `git show`, `git log` and history
+    inspection are unrestricted; that is not licence to re-derive the diff you
+    were handed. When you genuinely need another revision's files laid out on
+    disk, give that revision a directory of its own rather than moving this
+    one: `git worktree add /tmp/review-[SHA] [SHA]`.
 
     ## What to Check
 
@@ -90,9 +101,17 @@ Subagent (general-purpose):
     Where the branch leaves the plan in a way that matters, say so plainly and
     separately, so the implementer can confirm it was deliberate. And where the
     fault lies in the plan rather than in the code following it, that is a
-    finding too — report it as one.
+    finding too — report it as one. Label such a finding `plan-mandated`, the
+    same word the task reviewer uses, and count it in what you send back.
 
-    ## Output Format
+    ## Where your review goes
+
+    Write the review to [REVIEW_FILE], in the sections below.
+
+    You created that file empty before opening the package. If you could not,
+    send `WRITE_FAILED` and stop there — discovering an unwritable path after
+    the review is written throws away the whole of this dispatch, which is the
+    most expensive one in the build.
 
     ### Strengths
     [Name what the work got right, concretely.]
@@ -109,8 +128,17 @@ Subagent (general-purpose):
     #### Minor (Nice to Have)
     [Naming, polish, a stale comment, an optimisation worth recording]
 
-    Each entry gives its `file:line`, the defect, the reason it matters, and —
-    where that is not already obvious — the remedy.
+    Each entry in the three buckets above gives its `file:line`, the defect, the
+    reason it matters, and — where that is not already obvious — the remedy.
+
+    #### Minor triage
+    Triage the Minor findings carried over from earlier tasks, listed in
+    [MINOR_LEDGER], against the merge bar. Where that placeholder is empty, say
+    so in one line rather than omitting this heading — the controller reads it
+    by name, and an absent heading is indistinguishable from a skipped triage.
+
+    These are carried over, not found by you: they do not count toward
+    `Minor N`, which is your own findings on this branch.
 
     ### Recommendations
     [Worth doing to the code, the design, or the way this was built; not
@@ -122,7 +150,30 @@ Subagent (general-purpose):
 
     **Reasoning:** [one or two sentences, technical]
 
+    ## What you send back
+
+    Fifteen lines at most. The review is in the file; this message is only what
+    the controller needs to choose its next move:
+
+    - **Ready to merge?** Yes | No | With fixes
+    - the counts: `Critical N, Important N, Minor N, plan-mandated N`. The
+      plan-mandated findings are a subset of the graded ones and not a fourth
+      grade, so `Important 2, plan-mandated 2` describes two findings, not four.
+    - where the review file is
+
+    Nothing else. No findings, no summary of them, no preamble, no account of
+    your method. Whoever acts on a finding reads the file.
+
+    Two things replace the verdict rather than joining it. If you could not
+    write the review file, send back `WRITE_FAILED` as the first line and the
+    reason on the second. If the package was not at [DIFF_FILE], send back
+    `PACKAGE_MISSING` the same way. Never report a verdict whose evidence you
+    could not read, or could not record.
+
     ## Critical Rules
+
+    These govern the review you write to [REVIEW_FILE], not the message you
+    send back.
 
     Cite, do not assert: every finding carries a `file:line`, the defect and why
     it matters. "Improve error handling" names nothing and cannot be acted on.
@@ -140,13 +191,24 @@ Subagent (general-purpose):
 - `[DESCRIPTION]` — what was built, in a sentence or two
 - `[PLAN_OR_REQUIREMENTS]` — what it was supposed to do: a plan path, the task
   text, or the requirements themselves
-- `[BASE_SHA]` — the commit the branch left from
+- `[DIFF_FILE]` — REQUIRED. Where the review package was written.
+  `scripts/review-package BASE HEAD` prints a path unique to that range, and the
+  package's contents never pass through the controller's own context.
+- `[REVIEW_FILE]` — REQUIRED. Where the reviewer writes the review. The
+  controller clears this path before dispatching and reads it afterwards.
+- `[MINOR_LEDGER]` — the Minor findings accumulated from the task reviews, for
+  triage against the merge bar. `SKILL.md` already requires this handover; until
+  now it had no named slot. Pass an explicit "none" when the ledger carried no
+  Minor findings.
+- `[BASE_SHA]` — the branch's fork point from the base branch
 - `[HEAD_SHA]` — the commit it ends on
 
-**What comes back:** Strengths, Issues (Critical / Important / Minor),
-Recommendations, Assessment — and a merge verdict.
+**What comes back:** at most fifteen lines — a merge verdict, the finding counts
+by grade plus the `plan-mandated` subset, and the review file's path. Or
+`WRITE_FAILED` / `PACKAGE_MISSING` and a reason. The review itself is in
+`[REVIEW_FILE]`.
 
-## Example Output
+## Example review file
 
 ```
 ### Strengths
@@ -181,4 +243,12 @@ Recommendations, Assessment — and a merge verdict.
 **Ready to merge?** With fixes
 
 **Reasoning:** The structure is right and the tests are real, but the unapplied ceiling is a live defect on exactly the path this change exists to protect.
+```
+
+## Example return message
+
+```
+**Ready to merge?** With fixes
+Critical 0, Important 2, Minor 1, plan-mandated 0
+Review: .agent/sdd/final-review-a1b2c3d..e4f5a6b.md
 ```
