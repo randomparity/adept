@@ -30,7 +30,11 @@ set -euo pipefail
 # exception and runs the other way: a failed removal reports itself and names the
 # path, but never displaces a status the run had already earned.
 #
-# One residual is left open, and it fails open rather than closed. A `done <file`
+# Two residuals are left open. The smaller: a failed write on the closing
+# `all rules pass` line exits 1 with no finding, which is accepted because it
+# takes a closed or broken stdout to reach.
+#
+# The larger fails open rather than closed. A `done <file`
 # redirect that cannot be opened prints a bash diagnostic, skips the loop
 # entirely, and lets the run reach `all rules pass` and exit 0 -- measured on
 # bash 3.2.57, this repository's declared floor. `done <file || fault` would read
@@ -72,6 +76,9 @@ fi
 # report; this one reports and exits instead. The deviation is admissible only
 # because `fault` is terminal, so the double report rule 3 exists to prevent --
 # the scan fault and the rule's own verdict both firing -- cannot happen here.
+# That holds only in the main shell: inside a subshell or command substitution
+# `fault` would end the subshell and let the caller carry on, so call this from
+# the main shell, as both call sites below do.
 name_listed() { # name rule -- 0 listed, 1 not listed, faults when the scan fails
 	local scan_status=0
 	grep -qxF -- "$1" "$names" || scan_status=$?
