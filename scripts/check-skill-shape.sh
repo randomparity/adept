@@ -16,25 +16,56 @@ set -euo pipefail
 # Every scan captures rg's status explicitly rather than trailing `|| true`.
 # rg exits 1 for "no matches" and >1 for a real failure; collapsing those makes
 # a scan that could not run read as a scan that found nothing.
+#
+# Exit 0 clean, 1 on a finding naming a skill, 2 on a fault -- the contract
+# check-ripgrep-config.sh and check-public-safety.sh already state. Exit 1
+# belongs to a content finding alone, so nothing that merely stopped the gate
+# from running may borrow it: a gate that goes red on a status no message
+# accounts for leaves the operator hunting a violation that does not exist.
 
 root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 status=0
+
+fault() {
+	printf 'check-skill-shape: %s\n' "$1" >&2
+	exit 2
+}
 
 report() {
 	printf 'check-skill-shape: %s\n' "$1" >&2
 	status=1
 }
 
-workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")"
-trap 'rm -R "$workspace"' EXIT
+workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")" ||
+	fault 'could not create a scratch directory'
+
+# Under `set -e` an EXIT trap's non-zero return becomes the shell's exit status,
+# so the bare `trap 'rm -R "$workspace"' EXIT` this replaces turned a scratch
+# directory it could not remove into the finding status. The removal reports
+# itself on the fault status instead, and names what it left behind -- nothing
+# else will, and the path is the only way to reclaim it.
+#
+# shellcheck disable=SC2329 # run by the EXIT trap; 0.11 stops tracing at the terminal exit
+cleanup() {
+	local exit_status=$?
+	if rm -R -- "$workspace"; then
+		exit "$exit_status"
+	fi
+	printf 'check-skill-shape: retained scratch path: %s\n' "$workspace" >&2
+	if [ "$exit_status" -eq 0 ]; then
+		exit 2
+	fi
+	exit "$exit_status"
+}
+trap cleanup EXIT
 
 names="$workspace/names"
-find "$root/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort >"$names"
+find "$root/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; |
+	sort >"$names" || fault "could not enumerate $root/skills"
 
 count="$(wc -l <"$names" | tr -d ' ')"
 if [ "$count" -eq 0 ]; then
-	printf 'check-skill-shape: no skills found under %s/skills\n' "$root" >&2
-	exit 1
+	fault "no skills found under $root/skills"
 fi
 
 # Rule 1: every skill directory has a SKILL.md.
@@ -52,8 +83,7 @@ while IFS= read -r name; do
 	# rg build carries.
 	declared="$(rg --no-config -m1 -N -o -r '$1' '^name: *(\S+)' "$skill_file")" || name_status=$?
 	if [ "$name_status" -gt 1 ]; then
-		printf 'check-skill-shape: reading %s failed (rg exit %s)\n' "$skill_file" "$name_status" >&2
-		exit 1
+		fault "reading $skill_file failed (rg exit $name_status)"
 	fi
 	if [ -z "$declared" ]; then
 		report "$name: SKILL.md has no name: frontmatter"
@@ -67,8 +97,7 @@ reserved_status=0
 rg --no-config -v '^#|^$' "$root/scripts/reserved-skill-names.txt" |
 	sort -u >"$workspace/reserved" || reserved_status=$?
 if [ "$reserved_status" -gt 1 ]; then
-	printf 'check-skill-shape: reading the reserved-name list failed (exit %s)\n' "$reserved_status" >&2
-	exit 1
+	fault "reading the reserved-name list failed (exit $reserved_status)"
 fi
 while IFS= read -r reserved; do
 	if grep -qxF -- "$reserved" "$names"; then
@@ -89,8 +118,7 @@ refs_status=0
 rg --no-config -o -N '`\$[a-z][a-z0-9-]*`' "$root"/skills/*/SKILL.md \
 	>"$workspace/raw" || refs_status=$?
 if [ "$refs_status" -gt 1 ]; then
-	printf 'check-skill-shape: scanning invocations failed (rg exit %s)\n' "$refs_status" >&2
-	exit 1
+	fault "scanning invocations failed (rg exit $refs_status)"
 fi
 # shellcheck disable=SC2016 # the $ is a literal to strip, not an expansion
 sed 's/.*`\$//;s/`//' "$workspace/raw" | sort -u >"$workspace/refs"
@@ -112,8 +140,7 @@ links_status=0
 rg --no-config -o -N --no-filename '\.\./\.\./references/[a-z0-9-]+\.md' "$root"/skills/*/SKILL.md \
 	>"$workspace/rawlinks" || links_status=$?
 if [ "$links_status" -gt 1 ]; then
-	printf 'check-skill-shape: scanning reference links failed (rg exit %s)\n' "$links_status" >&2
-	exit 1
+	fault "scanning reference links failed (rg exit $links_status)"
 fi
 sort -u "$workspace/rawlinks" >"$workspace/links"
 while IFS= read -r rel; do
@@ -138,9 +165,7 @@ while IFS= read -r name; do
 	coverage_status=0
 	rg --no-config -qF -- "\`$name\`" "$root/docs/cheatsheet.md" || coverage_status=$?
 	if [ "$coverage_status" -gt 1 ]; then
-		printf 'check-skill-shape: scanning docs/cheatsheet.md failed (rg exit %s)\n' \
-			"$coverage_status" >&2
-		exit 1
+		fault "scanning docs/cheatsheet.md failed (rg exit $coverage_status)"
 	fi
 	if [ "$coverage_status" -eq 1 ]; then
 		report "$name: not referenced in docs/cheatsheet.md"
