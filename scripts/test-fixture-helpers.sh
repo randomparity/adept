@@ -89,9 +89,10 @@ fixture_scratch() { # prefix -- sets FIXTURE_SCRATCH
 #
 # The prefix guard is unreachable by construction -- mktemp returns the template
 # it was handed, and fixture_scratch records that same template as the prefix --
-# so it is defence in depth on the one `rm` here, not a live check. The five
-# copies it replaces re-derived the prefix at cleanup time and compared it
-# against a variable suite code could reassign, which is what made theirs live.
+# so it is defence in depth on the one `rm` here, not a live check. Five of the
+# twelve copies it replaces re-derived the prefix at cleanup time and compared
+# it against a variable suite code could reassign, which is what made theirs
+# live; the other seven removed their scratch root with no guard at all.
 fixture_cleanup() {
 	local index=0 path prefix status=0
 	while [ "$index" -lt "${#fixture_scratch_paths[@]}" ]; do
