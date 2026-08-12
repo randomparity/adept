@@ -128,12 +128,12 @@ while IFS= read -r rel; do
 	fi
 done <"$workspace/links"
 
-# Rule 6: every skill name is referenced in docs/cheatsheet.md. This is what
-# makes a skill added without documentation fail fast instead of going
-# unnoticed -- the same inventory-vs-reference shape as rule 4, pointed at
-# docs/cheatsheet.md instead of at skills/*/SKILL.md. Membership only: no
-# wording, table-shape, or description-text assertion, per repository anatomy
-# rule 4 (nothing here greps for a sentence).
+# Rule 6: every skill name is referenced in docs/cheatsheet.md, as a
+# backtick-wrapped token. This is what makes a skill added without
+# documentation fail fast instead of going unnoticed -- the same
+# inventory-vs-reference shape as rule 4, pointed at docs/cheatsheet.md
+# instead of at skills/*/SKILL.md. Membership only, no wording or
+# table-shape assertion.
 while IFS= read -r name; do
 	coverage_status=0
 	rg --no-config -qF -- "\`$name\`" "$root/docs/cheatsheet.md" || coverage_status=$?

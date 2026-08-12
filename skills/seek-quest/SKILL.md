@@ -62,11 +62,12 @@ Input: an optional caller-supplied risk allowlist and/or effort allowlist
      any open PR's body contains, case-insensitively and at a word boundary
      (so "discloses" does not match `closes`), one of `close`, `closes`,
      `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved`,
-     followed by optional whitespace, then `#N` and a non-digit character
-     or end of string — the optional whitespace matches `$deliver`'s own
+     followed by optional whitespace, then `#N` and a non-digit character or
+     end of string. The optional whitespace matches `$deliver`'s own
      `Closes #<issue-number>` convention, and the trailing boundary keeps
-     `#5` from matching a body that says `closes #56` — or if any PR's
-     `headRefName` matches the same anchored branch-suffix rule as above.
+     `#5` from matching a body that says `closes #56`. Also drop it if any
+     PR's `headRefName` matches the same anchored branch-suffix rule as
+     above.
    - For each surviving candidate, scan its `body` line by line for the
      `quest-log` dependency contract's three states:
      - **No line begins `Blocked by #`.** This check passes.
@@ -94,7 +95,7 @@ Input: an optional caller-supplied risk allowlist and/or effort allowlist
 
 8. **Empty-queue and revalidation gates.** Revalidation here rechecks only
    status label and `Blocked by #N` resolution — it does not re-fetch
-   assignees, branches, or PRs, so an assignment or a new branch/PR opened
+   assignees, branches, or PRs. An assignment or a new branch/PR opened
    against a candidate in the window between Step 6 and this step is not
    caught here; it surfaces instead as a duplicate-branch conflict if
    `$quest` is started on that candidate afterward.

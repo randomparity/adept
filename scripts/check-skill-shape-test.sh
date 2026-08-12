@@ -74,9 +74,7 @@ assert_fails() { # name root expected-fragment
 
 # Case 1: the baseline fixture alone -- rules 1-5 (SKILL.md exists, name:
 # frontmatter matches, no reserved-name collision, no dangling $invocation, no
-# dangling reference link) and the new rule 6 all pass together. This is what
-# proves the new root argument and rule 6 did not break the existing rules'
-# fixture-testability, not just rule 6 in isolation.
+# dangling reference link) and the new rule 6 all pass together.
 baseline_root=$(new_baseline baseline)
 assert_passes 'minimal valid fixture, all rules' "$baseline_root"
 
@@ -126,9 +124,9 @@ SHEET
 assert_passes 'reworded surrounding prose' "$worded_root"
 
 # Case 5: substring-adjacent skill names, the real shape this repo's own
-# inventory has (`quest`, `quest-log`, `seek-quest` all coexist). All three
-# documented -- backtick-anchoring on both ends must not let one name's
-# presence be mistaken for another's.
+# inventory has (`quest`, `quest-log`, `seek-quest` all coexist), all three
+# documented and passing. This is the baseline fixture Case 6 mutates below
+# to actually exercise backtick-anchoring.
 collision_root=$(new_baseline collision)
 mkdir -p "$collision_root/skills/quest" "$collision_root/skills/quest-log" \
 	"$collision_root/skills/seek-quest"
@@ -155,13 +153,10 @@ assert_passes 'substring-adjacent names, all documented' "$collision_root"
 
 # Case 6: same three names, but the *shorter* name (`quest`) is left
 # undocumented while the two longer names that contain it as a substring
-# (`quest-log`, `seek-quest`) are documented -- this is the direction that
-# actually exercises backtick-anchoring: an un-anchored search for `quest`
-# would false-match inside the `quest-log`/`seek-quest` tokens' own
-# backtick-delimited text and wrongly pass. `quest-log` undocumented while
-# `quest`/`seek-quest` are present could never collide either direction
-# (`quest-log` is not a substring of either), so it wouldn't have exercised
-# anchoring at all.
+# (`quest-log`, `seek-quest`) are documented. An un-anchored search for
+# `quest` would false-match inside the `quest-log`/`seek-quest` tokens' own
+# backtick-delimited text and wrongly pass; backtick-anchoring on both ends
+# is what keeps `quest` correctly flagged as undocumented.
 partial_collision_root=$tmp_root/partial-collision
 cp -R "$collision_root" "$partial_collision_root"
 cat >"$partial_collision_root/docs/cheatsheet.md" <<'SHEET'
