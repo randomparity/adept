@@ -28,6 +28,20 @@ existing check data; lifecycle state controls whether computed mergeability is r
 |---|---|
 | `skills/return-to-town/SKILL.md` | Status snapshot, terminal-state ordering, and entry into post-merge cleanup |
 
+## Pre-implementation scope check
+
+Before Task 1, run `git branch --show-current` and
+`git status --short --untracked-files=all`. Require branch
+`feat/merged-state-first-76` and no changes outside the committed design artifacts. Then run:
+
+```sh
+gh issue view 76 --json comments \
+  --jq '[.comments[].body | select(test("(?m)^<!-- WORK:SCOPE -->$") and test("(?m)^<!-- SCOPE:COMPLETE -->$"))] | last'
+```
+
+Require token `8E015A61-A363-4098-9F86-55305B0BC22D`. Stop before implementation on a
+branch, ownership, or token mismatch. Task 2 repeats the token read as a final drift check.
+
 ## Task 1 — Order terminal state before mergeability
 
 **Files:** modify `skills/return-to-town/SKILL.md`.
@@ -39,7 +53,24 @@ consumes a new code interface.
 
 ### Step 1.1 — Establish the failing behavioral review
 
-Give a fresh, read-only reviewer the unchanged skill and the specification's V1 packet.
+Give a fresh, tools-disabled reviewer the unchanged skill and the specification's V1 packet.
+Save its complete structured response in ignored `.agent/evals/issue-76-before.json`. Use this
+exact prompt, substituting the full current skill text for `<SKILL>` and the packet values for
+`<PACKET>`:
+
+```text
+You are a read-only behavioral evaluator. Use only the supplied skill text and hypothetical
+packet; do not call tools or GitHub. Trace the instructions from invocation until stop. Return
+JSON only with: packet, route, state_read_before_routing, mergeability_read_before_state,
+polls_computed_fields, enters_post_merge_cleanup, result, instruction_lines, pass. The pass
+field is true only when the observed route exactly matches the packet's expected result.
+
+SKILL:
+<SKILL>
+
+PACKET:
+<PACKET>
+```
 
 Expected: fail. The current contract does not require querying `state` or `mergedAt` before
 computed fields and therefore cannot guarantee immediate cleanup for V1.
@@ -61,8 +92,11 @@ and cleanup, `CLOSED` stops without cleanup, and only `OPEN` evaluates or polls
 
 ### Step 1.3 — Re-run focused behavioral review
 
-Give a fresh, read-only reviewer the changed skill and fixed packets V1, V1b, V2, and V3
-from the spec.
+Give a fresh, tools-disabled reviewer the changed skill and fixed packets V1, V1b, V2, and V3
+from the spec, using the exact Step 1.1 prompt independently for each packet. Save the complete
+results as a JSON array in ignored `.agent/evals/issue-76-after.json`. Each result must cite
+the instruction lines that decide routing and explicitly report whether mergeability was read
+or computed fields were polled before state dispatch.
 
 Expected: all pass. V1 performs no poll, V2 preserves open-PR behavior, and V3 performs no
 post-merge cleanup.
