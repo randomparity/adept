@@ -38,10 +38,42 @@ on prose. Existing shape checks remain responsible for actual Markdown links and
 3. The `forge` dispatch templates name the existing `Choosing a model` section.
 4. `trial-loop` names its existing `CHARTER` dispatch block.
 
-These are instruction-only edits. There is no runtime state, persistence, migration, external
-API, or new failure path. A missing target artifact continues to fail closed where the original
-workflow already required verification; the repair changes which valid evidence can satisfy the
-rule.
+These are instruction-only edits. There is no runtime state, persistence, migration, or new API.
+`warding` already requires current-version research during a sweep; the repair makes the official
+OSV-Scanner installation documentation the authoritative source for install guidance. If that
+source cannot be read or does not provide an applicable command, the sweep reports the audit as
+skipped and names the missing guidance; it must not invent a command or report the audit clean.
+A missing target artifact continues to fail closed where the original workflow already required
+verification; the repair changes which valid evidence can satisfy the rule.
+
+## Reference repair matrix
+
+| File | Stale reference | Current target |
+|---|---|---|
+| `skills/attunement/SKILL.md` | `AGENTS.md`, `AGENTS.md` | `AGENTS.md`, `CLAUDE.md` |
+| `skills/attunement/SKILL.md` | coupling branch in `Step 6` | parallel-run context in step 7 |
+| `skills/spellcraft/SKILL.md` | `AGENTS.md` / `AGENTS.md` | `AGENTS.md` / `CLAUDE.md` |
+| `skills/spellcraft/SKILL.md` | assigned ADR number in attunement step 6 | attunement step 7 |
+| `skills/spellcraft/SKILL.md` | coupling verdict in attunement step 4 | attunement step 5 |
+| `skills/bards-tale/SKILL.md` | `shared/commands/*.md` or `AGENTS.md` | verified governing workflow or repository instruction source |
+| `skills/restock/SKILL.md` | `return-to-town.md` and both `AGENTS.md` files | `$return-to-town` and applicable repository instructions |
+| `skills/warding/SKILL.md` | `install-tools.sh` inventory/install command | actual provisioning/workflow pins and current official OSV-Scanner guidance |
+| `skills/forge/implementer-prompt.md` | `Model Selection` | `Choosing a model` |
+| `skills/forge/task-reviewer-prompt.md` | `Model Selection` | `Choosing a model` |
+| `skills/trial-loop/SKILL.md` | `review-dispatch` block | `CHARTER` block |
+
+The focused verification command is:
+
+```bash
+rg -n --no-config 'shared/commands|install-tools\.sh|Model Selection|review-dispatch|AGENTS\.md.*,.*AGENTS\.md|AGENTS\.md.*/.*AGENTS\.md|attunement.*step (4|6)' \
+  skills/attunement/SKILL.md skills/spellcraft/SKILL.md skills/bards-tale/SKILL.md \
+  skills/restock/SKILL.md skills/warding/SKILL.md skills/forge/implementer-prompt.md \
+  skills/forge/task-reviewer-prompt.md skills/trial-loop/SKILL.md
+```
+
+Exit 1 with no output is the expected result. Any output is a blocking stale reference; exit
+greater than 1 is a scan failure, not a pass. Review also follows each replacement target in the
+matrix because the semantic targets cannot all be validated by matching prose.
 
 ## Acceptance criteria
 
@@ -83,30 +115,38 @@ skill-shape validation, adversarial instruction review, and the full guardrail s
 | A new prose gate rejects valid examples or target paths | 4 | No new prose gate is introduced |
 | Changes escape the issue-listed surface | 3 | Diff review against the frozen scope |
 
+Evaluation cases use the reference matrix as the fixture. The implementation diff is the changed
+repository state, and the focused search above is the machine oracle for stale literals. Semantic
+cases use an independent `$gauntlet` branch review: the reviewer must cite the replacement lines
+and the current target they followed; an unsupported or unresolved target is a blocking finding.
+
 Evaluation cases:
 
-- `REF-01` happy path: a repository has `CLAUDE.md` but no `AGENTS.md`; preflight names and reads
-  the applicable file. Pass: both supported filenames are considered without duplication. Gate:
-  block.
+- `REF-01` happy path: inspect the `attunement` instruction-file list after the edit. Pass: it
+  contains `AGENTS.md` and `CLAUDE.md` once each; the focused search emits nothing. Gate: block.
 - `REF-02` ambiguous target instructions: both supported files exist with nested instructions.
-  Pass: native precedence remains authoritative; the skill does not invent a precedence rule.
-  Gate: block.
+  Pass: the replacement still delegates precedence to the agent's native applicable-instruction
+  rules; the independent reviewer cites that unchanged rule. Gate: block.
 - `REF-03` forbidden evidence: no verified workflow or instruction artifact supports a proposed
-  tuning. Pass: `bards-tale` still omits the proposal rather than fabricating grounding. Gate:
-  block.
+  tuning. Pass: the independent reviewer confirms the existing fail-closed omission remains and
+  cites the verification language beside the replacement. Gate: block.
 - `REF-04` stale source: a target repository has no installer inventory. Pass: `warding` inspects
-  actual provisioning/workflow files and makes no claim about `install-tools.sh`. Gate: block.
+  actual provisioning/workflow files and makes no claim about `install-tools.sh`; the focused
+  search emits nothing. Gate: block.
 - `REF-05` permissions boundary: official installation guidance cannot be accessed. Pass: the
-  sweep reports `osv-scanner` as skipped and the missing actionable guidance rather than claiming
-  a clean audit. Gate: warn.
+  instruction explicitly requires a skipped result, names the inaccessible guidance, forbids an
+  invented command, and forbids a clean result; the independent reviewer cites all four traits.
+  Gate: warn.
 - `REF-06` bounded behavior: the repair adds no agent loop or extra dispatch; existing workflow
-  limits remain unchanged. Pass: the diff contains only the scoped instruction edits and design
-  records. Gate: block.
-- `REF-07` regression fixture: search for the exact issue-listed predecessor strings and stale
-  heading/block names in their affected files. Pass: no stale occurrence remains. Gate: block.
+  limits remain unchanged. Pass: `git diff --name-only main...HEAD` contains only the matrix files
+  and required design records, and independent review finds no new dispatch. Gate: block.
+- `REF-07` regression fixture: run the focused search above. Pass: exit 1 with no output; exit 0
+  identifies a blocker and exit greater than 1 is a failed scan. Gate: block.
 
-All checks are code-based searches or human adversarial review of the changed instructions; no
-LLM judges its own output.
+The focused search is code-based. Semantic cases require a context-isolated adversarial reviewer
+whose evidence is checked by the controller against the cited lines and targets; the author does
+not grade the same pass, and an unsupported citation fails the review. No model grades its own
+output.
 
 ## Verification and rollback
 
