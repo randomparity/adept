@@ -15,8 +15,10 @@ acceptance criteria. The operator explicitly authorized implementing all propose
 pull request. Terminology consolidation remains excluded, as does unrelated repair of closed issue
 #39.
 
-Permitted implementation surface is `skills/restock/SKILL.md`, focused contract tests, and direct
-design records. The design changes no package dependency, schema, runtime service, or product code.
+Permitted implementation surface is `skills/restock/SKILL.md`,
+`skills/return-to-town/SKILL.md` limited to PR-only tracking and expected-SHA guarded merge behavior,
+focused contract coverage, and direct design records. The design changes no package dependency,
+schema, runtime service, or product code.
 
 ## Decision
 
@@ -32,6 +34,13 @@ prior restock run roots beneath the session scratchpad, validates each prior orc
 ledger, and reconciles only ledger-proven artifacts whose worker end was observed. The new ledger
 records only current-run artifacts and every retained prior artifact plus its reason. This
 eliminates cross-run name collisions without deleting unknown state.
+
+Eligible roots live only in the dedicated `<session-scratchpad>/restock/` namespace and use the
+`run.XXXXXX` `mktemp` template. Before creating children, the orchestrator writes a versioned marker
+and ledger binding the canonical root to the repository identity and run token. Reconciliation
+opens only direct `run.*` children carrying a supported marker owned by the current user; an absent,
+malformed, mismatched, or unsupported marker makes that child unrelated and it is neither traversed
+nor removed.
 
 For every dependency PR selected for evaluation, restock adds `status:in-progress`, then swaps it to
 `status:in-review` while workers run. It posts a complete `WORK:REVIEW` block to the PR after the
@@ -110,14 +119,17 @@ One fresh most-capable scenario worker per R1-R9 receives the changed skill file
 input packet, and the
 neutral request `Apply the supplied workflow instructions to this scenario and return the response
 they require.` Captures are written beneath ignored `.agent/evals/issue-43/` with case id, evaluated
-commit, supplied file blob ids, packet hash, model identity, and raw response. A different fresh
-evaluator receives the captures, this specification, ADR 0012, and the table above; it emits one
-pass/fail/uncertain result per observable and forbidden trait with instruction-line citations in a
-fixed JSON object keyed R1-R9. One uncertain result receives one fresh evaluator retry; disagreement
-or a second uncertain result fails closed for human review. Missing, duplicate, malformed, or extra
-cases fail the evaluation. The overall gate passes only when R1-R9 all pass. The operator running
+commit, supplied file blob ids, packet hash, model identity, and raw response. Two different fresh
+most-capable evaluators receive the captures, this specification, ADR 0012, and the table above.
+For each case, the rubric expands its pass and forbidden traits into boolean fields; every field
+requires an instruction-line citation and capture evidence. Each evaluator emits one
+pass/fail/uncertain result per field in a fixed JSON object keyed R1-R9. Both evaluators must return
+pass for every field. Any fail, uncertain, or disagreement fails closed to named human review;
+there is no retry for a more convenient verdict. Missing, duplicate, malformed, or extra cases fail
+the evaluation. The overall gate passes only when R1-R9 all pass. The operator running
 `$quest` owns the gate, validates packet/capture hashes and schemas, and posts the commit, models,
-case verdicts, and hashes in `WORK:REVIEW`; raw captures remain ignored scratch artifacts. `just
+both case verdict sets, any human disposition, and hashes in `WORK:REVIEW`; raw captures remain
+ignored scratch artifacts. `just
 verify` separately proves repository structure, links, formatting, and public safety; it does not
 claim semantic prose coverage.
 
