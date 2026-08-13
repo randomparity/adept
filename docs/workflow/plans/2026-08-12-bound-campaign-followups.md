@@ -61,8 +61,9 @@ below-threshold path. Add:
 - separate all-state `gh search issues --repo <owner/name> <dimension> --json
   number,title,state,body,url --limit 100` searches for evidenced mechanism/idiom, component/file
   family, and governing accepted decision when present;
-- exact saturation semantics: 100 results cannot prove below-threshold; query/read failure is
-  degraded; either may proceed only after three historical occurrences are already verified;
+- exact saturation semantics: 100 results cannot prove below-threshold but may proceed after
+  three historical occurrences are already verified; any query or linked-issue read failure
+  stops filing regardless of how many occurrences were otherwise verified;
 - direct linked-issue traversal from matched sweeps, deduplicated and capped at 100, with the
   same saturation semantics;
 - tuple verification requiring all applicable dimensions, candidate/uncertain presentation,
@@ -96,7 +97,9 @@ Run the same bounty packets from Step 1.1 and capture
 `.agent/evals/issue-91-bounty-after.md`.
 
 Expected: all bounty cases pass with exact supplied evidence preserved; E4/E14 stop without
-writes; E12/E13 request renewed confirmation and make no write after decline.
+writes; E12/E13 request renewed confirmation and make no write after decline. Repeat E4 with
+three verified historical occurrences plus one linked-issue read failure; expected is still a
+stop with no draft or write, distinguishing degraded reads from saturated successful results.
 
 Run `just shape-check`, `just public-safety`, and `git diff --check`.
 
