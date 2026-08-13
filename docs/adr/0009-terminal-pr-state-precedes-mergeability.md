@@ -39,4 +39,3 @@ lifecycle discriminator; `mergedAt` remains useful corroborating context.
 
 **Keep polling computed fields until GitHub settles.** Rejected because they cannot add useful
 information after `state` is already `MERGED`.
-
