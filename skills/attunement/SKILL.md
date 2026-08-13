@@ -18,7 +18,7 @@ genuine blocker you have named.
 
 ## 1. Read the repo instructions
 
-Read `AGENTS.md`, `AGENTS.md`, and any nested instruction files that apply to
+Read `AGENTS.md`, `CLAUDE.md`, and any nested instruction files that apply to
 the files you will touch. If those instructions name an installed language
 reference for the files' language (Python, TypeScript, Rust, Bash, or GitHub
 Actions), read that reference before writing code — it holds the strictness and
@@ -101,8 +101,8 @@ Where the repo keeps an ADR index, also determine whether a gated check couples
 the two — an ADR file requiring a matching index row, or the reverse. Read the
 recipe rather than trusting its name; the guard is often a script the recipe
 calls. Record a `coupled` / `not coupled` verdict beside the commands, and report
-it to the orchestrator under `$campaign`. Step 6, `$spellcraft`, and `$campaign`
-step 6 all branch on that coupling verdict.
+it to the orchestrator under `$campaign`. Step 7, `$spellcraft`, and `$campaign`
+step 7 all branch on that coupling verdict.
 
 ## 6. Confirm gh authentication
 

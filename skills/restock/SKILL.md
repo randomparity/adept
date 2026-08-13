@@ -64,7 +64,8 @@ flag and exits `1` with `unknown flag: --repo` if given one, unlike the
   | `squashMergeAllowed` | `--squash` |
 
   Rebase is first because it satisfies the no-squash-code-PRs rule in
-  `return-to-town.md` and both `AGENTS.md` files without needing an exception, and
+  `$return-to-town` and the applicable repository instructions without needing an
+  exception, and
   on the common single-commit dependabot PR it produces exactly the history
   `--squash` would. Where a PR carries more than one commit — a grouped update, or
   a bump dependabot had to rebase and fix up — rebase keeps each commit bisectable.

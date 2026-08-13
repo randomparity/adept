@@ -176,7 +176,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
 
 1. **Petition the council** — run `$gauntlet` in a **subagent** with
    `--json --out <findings-path> <challenge-args>`, then the exact
-   `review-dispatch` block above as the labeled trailing block.
+   `CHARTER` block above as the labeled trailing block.
 
    Restating the focus inside the block is deliberate — it keeps the charter
    self-contained for the reviewer, and `$gauntlet` reads the duplicate as one

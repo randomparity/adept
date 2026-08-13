@@ -15,7 +15,7 @@ repo's `references/` would not resolve. Do not collapse it into a link.
 ```
 Subagent (general-purpose):
   description: "Task N review — spec and quality"
-  model: [MODEL — REQUIRED: pick one from SKILL.md, Model Selection. Leave this
+  model: [MODEL — REQUIRED: pick one from SKILL.md, Choosing a model. Leave this
          unset and the dispatch quietly inherits whatever model this session is
          running, which is the costliest choice available.]
   prompt: |
@@ -181,7 +181,7 @@ Subagent (general-purpose):
 
 ## Filling the placeholders
 
-- `[MODEL]` — REQUIRED. The reviewer's model; see SKILL.md, Model Selection.
+- `[MODEL]` — REQUIRED. The reviewer's model; see SKILL.md, Choosing a model.
 - `[BRIEF_FILE]` — REQUIRED. The brief the implementer worked from.
   `scripts/task-brief PLAN N` prints where it is.
 - `[GLOBAL_CONSTRAINTS]` — the binding requirements, transcribed exactly: every
