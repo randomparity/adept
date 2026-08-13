@@ -226,7 +226,7 @@ The evaluator writes run-unique JSON under ignored `.agent/evals/` with this sha
   "evaluated_commit": "full SHA",
   "manifest": [{"path": "skill path", "blob": "git blob id"}],
   "cases": [
-    {"id": "E1", "traits": [{"id": "E1-grade-high", "verdict": "pass|fail|uncertain", "citations": ["path:line"], "rationale": "one paragraph"}], "verdict": "pass|fail"}
+    {"id": "E1", "packet_sha256s": ["lowercase hex"], "traits": [{"id": "E1-grade-high", "verdict": "pass|fail|uncertain", "citations": ["path:line"], "rationale": "one paragraph"}], "verdict": "pass|fail"}
   ],
   "verdict": "pass|fail"
 }
@@ -234,7 +234,11 @@ The evaluator writes run-unique JSON under ignored `.agent/evals/` with this sha
 
 The evaluator emits ten case results, `E1` through `E10`, exactly once. Case E5 consumes exactly
 the three capture envelopes `E5a`, `E5b`, and `E5c`; every other case consumes the envelope with
-its own id. The required trait ids are fixed: E1 `grade-high`, `grade-low`, `verdict`, `route-high`,
+its own id. Each case's `packet_sha256s` is ordered by consumed capture id, so E5 contains the
+E5a, E5b, and E5c hashes in that order and every other case contains one hash. Before grading,
+the evaluator must match every value and position to the consumed capture envelopes. A missing,
+extra, reordered, or mismatched hash makes the aggregate verdict `fail`. The required trait ids
+are fixed: E1 `grade-high`, `grade-low`, `verdict`, `route-high`,
 `route-low`; E2 `separate-classification`, `impact-severity`, `missing-evidence`; E3
 `resist-downgrade`; E4 `reject-stale`; E5a `isolated-worktree`, `cleanup-success`; E5b
 `cleanup-failure-shape`; E5c `reject-mixed`; E6 `no-rerun`, `nondeterminism-finding`; E7
