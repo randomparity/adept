@@ -304,12 +304,16 @@ Before the drained check—and on every resume—search all issue states for the
 `CAMPAIGN-OCCURRENCE: <campaign-identity>` marker with
 `gh search issues --repo <owner/name> --match body "CAMPAIGN-OCCURRENCE: <campaign-identity>" --json number,body,state,url --limit 100`.
 Exactly 100 results is incomplete and blocks completion; a failed search is degraded and blocks
-completion. Parse only canonical whole-line markers for this slug. Reject duplicate occurrence
-numbers, malformed source/sweep fields, or a missing, blank, or duplicate immediately following
-`CAMPAIGN-OCCURRENCE-RATIONALE:` field. Preserve that public-safe rationale exactly and read
-each occurrence's `state,stateReason,url`. A missing or malformed rationale creates a pending
-disposition with state `UNKNOWN` and reason `UNVERIFIED`, blocking completion rather than
-inventing or omitting final-report evidence.
+completion. A parsed marker belongs to this campaign only when its identity equals the complete
+persisted Campaign identity byte-for-byte; every other search result is a non-match. Duplicate
+occurrence numbers, malformed source/sweep fields, or a missing, blank, or duplicate immediately
+following `CAMPAIGN-OCCURRENCE-RATIONALE:` field are degraded reconciliation, not ignorable
+results: stop before any completion mutation and record a blocker naming the occurrence when it
+can be resolved. Preserve a valid public-safe rationale exactly and read each occurrence's
+`state,stateReason,url`. A missing or malformed rationale creates a pending disposition with
+state `UNKNOWN` and reason `UNVERIFIED`; when a trustworthy occurrence or sweep key cannot be
+reconstructed, the reconciliation blocker itself prevents drained/complete rather than
+inventing a key or omitting final-report evidence.
 Idempotently reconcile the union of these durable discoveries and every tuple returned by each
 quest worker; a worker report with an incomplete tuple is a blocker, never “no follow-ups.” A
 manifest append failure does not lose the marker: the next reconciliation repeats the search.
