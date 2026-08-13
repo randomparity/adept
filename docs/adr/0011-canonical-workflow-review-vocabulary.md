@@ -24,6 +24,13 @@ may retain different enums only when their contract includes an explicit, one-wa
 to the canonical vocabulary and states that the domain value is not a finding severity or
 review verdict.
 
+`approve` means the review found no defensible finding. Any finding produces
+`needs-attention` until the orchestrator dispositions it. Forge fixes `critical`, `high`, and
+`medium`; it records `low` findings in the existing ledger and may advance after that explicit
+disposition without relabeling the review `approve`. Final triage decides whether ledger items
+hold merge. A verdict therefore states what the reviewer found, while routing states what the
+orchestrator does with it.
+
 Oathbind's scope classifications stay orthogonal to severity: each defensible concern also
 receives an impact-based canonical severity; `unsupported` is rejection evidence rather than
 a finding. Restock converts `PASS` to `approve` and both `WARN` and `FAIL` to
@@ -44,10 +51,16 @@ The orchestrator selects models through forge's `Choosing a model` rubric: task 
 a mid-tier floor and scale with task complexity; the final whole-branch reviewer uses the most
 capable available model. Both templates carry a required explicit model field.
 
-This record supersedes only ADR 0007's decisions to preserve the whole-branch review's
-`Critical / Important / Minor` grades and `Yes | No | With fixes` verdict. ADR 0007 continues
-to govern the packaged diff, file-backed review, bounded return, failure values, verification,
-and conditional reads.
+The whole-branch reviewer retains ADR 0007's artifact contract: the orchestrator supplies a
+verified diff package and review-file path; the worker writes the full review to that file and
+returns only the verdict, canonical severity counts, the plan-mandated subset count, and the
+path. `WRITE_FAILED` and `PACKAGE_MISSING` replace rather than accompany a verdict. The
+orchestrator verifies the returned artifact, hands it to a fix worker by path, and conditionally
+reads low-finding triage and plan-mandated findings. Findings never return inline.
+
+This record supersedes ADR 0007 as a whole. It carries forward the artifact and bounded-return
+decisions above and replaces only the former `Critical / Important / Minor` grades and
+`Yes | No | With fixes` verdict within that contract.
 
 Review artifacts use caller-supplied, run-unique paths. The worker may create or overwrite
 only its assigned artifact and must not dispose of it. The orchestrator clears that path
