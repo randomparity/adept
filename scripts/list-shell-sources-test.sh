@@ -118,6 +118,52 @@ out=$(listing "$missing" --tabs 2>&1) || status=$?
 printf '%s\n' "$out" | grep -q '^list-shell-sources: scripts/hook is tracked but nothing is there' ||
 	fail "missing: the diagnostic does not point at the deletion: $out"
 
+# A sparse checkout leaves tracked paths deliberately absent from the worktree
+# and marks them skip-worktree, which `git ls-files` still lists. Treating those
+# as a fault would make the repository uncommittable for anyone using a sparse
+# checkout or assume-unchanged -- both supported configurations, and both
+# indistinguishable from the `missing` case above by anything but git's own tag.
+sparse=$(new_fixture sparse)
+write_tracked "$sparse" scripts/hook '#!/usr/bin/env bash
+'
+git -C "$sparse" -c user.name=t -c user.email=t@e.invalid commit -qm base
+git -C "$sparse" update-index --skip-worktree scripts/hook
+rm -- "$sparse/scripts/hook"
+status=0
+out=$(listing "$sparse" --tabs 2>&1) || status=$?
+[ "$status" -eq 0 ] ||
+	fail "sparse: a skip-worktree path was reported as a fault: $out"
+if lists "$out" scripts/hook; then
+	fail "sparse: a path absent by design was listed as a shell source: $out"
+fi
+
+# The walk that produces the inventory. `git ls-files -z` read through a process
+# substitution reported the loop's status, so a listing that stopped partway
+# yielded a short inventory at exit 0 -- this script's own producer carrying the
+# defect its consumers were rewired to avoid.
+walk=$(new_fixture walk)
+write_tracked "$walk" scripts/hook '#!/usr/bin/env bash
+'
+stub_bin=$SCRATCH/git-walk-fault-bin
+mkdir -p "$stub_bin"
+real_git=$(command -v git)
+cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-files ] && [ "\$2" = -z ]; then
+  printf 'scripts/hook\0'
+  printf 'fatal: fixture-fault: simulated index read error\n' >&2
+  exit 128
+fi
+exec "$real_git" "\$@"
+STUB
+chmod +x "$stub_bin/git"
+status=0
+out=$(cd "$walk" && PATH="$stub_bin:$PATH" ./scripts/list-shell-sources.sh --tabs 2>&1) || status=$?
+[ "$status" -ne 0 ] ||
+	fail "walk: a listing that stopped partway produced an inventory at exit 0: $out"
+printf '%s\n' "$out" | grep -q "^list-shell-sources: could not list the repository's tracked files" ||
+	fail "walk: no diagnostic for a failed listing: $out"
+
 # A tracked path replaced by a FIFO. git only ever stores regular files,
 # symlinks and gitlinks, so this cannot come from the index -- it comes from
 # the worktree, where anything can be put at a tracked path. It is the one
@@ -241,6 +287,26 @@ echo hi
 		fail "unsearchable: a file behind an unsearchable directory was dropped at exit 0: $out"
 	printf '%s\n' "$out" | grep -q '^list-shell-sources: .*scripts/nested/hook' ||
 		fail "unsearchable: no diagnostic naming the file: $out"
+
+	# A symlink whose target exists and cannot be read. `-L` alone would call
+	# this a broken link and send the developer looking for a missing target
+	# rather than at the permissions that are actually wrong.
+	link_unreadable=$(new_fixture link_unreadable)
+	write_tracked "$link_unreadable" scripts/target '#!/usr/bin/env bash
+'
+	ln -s target "$link_unreadable/scripts/hook"
+	git -C "$link_unreadable" add -- scripts/hook
+	chmod 000 "$link_unreadable/scripts/target"
+	status=0
+	out=$(listing "$link_unreadable" --tabs 2>&1) || status=$?
+	chmod 644 "$link_unreadable/scripts/target"
+	[ "$status" -ne 0 ] ||
+		fail "link_unreadable: an unreadable link target was dropped at exit 0: $out"
+	if printf '%s\n' "$out" | grep -q 'whose target is missing'; then
+		fail "link_unreadable: a readable link to an unreadable target read as broken: $out"
+	fi
+	printf '%s\n' "$out" | grep -q '^list-shell-sources: cannot open scripts/' ||
+		fail "link_unreadable: no permissions diagnostic: $out"
 fi
 
 # The lister's exit status only reaches a verdict if its consumers read it, and
