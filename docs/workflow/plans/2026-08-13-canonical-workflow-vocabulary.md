@@ -137,12 +137,20 @@ per-run blob map. Produces final evaluation and repository-gate evidence.
    entire post-evaluation against the new HEAD with fresh run ids.
 4. Run `git diff --check`, then `just verify` bare. Expected: zero warnings and exit 0.
 5. Review `git diff main...HEAD` for scope, naming, and stale old vocabulary. Record final branch,
-   base, guardrail result, evaluation run ids, and zero open findings in this plan's progress
-   section.
+   base, guardrail result, evaluation run ids, and open findings only in the quest's GitHub
+   `WORK:REVIEW`/handoff annotations; do not edit this tracked plan after the proven HEAD.
+6. After the handoff has durably recorded the run ids, move the ignored issue-45 packet, capture,
+   evaluator, oathbind, and gauntlet artifacts to trash. Never delete another run's `.agent/`
+   content.
 
 **Acceptance:** all fixed behavioral traits pass under one independent evaluator, all repository
 guardrails pass, evaluation artifacts remain untracked, and the branch contains only chartered
 surface.
+
+**Rollback:** before push, revert the implementation commits newest-first while retaining the
+design history only if another change still needs it; after push, use ordinary `git revert`
+commits in that same order. Never rewrite published history. Ignored evaluation artifacts are
+evidence only and can be moved to trash after their run ids and verdicts are recorded.
 
 ## Progress
 
