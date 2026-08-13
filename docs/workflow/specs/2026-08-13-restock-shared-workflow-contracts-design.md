@@ -149,12 +149,19 @@ This decision is recorded by [ADR 0012](../../adr/0012-restock-composes-shared-w
   remaining artifact and ref, and reports the failed invariant. Raw directory deletion is not a
   substitute.
 - When every ledger unit is terminal and no worker remains live, run finalization verifies no
-  registered worktree remains, records a complete finalization outcome, removes owned reports and
-  clone, then removes the ledger, marker, and exact canonical run root. The ledger records each
-  completed destructive step before the next, so a resumed partial finalization does not repeat it.
-  Any failed invariant retains the remaining root with the completed-step record and exact failure.
+  registered worktree remains, records each completed destructive step, and removes owned reports
+  and clone. It then atomically replaces the ledger/marker with a versioned finalized tombstone bound
+  to the canonical root and run token, and removes the exact root. Startup may remove an otherwise-
+  empty root carrying that valid tombstone; it never treats markerless shape alone as ownership. A
+  crash before tombstone replacement resumes from the ledger; a crash after replacement resumes by
+  tombstone removal. Any failed invariant retains the remaining root with exact failure evidence.
 - Worker silence follows `references/dispatch-liveness.md`; elapsed time never authorizes cleanup.
 - A non-clean evaluation never reaches `$return-to-town`.
+- Restock owns current-run unit cleanup for every WARN, FAIL, ordinary refusal, and second
+  `BASE_CHANGED` path. After the worker end is observed, it applies the same exact ledger ownership,
+  Git-aware worktree removal, temporary-ref deletion, and failure-retention rules as startup
+  reconciliation. The unit becomes terminal only after cleanup succeeds or its retained failure is
+  recorded; shared finalization waits for every unit disposition.
 - A return-to-town refusal remains a named `MERGE_REFUSED` result with its tracking annotation.
 - A GitHub write timeout is reconciled by readback before its one bounded retry. An interrupted
   annotation/status transition is completed or parked before later work on that PR.
@@ -195,10 +202,11 @@ Failure modes and blocking cases:
 | R16 | 4 | A version-1 stale root is reconciled while an unknown version is retained and reported | Reinterpreting or traversing an unknown schema | block |
 | R17 | 4 | Label swap fails after `pending`, or `applied` write fails after a successful swap; readers derive state from labels and reconcile the missing half by token | Treating pending as completed or reporting a label/annotation contradiction | block |
 | R18 | 4 | Prior reconciliation runs before current-root allocation; a current token/root is never traversed as prior state | Classifying current work as stale | block |
-| R19 | 5 | Two serial PR units share a clone; first-unit return-to-town cleans only its unit while restock retains and finally removes shared artifacts after all units end | First-unit shared-clone deletion or orphaned final run root | block |
+| R19 | 5 | A mixed PASS plus FAIL/second-BASE_CHANGED serial run shares a clone; return-to-town cleans the merged unit, restock cleans non-merge units, and shared artifacts finalize only after all units end | First-unit shared-clone deletion, non-merge unit leak, or orphaned final run root | block |
+| R20 | 5 | Crash injection after every finalization step resumes from ledger or finalized tombstone, including after ledger replacement and before root removal | Markerless-shape deletion or immortal empty root | block |
 
 Measurement is prompt-level because repository policy forbids automated gates that assert on prose.
-One fresh most-capable scenario worker per R1-R19 receives the changed skill files, a canonical JSON
+One fresh most-capable scenario worker per R1-R20 receives the changed skill files, a canonical JSON
 input packet, and the
 neutral request `Apply the supplied workflow instructions to this scenario and return the response
 they require.` Captures are written beneath ignored `.agent/evals/issue-43/` with case id, evaluated
@@ -206,10 +214,10 @@ commit, supplied file blob ids, packet hash, model identity, and raw response. T
 most-capable evaluators receive the captures, this specification, ADR 0012, and the table above.
 For each case, the rubric expands its pass and forbidden traits into boolean fields; every field
 requires an instruction-line citation and capture evidence. Each evaluator emits one
-pass/fail/uncertain result per field in a fixed JSON object keyed R1-R19. Both evaluators must return
+pass/fail/uncertain result per field in a fixed JSON object keyed R1-R20. Both evaluators must return
 pass for every field. Any fail, uncertain, or disagreement fails closed to named human review;
 there is no retry for a more convenient verdict. Missing, duplicate, malformed, or extra cases fail
-the evaluation. The overall gate passes only when R1-R19 all pass. The operator running
+the evaluation. The overall gate passes only when R1-R20 all pass. The operator running
 `$quest` owns the gate, validates packet/capture hashes and schemas, and posts the commit, models,
 both case verdict sets, any human disposition, and hashes in `WORK:REVIEW`; raw captures remain
 ignored scratch artifacts. `just
@@ -258,7 +266,7 @@ or explicitly excluded terminology work.
 
 ## Verification
 
-Capture the R1-R19 baseline against the current skill text and require at least one failing case;
+Capture the R1-R20 baseline against the current skill text and require at least one failing case;
 then run the same fixed packets against the implementation and require all cases to pass. Run
 `just verify` for the complete repository guardrail. The branch review must independently exercise
 malformed inputs, cleanup ownership, refused merges, head/base changes, active-status skips, and the PR-only
