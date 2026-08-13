@@ -208,7 +208,7 @@ Worker (reviewer):
   `scripts/review-package BASE HEAD` prints a path unique to that range, and the
   package's contents never pass through the orchestrator's own context.
 
-**What comes back:** a Spec Compliance verdict (✅ / ❌ / ⚠️), Strengths, Issues
+**What comes back:** a Spec Compliance check (✅ / ❌ / ⚠️), Strengths, Issues
 graded critical / high / medium / low, and a canonical verdict. `approve` is
 valid only when there are zero findings. A `low` finding therefore keeps the
 reviewer's verdict at `needs-attention`; the orchestrator may disposition it in
