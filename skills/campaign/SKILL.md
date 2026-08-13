@@ -70,7 +70,7 @@ Manifest schema:
 - Normalized-selector: <normal form>
 - Completion notes: <text or "none">
 - Public-safe notes: <derived summary or "none">
-- Completion condition: every queued issue closed or merged
+- Completion condition: every queued issue closed or merged and pending occurrence dispositions empty
 - BASE_BRANCH: <filled by step 2>
 - Guardrail commands: <filled by step 2>
 - ADR-index coupling: <filled by step 2>
@@ -93,7 +93,8 @@ Status progression: `pending → triaged → in-flight → merged | closed | blo
 
 The pending-occurrence table is not a fix queue. Validate unique occurrence numbers and only
 the two nonterminal states shown above. Older manifests without the section backfill an empty
-table before validation. On every resume, read each occurrence with
+table and normalize the Completion condition field to the schema text above before validation.
+On every resume, read each occurrence with
 `gh issue view <N> --json state,stateReason,url`: remove it and append the verified
 `closed-not-planned: occurrence of sweep #N` outcome only for `CLOSED`/`NOT_PLANNED`; otherwise
 update its actual state and keep it pending. A failed read records `unknown-unverified`.
@@ -165,6 +166,12 @@ leave the issue open, record an issue-local blocker, and continue draining other
 `closed-not-planned` outcome. A failed close, failed readback, or other state records the actual
 state (`unknown/unverified` when unreadable), blocks that row, and never emits a terminal
 closure claim.
+
+After successful readback, surgically update the full unique queue row to `Status: closed`,
+append `closed-not-planned` plus its rationale to Outcomes log, and re-read the manifest to
+verify only that row and outcome changed. If the manifest write or readback fails, do not repeat
+the already-verified GitHub close; record that actual closure as a blocker and stop completion
+until the manifest can be reconciled.
 
 ## 5. Execute Fixes
 
