@@ -1,6 +1,6 @@
 # Canonical workflow vocabulary design
 
-Issue: [#45](https://github.com/randomparity/adept/issues/45)  
+Issue: [#45](https://github.com/randomparity/adept/issues/45)
 Decision: [ADR 0011](../../adr/0011-canonical-workflow-review-vocabulary.md)
 
 ## Scope and outcome
