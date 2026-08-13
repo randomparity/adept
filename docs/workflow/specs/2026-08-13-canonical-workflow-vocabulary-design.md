@@ -169,6 +169,8 @@ produce; it does not grade itself. The orchestrator captures each response uncha
 run-unique file under ignored `.agent/evals/`. These are prompt-level simulations: commands,
 tracker writes, and git mutations remain hypothetical, so E5 supplies fixed successful-cleanup,
 failed-cleanup, and mixed-payload command results rather than touching shared git state.
+The run has exactly twelve captures with ids `E1`, `E2`, `E3`, `E4`, `E5a`, `E5b`, `E5c`,
+`E6`, `E7`, `E8`, `E9`, and `E10`; a missing, duplicate, or extra capture fails the run.
 
 Second, one different fresh most-capable evaluator receives those captured responses plus the
 frozen charter, specification, ADR, fixed input manifest with verified contents, and E1–E10
@@ -230,15 +232,20 @@ The evaluator writes run-unique JSON under ignored `.agent/evals/` with this sha
 }
 ```
 
-The required trait ids are fixed: E1 `grade-high`, `grade-low`, `verdict`, `route-high`,
+The evaluator emits ten case results, `E1` through `E10`, exactly once. Case E5 consumes exactly
+the three capture envelopes `E5a`, `E5b`, and `E5c`; every other case consumes the envelope with
+its own id. The required trait ids are fixed: E1 `grade-high`, `grade-low`, `verdict`, `route-high`,
 `route-low`; E2 `separate-classification`, `impact-severity`, `missing-evidence`; E3
 `resist-downgrade`; E4 `reject-stale`; E5a `isolated-worktree`, `cleanup-success`; E5b
 `cleanup-failure-shape`; E5c `reject-mixed`; E6 `no-rerun`, `nondeterminism-finding`; E7
 `merge-refused`, `pass-conversion`, `counter-cases`; E8 `separate-risk-axes`,
 `concrete-only-severity`; E9 `common-verdict`, `common-counts`, `transport-difference`,
 `explicit-model`; E10 `generic-roles`, `precise-subtype`. The orchestrator records each ordered
-list beside its packet hash. Each case result must contain exactly those trait ids once, prefixed
-by its case id (for example `E5-reject-mixed`). Every trait needs its own
+list beside its applicable packet hash or hashes. Each case result must contain exactly those trait ids once, prefixed
+by its evaluator case id (for example the E5c evidence is graded as `E5-reject-mixed`). Each E5
+trait cites the capture envelope that supplies its evidence: `isolated-worktree` and
+`cleanup-success` cite E5a, `cleanup-failure-shape` cites E5b, and `reject-mixed` cites E5c.
+Every trait needs its own
 verdict, implementation citations, and rationale; a case passes only when all its traits pass.
 All E1–E10 cases must appear once and return `pass`; any `fail`, `uncertain`, missing/duplicate
 case or trait, missing implementation citation, design-only pass citation, malformed field,
