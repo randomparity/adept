@@ -17,9 +17,10 @@ governing decision is
 
 ## Behavior
 
-At entry to the operator-merge path and the shared “After a merge” path,
-`$return-to-town` takes one explicit-field snapshot containing `state`, `mergedAt`,
-`mergeable`, `mergeStateStatus`, and `statusCheckRollup`. It branches in this order:
+Before the default handoff or operator-authorized merge paths diverge, `$return-to-town`
+takes one explicit-field snapshot containing `state`, `mergedAt`, `mergeable`,
+`mergeStateStatus`, and `statusCheckRollup`. No handoff tracking write and no computed-field
+interpretation precedes this dispatch. It branches in this order:
 
 1. `MERGED`: treat the pull request as conclusively merged regardless of computed-field
    values, complete operator-path tracking when applicable, and proceed to cleanup.
@@ -44,6 +45,8 @@ with three fixed packets:
 
 - V1: `state=MERGED`, non-null `mergedAt`, computed fields `UNKNOWN`; expected result is
   immediate post-merge tracking/cleanup with no poll.
+- V1b: `state=MERGED`, null `mergedAt`, computed fields `UNKNOWN`; expected result is the
+  same immediate post-merge tracking/cleanup, proving `state` alone controls the branch.
 - V2: `state=OPEN`, green checks, `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`; expected
   result is the existing handoff or authorized-merge behavior.
 - V3: `state=CLOSED`, null `mergedAt`; expected result is a stop without post-merge cleanup.
@@ -65,4 +68,3 @@ Then run `just verify` and `git diff --check`.
 - `BASE_BRANCH` is `main`; branch is `feat/merged-state-first-76`.
 - Host architecture is `arm64`; no target architecture is declared, so the relationship is
   `no-target-declared`.
-
