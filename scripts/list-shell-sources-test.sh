@@ -118,6 +118,44 @@ out=$(listing "$missing" --tabs 2>&1) || status=$?
 printf '%s\n' "$out" | grep -q '^list-shell-sources: scripts/hook is tracked but nothing is there' ||
 	fail "missing: the diagnostic does not point at the deletion: $out"
 
+# A tracked path replaced by a FIFO. git only ever stores regular files,
+# symlinks and gitlinks, so this cannot come from the index -- it comes from
+# the worktree, where anything can be put at a tracked path. It is the one
+# shape that must not reach the open: opening a FIFO for reading blocks until a
+# writer appears, which would hang every gate that consumes this list.
+#
+# What this case pins is the verdict, not the hang. Measured on bash 3.2: with
+# the guard removed the open sometimes returns instead of blocking, because the
+# process substitution feeding the loop delivers a SIGCHLD that interrupts it --
+# a race, which is exactly what the guard removes. Against the `[[ -f ]]` test
+# this branch replaced it reddens outright, since that answered 1 and dropped
+# the path in silence.
+fifo=$(new_fixture fifo)
+write_tracked "$fifo" scripts/hook '#!/usr/bin/env bash
+'
+rm -- "$fifo/scripts/hook"
+mkfifo "$fifo/scripts/hook"
+status=0
+out=$(listing "$fifo" --tabs 2>&1) || status=$?
+rm -- "$fifo/scripts/hook"
+[ "$status" -ne 0 ] ||
+	fail "fifo: a tracked path replaced by a FIFO was dropped at exit 0: $out"
+printf '%s\n' "$out" | grep -q '^list-shell-sources: scripts/hook is tracked but is not a regular file' ||
+	fail "fifo: the diagnostic does not say it is not a regular file: $out"
+
+# A tracked symlink whose target is gone. `-e` follows the link and is false,
+# exactly as it is for an absent path, so without its own branch the diagnostic
+# tells the developer to stage a deletion that is not there.
+dangling=$(new_fixture dangling)
+ln -s missing-target "$dangling/scripts/hook"
+git -C "$dangling" add -- scripts/hook
+status=0
+out=$(listing "$dangling" --tabs 2>&1) || status=$?
+[ "$status" -ne 0 ] ||
+	fail "dangling: a symlink with no target was dropped at exit 0: $out"
+printf '%s\n' "$out" | grep -q '^list-shell-sources: scripts/hook is a symlink whose target is missing' ||
+	fail "dangling: the diagnostic does not name the broken symlink: $out"
+
 # A submodule's gitlink is the one non-file git emits here as a matter of
 # course, and it is a directory. It is the ordinary negative, not a fault: with
 # the open deciding and nothing naming this case, every repo with a submodule

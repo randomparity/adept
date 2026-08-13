@@ -18,12 +18,15 @@ set -euo pipefail
 # is one this script cannot classify, and dropping it would leave it out of an
 # inventory whose whole purpose is that no script escapes the gates.
 #
-# The second one applies to every tracked file, not only to scripts, because
-# whether a file is a script is exactly what an unopenable one does not say. So
-# deleting a tracked file without staging the deletion reds `just lint`,
-# `just format-check` and the `commit-check` hook until it is staged or the file
-# is restored. That is the intended reading of an inventory that cannot be
-# trusted, not a broken gate -- the diagnostic names which of the two it is.
+# The second one covers every tracked file this script has to open to classify
+# -- everything without a `.sh` name, since whether such a file is a script is
+# exactly what an unopenable one does not say. So deleting a tracked file
+# without staging the deletion reds `just lint`, `just format-check` and the
+# `commit-check` hook until it is staged or the file is restored. That is the
+# intended reading of an inventory that cannot be trusted, not a broken gate --
+# the diagnostic names which case it is. A `.sh` file is classified by name and
+# never opened here, so an unopenable one reaches shellcheck and shfmt instead
+# and fails there.
 
 mode='tabs'
 nul=0
@@ -63,19 +66,25 @@ env_bash_shebang='^#![[:space:]]*([^[:space:]]*/)?env[[:space:]]+(-S[[:space:]]+
 # bash's own "Permission denied" behind the redirection -- this script's
 # diagnostic is its interface.
 #
-# There is no `[[ -f $path ]]` guard ahead of it, and its absence is the point.
-# git lists the path, so something is meant to be there; a test that answers
-# "not a regular file" collapses a tracked file missing from the worktree, one
-# behind an unsearchable directory, and a broken symlink into the same silent
-# negative as a text file, which is the defect one line further down. Let the
-# open report each of them. A submodule's gitlink is the one ordinary non-file
-# git emits here, and it is a directory, so it is named rather than opened.
+# The `[[ -f $path ]]` guard this replaces answered "not a regular file" and
+# returned the ordinary negative, which collapsed a tracked file missing from
+# the worktree, one behind an unsearchable directory and a broken symlink into
+# the same silence as a text file -- the defect one line further down. Those
+# three reach the open and are reported.
+#
+# Two shapes must not reach it. A directory is a submodule's gitlink, the one
+# non-file git emits here as a matter of course, and it is the ordinary
+# negative. Anything else that exists but is not a regular file -- a FIFO left
+# where a tracked file used to be is the reachable one -- would block the open
+# forever and hang every gate that consumes this list, so it is reported
+# instead. Both tests follow symlinks, which is what the open would have done.
 is_shell_source() {
 	local path=$1 first_line=''
 	case $path in
 	*.sh) return 0 ;;
 	esac
 	[[ -d $path ]] && return 1
+	[[ -e $path && ! -f $path ]] && return 2
 	{ exec 3<"$path"; } 2>/dev/null || return 2
 	IFS= read -r first_line <&3 || :
 	exec 3<&-
@@ -96,12 +105,19 @@ while IFS= read -r -d '' path; do
 	case $source_status in
 	0) ;;
 	1) continue ;;
-	# Two remedies, so two messages. The fault is the same either way -- this
-	# script cannot say what the file is -- but "restore it" and "fix its
-	# permissions" are not the same instruction, and one message covering both
-	# reads as a broken gate to whoever hits the common one.
+	# One fault, four remedies, so four messages. What the script cannot do is
+	# the same every time -- say what the file is -- but "stage the deletion",
+	# "fix the symlink", "replace the FIFO" and "fix the permissions" are not
+	# one instruction, and a message covering all four reads as a broken gate
+	# to whoever hits the common one.
 	*)
-		if [[ -e $path ]]; then
+		if [[ -e $path && ! -f $path ]]; then
+			printf 'list-shell-sources: %s is tracked but is not a regular file, so it cannot be classified\n' \
+				"$path" >&2
+		elif [[ -L $path ]]; then
+			printf 'list-shell-sources: %s is a symlink whose target is missing, so it cannot be classified\n' \
+				"$path" >&2
+		elif [[ -e $path ]]; then
 			printf 'list-shell-sources: cannot open %s to classify it; check the permissions on it and on its parent directories\n' \
 				"$path" >&2
 		else
