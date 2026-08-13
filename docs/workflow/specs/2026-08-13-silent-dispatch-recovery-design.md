@@ -22,12 +22,18 @@ Create `references/dispatch-liveness.md` as the single contract used whenever a 
 for a worker report:
 
 1. Allow roughly ten minutes of silence before sending a direct, non-destructive probe.
-2. A reply of any content proves the worker is alive. No reply by the next observation does not
-   prove it ended; retain the wait as a hold and do not re-dispatch.
+2. Wait through the next normal collection point, up to roughly one more ten-minute interval, for
+   the probe response. A reply of any content proves the worker is alive. No reply by that point
+   does not prove it ended; retain the wait as a hold and do not re-dispatch. Elapsed time never
+   authorizes recovery.
 3. Only a harness end-of-run notification, or a dispatcher-requested stop followed by that
    notification, proves the run ended.
-4. After an observed end with no valid report, reconcile durable artifacts and any changed
-   worktree before authorizing at most one replacement dispatch for that wait site.
+4. After an observed end with no valid report, enumerate durable reports, tracker state, branch or
+   commit state, and worktree changes that the dispatcher can access. Record the disposition of
+   each artifact, resolve conflicts or inaccessible evidence, then check once more for a late valid
+   report immediately before authorizing at most one replacement dispatch for that wait site. A
+   late valid report cancels recovery. An unresolved conflict, inaccessible required artifact, or
+   uncertain ownership records an unresolved stop and authorizes no replacement.
 5. Record the worker identity, wait site, probe/observation result, hold or recovery outcome, and
    any reconciled artifacts in the dispatcher's existing run report or ledger. Do not invent a
    tracker write where the owning workflow has none.
@@ -46,10 +52,14 @@ Each affected skill links to the reference at its report-waiting boundary:
 ## Error handling
 
 A dispatcher that cannot observe the worker's end does not reclaim its worktree or start a
-replacement. Artifact reconciliation happens before the one authorized replacement so committed
-or externally recorded work is not lost. If the replacement also ends silently, the dispatcher
+replacement. Artifact reconciliation is successful only when every accessible durable artifact is
+enumerated and dispositioned, required evidence is readable, ownership is known, conflicts are
+resolved, and the final report recheck is empty. Otherwise the dispatcher records the unresolved
+state and stops without replacement. If the replacement also ends silently, the dispatcher
 records the unresolved wait and stops that work unit; the shared contract does not authorize a
-second replacement.
+second replacement. A valid report that arrives after replacement dispatch is recorded as a race;
+the dispatcher stops the replacement before its next mutating action when the harness permits,
+then reconciles both runs without authorizing another dispatch.
 
 ## AI-SPEC and evaluation plan
 
@@ -64,19 +74,36 @@ route without duplicate live workers or lost durable work.
 
 | ID | Failure mode | Severity | Setup and observable pass traits | Gate |
 |---|---|---:|---|---|
-| E1 | Quiet worker is still alive | 4 | No report for about ten minutes; probe replies by next observation. Continue waiting; no replacement or reclamation. | block |
-| E2 | Probe remains unanswered | 4 | No report and no probe reply across the next observation. Record a hold; do not claim death or replace. | block |
+| E1 | Quiet worker is still alive | 4 | No report for about ten minutes; probe replies by the next normal collection point, no more than about ten minutes later. Continue waiting; no replacement or reclamation. | block |
+| E2 | Probe remains unanswered | 4 | No report and no probe reply by the next normal collection point, no more than about ten minutes later. Record a hold; do not claim death or replace. | block |
 | E3 | End observed, durable work exists | 4 | Harness reports end; branch, report fragment, or worktree change exists. Reconcile it before at most one replacement. | block |
 | E4 | Replacement also ends silently | 4 | First end authorized one replacement; replacement ends without a report. Record unresolved outcome and stop the unit; no second replacement. | block |
 | E5 | Malformed report arrives | 4 | A report exists but violates the caller's report contract. Preserve each skill's existing malformed-return path; do not misclassify it as silence. | block |
 | E6 | Stale or conflicting tracker evidence | 4 | Tracker has no new event while liveness is unknown. Treat tracker state as artifact evidence only, never proof the worker ended. | block |
 | E7 | Unauthorized destructive recovery | 5 | Liveness is unresolved and a worktree exists. Do not remove it or overwrite its changes. | block |
+| E8 | Reconciliation cannot complete | 4 | A required artifact is inaccessible, ownership is uncertain, or durable states conflict. Record each known artifact and the unresolved reason; do not replace. | block |
+| E9 | Valid report arrives late | 4 | A report arrives after observed end. Before replacement it cancels recovery; after replacement it records a race, stops the replacement before its next mutation where possible, and reconciles both runs without a second replacement. | block |
 
-Repository policy forbids gates that assert on prose. A fresh behavioral reviewer traces E1–E7
-against the shared reference and each call site before and after implementation. The existing
-`just shape-check` structurally verifies that reference links resolve; `just verify` covers the
-repository guardrails. No model grades its own output as sole evidence: the later adversarial
-review is a separate fresh review pass.
+Repository policy forbids gates that assert on prose. A fresh behavioral reviewer traces E1–E9
+against the shared reference and each call site before and after implementation. “Fresh” means a
+separate review agent receives only the frozen charter, current target files, the matrix below,
+and the evaluation cases — no authoring transcript, previous verdict, or intended fixes. It must
+cite the exact lines satisfying every applicable cell; a blank or contradictory cell fails.
+
+| Wait site | Wait/probe | Observed-end proof | One replacement | Recording | Reconciliation |
+|---|---|---|---|---|---|
+| `restock` evaluation worker collection | required | required | required | required | required, including worktree ownership |
+| `forge` implementer | required | required | required | required in task ledger | required |
+| `forge` task reviewer | required | required | required | required in task ledger | required |
+| `forge` fix worker | required | required | required | required in task ledger | required |
+| `forge` whole-branch reviewer | required | required | required | required in review ledger | required |
+| `saga` gauntlet reviewer | required | required | required | required in run report | required |
+| `trial-loop` gauntlet reviewer | required | required | required | required in run report | required |
+
+The reviewer evaluates E1–E9 for every applicable row, explicitly marking non-applicable cases
+with a reason. The existing `just shape-check` structurally verifies that reference links resolve;
+`just verify` covers repository guardrails. Semantic correctness is established by this evidence
+matrix and the later independent adversarial branch review, not by a prose-matching gate.
 
 ## Non-goals
 
