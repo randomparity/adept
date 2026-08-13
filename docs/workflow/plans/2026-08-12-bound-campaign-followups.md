@@ -33,6 +33,13 @@ script, dependency, label taxonomy, or prose-sensitive automated test is added.
 | `skills/bounty/SKILL.md` | Defect-class discovery, threshold routing, sweep lifecycle, confirmation freshness, occurrence creation/closure handoff |
 | `skills/campaign/SKILL.md` | Cost/benefit triage, not-planned closure, follow-up confirmation, manifest/final-report disclosure |
 
+## Pre-implementation scope check
+
+Before Task 1, read issue #91's latest complete `WORK:SCOPE` block with the bounded `gh issue
+view --json comments --jq` command in Task 3 Step 3.1. Verify token
+`68863689-6849-47C1-B56D-41C43F790D66-v4`. A missing or different token stops before any
+implementation edit. Task 3 repeats this as a final drift check.
+
 ## Task 1 — Bounty recurrence and occurrence lifecycle
 
 **Files:** modify `skills/bounty/SKILL.md`.
@@ -155,9 +162,10 @@ state and keep the follow-up blocked; never emit the closed row or finish the ca
 
 ### Step 2.4 — Run focused behavioral review and guardrails
 
-Run all fixed simulations E1–E14 against both changed skills and capture the complete prompts,
-packets, JSON, model identifier or `unavailable`, human pass/fail comparison, and instruction
-line citations at `.agent/evals/issue-91-final.md`.
+Dispatch all fixed simulations E1–E14 to a fresh reviewer context with tools disabled, distinct
+from the implementing context, and capture the complete prompts, packets, JSON, model identifier
+or `unavailable`, human pass/fail comparison, and instruction line citations at
+`.agent/evals/issue-91-final.md` exactly as the specification requires.
 
 Expected: every blocking case passes. Specifically E6 declines with no manifest mutation, E8
 closes not planned without claiming fixed, E10 produces the final report row, and E11 stops on
@@ -197,7 +205,15 @@ unexplained divergence from the ADR.
 
 ### Step 3.2 — Run the full guardrail suite
 
-Run `just verify` bare, then `git diff --check` and `git status --short`.
+First run an independent adversarial whole-diff review against `main`, focused on contract
+contradictions, missing failure edges, consent boundaries, evidence loss, recurrence counting,
+and divergence from ADR 0008 and the approved surface. Disposition every finding. For each
+accepted fix, edit only the two skill files, commit that fix separately, rerun the affected
+E1–E14 simulations with a fresh reviewer, and repeat whole-diff review until approved or the
+review cap stops the task.
+
+After review approval, run `just verify` bare, then `git diff --check` and
+`git status --short`.
 
 Expected: all gates exit 0; status contains no untracked or modified file except intentional
 review fixes not yet committed. Commit any accepted review fix separately before continuing.
