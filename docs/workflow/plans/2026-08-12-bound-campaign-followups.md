@@ -173,15 +173,21 @@ Commit explicit path `skills/campaign/SKILL.md` with:
 
 ## Task 3 — Whole-change verification
 
-**Files:** no planned edits; findings may change only the two implementation files or the
-design artifacts through their review contracts.
+**Files:** no planned edits; accepted implementation-review fixes may change only
+`skills/campaign/SKILL.md` and `skills/bounty/SKILL.md`. A finding against the approved spec or
+accepted ADR stops implementation for a new design-review or supersession decision; it does not
+authorize editing the frozen baseline inline.
 
 **Interfaces:** consumes both completed task contracts and produces branch-review evidence.
 
 ### Step 3.1 — Trace every requirement
 
-Read the v4 scope annotation, ADR 0008, and the specification traceability table. Map each
-criterion to exact lines in campaign/bounty and each E1–E14 row in the final eval artifact.
+Read the latest complete `WORK:SCOPE` block on issue #91 with:
+`gh issue view 91 --json comments --jq '[.comments[].body | select(test("(?m)^<!-- WORK:SCOPE -->$") and test("(?m)^<!-- SCOPE:COMPLETE -->$"))] | last'`.
+Verify it contains scope token `68863689-6849-47C1-B56D-41C43F790D66-v4`, then read ADR 0008
+and the specification traceability table. Map each criterion to exact lines in campaign/bounty
+and each E1–E14 row in the final eval artifact. A missing or different latest token stops the
+task for scope reconciliation.
 
 Expected: no unmapped criterion, no implementation file outside the frozen surface, and no
 unexplained divergence from the ADR.
