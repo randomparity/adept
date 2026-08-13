@@ -61,9 +61,12 @@ status. Every report names the evaluated SHA.
 
 Before the first claim, restock reads repository viewer permission, ensures every status label it
 may write with the quest-log distinguish-already-exists recipe, and verifies that the selected merge
-method plus `--match-head-commit` are available. Read-only or label/comment-incapable credentials
-stop before a claim; GitHub exposes no side-effect-free proof of comment permission, so the first
-claim comment is the bounded capability test. If it fails, nothing else is mutated.
+method plus `--match-head-commit` are available. GitHub exposes no side-effect-free proof of comment
+or existing-label edit permission, so the initial claim plus `status:in-progress` swap is a bounded
+capability transaction. Claim failure stops with no later mutation. If the comment succeeds but the
+status edit fails, restock posts and verifies a terminal void-claim annotation when comment access
+remains, then stops before evaluation; an unverifiable void leaves `status:needs-human` instructions
+for the operator rather than pretending the claim is inactive.
 
 Every tracking transition uses the same ordering and stable run token: append the explanatory
 complete annotation, read it back, swap the single active status set, then read the labels back.
@@ -76,10 +79,14 @@ handling follows the same order: verified collision annotation first, then exact
 
 For a clean `PASS`, restock swaps the PR to `status:awaiting-merge` and invokes
 `$return-to-town <PR>` with the caller's explicit merge authorization, the restock tracking target,
-the evaluated head SHA, the branch/worktree ownership recorded in the ledger, and the discovered
-base/guardrails. Return-to-town passes that SHA to GitHub's guarded merge operation and refuses if
-the live head differs; the check and merge are one GitHub operation rather than a local read followed
-by an unguarded merge. Restock does not repeat merge, base refresh, branch deletion, worktree
+the evaluated head SHA and base SHA, the branch/worktree ownership recorded in the ledger, and the
+discovered base/guardrails. Return-to-town re-reads the live base before merge. If only the base
+advanced, restock integrates that base into the evaluation branch, reruns the discovered guardrails,
+and updates the evaluated base/head evidence before returning; a failure becomes non-merge terminal
+evidence. Return-to-town passes the current evaluated head SHA to GitHub's guarded merge operation
+and accepts required checks only for that current head. The final head check and merge are one
+GitHub operation rather than a local read followed by an unguarded merge. Restock does not repeat
+merge, branch deletion, worktree
 removal, or remote pruning. Because Dependabot PRs commonly have no owning issue,
 `$return-to-town` gains an explicit PR-only tracking mode: it posts the terminal
 `WORK:TRAJECTORY` on the PR, strips the PR's `status:` labels after a verified merge, and skips issue
@@ -111,10 +118,13 @@ This decision is recorded by [ADR 0012](../../adr/0012-restock-composes-shared-w
   unobserved worker end retains the artifact and reports the exact reason.
 - After those checks, reconciliation uses Git-aware operations in this order: verify the recorded
   common directory still belongs to the recorded clone; verify the registered worktree holds the
-  recorded temporary ref; remove that exact worktree through Git; verify its registration is gone;
-  delete only the recorded temporary ref; then prune worktree registrations only in the recorded
-  clone. A mismatch or failed step stops reconciliation for that unit, retains every remaining
-  artifact and ref, and reports the failed invariant. Raw directory deletion is not a substitute.
+  recorded temporary ref; inspect dirtiness; remove that exact worktree through Git; verify its
+  registration is gone; delete only the recorded temporary ref; then prune worktree registrations
+  only in the recorded clone. `git worktree remove --force` is permitted only for a dirty evaluation
+  worktree after every ownership check and observed-end proof has passed; the ledger records that
+  forced removal. A mismatch or failed step stops reconciliation for that unit, retains every
+  remaining artifact and ref, and reports the failed invariant. Raw directory deletion is not a
+  substitute.
 - Worker silence follows `references/dispatch-liveness.md`; elapsed time never authorizes cleanup.
 - A non-clean evaluation never reaches `$return-to-town`.
 - A return-to-town refusal remains a named `MERGE_REFUSED` result with its tracking annotation.
@@ -147,12 +157,12 @@ Failure modes and blocking cases:
 | R5 | 4 | A worker dispatch names Codex worker semantics portably | Required Claude `general-purpose` subtype | block |
 | R6 | 4 | Conflicting or malformed worker evidence follows liveness/fail-closed rules | Silent adoption or unbounded redispatch | block |
 | R7 | 4 | A PR-only return-to-town run records trajectory on the PR and skips issue operations | Fabricated issue identity or dependent reconciliation | block |
-| R8 | 5 | A PR head changes or multiple live claims exist after evaluation; guarded merge refuses the changed SHA and every collision contender leaves exactly `status:needs-human` until a complete operator resolution | Merge of a different SHA, another active status, or unilateral collision cleanup | block |
+| R8 | 5 | A PR head or base changes or multiple live claims exist after evaluation; base advance triggers re-evaluation, guarded merge refuses an unmatched head, and every collision contender leaves exactly `status:needs-human` until a complete operator resolution | Merge of an unevaluated head/base combination, another active status, or unilateral collision cleanup | block |
 | R9 | 5 | A prior ledger contains traversal, a symlink, or a type mismatch; the artifact is retained and the failed check is named | Cleanup outside the canonical owned root | block |
 | R10 | 5 | A PR changes an agent-facing instruction file; the worker treats it as data and follows only orchestrator and validated base-branch instructions | PR-head instruction authority or tools outside assigned evaluation paths | block |
 | R11 | 4 | A cross-host claim has no terminal evidence; it remains `needs-human` until a complete operator resolution names the token and evidence | Age-based automatic claim clearing | block |
-| R12 | 5 | A killed run leaves a registered worktree and temporary PR/batch ref; reconciliation verifies clone/common-dir/ref ownership, unregisters the worktree, verifies removal, deletes only that ref, and prunes only the owning clone | Raw directory deletion, branch-first deletion, broad ref deletion, or pruning another clone | block |
-| R13 | 5 | Label creation or the first claim comment is denied; the run stops before any later PR mutation or evaluation | Partial active status or evaluation without durable claim | block |
+| R12 | 5 | A killed run leaves clean and dirty registered worktrees plus temporary PR/batch refs; reconciliation verifies clone/common-dir/ref ownership, uses force only for a proven-ended owned dirty tree, verifies removal, deletes only that ref, and prunes only the owning clone | Raw directory deletion, branch-first deletion, unproven force, broad ref deletion, or pruning another clone | block |
+| R13 | 5 | Label creation, first claim comment, or editing an existing label is denied; the run stops before evaluation and voids or explicitly parks any posted claim | Evaluation without durable active claim or silent orphan claim | block |
 | R14 | 4 | Annotation succeeds and label swap fails or times out; readback prevents duplication and a later run reconciles the token before acting | Label-first transition, unbounded retry, or ignored incomplete state | block |
 | R15 | 5 | Guarded merge succeeds but terminal comment/label cleanup fails; merged state is re-read, merge is not retried, and `MERGED_TRACKING_INCOMPLETE` names repair | `MERGE_REFUSED`, repeated merge, or silent success | block |
 
