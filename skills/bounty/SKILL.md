@@ -61,9 +61,11 @@ the exact draft and target; the open-sweep occurrence path also verifies its not
    instead of another sweep. Preserve the current source, trigger, and evidence verbatim, link
    the open sweep in the body, and state that the occurrence will be closed not planned after
    verified creation. When called by campaign, also include a public-safe, whole-line
-   `CAMPAIGN-OCCURRENCE: <campaign-slug> source=#N sweep=#N` marker in the new occurrence body.
-   Show that marker and lifecycle in the draft the operator confirms. The marker belongs to the
-   new issue; discovery still never mutates historical issues.
+   `CAMPAIGN-OCCURRENCE: <campaign-slug> source=#N sweep=#N` marker and an immediately following
+   whole-line `CAMPAIGN-OCCURRENCE-RATIONALE: <public-safe rationale>` field in the new
+   occurrence body. The rationale is the same value returned in the occurrence tuple. Show both
+   fields and the lifecycle in the draft the operator confirms. They belong to the new issue;
+   discovery still never mutates historical issues.
 5. **Triage at creation.** Apply the `$sort-board` taxonomy (`type:`/`priority:`/
    `effort:` + adopted equivalents). Ensure-create the `status:` label you will apply using
    the `quest-log` skill's `ensure_label` recipe. Born triaged:
