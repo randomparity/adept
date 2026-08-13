@@ -168,7 +168,7 @@ state and keep the follow-up blocked; never emit the closed row or finish the ca
 
 ### Step 2.4 — Run focused behavioral review and guardrails
 
-Dispatch all fixed simulations E1–E20 to a fresh reviewer context with tools disabled, distinct
+Dispatch all fixed simulations E1–E22 to a fresh reviewer context with tools disabled, distinct
 from the implementing context, and capture the complete prompts, packets, JSON, model identifier
 or `unavailable`, human pass/fail comparison, and instruction line citations at
 `.agent/evals/issue-91-final.md` exactly as the specification requires.
@@ -210,7 +210,7 @@ Read the latest complete `WORK:SCOPE` block on issue #91 with:
 `gh issue view 91 --json comments --jq '[.comments[].body | select(test("(?m)^<!-- WORK:SCOPE -->$") and test("(?m)^<!-- SCOPE:COMPLETE -->$"))] | last'`.
 Verify it contains scope token `68863689-6849-47C1-B56D-41C43F790D66-v7`, then read ADR 0008
 and the specification traceability table. Map each criterion to exact lines in campaign/bounty
-and each E1–E20 row in the final eval artifact. A missing or different latest token stops the
+and each E1–E22 row in the final eval artifact. A missing or different latest token stops the
 task for scope reconciliation.
 
 Expected: no unmapped criterion, no implementation file outside the frozen surface, and no
@@ -222,13 +222,13 @@ First run an independent adversarial whole-diff review against `main`, focused o
 contradictions, missing failure edges, consent boundaries, evidence loss, recurrence counting,
 and divergence from ADR 0008 and the approved surface. Disposition every finding. For each
 accepted fix, edit only the two skill files, commit that fix separately, rerun the affected
-E1–E20 simulations with a fresh reviewer, and repeat whole-diff review until approved or the
+E1–E22 simulations with a fresh reviewer, and repeat whole-diff review until approved or the
 review cap stops the task.
 
 After every accepted review fix, replace—not append beside—the affected case entries in
 `.agent/evals/issue-91-final.md` with complete prompts, packets, current JSON, comparison, and
 line citations from the fixed HEAD. After whole-diff approval, repeat Step 3.1's complete
-requirement-to-current-line mapping and verify every E1–E20 entry describes HEAD before running
+requirement-to-current-line mapping and verify every E1–E22 entry describes HEAD before running
 the final gates.
 
 After review approval, run `just verify` bare, then `git diff --check` and
