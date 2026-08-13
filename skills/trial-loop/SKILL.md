@@ -4,6 +4,9 @@ description: "Iteratively run an adversarial challenge review, fix or dispositio
 ---
 # Adversarial Review Loop
 
+The coordinating role is the `orchestrator`; dispatched reviewers and fixers
+are `worker` subtypes. `subagent` refers only to the literal dispatch capability.
+
 Run `$gauntlet` against a target iteratively, fixing findings between passes,
 until it returns `approve` or 5 iterations are exhausted. This is both a
 standalone skill and a subroutine of `$quest` and `$spellcraft`.

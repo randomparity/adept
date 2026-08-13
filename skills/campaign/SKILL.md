@@ -5,6 +5,10 @@ description: "Orchestrate a set of GitHub issues until each is closed as already
 
 Drive a batch of GitHub issues to completion — each issue either closed (already fixed) or merged (fixed by a PR).
 
+Use `orchestrator` for the coordinating role and `worker` for a dispatched role;
+implementer and reviewer are worker subtypes. Use `subagent` only when naming a
+literal harness/API capability.
+
 **Single continuous task.** This is one task from start to final merge. Checkpoints (triage done, CI green, PR merged) are not turn boundaries. End only when the queue is empty or you hit a **global** blocker (dirty tree, missing auth). Issue-local blockers don't stop the batch — mark them blocked and continue.
 
 **Authorization.** Invoking `$campaign` authorizes you to auto-close issues shown as already-fixed and self-merge green + mergeable PRs. This authorization stays with you — never propagate merge rights to subagents. Each `$quest` stops at a green + mergeable PR; you handle the merge.

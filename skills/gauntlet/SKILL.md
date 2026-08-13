@@ -284,17 +284,26 @@ When `--json` is present, the skill's **output artifact** is exactly this JSON o
 
 ### Severity vocabulary
 
-These four values — `critical | high | medium | low` — are the **canonical finding severities for command-pipeline surfaces**. `$trial-loop`'s dispositions and `$spellcraft`'s ADR/spec/plan reviews report against this scale; the `WORK:REVIEW` annotation is itself scale-agnostic (verdict, findings count, iterations), so it inherits whatever the reviews beneath it used.
+These four values — `critical | high | medium | low` — are the **canonical finding severities for command-pipeline surfaces**:
 
-`$forge`'s two reviewer templates — the per-task reviewer and the whole-branch `code-reviewer.md` — grade `Critical / Important / Minor` instead. When one of their findings crosses into a command surface, map it:
+- `critical`: unsafe to continue; irreversible harm, corruption, exploitable exposure, or a
+  violated authority boundary is present or imminent;
+- `high`: required behavior is wrong or missing, or the change cannot be trusted to ship;
+- `medium`: a concrete bounded failure mode, coverage gap, or maintainability defect should be
+  fixed or explicitly dispositioned;
+- `low`: bounded polish, naming, or optimization with no demonstrated correctness failure.
 
-| $forge | here |
-|---|---|
-| `Critical` (must fix) | `critical` |
-| `Important` (should fix) | `high` |
-| `Minor` (nice to have) | `low`, or `medium` where the finding names a concrete failure mode |
+`$forge`, `$trial-loop`, and `$spellcraft` use this scale directly. `approve` means zero
+defensible findings; any finding produces `needs-attention` until the orchestrator dispositions
+it. Domain classifications and outcomes remain separate and map only under their owning skill's
+explicit rules. GitHub `priority:P0–P3` ranks queue order, `risk:*` governs unattended execution,
+and neither maps to finding severity.
 
-The map is one-way and lossy by construction — three buckets do not recover four, so do not round-trip a severity through it. GitHub's `priority:P0–P3` labels are **not** on either scale: they rank an issue in the queue and say nothing about a finding's severity. Never map between them.
+### Artifact lifecycle
+
+Callers supply a run-unique output path, clear it before dispatch, verify its returned identity,
+and dispose of it after every consumer finishes. A worker may create or overwrite only that path
+and never disposes of it. Fixed filenames are unsafe when reviews can overlap.
 
 ### File output (`--out <path>`)
 
@@ -339,7 +348,8 @@ $gauntlet docs/workflow/specs/YYYY-MM-DD-<rollout-design>.md
 $gauntlet docs/workflow/specs/*.md          # all specs in a directory
 $gauntlet src/auth/*.ts focus on tenant isolation
 $gauntlet --json docs/workflow/plans/YYYY-MM-DD-<migration>.md
-$gauntlet --json --out "$TMPDIR/challenge-review.json" --base main   # findings to a temp file, compact object inline
+$gauntlet --json --out "$TMPDIR/challenge-review-<run-id>.json" --base main
+                                                # caller-supplied run-unique path
 $gauntlet --base main <CHARTER block>          # charter paths are focus, never targets;
                                                 # a CHARTER label ahead of every target is an error
 ```

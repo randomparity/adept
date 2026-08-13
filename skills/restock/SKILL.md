@@ -83,7 +83,8 @@ confirmation at any phase.
   confirmation (but honor the hard stops below); completing a phase means
   proceed to the next.
 - **Merge authorization & boundary.** Merge **only** work units with a
-  `PASS` verdict (approve, then merge with `$MERGE_FLAG` per Phase 4a).
+  `PASS` evaluation outcome and canonical `approve` verdict, then merge with
+  `$MERGE_FLAG` per Phase 4a.
   **Never merge `WARN` or `FAIL`** — those go to the final report for human
   review (Phase 4b). Re-test each unit on the updated default branch before
   merging it; if it then fails **and the failure repeats**, mark it `SKIPPED`
@@ -97,7 +98,7 @@ confirmation at any phase.
   command's local build — and Phase 3 Step 5 exists precisely because that local
   build cannot cover the CI matrix. Approvals are already satisfiable without it:
   dependabot is the PR author, so the Phase 4a approval counts. A refused merge is
-  a `BLOCKED` outcome to report, never a reason to retry with `--admin`.
+  a `MERGE_REFUSED` outcome to report, never a reason to retry with `--admin`.
 - **Stop conditions.** **Abort the whole run** if the default-branch baseline
   build or tests fail, or a baseline test flakes (Phase 1c — fix the default
   branch first), the repo allows
@@ -319,8 +320,8 @@ git worktree add -b test-batch-{batch_id} \
   /tmp/depbot-eval-{repo-slug}-wt/batch-{batch_id} "$DEFAULT_BRANCH"
 ```
 
-Create every worktree here, in the parent, and pass each subagent its path.
-Cleanup is the parent's job too (Phase 3c) — a subagent that reports FAIL stops
+Create every worktree here, in the orchestrator, and pass each worker its path.
+Cleanup is the orchestrator's job too (Phase 3c) — a worker that reports FAIL stops
 early and would never reach a cleanup step of its own.
 
 Two costs come with the isolation. Each worktree is a full checkout, so a wave of
@@ -485,10 +486,10 @@ runs in CI:
 | Dependency version | numpy 1.x, 2.x | PR's version only |
 
 Report the matrix gaps and assess risk:
-- **HIGH risk:** The dependency is known to have version-specific
+- **HIGH coverage exposure:** The dependency is known to have version-specific
   behavior (e.g., numpy/scipy ABI, pytorch CUDA builds, native
   extensions) and CI tests versions we couldn't test locally
-- **LOW risk:** The matrix covers OS variants or formatting
+- **LOW coverage exposure:** The matrix covers OS variants or formatting
   differences unlikely to be affected by a dependency bump
 
 If there is no matrix strategy in CI, report "No CI matrix — single
@@ -500,13 +501,13 @@ configuration build."
 - Build succeeds
 - All tests pass (or only pre-existing failures), none of them flaking
 - No transitive dependency flags (downgrades, major bumps)
-- No high-risk matrix gaps
+- No HIGH coverage-exposure gaps
 
 **WARN** — the build succeeded and no test failed deterministically, but
 concerns exist:
 - New transitive dependencies introduced
 - Transitive dep crossed a major version boundary
-- High-risk matrix gaps
+- HIGH coverage-exposure gaps
 - A test flaked, so the suite gave no deterministic answer
 - List each specific concern
 
@@ -515,12 +516,19 @@ concerns exist:
 - New test failures that repeat
 - Merge conflicts
 
+`PASS | WARN | FAIL` are dependency-evaluation outcomes, not review verdicts.
+Map `PASS` to canonical `approve` only when it has no concern and therefore no
+finding. Map a `PASS` with a defensible concern, or a `WARN`/`FAIL` concern, to
+`needs-attention` only when the concern is recorded as a canonical-severity
+finding. Without such a finding, report the domain outcome and no canonical
+verdict.
+
 Format the final report:
 
 ```
 ## Evaluation Report: PR #{number} — {title}
 
-**Verdict: {PASS|WARN|FAIL}**
+**Evaluation outcome: {PASS|WARN|FAIL}**
 
 ### Transitive Dependency Analysis
 {step 2 output}
@@ -636,7 +644,7 @@ or disturb a worker that may still be live.
 
 ### 3c. Remove the evaluation worktrees
 
-Once every subagent has reported, remove the worktrees before starting
+Once every worker has reported, remove the worktrees before starting
 Phase 4. That phase checks PR branches out in the clone itself, and git
 refuses to check out a branch a worktree is holding.
 
@@ -650,12 +658,12 @@ remove` refuses a dirty tree without it.
 
 ## Phase 4: Sequential Merge
 
-Collect all subagent evaluation reports. Process work units in the
+Collect all worker evaluation reports. Process work units in the
 dependency order established in Phase 2.
 
 ### 4a. Merge passing PRs
 
-For each work unit with a **PASS** verdict, in order:
+For each work unit with a **PASS** evaluation outcome, in order:
 
 1. Approve the PR:
    ```bash
@@ -679,14 +687,14 @@ For each work unit with a **PASS** verdict, in order:
    ```
    Confirm `state` is `"MERGED"`. If it is not, the merge was refused —
    red or pending required checks, or an unsatisfied protection rule. Mark
-   the work unit **BLOCKED**, record `gh`'s refusal message verbatim for
+   the work unit **MERGE_REFUSED**, record `gh`'s refusal message verbatim for
    Phase 5c, and continue to the next work unit. **Do not re-run the merge
    with `--admin`**, and do not treat the local `PASS` as grounds to override:
    a refusal is the repo reporting something this skill did not test.
 
    **One refusal is retryable: a branch behind its base.** On a repo that
    requires branches be up to date before merging, every PR after the first
-   merge of a wave goes `BEHIND`, and each would otherwise report `BLOCKED` —
+   merge of a wave goes `BEHIND`, and each would otherwise report `MERGE_REFUSED` —
    so the run would merge one PR and refuse the rest. Satisfy the rule rather
    than bypass it:
 
@@ -696,7 +704,7 @@ For each work unit with a **PASS** verdict, in order:
 
    This re-triggers the PR's checks, so they return to pending. Wait for them,
    then attempt the merge once more. If the turn budget (above) is too tight to
-   wait, mark the unit `BLOCKED` and note that it was only behind — that is a
+   wait, mark the unit `MERGE_REFUSED` and note that it was only behind — that is a
    different report for the human than a failing check. Any other refusal reason
    gets no retry.
 
@@ -734,13 +742,13 @@ For each work unit with a **PASS** verdict, in order:
 For **batched** work units, merge each PR in the batch
 sequentially using the same approve-then-merge flow.
 
-### 4b. Handle WARN and FAIL verdicts
+### 4b. Handle WARN and FAIL outcomes
 
 - **WARN** — do not merge. Include in final report with specific
   concerns. These need human review.
 - **FAIL** — do not merge. Include full error context for diagnosis.
 
-`BLOCKED` is not a verdict but a merge outcome: the unit passed evaluation and
+`MERGE_REFUSED` is not a verdict but a merge outcome: the unit passed evaluation and
 the repo refused the merge (step 3). Report it with the refusal message so the
 human can see which gate declined — a red required check needs a different fix
 than a protection rule that wants a second reviewer.
@@ -787,9 +795,9 @@ If a dependabot config PR was created in Phase 0:
 
 ### 5c. Detailed reports for non-merged PRs
 
-For each WARN, FAIL, SKIPPED, or BLOCKED PR, print the full evaluation
-report from the subagent so the user has all context needed to
-decide or fix the issue. For a BLOCKED PR, add the merge refusal message
+For each WARN, FAIL, SKIPPED, or MERGE_REFUSED PR, print the full evaluation
+report from the worker so the user has all context needed to
+decide or fix the issue. For a MERGE_REFUSED PR, add the merge refusal message
 from Phase 4a step 3 — the evaluation report alone says `PASS` and does not
 explain why the merge did not happen. For a `WARN` assigned at Phase 4a
 step 5, add the flake evidence — both outcomes and the test's name — for

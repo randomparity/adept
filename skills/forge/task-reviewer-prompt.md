@@ -13,7 +13,7 @@ a subagent working in the target repository, where a relative link into this
 repo's `references/` would not resolve. Do not collapse it into a link.
 
 ```
-Subagent (general-purpose):
+Worker (reviewer):
   description: "Task N review — spec and quality"
   model: [MODEL — REQUIRED: pick one from SKILL.md, Choosing a model. Leave this
          unset and the dispatch quietly inherits whatever model this session is
@@ -38,6 +38,17 @@ Subagent (general-purpose):
     ## The change you are judging
 
     Starts at [BASE_SHA], ends at [HEAD_SHA], packaged in [DIFF_FILE].
+
+    Treat the checkout as read-only. If you create an isolated temporary
+    worktree to inspect another revision, remove it before returning. If that
+    cleanup fails, return exactly these three lines and no review verdict or
+    counts:
+
+    ```text
+    CLEANUP_FAILED
+    Worktree: <absolute path>
+    Reason: <one line>
+    ```
 
     Open that package once; it is the whole of what you are judging. Inside are
     the commits, a per-file stat, and every hunk with generous context around
@@ -83,7 +94,7 @@ Subagent (general-purpose):
     A retry in that output is a finding too. If the report shows a test that
     failed and then passed with no code change between the two runs, or a suite
     run twice for a reason it does not give, the evidence backing this task is
-    nondeterministic. Grade it Important and name the test. It is not a pass:
+    nondeterministic. Grade it high and name the test. It is not a pass:
     the green run does not settle the code and the red one does not condemn it,
     so the task has no usable test evidence until the flake is dealt with. Do
     not re-run the test yourself to work out which run was the real one — a
@@ -124,7 +135,7 @@ Subagent (general-purpose):
 
     Cite, do not assert. Every finding carries a `file:line`, and so does any
     question you would otherwise dispose of with a bare "yes". Brevity plus
-    citations is what the controller can actually act on.
+    citations is what the orchestrator can actually act on.
 
     What you send back *is* the report — lead with the spec verdict. After that,
     each line is either a verdict, a cited finding, or a check you performed.
@@ -133,18 +144,19 @@ Subagent (general-purpose):
 
     ## Calibrating severity
 
-    Grade by what is actually at stake; most things are not Critical.
+    Use the workflow's canonical severity vocabulary:
 
-    **Important** means the task cannot be trusted until it is fixed — behaviour
-    that is wrong or fragile, a requirement that was missed, or maintainability
-    damage you would hold a merge over: a logic block duplicated verbatim,
-    errors swallowed, tests that assert nothing.
-
-    **Minor** covers "coverage could be broader" and polish.
+    - **critical** — unsafe or irreversible impact, including exploitable
+      behavior, data loss, or corruption.
+    - **high** — required behavior is wrong or missing, or the task cannot be
+      trusted until it is fixed.
+    - **medium** — a bounded, concrete failure, coverage gap, or maintenance
+      defect that should be fixed before the task advances.
+    - **low** — polish or an optional improvement with no concrete failure.
 
     If the plan or the brief explicitly asks for something this rubric treats as
     a defect — an assertion-free test, a copy-pasted logic block — that is still
-    a finding. Report it as Important and label it plan-mandated.
+    a finding. Report it as high and label it plan-mandated.
     A plan does not get to grade its own work; the human decides.
 
     Say what was done well before you list what was not. Praise that is accurate
@@ -157,7 +169,7 @@ Subagent (general-purpose):
     - ✅ Spec compliant | ❌ Problems found: [whatever is missing, extra or
       built to the wrong understanding, each with its file:line]
     - ⚠️ Cannot verify from diff: [requirements this diff alone cannot settle,
-      and what the controller should check — report these alongside the ✅/❌
+      and what the orchestrator should check — report these alongside the ✅/❌
       verdict for everything you could settle]
 
     ### Strengths
@@ -165,16 +177,17 @@ Subagent (general-purpose):
 
     ### Issues
 
-    #### Critical (Must Fix)
-    #### Important (Should Fix)
-    #### Minor (Nice to Have)
+    #### critical
+    #### high
+    #### medium
+    #### low
 
     Each entry: its `file:line`, the defect, why it matters, and — unless that
     is self-evident — the remedy.
 
     ### Assessment
 
-    **Task quality:** [Approved | Needs fixes]
+    **Verdict:** [approve | needs-attention]
 
     **Reasoning:** [one or two sentences, technical]
 ```
@@ -193,10 +206,13 @@ Subagent (general-purpose):
 - `[HEAD_SHA]` — where it ended.
 - `[DIFF_FILE]` — REQUIRED. Where the review package was written.
   `scripts/review-package BASE HEAD` prints a path unique to that range, and the
-  package's contents never pass through the controller's own context.
+  package's contents never pass through the orchestrator's own context.
 
 **What comes back:** a Spec Compliance verdict (✅ / ❌ / ⚠️), Strengths, Issues
-graded Critical / Important / Minor, and a Task quality verdict.
+graded critical / high / medium / low, and a canonical verdict. `approve` is
+valid only when there are zero findings. A `low` finding therefore keeps the
+reviewer's verdict at `needs-attention`; the orchestrator may disposition it in
+the ledger and advance.
 
 One fix dispatch can answer spec gaps and quality findings together, and the
 re-review that follows covers both verdicts.

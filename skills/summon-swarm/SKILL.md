@@ -11,6 +11,8 @@ judgment; worker processes handle volume. A clear spec plus high volume can go
 to workers; a fuzzy spec or expensive-if-wrong work stays in this session.
 Nothing ships unreviewed.
 
+Reserve `subagent` for a literal harness/API capability, never a workflow role.
+
 Adapted from `suede-codex-fleet` in
 [JasonColapietro/suede-creator-skills](https://github.com/JasonColapietro/suede-creator-skills) (MIT).
 

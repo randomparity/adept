@@ -8,7 +8,7 @@ a subagent working in the target repository, where a relative link into this
 repo's `references/` would not resolve. Do not collapse it into a link.
 
 ```
-Subagent (general-purpose):
+Worker (implementer):
   description: "Task N — [task name]"
   model: [MODEL — REQUIRED: pick one from SKILL.md, Choosing a model. Leave this
          unset and the dispatch quietly inherits whatever model this session is
@@ -58,15 +58,15 @@ Subagent (general-purpose):
     defect in its own right, and evidence of nothing in either direction: the
     green run does not clear your code and the red run does not condemn it.
     Report it with both outcomes and the test's name. Fixing or filing it is
-    the controller's call, not yours.
+    the orchestrator's call, not yours.
 
     If it fails both times and you can see that your change caused it, that is
-    ordinary work: fix it, or report BLOCKED. Do not commit past it.
+    ordinary work: fix it, or report CANNOT_COMPLETE. Do not commit past it.
 
     If it fails both times and you cannot see how your change reaches it, stop
     there. Report the test's name and whether you touched anything it covers,
     and say you did not classify it. Do not go hunting through the history to
-    prove it was already broken — the controller has the base commit and the
+    prove it was already broken — the orchestrator has the base commit and the
     plan, and settling it costs far less there than here.
 
     Whatever happened, never write "tests pass" on the strength of a re-run. A
@@ -104,9 +104,9 @@ Subagent (general-purpose):
     - you have opened file after file and understand the system no better than
       when you started.
 
-    **To escalate:** report back as BLOCKED or NEEDS_CONTEXT, and be specific —
+    **To escalate:** report back as CANNOT_COMPLETE or NEEDS_CONTEXT, and be specific —
     what stopped you, what you already tried, and what would unblock you. The
-    controller can supply the missing context, re-dispatch you on a stronger
+    orchestrator can supply the missing context, re-dispatch you on a stronger
     model, or cut the task into smaller pieces.
 
     ## Review your own work first
@@ -154,18 +154,18 @@ Subagent (general-purpose):
     Then keep the message you send back under fifteen lines, because the detail
     is in the file:
 
-    - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
+    - **Status:** DONE | DONE_WITH_CONCERNS | CANNOT_COMPLETE | NEEDS_CONTEXT
     - the commits you made, short SHA and subject
     - one line on the tests, e.g. "14/14 passing, output pristine" — and name
       any test that flaked, however clean the final run looked
     - your concerns, if you have any
     - where the report file is
 
-    When the status is BLOCKED or NEEDS_CONTEXT, put the specifics in that final
-    message rather than only in the file — the controller reads it and acts.
+    When the status is CANNOT_COMPLETE or NEEDS_CONTEXT, put the specifics in that final
+    message rather than only in the file — the orchestrator reads it and acts.
 
     Choose the status honestly. DONE_WITH_CONCERNS is for work you finished but
-    are not certain of. BLOCKED is for work you cannot finish. NEEDS_CONTEXT is
+    are not certain of. CANNOT_COMPLETE is for work you cannot finish. NEEDS_CONTEXT is
     for work waiting on something you were never given. Never hand back work you
     doubt without saying that you doubt it.
 ```

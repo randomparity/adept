@@ -231,7 +231,7 @@ Markdown except the body.
 
 | Type | Posted on | When | Content |
 |---|---|---|---|
-| `WORK:SCOPE` | issue | after scoping, before building | blast radius, risk flags, complexity (S/M/L), decompose verdict |
+| `WORK:SCOPE` | issue | after scoping, before building | blast radius, change hazards, complexity (S/M/L), decompose verdict |
 | `WORK:REVIEW` | PR | right after the PR is created | verdict, findings count, iterations, security-review status |
 | `WORK:TRAJECTORY` | issue | at the terminal hand-off, and before parking an issue at `blocked`/`needs-human` (exit-edges rule above) | outcome or parked phase, branch/PR #, guardrail status, what a human must decide or supply, surprises worth remembering |
 | `GROOM:STALE` | issue | when `$warding` first marks an issue `stale`, one grace period before it closes it | how long the issue has been quiet, the date the sweep will close it, and how to keep it open |

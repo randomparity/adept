@@ -4,6 +4,9 @@ description: "Run a diff-scoped security pass by inventorying touched trust boun
 ---
 # Threat Scan
 
+The caller is the `orchestrator` and a dispatched security reviewer is a
+`worker`; precise reviewer names remain valid subtypes.
+
 Enumerate the trust boundaries a change touches and check what crosses each one. Read-only
 apart from an optional `--out` findings file — do not edit scanned files, comment on PRs, or
 change git state.

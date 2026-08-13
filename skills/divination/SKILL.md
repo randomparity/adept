@@ -22,7 +22,7 @@ this skill writes nothing to GitHub, git, or the filesystem. Its output feeds
    subagent to read):
    - **Blast radius** — the files/modules affected, and whether the change is local or
      cross-cutting.
-   - **Risk flags** — call out any of: migrations, auth/permissions, public API/contract,
+   - **Change hazards** — call out any of: migrations, auth/permissions, public API/contract,
      concurrency, data loss/irreversibility, external services. "none" is a valid result.
    - **Complexity** — `S` (one or two files, no contract change), `M`, or `L` (broad or
      cross-cutting).
