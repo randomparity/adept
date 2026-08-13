@@ -1632,6 +1632,83 @@ STUB
   run_case "base record listing faults, floor not disarmed" 1 E-BASE-LIST-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
 
+  # The preamble reader, which the `-v want=` key above cannot reach: preamble is a bare awk
+  # with no -v, so it needs its own key. Its program is the only one in either script
+  # containing `NR > 1`. The appended line keeps the change from being marker-only, so
+  # check_not_rewritten gets past the shape check and actually runs this rule.
+  stub_bin="$SCRATCH/awk-preamble-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  *'NR > 1'*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  d=$(case_dir preamble_read_scan_fault)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/debt/0001-valid.md"
+  run_case "preamble read faults, not a clean pass" 1 E-PREAMBLE-DIFF-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
+  # The scenario ADR 0008 calls its worst instance, pinned in the direction that matters. When
+  # canonicalise cannot read the file, both protected_shape results used to come back empty,
+  # compare equal, and send check_not_rewritten home before any anti-erasure rule ran -- so a
+  # merged record with a protected section gutted reported `Records OK.` and exit 0. Nothing
+  # else fires on this fixture, so the case fails with got=0 if the fix is removed, rather than
+  # merely missing a code on a run that was already red. Keyed on canonicalise's marker pattern.
+  stub_bin="$SCRATCH/awk-canonicalise-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  *'(target|review-by)'*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  d=$(case_dir marker_shape_scan_fault)
+  b=$(base_of "$d")
+  sed 's/^A real concern with a body\.$/Nothing much, actually./' "$d/docs/debt/0001-valid.md" >"$d/.t" && mv "$d/.t" "$d/docs/debt/0001-valid.md"
+  run_case "shape read faults, gutted record not passed" 1 E-MARKER-SHAPE-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
+  # protected_shape's second stage, which filters the captured text rather than reading a file.
+  # ADR 0005 decision 1 would exempt it as in-memory, and it is captured anyway: an empty result
+  # here is not a false error but a false pass, so discarding the status would have moved the
+  # fail-open one stage right instead of closing it. Keyed on the filter's own program text.
+  stub_bin="$SCRATCH/awk-shape-filter-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  *in_status*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  d=$(case_dir shape_filter_scan_fault)
+  b=$(base_of "$d")
+  sed 's/^A real concern with a body\.$/Nothing much, actually./' "$d/docs/debt/0001-valid.md" >"$d/.t" && mv "$d/.t" "$d/docs/debt/0001-valid.md"
+  run_case "shape filter faults, gutted record not passed" 1 E-MARKER-SHAPE-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
   # The base-ref blob behind the three anti-erasure rules. `git cat-file blob ... || return 0`
   # read an unreadable copy as an absent one, and absent is the legitimate common case -- a
   # record the change adds has no base copy -- so the record was silently exempted from
@@ -1906,7 +1983,7 @@ STUB
   #
   # The same fixture reaches the conversion that mattered most in ADR 0008: canonicalise's awk
   # cannot open the file either, so marker_only_change can no longer say whether the change is
-  # marker-only and reports E-SHAPE-SCAN. Both protected_shape results used to come back empty,
+  # marker-only and reports E-MARKER-SHAPE-SCAN. Both protected_shape results used to come back empty,
   # compare equal, and turn all three anti-erasure rules off at once on a run that exited 0.
   if [ "$(id -u)" -eq 0 ]; then
     printf '  skip %-44s running as root; chmod 000 does not deny access\n' "record unreadable (section scan)"
@@ -1916,7 +1993,7 @@ STUB
     b=$(base_of "$d")
     chmod 000 "$d/docs/debt/0001-valid.md"
     run_case "record unreadable (section scan)" 1 E-SECTION-SCAN "$d" BASE_SHA="$b"
-    run_case "record unreadable (protected shape scan)" 1 E-SHAPE-SCAN "$d" BASE_SHA="$b"
+    run_case "record unreadable (protected shape scan)" 1 E-MARKER-SHAPE-SCAN "$d" BASE_SHA="$b"
     chmod 644 "$d/docs/debt/0001-valid.md"
   fi
 
@@ -1956,7 +2033,7 @@ STUB
   PATH=$saved_path
 
   # check_headings_intact's own scan fault needs a readable record, now that an unreadable one
-  # stops at E-SHAPE-SCAN before the three anti-erasure rules run. A grep stub that faults only
+  # stops at E-MARKER-SHAPE-SCAN before the three anti-erasure rules run. A grep stub that faults only
   # on the H1 lookup reaches it: check_headings_intact is the only rule that greps for the H1
   # line, so check_sections -- which greps only the `## ` headings -- is left alone, and the
   # gutted body keeps the change from being marker-only so the rule is reached at all.

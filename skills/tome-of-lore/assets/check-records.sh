@@ -278,10 +278,19 @@ protected_shape() {
     protected_shape_status=$status
     return 2
   fi
+  # The filter reads a shell variable, so ADR 0005 decision 1 would ordinarily exempt it. It is
+  # captured anyway, because here an empty result is not a false error but a false *pass*: two
+  # empty shapes compare equal, which is the fail-open this function was converted to close.
+  # Discarding this status would move that fail-open one stage right rather than removing it.
+  status=0
   protected_shape_out=$(printf '%s\n' "$canon" | awk '
     /^## / { in_status = ($0 == "## status"); print; next }
     !in_status { print }
-  ')
+  ') || status=$?
+  if [ "$status" -ne 0 ]; then
+    protected_shape_status=$status
+    return 2
+  fi
   return 0
 }
 
@@ -354,7 +363,9 @@ check_sections() {
       err_full "E-SECTION-BODY-SCAN: $label: could not read the body of section '$section' in $file (awk exit $read_section_status)"
       continue
     fi
-    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]')
+    # In-memory, and the discard is written out per ADR 0008 decision 2. Unlike protected_shape
+    # this one fails toward a false error rather than a false pass, so it is not captured.
+    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]') || :
     if [ -z "$body" ]; then
       err "E-SECTION-EMPTY: $label: section '$section' is empty — a heading with no content is not a record"
     fi
@@ -600,12 +611,24 @@ $candidate"
   return 1
 }
 
+# git's real status is left in records_in_ref_status for the caller's diagnostic, the way
+# path_exists_at leaves its own: the `return 1` below is a sentinel, and reporting it would name
+# a status git never returned -- and 1 is a status git could plausibly have returned, so the
+# misattribution would not even look wrong.
+records_in_ref_status=0
 records_in_ref() {
-  local ref=$1 raw
+  local ref=$1 raw status=0
+  records_in_ref_status=0
   # The checker's coded ::error:: lines are its interface; a bare `fatal:` from git is not,
   # so a bad ref's stderr is suppressed here rather than at each call site.
-  raw=$(git ls-tree -r --name-only "$ref" -- "$RECORD_DIR" 2>/dev/null) || return 1
-  printf '%s' "$raw" | grep -E "$RECORD_RE" || true
+  raw=$(git ls-tree -r --name-only "$ref" -- "$RECORD_DIR" 2>/dev/null) || status=$?
+  if [ "$status" -ne 0 ]; then
+    records_in_ref_status=$status
+    return 1
+  fi
+  # `printf` over a shell variable, which ADR 0005 decision 1 places outside the scan rule and
+  # ADR 0008 decision 4 confirms does not convert. The discard is written per decision 2.
+  printf '%s' "$raw" | grep -E "$RECORD_RE" || :
 }
 
 # Heading lines are the one region section_body skips outright — it matches a heading only to
@@ -712,8 +735,9 @@ check_sections_append_only() {
   local sections=$APPEND_ONLY_SECTIONS
   if [ "$sections" = "*" ]; then
     # Split from the filter below: only this grep reads a file and can fault on one. The
-    # `grep -vxF` that follows reads what this produced, where exit 1 just means every section
-    # was `## Status` -- a pipeline whose stages need telling apart, tracked on #63.
+    # `grep -vxF` that follows reads what this produced, so ADR 0005 decision 1 exempts it and
+    # ADR 0008 decision 4 confirms it does not convert -- its exit 1 just means every section
+    # was `## Status`.
     all_sections=$(grep -E '^## ' "$tmp") || list_status=$?
     case $list_status in
     0 | 1) ;;
@@ -722,7 +746,8 @@ check_sections_append_only() {
       return 0
       ;;
     esac
-    sections=$(printf '%s\n' "$all_sections" | grep -vxF '## Status') || true
+    # In-memory; discard written out per ADR 0008 decision 2.
+    sections=$(printf '%s\n' "$all_sections" | grep -vxF '## Status') || :
   fi
 
   while IFS= read -r section; do
@@ -769,7 +794,13 @@ check_sections_append_only() {
 
 check_not_rewritten() {
   local base=$1 path=$2 tmp blob_status=0 marker_status
-  tmp=$(mktemp) || return 0
+  # `|| return 0` here was itself a fail-open of the class this sweep closes: a failed mktemp
+  # silently skipped all three anti-erasure rules, and it also made the inner E-TMPFILE branches
+  # below unreachable, so they promised a guarantee nothing could deliver.
+  tmp=$(mktemp) || {
+    err_full "E-TMPFILE: $path: cannot create a temp file for the base ref's copy, so the append-only rules did not run"
+    return 0
+  }
   read_base_blob "$base" "$path" "$tmp" || blob_status=$?
   case $blob_status in
   0) ;;
@@ -807,7 +838,7 @@ check_not_rewritten() {
   # marker-only" and turned all three anti-erasure rules off at once, silently.
   *)
     rm -f "$tmp"
-    err_full "E-SHAPE-SCAN: $path: could not canonicalise it or the base ref's copy, so the append-only rules did not run (awk exit $marker_only_status)"
+    err_full "E-MARKER-SHAPE-SCAN: $path: could not canonicalise it or the base ref's copy, so the append-only rules did not run (awk exit $marker_only_status)"
     return 0
     ;;
   esac
@@ -1489,7 +1520,7 @@ run_profile() {
     list_status=0
     base_records=$(records_in_ref "${BASE_SHA}") || list_status=$?
     if [ "$list_status" -ne 0 ]; then
-      err_full "E-BASE-LIST-SCAN: $BASE_SHA: could not list the $RECORD_LABEL records at the base ref, so E-COUNT-FLOOR did not run (git exit $list_status)"
+      err_full "E-BASE-LIST-SCAN: $BASE_SHA: could not list the $RECORD_LABEL records at the base ref, so E-COUNT-FLOOR did not run (git exit $records_in_ref_status)"
     else
       base_count=$(count_lines "$base_records")
       if [ "$base_count" -gt 0 ] && [ "$record_count" -eq 0 ]; then

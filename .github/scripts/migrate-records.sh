@@ -34,12 +34,6 @@
 # One of the six gate assets an adopting repo copies. It never runs in CI, but
 # check-records-test.sh — which the workflow runs first — resolves it beside itself because the
 # self-check cases exercise the checker's allowance function.
-#
-# SC2154 is disabled file-wide for the same reason SC1091 is disabled at the source line below:
-# without `shellcheck -x` the sourced check-records.sh is invisible, so the globals its readers
-# assign — read_section_out, read_section_status, marker_only_status — look unassigned here. The
-# profiles carry the same disable for the same blindness, from the other side of the source.
-# shellcheck disable=SC2154
 
 set -euo pipefail
 
@@ -234,9 +228,11 @@ report_status_leftover() {
   # in a discarded subshell — ADR 0008 decision 6.
   read_section "$file" "## Status" || read_status=$?
   if [ "$read_status" -ne 0 ]; then
+    # shellcheck disable=SC2154 # assigned by read_section in the sourced check-records.sh
     report_failure "E-MIGRATE-STATUS-SCAN: $file: could not read the Status section (awk exit $read_section_status)"
     return 0
   fi
+  # shellcheck disable=SC2154 # assigned by read_section in the sourced check-records.sh
   body=$read_section_out
 
   # In-memory from here, which ADR 0005 decision 1 exempts; the discards are written out per
@@ -286,10 +282,13 @@ report_leftovers() {
     body_status=0
     read_section "$file" "$section" || body_status=$?
     if [ "$body_status" -ne 0 ]; then
+      # shellcheck disable=SC2154 # assigned by read_section in the sourced check-records.sh
       report_failure "E-MIGRATE-SECTION-SCAN: $file: could not read the body of '$section' (awk exit $read_section_status)"
       continue
     fi
-    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]')
+    # In-memory; discard written out per ADR 0008 decision 2.
+    # shellcheck disable=SC2154 # assigned by read_section in the sourced check-records.sh
+    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]') || :
     if [ -z "$body" ]; then
       leftover "$label: '$section' has no body — a heading with no content is not a record"
     fi
@@ -349,6 +348,7 @@ migrate_record() {
     ;;
   *)
     rm -f "$tmp"
+    # shellcheck disable=SC2154 # assigned by marker_only_change in the sourced check-records.sh
     report_failure "E-MIGRATE-SHAPE-SCAN: $path: could not canonicalise it or the transform's output, so the self-check did not run — refusing to write (awk exit $marker_only_status)"
     return 0
     ;;
@@ -381,7 +381,7 @@ migrate_record() {
 }
 
 migrate_profile() {
-  local name=$1 record listing records find_status
+  local name=$1 record listing sorted records find_status sort_status
   load_migrate_profile "$name" || return 1
   if [ ! -d "$RECORD_DIR" ]; then
     report_failure "E-PROFILE-DIR-MISSING: profile '$name' is enabled but $RECORD_DIR does not exist"
@@ -404,9 +404,18 @@ migrate_profile() {
     report_failure "E-MIGRATE-LIST-SCAN: $RECORD_DIR: could not list the record directory (find exit $find_status)"
     return 1
   fi
+  # sort is lifted out too. It reads in-memory input, but a fault would empty the listing and
+  # restore the very "0 record(s) examined, exit 0" fail-open E-MIGRATE-LIST-SCAN exists to
+  # close -- and pipefail could not tell it apart, since grep then exits 1 over empty input.
+  sort_status=0
+  sorted=$(printf '%s\n' "$listing" | sort) || sort_status=$?
+  if [ "$sort_status" -ne 0 ]; then
+    report_failure "E-MIGRATE-LIST-SCAN: $RECORD_DIR: could not order the record listing (sort exit $sort_status)"
+    return 1
+  fi
   # In-memory; discard per ADR 0008 decision 2. grep exits 1 when the directory holds no file
   # matching the record pattern, which is an ordinary empty listing.
-  records=$(printf '%s\n' "$listing" | sort | grep -E "$RECORD_RE") || :
+  records=$(printf '%s\n' "$sorted" | grep -E "$RECORD_RE") || :
   [ -n "$records" ] || return 0
 
   while IFS= read -r record; do

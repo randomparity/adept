@@ -105,6 +105,17 @@ need if a guard is ever written for this idiom.
 The nonzero being discarded is usually ordinary, not exotic: `grep .` exits 1
 on any ADR whose `## Status` carries only a supersession banner.
 
+**The exemption is by consequence, not only by input.** An in-memory stage is
+exempt because its failure is not the scan-could-not-run case — but where its
+empty output would produce a *pass* rather than an error, it is captured anyway.
+`protected_shape`'s filter is the one such site: it reads a shell variable, yet
+an empty result makes two shapes compare equal, which is the fail-open this
+whole record exists to close. Discarding that status would move the fail-open
+one stage right rather than removing it. The other in-memory sites fail toward a
+false error, which is loud, and stay exempt. Adversarial review of the first
+implementation found exactly this, after the record's own first draft had
+licensed the discard.
+
 **3. `head` does not appear in a residual pipeline whose status feeds a
 verdict.** This is the SIGPIPE question #63 asked, answered by construction
 rather than by policy: 141 arises only where `head` closes a pipe on a live
@@ -165,7 +176,7 @@ found by reading and are converted here.
 - New codes, each named per rule so a test can assert which site faulted:
   `E-STATUS-SCAN`, `E-SUPERSEDE-SCAN`, `E-TARGET-SCAN`, `E-REVIEWBY-SCAN`,
   `E-SECTION-BODY-SCAN`, `E-PREAMBLE-DIFF-SCAN`, `E-APPEND-DIFF-SCAN`,
-  `E-SHAPE-SCAN`, `E-BASE-LIST-SCAN`. The migrator reports through
+  `E-MARKER-SHAPE-SCAN`, `E-BASE-LIST-SCAN`. The migrator reports through
   `report_failure`, which already carries per-rule codes, so its sites are named
   too — `E-MIGRATE-STATUS-SCAN`, `E-MIGRATE-SECTION-SCAN`,
   `E-MIGRATE-SHAPE-SCAN`, `E-MIGRATE-DIFF-SCAN`, `E-MIGRATE-LIST-SCAN` — for
@@ -173,8 +184,25 @@ found by reading and are converted here.
   faulted.
 - Every converted site has a regression test that was verified to bite. With
   `read_section`'s fault return neutralised the suite reports seven failures and
-  the gate **exits 0**; with `marker_only_change`'s neutralised, two more. The
-  silent-pass direction is what the tests pin, not merely the message text.
+  the gate **exits 0**; with `marker_only_change`'s neutralised, two more; with
+  `protected_shape`'s filter guard neutralised, one more, again at `got=0`.
+  Where a fixture can be built on which nothing else fires, the case pins the
+  silent-pass direction rather than only the message text.
+- `records_in_ref` becomes three-valued on the house pattern, with git's real
+  status in `records_in_ref_status`. Its `return 1` is a sentinel, and reporting
+  it would have named a status git never returned — `1` being a status git could
+  plausibly return, the misattribution would not even have looked wrong.
+- `migrate_profile` lifts `sort` out alongside `find`. `sort` reads in-memory
+  input, but a fault empties the listing and restores the "0 record(s) examined,
+  exit 0" fail-open `E-MIGRATE-LIST-SCAN` exists to close — the consequence test
+  above, applied a second time.
+- `check_not_rewritten`'s opening `tmp=$(mktemp) || return 0` is converted too.
+  It was a fail-open of the same class, silently skipping all three anti-erasure
+  rules, and it made the inner `E-TMPFILE` branches unreachable — a guarantee
+  the record claimed and nothing could deliver.
+- The code is `E-MARKER-SHAPE-SCAN`, not `E-SHAPE-SCAN`: the shorter name is a
+  substring of the pre-existing `E-BASE-SHAPE-SCAN`, so a bare grep for it
+  returned both.
 - `diff` keeps its status read directly rather than through `read_section`: it
   is the reading stage at those sites, and its 0 and 1 both being ordinary —
   same, and differs — makes `>= 2` the fault test. That is the one place a
@@ -194,12 +222,12 @@ found by reading and are converted here.
   early returns inside `check_sections_append_only`'s loop.
 - `protected_shape` and `marker_only_change` both become three-valued, per ADR
   0005 decision 3 — a predicate that can fault returns a distinct fault value
-  and its caller reports. `check_not_rewritten` reports `E-SHAPE-SCAN` and
+  and its caller reports. `check_not_rewritten` reports `E-MARKER-SHAPE-SCAN` and
   returns rather than running the three anti-erasure rules against a comparison
   it could not make, and the migrator's `if ! marker_only_change` becomes a
   `case`, since `if !` collapses 1 and 2 into one branch and is exactly what
   0005's Consequences forbid for a three-valued predicate.
-- `E-SHAPE-SCAN` correctly preempts `E-HEADING-SCAN` on an unreadable record:
+- `E-MARKER-SHAPE-SCAN` correctly preempts `E-HEADING-SCAN` on an unreadable record:
   once the shape comparison cannot be made, the rules behind it do not run, so
   there is one finding rather than three. `check_headings_intact`'s own
   scan-fault test moves to a `grep` stub keyed on the H1 line to keep that code
