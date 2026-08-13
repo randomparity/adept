@@ -65,7 +65,15 @@ Verify: `git -C "$campaign_root" check-ignore -q .agent/campaigns/`. Stop if fai
 
 **Routing:**
 - **No file** → create with `Status: active`
-- **File with `Status: active`** → **resume**: load it, skip init, don't overwrite non-`pending` rows. Manifests written before the `Public-safe notes` field existed lack it — backfill before validation: derive the summary from the stored `Completion notes` (`none` when notes are `none`; ask the user when safe derivation is impossible) and write the manifest back atomically. For NL selectors, reconcile live resolved set against loaded queue — enqueue new matches. If completion notes differ, surface and confirm; on confirmed change, re-derive the public-safe summary and update the manifest.
+- **File with `Status: active`** → **resume**: load it, skip init, don't overwrite non-`pending`
+  rows. Normalize legacy fields before validation in one atomic write. When `Campaign identity` is
+  absent, mint one UUID using the loaded manifest's collision-resolved filename stem, persist it
+  once, and reuse it on every later resume; reject a present but empty or malformed identity.
+  When `Public-safe notes` is absent, derive it from stored `Completion notes` (`none` when notes
+  are `none`; ask the user when safe derivation is impossible). For NL selectors, reconcile the
+  live resolved set against the loaded queue and enqueue new matches. If completion notes differ,
+  surface and confirm; on confirmed change, re-derive the public-safe summary and update the
+  manifest.
 - **File with `Status: complete`** → archive as `<slug>-done-<timestamp>.md`, create fresh
 
 **You are the only writer.** Subagents reference manifest facts by value (copied into prompts), never write it. Write atomically (temp + rename).
