@@ -10,7 +10,7 @@ repo's `references/` would not resolve. Do not collapse it into a link.
 ```
 Subagent (general-purpose):
   description: "Task N — [task name]"
-  model: [MODEL — REQUIRED: pick one from SKILL.md, Model Selection. Leave this
+  model: [MODEL — REQUIRED: pick one from SKILL.md, Choosing a model. Leave this
          unset and the dispatch quietly inherits whatever model this session is
          running, which is the costliest choice available.]
   prompt: |

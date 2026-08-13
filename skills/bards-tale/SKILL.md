@@ -265,9 +265,9 @@ Sections:
    from the table, or a number the table contradicts. Causal phrasing is allowed
    only to the extent the cited metric supports it.
 4. **Proposed tuning (NOT applied)** — concrete suggestions, each satisfying **both**
-   halves of the grounding rule: it **cites a real** `shared/commands/*.md` or
-   `AGENTS.md` file (verified with `Read` / `Grep`) **and traces to a finding or
-   metric** in this report. No proposal invented independent of the data. Each is
+   halves of the grounding rule: it **cites a real governing workflow or applicable
+   repository instruction source** (verified with `Read` / `Grep`) **and traces to a
+   finding or metric** in this report. No proposal invented independent of the data. Each is
    explicitly a proposal a human applies on a branch — the skill never edits those
    files.
 5. **Data gaps** — issues/PRs whose source annotation is genuinely *absent*.

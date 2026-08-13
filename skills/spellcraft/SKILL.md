@@ -21,7 +21,7 @@ Otherwise, work from the session context or ask the user what to design.
 If you are running as part of a larger workflow (e.g. `$quest`),
 `BASE_BRANCH` and guardrail commands should already be recorded from
 `$attunement`. If running standalone, discover them first: read `AGENTS.md` /
-`AGENTS.md`, find the default branch (`gh repo view --json defaultBranchRef`),
+`CLAUDE.md`, find the default branch (`gh repo view --json defaultBranchRef`),
 and identify the repo's check suite.
 
 **Caller contract.** If invoked inside `$quest`, completing this step
@@ -134,7 +134,7 @@ governs has stopped recording the decision and started defending it; a 514-line 
 over a 19-line state machine is the failure this bounds. State the decision and stop.
 
 Use the orchestrator-assigned ADR number if you were given one (from
-`$attunement` step 6); otherwise take the next free number. Link the ADR from
+`$attunement` step 7); otherwise take the next free number. Link the ADR from
 the spec. Run the relevant doc guardrails and commit the spec/ADR.
 
 ### Spec self-review
@@ -159,11 +159,11 @@ index table serializes parallel ADR PRs on one merge conflict — N such PRs cos
 O(N²) resolutions, because git conflicts on adjacent insertions even when the
 assigned numbers are disjoint. If a repo keeps such an index anyway, add your row
 only on a **solo** run; on a **dispatched** run (an orchestrator handed you an ADR
-number, `$attunement` step 6) write only the ADR file and report `index row pending`
+number, `$attunement` step 7) write only the ADR file and report `index row pending`
 in your completion report, leaving the row to the orchestrator.
 
 **CI gating the index outranks that split**: the row is a merge
-precondition there, and run type is only a convention. `$attunement` step 4 reports the
+precondition there, and run type is only a convention. `$attunement` step 5 reports the
 coupling verdict — and separates checks CI hard-gates **individually** from ones
 reachable only through an umbrella recipe, since only the former can block a PR. Under
 `$campaign` the verdict reaches you in your dispatch prompt rather than being yours to
