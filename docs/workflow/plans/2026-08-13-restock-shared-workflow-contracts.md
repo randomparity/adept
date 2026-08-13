@@ -100,6 +100,11 @@ Bash 3.2-compatible command examples.
    types, clone/common-dir, worktree registration, temporary ref, worker lifecycle, and completed
    cleanup steps. Every manifest transition writes and fsyncs a sibling file, atomically renames it
    over the live manifest, and reads back the expected state before the next mutation.
+   Worker lifecycle starts `dispatched`; the active orchestrator changes it to `ended` only after a
+   harness end-of-run notification (or orchestrator-requested stop followed by that notification),
+   recording worker identity, recovery chain, observation, and artifact dispositions per
+   `references/dispatch-liveness.md`. Startup never infers end from time, process absence, or stale
+   files. A manifest lacking verified `ended` evidence is retained and reported without cleanup.
 4. Reconcile proven-ended units in Git-aware order: validate containment/type/registration/ref,
    persist/read back `cleanup: worktree-pending`, remove the exact worktree (force only for proven-
    owned dirty ended work), verify unregistered, persist/read back `worktree-removed`, delete the
@@ -120,8 +125,11 @@ Bash 3.2-compatible command examples.
    clear active status. For WARN/FAIL/refusal, restock cleans the unit itself. Never duplicate shared
    merge/cleanup commands.
 10. After every unit is terminal and worker end observed, finalize the run: remove shared owned
-    artifacts, write/fsync a sibling finalized manifest, atomically rename it over the live manifest,
-    read it back, then remove exact root. Startup removes an otherwise-empty validated finalized root.
+    artifacts only after persisting/readback of `finalization-pending`. Persist/read back progress
+    after each exact report/clone removal, and on startup resume a live manifest from its recorded
+    finalization step after verifying filesystem state. After all removals are verified, write/fsync
+    a sibling finalized manifest, atomically rename it over the live manifest, read it back, then
+    remove the exact root. Startup removes an otherwise-empty validated finalized root.
 11. Run `just shape-check`, `just public-safety`, and `git diff --check`. Expected: exit 0. Commit only
     `skills/restock/SKILL.md` as `docs(skills): compose restock with shared workflows`.
 
