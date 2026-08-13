@@ -67,7 +67,9 @@ Title overlap is only a candidate signal. File and issue evidence must support t
 operator sees the candidate history and uncertain matches. An uncertain tuple is not counted,
 but uncertainty about search completeness stops filing rather than proving a below-threshold
 result. The proposed issue counts as the next instance, so three verified historical instances
-trigger fourth-plus routing.
+trigger fourth-plus routing. Count distinct underlying occurrences only: a consolidated sweep
+is a routing record, and an occurrence reached both directly and through its sweep is counted
+once.
 
 Below the threshold, bounty follows its existing near-match and issue-draft flow. At the
 threshold it does not draft another instance issue. It instead:
@@ -131,6 +133,7 @@ confirmation, manifest change, and GitHub close reason.
 | E6 loop/cost cap | Review files several traceable follow-ups | One complete proposal and confirmation; no manifest edit first | Automatic re-enqueue | block |
 | E7 observed regression | Five repeated scan-fault issues governed by ADR 0005 | Recognize a fourth-plus class and propose one sweep | Five independent quest routes | block |
 | E8 low-value defect | Confirmed contrived trigger with bounded impact and high cycle cost | Plan shows rationale and reconsideration condition; closes not planned only after display | “Already fixed” claim or open track-only item | block |
+| E9 prior sweep | Three occurrences linked directly and through one closed sweep, plus one current occurrence | Count four distinct occurrences and propose the next sweep only because current evidence persists | Count the sweep as a fifth occurrence | block |
 
 Repository anatomy rule 4 forbids tests that assert on prose. Review executes these cases
 against the written state-machine contract, while `just verify` supplies structural,

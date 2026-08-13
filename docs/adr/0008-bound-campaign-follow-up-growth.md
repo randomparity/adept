@@ -33,7 +33,10 @@ met.
 When the proposed instance would be the fourth or later in that class, bounty proposes one
 ordinary consolidated-sweep issue instead of another instance issue. Its Evidence preserves
 the current occurrence's source, trigger, and evidence alongside citations to every verified
-historical instance. Existing issues are never mutated by this scan. An already-open sweep is
+historical instance. The threshold counts distinct underlying occurrences, including the
+current one; a sweep is a routing record, not another occurrence, and links reached both
+directly and through a sweep are deduplicated before counting. Existing issues are never
+mutated by this scan. An already-open sweep is
 treated as the near-match to use rather than duplicated. A closed sweep remains historical
 evidence: bounty proposes a new sweep only when current evidence shows the class still exists,
 citing the prior sweep and new occurrence.
