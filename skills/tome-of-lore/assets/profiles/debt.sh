@@ -12,7 +12,7 @@
 # linted standalone, shellcheck cannot see that use. SC2154 is the mirror of that blindness:
 # read_section_out and read_section_status are assigned by read_section in check-records.sh,
 # which sources this file, so a standalone lint sees only the reads.
-# shellcheck disable=SC2034,SC2154
+# shellcheck disable=SC2034
 
 RECORD_DIR="docs/debt"
 
@@ -60,11 +60,13 @@ profile_check_status() {
   # substitution and most sites in the sweep were assignments.
   read_section "$file" "## Status" || status=$?
   if [ "$status" -ne 0 ]; then
+    # shellcheck disable=SC2154 # assigned by read_section in check-records.sh, which sources this
     err_full "E-STATUS-SCAN: $label: could not read the Status section (awk exit $read_section_status)"
     return 0
   fi
   # In-memory, so this pipeline's status is a legitimate verdict (ADR 0005 decision 1). It
   # carries no `head`, so 141 cannot reach it — ADR 0008 decision 3.
+  # shellcheck disable=SC2154 # assigned by read_section in check-records.sh, which sources this
   if printf '%s\n' "$read_section_out" | grep -qi '^Open'; then
     return 0
   fi

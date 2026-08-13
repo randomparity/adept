@@ -2306,6 +2306,53 @@ exit 1
 STUB
   chmod +x "$d.bin/mktemp"
   run_case "temp file unavailable" 1 E-TMPFILE "$d" BASE_SHA="$b" PATH="$d.bin:$PATH"
+  # Two sites report E-TMPFILE on this run, so the code alone does not say which failed.
+  # check_not_rewritten used to open `tmp=$(mktemp) || return 0` -- a silent fail-open that
+  # skipped all three anti-erasure rules on a run that carried no finding for them. The phrase
+  # names that branch specifically; without it this case passes with the fail-open restored.
+  printf '  %-4s %-44s ' "" "the silently-skipped rules are named"
+  if grep -q 'E-TMPFILE: .*append-only rules did not run' "$d/.err"; then
+    passed=$((passed + 1))
+    printf 'ok   check_not_rewritten reported its own failure\n'
+  else
+    failed=$((failed + 1))
+    printf 'FAIL a failed mktemp still skipped the anti-erasure rules silently\n'
+  fi
+
+  # The E-TMPFILE branches inside check_sections_append_only and check_preamble_intact, which
+  # the always-failing stub above cannot reach: check_not_rewritten returns before them. A
+  # counting stub that succeeds once and fails afterwards gets past that first call, and the
+  # appended line keeps the record from being marker-only so the rules run at all.
+  d=$(case_dir tmpfile_late)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/debt/0001-valid.md"
+  mkdir -p "$d.bin"
+  real_mktemp=$(command -v mktemp)
+  cat >"$d.bin/mktemp" <<STUB
+#!/usr/bin/env bash
+count_file="\$TMPDIR/check-records-test-mktemp-count"
+n=0
+[ -f "\$count_file" ] && n=\$(cat "\$count_file")
+n=\$((n + 1))
+printf '%s' "\$n" >"\$count_file"
+if [ "\$n" -gt 1 ]; then
+  echo "mktemp: stub failure (check-records-test.sh forcing a late E-TMPFILE)" >&2
+  exit 1
+fi
+exec "$real_mktemp" "\$@"
+STUB
+  chmod +x "$d.bin/mktemp"
+  rm -f "${TMPDIR:-/tmp}/check-records-test-mktemp-count"
+  run_case "temp file unavailable later in the run" 1 E-TMPFILE "$d" BASE_SHA="$b" PATH="$d.bin:$PATH"
+  printf '  %-4s %-44s ' "" "the per-section comparison names itself"
+  if grep -q "E-TMPFILE: .*temp file to compare '## " "$d/.err"; then
+    passed=$((passed + 1))
+    printf 'ok   the append-only comparison reported its own failure\n'
+  else
+    failed=$((failed + 1))
+    printf 'FAIL a section comparison was skipped without a finding\n'
+  fi
+  rm -f "${TMPDIR:-/tmp}/check-records-test-mktemp-count"
 
   # A profile that sets its variables but defines no status hook. Without this check the
   # engine would silently reuse the previous profile's hook, since load_profile unsets the
@@ -3038,6 +3085,24 @@ STUB
   saved_path=$PATH
   PATH="$stub_bin:$PATH"
   run_migrator "migrator record listing faults, not empty" 1 E-MIGRATE-LIST-SCAN "$d"
+  PATH=$saved_path
+
+  # The sort half of the same listing. It reads in-memory input, so ADR 0005 would exempt it,
+  # and it is captured for the consequence: an empty listing is a pass. It shares a code with
+  # the find half above, so without its own case a code-only assertion could not tell the two
+  # apart -- and neutralising this guard left the suite fully green.
+  d=$(migrator_dir migrate_sort_scan_fault)
+  stub_bin="$SCRATCH/sort-migrate-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/sort" <<'STUB'
+#!/usr/bin/env bash
+printf 'sort: fixture-fault: simulated I/O error\n' >&2
+exit 2
+STUB
+  chmod +x "$stub_bin/sort"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator listing sort faults, not empty" 1 E-MIGRATE-LIST-SCAN "$d"
   PATH=$saved_path
 
   # The migrator's own profile resolution. A profile that satisfies the checker still has to

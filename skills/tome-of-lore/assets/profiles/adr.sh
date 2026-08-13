@@ -13,7 +13,7 @@
 # linted standalone, shellcheck cannot see that use. SC2154 is the mirror of that blindness:
 # read_section_out and read_section_status are assigned by read_section in check-records.sh,
 # which sources this file, so a standalone lint sees only the reads.
-# shellcheck disable=SC2034,SC2154
+# shellcheck disable=SC2034
 
 RECORD_DIR="docs/adr"
 
@@ -59,6 +59,7 @@ profile_check_status() {
   # rule reported E-STATUS against a Status section it never read.
   read_section "$file" "## Status" || status=$?
   if [ "$status" -ne 0 ]; then
+    # shellcheck disable=SC2154 # assigned by read_section in check-records.sh, which sources this
     err_full "E-STATUS-SCAN: $label: could not read the Status section (awk exit $read_section_status)"
     return 0
   fi
@@ -66,6 +67,7 @@ profile_check_status() {
   # discarded in the text per ADR 0008 decision 2 rather than left to the caller's ambient
   # `set -e` suppression: `grep .` exits 1 on any record whose Status holds only a banner, and
   # `head` can leave 141 behind on a long one. Neither is a verdict.
+  # shellcheck disable=SC2154 # assigned by read_section in check-records.sh, which sources this
   body=$(printf '%s\n' "$read_section_out" | grep -v '^>' | grep . | head -1) || :
   case "$body" in
   Proposed | Deferred) return 0 ;;

@@ -188,10 +188,18 @@ found by reading and are converted here.
   `protected_shape`'s filter guard neutralised, one more, again at `got=0`.
   Where a fixture can be built on which nothing else fires, the case pins the
   silent-pass direction rather than only the message text.
-- `records_in_ref` becomes three-valued on the house pattern, with git's real
-  status in `records_in_ref_status`. Its `return 1` is a sentinel, and reporting
-  it would have named a status git never returned — `1` being a status git could
-  plausibly return, the misattribution would not even have looked wrong.
+- `records_in_ref` returns its listing in `records_in_ref_out` and git's real
+  status in `records_in_ref_status`, on `read_section`'s shape rather than
+  `path_exists_at`'s. That distinction is load-bearing and was learned twice:
+  `path_exists_at` can leave its status in a global only because it writes
+  nothing to stdout and so is never called in `$( )`. `records_in_ref` returns a
+  payload, so every caller wrapped it in a command substitution — which put the
+  assignment in a subshell and left the caller reading the file-scope `0`,
+  printing `git exit 0` inside a message saying the read had failed. The first
+  attempt at this fix did exactly that, and adversarial review caught it. A
+  reader that must return both a payload and a status returns both in globals.
+- `E-BASE-TREE` gains git's status too. It reported none before, and it shares
+  the converted reader with `E-BASE-LIST-SCAN`.
 - `migrate_profile` lifts `sort` out alongside `find`. `sort` reads in-memory
   input, but a fault empties the listing and restores the "0 record(s) examined,
   exit 0" fail-open `E-MIGRATE-LIST-SCAN` exists to close — the consequence test
@@ -267,6 +275,14 @@ found by reading and are converted here.
   #64" is a misattribution this record corrects: `raw=$(git ls-tree …) ||
   return 1` has been present since 31d3d95, the original gate import. The
   `path_exists_at`/`read_base_blob` attribution to #64 is correct.
+- **Measured cyclomatic complexity rises at three converted sites** — roughly 12
+  in `check_sections_append_only`, 11 in `check_preamble_intact`, 9 in
+  `check_not_rewritten`, against the repository's baseline of 8. This is the
+  shape of the fix, not drift: the count comes entirely from flat guard clauses
+  (`|| status=$?` then `if …; then report; return`), and maximum nesting depth
+  stays at 2. No changed function exceeds the 100-line limit. The only split
+  available is to factor the two `diff` blocks together, which is rejected
+  below.
 - **Nothing enforces this record**, exactly as ADR 0005 records of itself.
   Whether a gate should detect the idiom is still issue #66's, and this record
   adds a third shape for such a gate to recognise — mitigated by decision 2's
@@ -316,6 +332,16 @@ converting `check_sections_append_only` while leaving it green would be the
 least defensible half-measure available: `check_not_rewritten` returns on
 `marker_only_change` before the converted rule ever runs, so the record's
 headline fix would not reach the scenario at all.
+
+**Factor the two `diff` blocks in `check_preamble_intact` and
+`check_sections_append_only` into one helper.** They are near-identical, about
+25 lines each. Rejected as the second repetition, not the third — and the helper
+is worse than the duplication in this language: it would take two reader words of
+different arity, three message strings and a code pair, and it would need a
+return protocol to stand in for the `continue` its caller's loop performs, since
+a bash function cannot continue a caller's loop. That protocol would be a status
+the caller must not collapse, which is the defect class this record exists to
+close. Revisit if a third `diff`-based rule appears.
 
 **Split the migrator's sites into a follow-up.** `migrate-records.sh` is a
 developer tool rather than a CI gate, and its faults surface on a terminal a

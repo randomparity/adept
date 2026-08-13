@@ -261,7 +261,8 @@ preamble() {
 # compared two empty shapes as equal, and check_not_rewritten returned before any anti-erasure
 # rule ran — a merged record with a protected section deleted reported E-REWRITE on a working
 # toolchain and `Records OK.` on a faulting one. The read is lifted out and its status captured;
-# the awk that remains filters a shell variable, which ADR 0005 decision 1 exempts.
+# the awk that remains filters a shell variable, which ADR 0005 decision 1 would exempt -- see
+# the note at the filter itself for why it is captured anyway.
 #
 # The shape comes back in a global for read_section's reason: a caller running this in `$( )`
 # could not see the status. Comparing captured strings is safe here in a way it is not at the
@@ -278,10 +279,8 @@ protected_shape() {
     protected_shape_status=$status
     return 2
   fi
-  # The filter reads a shell variable, so ADR 0005 decision 1 would ordinarily exempt it. It is
-  # captured anyway, because here an empty result is not a false error but a false *pass*: two
-  # empty shapes compare equal, which is the fail-open this function was converted to close.
-  # Discarding this status would move that fail-open one stage right rather than removing it.
+  # Captured despite reading a variable: an empty result here is a false *pass*, since two empty
+  # shapes compare equal. Discarding it would move the fail-open one stage right, not remove it.
   status=0
   protected_shape_out=$(printf '%s\n' "$canon" | awk '
     /^## / { in_status = ($0 == "## status"); print; next }
@@ -611,24 +610,33 @@ $candidate"
   return 1
 }
 
-# git's real status is left in records_in_ref_status for the caller's diagnostic, the way
-# path_exists_at leaves its own: the `return 1` below is a sentinel, and reporting it would name
-# a status git never returned -- and 1 is a status git could plausibly have returned, so the
-# misattribution would not even look wrong.
+# The record listing at a ref, in records_in_ref_out, with git's real status in
+# records_in_ref_status: 0 the listing is in the global, 2 the read could not run.
+#
+# The listing comes back in a global rather than on stdout for read_section's reason, and this
+# function is where that reason was learned twice. Returning the payload on stdout forces every
+# caller into `$( )`, which runs the function in a subshell — so the assignment to
+# records_in_ref_status landed in a discarded child and the caller read the file-scope 0,
+# printing "git exit 0" inside a message saying the read failed. `path_exists_at`'s pattern
+# works only because it writes nothing to stdout and so is never called in `$( )`.
+records_in_ref_out=""
 records_in_ref_status=0
 records_in_ref() {
   local ref=$1 raw status=0
+  records_in_ref_out=""
   records_in_ref_status=0
   # The checker's coded ::error:: lines are its interface; a bare `fatal:` from git is not,
   # so a bad ref's stderr is suppressed here rather than at each call site.
   raw=$(git ls-tree -r --name-only "$ref" -- "$RECORD_DIR" 2>/dev/null) || status=$?
   if [ "$status" -ne 0 ]; then
     records_in_ref_status=$status
-    return 1
+    return 2
   fi
   # `printf` over a shell variable, which ADR 0005 decision 1 places outside the scan rule and
-  # ADR 0008 decision 4 confirms does not convert. The discard is written per decision 2.
-  printf '%s' "$raw" | grep -E "$RECORD_RE" || :
+  # ADR 0008 decision 4 confirms does not convert: grep's exit 1 here means the ref simply held
+  # no records. The discard is written out per decision 2.
+  records_in_ref_out=$(printf '%s' "$raw" | grep -E "$RECORD_RE") || :
+  return 0
 }
 
 # Heading lines are the one region section_body skips outright — it matches a heading only to
@@ -746,7 +754,6 @@ check_sections_append_only() {
       return 0
       ;;
     esac
-    # In-memory; discard written out per ADR 0008 decision 2.
     sections=$(printf '%s\n' "$all_sections" | grep -vxF '## Status') || :
   fi
 
@@ -784,7 +791,6 @@ check_sections_append_only() {
       continue
     fi
 
-    # In-memory; see check_preamble_intact for why the discard is written here.
     removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
     if [ "$removed" -gt 0 ]; then
       err_full "E-REWRITE: $path drops $removed line(s) from '$section' that the base ref had — a merged record is append-only there; resolve it with a banner rather than rewriting it"
@@ -913,10 +919,13 @@ evaluate_base_conformance() {
 
 check_no_disappearances() {
   local base=$1 tree record renumbered_to="" used_renumber_targets="" renum_status still_status
-  if ! tree=$(records_in_ref "$base"); then
-    err "E-BASE-TREE: could not read $RECORD_DIR at $base — cannot check for removed records"
+  local tree_status=0
+  records_in_ref "$base" || tree_status=$?
+  if [ "$tree_status" -ne 0 ]; then
+    err "E-BASE-TREE: could not read $RECORD_DIR at $base — cannot check for removed records (git exit $records_in_ref_status)"
     return 0
   fi
+  tree=$records_in_ref_out
 
   while IFS= read -r record; do
     [ -n "$record" ] || continue
@@ -1513,12 +1522,13 @@ run_profile() {
   # under E-BASE-TREE instead of just E-BASE-REF, once per profile.
   if [ -n "${BASE_SHA:-}" ] && [ "$base_valid" -eq 1 ]; then
     check_no_disappearances "${BASE_SHA}"
-    # `|| true` here discarded the `return 1` records_in_ref raises when its `git ls-tree`
-    # faults on the base ref. The list came back empty, base_count was 0, and E-COUNT-FLOOR —
-    # the rule that exists to refuse a clean run over nothing — was disarmed by a read that
-    # never completed. ADR 0005 named this site and assigned it to #63.
+    # `|| true` here discarded the fault records_in_ref raises when its `git ls-tree` faults on
+    # the base ref. The list came back empty, base_count was 0, and E-COUNT-FLOOR — the rule
+    # that exists to refuse a clean run over nothing — was disarmed by a read that never
+    # completed. ADR 0005 named this site and assigned it to #63.
     list_status=0
-    base_records=$(records_in_ref "${BASE_SHA}") || list_status=$?
+    records_in_ref "${BASE_SHA}" || list_status=$?
+    base_records=$records_in_ref_out
     if [ "$list_status" -ne 0 ]; then
       err_full "E-BASE-LIST-SCAN: $BASE_SHA: could not list the $RECORD_LABEL records at the base ref, so E-COUNT-FLOOR did not run (git exit $records_in_ref_status)"
     else

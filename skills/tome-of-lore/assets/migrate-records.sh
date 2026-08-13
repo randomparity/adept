@@ -286,8 +286,6 @@ report_leftovers() {
       report_failure "E-MIGRATE-SECTION-SCAN: $file: could not read the body of '$section' (awk exit $read_section_status)"
       continue
     fi
-    # In-memory; discard written out per ADR 0008 decision 2.
-    # shellcheck disable=SC2154 # assigned by read_section in the sourced check-records.sh
     body=$(printf '%s' "$read_section_out" | tr -d '[:space:]') || :
     if [ -z "$body" ]; then
       leftover "$label: '$section' has no body — a heading with no content is not a record"
