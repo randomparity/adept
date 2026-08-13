@@ -1,10 +1,10 @@
 ---
 name: divination
-description: "Estimate a GitHub issue's blast radius, risk, complexity, and decomposition before implementation. Use when asked to scope an issue, assess whether it fits one pull request, or provide grounded sizing to issue and work workflows."
+description: "Estimate a GitHub issue's blast radius, change hazards, complexity, and decomposition before implementation. Use when asked to scope an issue, assess whether it fits one pull request, or provide grounded sizing to issue and work workflows."
 ---
 # Scope a GitHub Issue
 
-Estimate the size and risk of issue **#<issue-number>** before any work starts. **Read-only** —
+Estimate the size and change hazards of issue **#<issue-number>** before any work starts. **Read-only** —
 this skill writes nothing to GitHub, git, or the filesystem. Its output feeds
 `$quest` and `$bounty`'s decomposition.
 

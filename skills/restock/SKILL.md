@@ -485,7 +485,7 @@ runs in CI:
 | Language version | python 3.9-3.12 | Installed version only |
 | Dependency version | numpy 1.x, 2.x | PR's version only |
 
-Report the matrix gaps and assess risk:
+Report the matrix gaps and assess coverage exposure:
 - **HIGH coverage exposure:** The dependency is known to have version-specific
   behavior (e.g., numpy/scipy ABI, pytorch CUDA builds, native
   extensions) and CI tests versions we couldn't test locally

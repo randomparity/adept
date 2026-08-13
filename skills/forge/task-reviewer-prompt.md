@@ -60,8 +60,8 @@ Worker (reviewer):
     `git diff [BASE_SHA]..[HEAD_SHA]`.
 
     Stay out of the rest of the codebase. Look beyond the diff
-    only to test a specific risk you can put a name to — one focused check per
-    named risk, with both the risk and the check written into your report.
+    only to test a specific concern you can put a name to — one focused check per
+    named concern, with both the concern and the check written into your report.
     Cross-cutting changes qualify: when a diff moves lock ordering, alters a
     function or API contract, or touches shared mutable state, going to the call
     sites is exactly the right move.
