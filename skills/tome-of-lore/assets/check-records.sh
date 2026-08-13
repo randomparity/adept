@@ -499,14 +499,6 @@ $candidate"
       else
         used_renumber_targets=$candidate
       fi
-      # A match outranks a fault, but it does not erase it: an earlier candidate's scan still
-      # could not run, and the search that reached this one was therefore incomplete. Reported
-      # as a warning rather than an error because the verdict below it is positive and the
-      # gate did establish it — the rule against reporting a fault *alongside* a verdict is
-      # about a negative one, which this is not.
-      if [ "$fault_status" -ne 0 ]; then
-        warn_full "W-RENUMBER-SCAN: $path: matched $candidate, but could not read $fault_path along the way (exit $fault_status)"
-      fi
       return 0
     fi
   done <<<"$records"

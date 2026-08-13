@@ -1720,16 +1720,6 @@ STUB
   write_ls_files_stub "$stub_bin" docs/debt/0002-c.md
   run_case "a real renumber outranks a candidate fault" 0 - "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
-  # Outranked is not erased. The search that found the match was still incomplete, and a scan
-  # that could not run leaves a line even where it did not decide the verdict.
-  printf '  %-4s %-44s ' "" "the outranked fault still leaves a trace"
-  if grep -q '::warning::W-RENUMBER-SCAN: ' "$d/.err"; then
-    passed=$((passed + 1))
-    printf 'ok   W-RENUMBER-SCAN\n'
-  else
-    failed=$((failed + 1))
-    printf 'FAIL the outranked candidate fault vanished\n'
-  fi
 
   # check_gate_files, on the gate file itself. A gate file present and tracked read as removed,
   # which reported E-GATE-GONE -- the gate accusing the change of deleting a file that is
