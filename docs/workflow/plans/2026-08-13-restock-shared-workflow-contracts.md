@@ -74,9 +74,11 @@ Bash 3.2-compatible command examples.
 3. Define PR-only tracking: pending trajectory, verified status transition, applied trajectory;
    after merge remove PR `status:` labels and skip issue closure/dependent reconciliation.
 4. If merge succeeds but terminal tracking does not, re-read merged state, never retry merge, retry
-   tracking once after readback, then return `MERGED_TRACKING_INCOMPLETE` with repair details.
+   tracking once after readback, then return `MERGED_TRACKING_INCOMPLETE` with repair details and
+   without cleaning the worktree/ref. Terminal tracking always precedes unit cleanup.
 5. Restrict cleanup to the exact unit worktree/ref supplied by restock; honor `shared: retain` for
-   clone/root/manifest/reports. Preserve all existing issue-backed behavior.
+   clone/root/manifest/reports. On `MERGED_TRACKING_INCOMPLETE`, transfer the untouched unit ownership
+   back to restock. Preserve all existing issue-backed behavior.
 6. Run `just shape-check`, `just public-safety`, and `git diff --check`. Expected: exit 0. Commit only
    `skills/return-to-town/SKILL.md` as `docs(skills): add PR-only return-to-town handoff`.
 
@@ -130,8 +132,9 @@ Bash 3.2-compatible command examples.
    tracking state. On a later ordinary restock startup, correlate each retained-partial manifest with
    the exact repository, PR, run token, and merged SHA; read back the required terminal trajectory
    and absence of active status. If they match, atomically persist/read back a verified-repair
-   disposition, mark the unit terminal, and resume finalization. If not, retain without mutation and
-   repeat the exact repair report. Map R15's initial and resumed packets explicitly to this branch.
+   disposition, perform the same exact Git-aware unit cleanup, mark the unit terminal, and resume
+   finalization. If not, retain without mutation and repeat the exact repair report. Map R15's
+   retained evidence, repair verification, and post-repair cleanup packets explicitly to this branch.
 10. After every unit is terminal and worker end observed, finalize the run: remove shared owned
     artifacts only after persisting/readback of `finalization-pending`. Persist/read back progress
     after each exact report/clone removal, and on startup resume a live manifest from its recorded
