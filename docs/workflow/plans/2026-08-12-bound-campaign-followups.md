@@ -39,7 +39,7 @@ Before Task 1, run `git branch --show-current` and `git status --short --untrack
 Require branch `feat/bound-campaign-followups-91`; stop before edits if branch setup differs or
 the tree contains changes not owned by this quest. Then read issue #91's latest complete `WORK:SCOPE` block with the bounded `gh issue
 view --json comments --jq` command in Task 3 Step 3.1. Verify token
-`68863689-6849-47C1-B56D-41C43F790D66-v6`. A missing or different token stops before any
+`68863689-6849-47C1-B56D-41C43F790D66-v7`. A missing or different token stops before any
 implementation edit. Task 3 repeats this as a final drift check.
 
 ## Task 1 — Bounty recurrence and occurrence lifecycle
@@ -208,7 +208,7 @@ authorize editing the frozen baseline inline.
 
 Read the latest complete `WORK:SCOPE` block on issue #91 with:
 `gh issue view 91 --json comments --jq '[.comments[].body | select(test("(?m)^<!-- WORK:SCOPE -->$") and test("(?m)^<!-- SCOPE:COMPLETE -->$"))] | last'`.
-Verify it contains scope token `68863689-6849-47C1-B56D-41C43F790D66-v6`, then read ADR 0008
+Verify it contains scope token `68863689-6849-47C1-B56D-41C43F790D66-v7`, then read ADR 0008
 and the specification traceability table. Map each criterion to exact lines in campaign/bounty
 and each E1–E20 row in the final eval artifact. A missing or different latest token stops the
 task for scope reconciliation.
