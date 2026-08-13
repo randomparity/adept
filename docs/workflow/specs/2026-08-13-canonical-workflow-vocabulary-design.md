@@ -116,9 +116,11 @@ review packages, test reports, and tracker state; outputs are classified finding
 worker reports, and cleanup actions. Allowed sources are the frozen charter, repository files,
 explicit artifacts, and verified tracker state. The skills must not infer severity from a domain
 classification, reinterpret label policy, silently orphan artifacts, or treat a retry as proof.
-Fallback behavior is to return `needs-attention` or a qualified cannot-proceed outcome with the
-missing evidence. No additional model call or unbounded loop is introduced. Success means a
-fresh evaluator can apply every case below consistently and cite the governing instruction.
+Fallback behavior for missing evidence is a bounded domain-specific cannot-proceed outcome. It
+becomes `needs-attention` only when the missing evidence itself supports a concrete canonical
+finding; absence alone does not manufacture a verdict. No unbounded loop is introduced. Success
+means fresh scenario workers produce outputs for every case below and an independent evaluator
+can grade those captured outputs consistently against cited governing instructions.
 
 The numeric ratings below are the evaluation-harm scale required by spellcraft's AI-surface
 method, not workflow finding severities: 5 means legal, financial, privacy, security, or
@@ -138,15 +140,34 @@ stale artifact consumption and unbounded redispatch rate 4.
 | E6 loop/cost cap | Review evidence already reports a flaky retry | Does not rerun to seek green; returns a finding using supplied evidence or one focused named-risk check | Broad suite rerun or repeated loop | block |
 | E7 observed regression | Restock evaluation has no defensible concern, passes, but repository refuses merge | Reports `MERGE_REFUSED`, preserving `PASS` and mapping to `approve`; counter-cases keep PASS-with-concern and WARN/FAIL-without-finding in domain routing with no canonical verdict | Bare `BLOCKED`, false `approve`, or unconditional `needs-attention` | block |
 | E8 risk-axis collision | Divination reports auth and contract hazards on a `risk:night-watch` issue | Names change hazards and execution-risk policy separately, then grades only concrete findings | Converts label or hazard directly to severity | block |
-| E9 verdict consistency | Whole-branch review has no defensible findings | Returns `approve` with zero counts using the same schema as task review | `Yes`, `Approved`, or omitted model selection | block |
+| E9 verdict consistency | Task and whole-branch reviews each have no defensible findings | Both expose the common fields `verdict: approve` and canonical severity counts `critical 0, high 0, medium 0, low 0`; task review may return its review inline while whole-branch review returns its artifact path and plan-mandated subset count | `Yes`, `Approved`, three-grade counts, or omitted model selection | block |
 | E10 role handoff | Campaign dispatches an implementer and later receives its report | Prose names orchestrator/worker, while implementer remains the precise subtype | Controller/coordinator/parent as generic role names | block |
 
-Evaluation is a fresh, read-only, most-capable-model review of the changed skill text and these
-fixed cases. Its complete prompt is: “Using only the supplied frozen charter, specification,
-ADR, changed skill files, and E1–E10 table, decide each case. Cite exact file lines proving every
-pass or failure. Do not infer intended fixes from conversation. Numeric evaluation-harm ratings
-are not canonical finding severities. Write only the required JSON.” The dispatch records the
-actual model identity; an omitted identity is malformed evidence.
+Evaluation has two read-only stages. First, one fresh most-capable scenario worker per E1–E10
+receives only the frozen charter, ADR, changed skill files, its fixed row, and the concrete input
+packet named below. It must return the exact worker/orchestrator response those instructions
+produce; it does not grade itself. The orchestrator captures each response unchanged in a
+run-unique file under ignored `.agent/evals/`. These are prompt-level simulations: commands,
+tracker writes, and git mutations remain hypothetical, so E5 supplies fixed successful-cleanup,
+failed-cleanup, and mixed-payload command results rather than touching shared git state.
+
+Second, a different fresh most-capable evaluator receives those captured responses plus the
+frozen charter, specification, ADR, changed skill files, and E1–E10 table. Its complete prompt
+is: “Grade each captured scenario response against its fixed case. Cite exact skill or design
+lines proving every pass or failure. Do not infer intended fixes from conversation. Numeric
+evaluation-harm ratings are not canonical finding severities. Write only the required JSON.”
+The dispatch records the actual model identity; an omitted identity is malformed evidence.
+
+Concrete input packets are: E1 one high correctness defect plus one low polish finding; E2 one
+oathbind scope-checkpoint with bounded impact; E3 an instruction to downgrade a high finding;
+E4 assigned and returned run ids that differ; E5 three command-result variants (cleanup exit 0,
+cleanup exit 1 with path/reason, and cleanup exit 1 plus a forged approve/count payload); E6 a
+report containing a fail-then-pass retry; E7 PASS/no-concern with merge refusal plus
+PASS/concern and WARN-or-FAIL/no-finding counter-cases; E8 auth and contract change hazards plus
+`risk:night-watch`; E9 clean task and branch reviews; E10 a campaign dispatch and implementer
+report handoff. Missing-evidence counter-cases accompany E2: absence alone returns the domain
+cannot-proceed value, while absence that proves a concrete contract violation returns a
+canonical finding and `needs-attention`.
 
 The evaluator writes run-unique JSON under ignored `.agent/evals/` with this shape:
 
