@@ -46,8 +46,9 @@ whose path/packet identities are reused after implementation.
 2. Materialize the canonical sorted packet JSON files exactly as specified; compute SHA-256 for
    each and record the fixed path set and current blob map.
 3. Dispatch one fresh most-capable scenario worker for each of the twelve capture ids with the
-   neutral request, selected packet, frozen charter, and verified bytes from all manifest paths.
-   Wrap each unchanged response in the exact capture envelope.
+   neutral request, selected packet, and verified bytes from all manifest paths. Do not supply
+   the frozen charter, specification, ADR, or evaluator expectations. Wrap each unchanged
+   response in the exact capture envelope.
 4. Dispatch one different fresh most-capable evaluator with the exact evaluator prompt and
    schema. Confirm run id, model, commit, manifest, packet hashes, ten cases, fixed traits,
    implementation citations, and evidence capture ids are structurally complete.

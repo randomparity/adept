@@ -160,8 +160,9 @@ the exact bytes—not only the path and id—to each scenario worker. Each captu
 the paths and blob ids actually supplied in the capture envelope, never in the worker response.
 
 Evaluation has two read-only stages. First, one fresh most-capable scenario worker per capture
-receives only the frozen charter, fixed input manifest with verified file contents, the neutral
-task request below, and one concrete input packet. It never receives the table's pass traits,
+receives only the fixed input manifest with verified file contents, the neutral task request
+below, and one concrete input packet. It does not receive the frozen charter, specification, or
+ADR. It never receives the table's pass traits,
 forbidden traits, gate, or trait ids; those are evaluator-only expectations. It treats the
 supplied skill/template contents as its operative instructions. It must return the exact
 worker/orchestrator response those instructions
