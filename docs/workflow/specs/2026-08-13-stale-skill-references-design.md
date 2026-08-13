@@ -115,28 +115,31 @@ skill-shape validation, adversarial instruction review, and the full guardrail s
 | A new prose gate rejects valid examples or target paths | 4 | No new prose gate is introduced |
 | Changes escape the issue-listed surface | 3 | Diff review against the frozen scope |
 
-Evaluation cases use the reference matrix as the fixture. The implementation diff is the changed
-repository state, and the focused search above is the machine oracle for stale literals. Semantic
-cases use an independent `$gauntlet` branch review: the reviewer must cite the replacement lines
-and the current target they followed; an unsupported or unresolved target is a blocking finding.
+Evaluation is static instruction-contract review, not execution of the skills against synthetic
+repositories. The reference matrix is the fixture, the implementation diff is the changed state,
+and the focused search above is the machine oracle for stale literals. Semantic cases use an
+independent `$gauntlet` branch review: the reviewer checks the stated predicate in the changed
+instruction, cites its exact lines and the current target it followed, and reports an unsupported
+or unresolved target as blocking. An invocation harness is outside this repair's scope and is not
+claimed as evidence.
 
 Evaluation cases:
 
 - `REF-01` happy path: inspect the `attunement` instruction-file list after the edit. Pass: it
   contains `AGENTS.md` and `CLAUDE.md` once each; the focused search emits nothing. Gate: block.
-- `REF-02` ambiguous target instructions: both supported files exist with nested instructions.
-  Pass: the replacement still delegates precedence to the agent's native applicable-instruction
-  rules; the independent reviewer cites that unchanged rule. Gate: block.
-- `REF-03` forbidden evidence: no verified workflow or instruction artifact supports a proposed
-  tuning. Pass: the independent reviewer confirms the existing fail-closed omission remains and
-  cites the verification language beside the replacement. Gate: block.
-- `REF-04` stale source: a target repository has no installer inventory. Pass: `warding` inspects
-  actual provisioning/workflow files and makes no claim about `install-tools.sh`; the focused
-  search emits nothing. Gate: block.
-- `REF-05` permissions boundary: official installation guidance cannot be accessed. Pass: the
-  instruction explicitly requires a skipped result, names the inaccessible guidance, forbids an
-  invented command, and forbids a clean result; the independent reviewer cites all four traits.
-  Gate: warn.
+- `REF-02` precedence predicate: the edited instruction still delegates instruction precedence to
+  the agent's native applicable-instruction rules and adds no ordering of its own. Pass: the
+  independent reviewer cites that unchanged delegation. Gate: block.
+- `REF-03` fail-closed predicate: the edited `bards-tale` grounding rule still omits any proposal
+  without a verified governing workflow or repository instruction source. Pass: the independent
+  reviewer cites both the admissible-source rule and the omission rule. Gate: block.
+- `REF-04` discovery predicate: the edited `warding` rule discovers pins from actual target
+  provisioning/workflow files and makes no claim about a repository-owned installer. Pass: the
+  reviewer cites the discovery rule and the focused search emits nothing. Gate: block.
+- `REF-05` degraded-guidance predicate: the edited instruction requires a skipped result when
+  official guidance is inaccessible or inapplicable, names the missing guidance, forbids an
+  invented command, and forbids a clean result. Pass: the independent reviewer cites all four
+  traits. Gate: warn.
 - `REF-06` bounded behavior: the repair adds no agent loop or extra dispatch; existing workflow
   limits remain unchanged. Pass: `git diff --name-only main...HEAD` contains only the matrix files
   and required design records, and independent review finds no new dispatch. Gate: block.
