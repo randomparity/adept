@@ -36,6 +36,10 @@ Use `"$campaign_root/..."` for all reads/writes — a bare `.agent/campaigns/...
 Slug is a short hash of this normal form. Store the full normal form in the manifest as `Normalized-selector`. Use `"$campaign_root/.agent/campaigns/<slug>.md"`.
 
 **Hash collision handling:** On any file match, confirm loaded `Normalized-selector` equals this run's. On mismatch, use `<slug>-2.md`, etc.
+The final collision-resolved manifest filename stem is `Campaign identity`; persist that field
+in the manifest and use its exact value in every bounty prompt, occurrence marker, and recovery
+search. Validate identity and Normalized-selector together before reconciliation; the initial
+short hash alone is never a durable marker namespace.
 
 **Keep manifest out of git** without relying on target repo's `.gitignore`** (required before any manifest write or resume mutation**):
 
@@ -68,6 +72,7 @@ Manifest schema:
 - Status: active            # flip to `complete` at end
 - Selector: <raw selector>
 - Normalized-selector: <normal form>
+- Campaign identity: <final manifest filename stem>
 - Completion notes: <text or "none">
 - Public-safe notes: <derived summary or "none">
 - Completion condition: every queued issue closed or merged and pending occurrence dispositions empty
@@ -93,13 +98,21 @@ Status progression: `pending → triaged → in-flight → merged | closed | blo
 
 The pending-occurrence table is not a fix queue. Validate unique occurrence numbers, the three
 normalized states shown above, and a non-empty state reason. `CLOSED` remains pending unless its
-reason is `NOT_PLANNED`. Older manifests without the section backfill an empty
+reason is `NOT_PLANNED`. Encode `&` as `&amp;` and `|` as `&#124;` before placing a rationale in
+the Markdown table; decode those entities for display. The canonical occurrence-body field is
+the exact source of truth. Older manifests without the section backfill an empty
 table and normalize the Completion condition field to the schema text above before validation.
 On every resume, read each occurrence with
 `gh issue view <N> --json state,stateReason,url`: remove it and append the verified
 `closed-not-planned: occurrence of sweep #N` outcome only for `CLOSED`/`NOT_PLANNED`; otherwise
 update its normalized state and reason and keep it pending. A failed read records state
 `UNKNOWN` and reason `UNVERIFIED`.
+
+For an `OPEN` occurrence discovered from a valid marker, present the exact close-only recovery
+action, obtain explicit confirmation, and invoke bounty's existing recovery path for that
+occurrence and sweep. On verified `CLOSED`/`NOT_PLANNED`, atomically replace the pending row with
+the outcome. Decline, failed close, or failed/nonconforming readback preserves the pending row
+and blocker; it never repeats creation.
 
 ## 2. Environment Discovery
 
@@ -199,7 +212,8 @@ Each prompt carries:
 - Mandatory follow-up return contract: every discovered/finalized issue and complete bounty
   occurrence tuple (occurrence, sweep, rationale, state, state reason), including verified
   closures
-- Campaign occurrence identity: pass the manifest slug and source issue so bounty embeds the
+- Campaign occurrence identity: pass the collision-resolved Campaign identity and source issue
+  so bounty embeds the
   confirmed `CAMPAIGN-OCCURRENCE: <slug> source=#N sweep=#N` marker and its public-safe
   `CAMPAIGN-OCCURRENCE-RATIONALE:` field in any new occurrence
 - (Parallel only) external worktree path (`../<repo>-worktrees/<branch>`)
@@ -284,8 +298,8 @@ manifest row for them, and proceeds to the drained-state check. On confirmation,
 approved issues, report each enqueue, and loop to step 3.
 
 Before the drained check—and on every resume—search all issue states for the exact public-safe
-`CAMPAIGN-OCCURRENCE: <slug>` marker with
-`gh search issues --repo <owner/name> --match body "CAMPAIGN-OCCURRENCE: <slug>" --json number,body,state,url --limit 100`.
+`CAMPAIGN-OCCURRENCE: <campaign-identity>` marker with
+`gh search issues --repo <owner/name> --match body "CAMPAIGN-OCCURRENCE: <campaign-identity>" --json number,body,state,url --limit 100`.
 Exactly 100 results is incomplete and blocks completion; a failed search is degraded and blocks
 completion. Parse only canonical whole-line markers for this slug. Reject duplicate occurrence
 numbers, malformed source/sweep fields, or a missing, blank, or duplicate immediately following

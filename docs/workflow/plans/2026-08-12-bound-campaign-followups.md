@@ -39,7 +39,7 @@ Before Task 1, run `git branch --show-current` and `git status --short --untrack
 Require branch `feat/bound-campaign-followups-91`; stop before edits if branch setup differs or
 the tree contains changes not owned by this quest. Then read issue #91's latest complete `WORK:SCOPE` block with the bounded `gh issue
 view --json comments --jq` command in Task 3 Step 3.1. Verify token
-`68863689-6849-47C1-B56D-41C43F790D66-v5`. A missing or different token stops before any
+`68863689-6849-47C1-B56D-41C43F790D66-v6`. A missing or different token stops before any
 implementation edit. Task 3 repeats this as a final drift check.
 
 ## Task 1 — Bounty recurrence and occurrence lifecycle
@@ -168,7 +168,7 @@ state and keep the follow-up blocked; never emit the closed row or finish the ca
 
 ### Step 2.4 — Run focused behavioral review and guardrails
 
-Dispatch all fixed simulations E1–E14 to a fresh reviewer context with tools disabled, distinct
+Dispatch all fixed simulations E1–E18 to a fresh reviewer context with tools disabled, distinct
 from the implementing context, and capture the complete prompts, packets, JSON, model identifier
 or `unavailable`, human pass/fail comparison, and instruction line citations at
 `.agent/evals/issue-91-final.md` exactly as the specification requires.
@@ -208,9 +208,9 @@ authorize editing the frozen baseline inline.
 
 Read the latest complete `WORK:SCOPE` block on issue #91 with:
 `gh issue view 91 --json comments --jq '[.comments[].body | select(test("(?m)^<!-- WORK:SCOPE -->$") and test("(?m)^<!-- SCOPE:COMPLETE -->$"))] | last'`.
-Verify it contains scope token `68863689-6849-47C1-B56D-41C43F790D66-v5`, then read ADR 0008
+Verify it contains scope token `68863689-6849-47C1-B56D-41C43F790D66-v6`, then read ADR 0008
 and the specification traceability table. Map each criterion to exact lines in campaign/bounty
-and each E1–E14 row in the final eval artifact. A missing or different latest token stops the
+and each E1–E18 row in the final eval artifact. A missing or different latest token stops the
 task for scope reconciliation.
 
 Expected: no unmapped criterion, no implementation file outside the frozen surface, and no
@@ -222,13 +222,13 @@ First run an independent adversarial whole-diff review against `main`, focused o
 contradictions, missing failure edges, consent boundaries, evidence loss, recurrence counting,
 and divergence from ADR 0008 and the approved surface. Disposition every finding. For each
 accepted fix, edit only the two skill files, commit that fix separately, rerun the affected
-E1–E14 simulations with a fresh reviewer, and repeat whole-diff review until approved or the
+E1–E18 simulations with a fresh reviewer, and repeat whole-diff review until approved or the
 review cap stops the task.
 
 After every accepted review fix, replace—not append beside—the affected case entries in
 `.agent/evals/issue-91-final.md` with complete prompts, packets, current JSON, comparison, and
 line citations from the fixed HEAD. After whole-diff approval, repeat Step 3.1's complete
-requirement-to-current-line mapping and verify every E1–E14 entry describes HEAD before running
+requirement-to-current-line mapping and verify every E1–E18 entry describes HEAD before running
 the final gates.
 
 After review approval, run `just verify` bare, then `git diff --check` and

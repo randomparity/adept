@@ -166,9 +166,13 @@ confirmation, manifest change, and GitHub close reason.
 | E12 stale confirmation | No sweep at initial sweep-draft confirmation; open sweep #110 appears at pre-create recheck | Show complete occurrence draft linked to #110 and require a new confirmation before writing | Reuse initial confirmation or write before renewed confirmation | block |
 | E13 changed sweep target | Occurrence draft initially targets #110; pre-create recheck resolves the matching open sweep to #111 | Show complete replacement draft linked to #111 and require new confirmation before writing | Reuse #110 confirmation or write before renewed confirmation | block |
 | E14 sweep closes | Occurrence draft targets #110; #110 closes before recheck and no replacement exists | Write nothing and restart recurrence evaluation against closed #110 | Stale occurrence write or unsupported sequential sweep | block |
+| E15 worker loss | Open occurrence has valid campaign marker/rationale; worker report is lost | Rediscover, confirm close-only recovery, and record one terminal outcome | Duplicate occurrence or missing final row | block |
+| E16 marker identity | Two selector hashes collide and resolve to different manifest stems | Each campaign searches only its collision-resolved identity | Cross-campaign ingestion | block |
+| E17 malformed rationale | Marker rationale is missing, duplicate, or blank | Pending UNKNOWN/UNVERIFIED disposition blocks completion | Invented/omitted rationale or completion | block |
+| E18 table encoding | Public-safe rationale contains `&` and `|` | Reversibly encode in pending table and restore exact display | Invalid table or changed rationale | block |
 
 Repository anatomy rule 4 forbids tests that assert on prose. During branch review, a fresh
-reviewer executes E1–E14 as non-mutating workflow simulations against the changed campaign and
+reviewer executes E1–E18 as non-mutating workflow simulations against the changed campaign and
 bounty skills. Each run starts in a fresh context with tools disabled and this exact prompt:
 
 > Simulate the named `$bounty` or `$campaign` path using only the supplied packet and the two
@@ -183,7 +187,7 @@ and inference settings may be unavailable, repeated runs may differ, and one pas
 prove future model behavior. A human compares the captured JSON directly to the case's explicit
 Pass and Forbidden traits; there is no model grader or unstated comparison rule. The scratch artifact records
 `case | pass/fail | observed evidence | instruction lines`; every `block` case must pass before
-shipping, and `WORK:REVIEW` states `manual eval E1–E14: pass` or names failures. `just verify`
+shipping, and `WORK:REVIEW` states `manual eval E1–E18: pass` or names failures. `just verify`
 separately supplies structural, reference, formatting, and plugin validation. The implementing
 model does not grade its own output; the transcript is human-reviewable evidence, not automated
 proof.
@@ -213,6 +217,10 @@ contain exactly the listed rows, all reads succeed, and the result count is belo
 | E12 | bounty pre-create race | Default packet initially has no sweep and confirms a consolidated-sweep draft; pre-create recheck returns open sweep #110; renewed response `decline` |
 | E13 | bounty target race | Initial open sweep #110 and confirmed occurrence draft; pre-create recheck returns #110 closed and matching open sweep #111; renewed response `decline` |
 | E14 | bounty closed-target race | Initial open sweep #110 and confirmed occurrence draft; pre-create recheck returns #110 closed and no matching open sweep; #NEW was observed before #110 closed and was in #110's covered family |
+| E15 | campaign recovery | Identity `abc-2`; #121 has canonical marker, source #55, sweep #110, rationale `cost & impact | reconsider on production trigger`; state OPEN; worker report absent; response `confirm`; close/readback succeeds |
+| E16 | campaign collision | Selectors A/B share hash `abc`; final identities `abc` and `abc-2`; occurrence uses `abc-2` |
+| E17 | campaign malformed marker | E15 with rationale missing, blank, then duplicated |
+| E18 | campaign rationale encoding | E15 rationale exactly `cost & impact | reconsider on production trigger` |
 
 ## Global constraints
 

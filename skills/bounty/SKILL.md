@@ -61,7 +61,7 @@ the exact draft and target; the open-sweep occurrence path also verifies its not
    instead of another sweep. Preserve the current source, trigger, and evidence verbatim, link
    the open sweep in the body, and state that the occurrence will be closed not planned after
    verified creation. When called by campaign, also include a public-safe, whole-line
-   `CAMPAIGN-OCCURRENCE: <campaign-slug> source=#N sweep=#N` marker and an immediately following
+   `CAMPAIGN-OCCURRENCE: <collision-resolved-campaign-identity> source=#N sweep=#N` marker and an immediately following
    whole-line `CAMPAIGN-OCCURRENCE-RATIONALE: <public-safe rationale>` field in the new
    occurrence body. The rationale is the same value returned in the occurrence tuple. Show both
    fields and the lifecycle in the draft the operator confirms. They belong to the new issue;
