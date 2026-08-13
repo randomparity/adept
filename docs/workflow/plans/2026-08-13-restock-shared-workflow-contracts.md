@@ -127,7 +127,11 @@ Bash 3.2-compatible command examples.
    merged state, never retry merge, retain the ownership manifest plus required branch/tracking
    evidence, and emit the exact operator repair. Mark the unit retained-partial rather than terminal
    and block ordinary run finalization until an operator-recorded disposition verifies the missing
-   tracking state. Map R15's packet explicitly to this branch.
+   tracking state. On a later ordinary restock startup, correlate each retained-partial manifest with
+   the exact repository, PR, run token, and merged SHA; read back the required terminal trajectory
+   and absence of active status. If they match, atomically persist/read back a verified-repair
+   disposition, mark the unit terminal, and resume finalization. If not, retain without mutation and
+   repeat the exact repair report. Map R15's initial and resumed packets explicitly to this branch.
 10. After every unit is terminal and worker end observed, finalize the run: remove shared owned
     artifacts only after persisting/readback of `finalization-pending`. Persist/read back progress
     after each exact report/clone removal, and on startup resume a live manifest from its recorded
