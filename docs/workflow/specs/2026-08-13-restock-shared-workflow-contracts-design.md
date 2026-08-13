@@ -41,10 +41,10 @@ eliminates cross-run name collisions without deleting unknown state.
 
 Eligible roots live only in the dedicated `<session-scratchpad>/restock/` namespace and use the
 `run.XXXXXX` `mktemp` template. Before creating children, the orchestrator writes a versioned marker
-and ledger binding the canonical root to the repository identity and run token. Reconciliation
-opens only direct `run.*` children carrying a supported marker owned by the current user; an absent,
-malformed, mismatched, or unsupported marker makes that child unrelated and it is neither traversed
-nor removed.
+and ledger as one ownership manifest binding the canonical root to the repository identity and run
+token. Reconciliation opens only direct `run.*` children carrying a supported manifest owned by the
+current user; an absent, malformed, mismatched, or unsupported manifest makes that child unrelated
+and it is neither traversed nor removed.
 
 The initial marker and ledger schema is version 1. This design requires its reader to reconcile
 version 1. Any unsupported version is retained untouched and reported as
@@ -148,13 +148,15 @@ This decision is recorded by [ADR 0012](../../adr/0012-restock-composes-shared-w
   forced removal. A mismatch or failed step stops reconciliation for that unit, retains every
   remaining artifact and ref, and reports the failed invariant. Raw directory deletion is not a
   substitute.
-- When every ledger unit is terminal and no worker remains live, run finalization verifies no
+- When every manifest unit is terminal and no worker remains live, run finalization verifies no
   registered worktree remains, records each completed destructive step, and removes owned reports
-  and clone. It then atomically replaces the ledger/marker with a versioned finalized tombstone bound
-  to the canonical root and run token, and removes the exact root. Startup may remove an otherwise-
-  empty root carrying that valid tombstone; it never treats markerless shape alone as ownership. A
-  crash before tombstone replacement resumes from the ledger; a crash after replacement resumes by
-  tombstone removal. Any failed invariant retains the remaining root with exact failure evidence.
+  and clone. It writes and fsyncs a sibling versioned finalized manifest bound to the canonical root
+  and run token, then atomically renames that single file over the live ownership manifest before
+  removing the exact root. Startup may remove an otherwise-empty root carrying that valid finalized
+  manifest; it never treats manifestless shape alone as ownership. A crash before the rename resumes
+  from the live manifest; a crash after it resumes by finalized-manifest removal. Readback verifies
+  the renamed state before root deletion. Any failed invariant retains the remaining root with exact
+  failure evidence.
 - Worker silence follows `references/dispatch-liveness.md`; elapsed time never authorizes cleanup.
 - A non-clean evaluation never reaches `$return-to-town`.
 - Restock owns current-run unit cleanup for every WARN, FAIL, ordinary refusal, and second
@@ -203,7 +205,7 @@ Failure modes and blocking cases:
 | R17 | 4 | Label swap fails after `pending`, or `applied` write fails after a successful swap; readers derive state from labels and reconcile the missing half by token | Treating pending as completed or reporting a label/annotation contradiction | block |
 | R18 | 4 | Prior reconciliation runs before current-root allocation; a current token/root is never traversed as prior state | Classifying current work as stale | block |
 | R19 | 5 | A mixed PASS plus FAIL/second-BASE_CHANGED serial run shares a clone; return-to-town cleans the merged unit, restock cleans non-merge units, and shared artifacts finalize only after all units end | First-unit shared-clone deletion, non-merge unit leak, or orphaned final run root | block |
-| R20 | 5 | Crash injection after every finalization step resumes from ledger or finalized tombstone, including after ledger replacement and before root removal | Markerless-shape deletion or immortal empty root | block |
+| R20 | 5 | Crash injection around every finalization step and single-manifest rename resumes from the live or finalized manifest, including after rename and before root removal | Manifestless-shape deletion, multi-file atomicity claim, or immortal empty root | block |
 
 Measurement is prompt-level because repository policy forbids automated gates that assert on prose.
 One fresh most-capable scenario worker per R1-R20 receives the changed skill files, a canonical JSON
