@@ -104,9 +104,16 @@ For each queued issue, check for artifacts from prior runs:
 
 **Dispatch read-only triage subagents** (up to 5 parallel). Each prompt carries completion notes verbatim (private dispatch context — safe inside prompts). Subagent investigates issue body, linked PRs/commits, and current code. Return only:
 
-- **verdict**: `close-candidate` | `fix` (subtype: `trivial-bugfix` | `governed-small-change` | `non-trivial`)
+- **verdict**: `close-candidate` | `close-not-planned` | `fix` (subtype:
+  `trivial-bugfix` | `governed-small-change` | `non-trivial`)
 - **evidence**: citations (`file:line`, commit SHA, PR number)
 - **rationale**: ≤300 tokens explaining why
+
+A `close-not-planned` verdict means the defect is confirmed, but its concrete trigger
+likelihood and likely impact do not justify its remediation and full quest-cycle cost. It also
+returns those four facts plus an observable reconsideration condition. “Low priority” alone is
+not evidence. Uncertain correctness is `fix`; uncertain cost/benefit stays visible in the plan
+for the operator rather than being closed.
 
 For `governed-small-change`, also return: decision reference, kind, accepted status, governed behavior, testable acceptance criteria. These are evidence, not authority — `$quest` revalidates.
 
@@ -114,6 +121,9 @@ Pick model by signals: clearly mechanical → fast model; ambiguous/wide-surface
 
 **Verdict handling:**
 - `close-candidate` → confirm with `bug-claim-verifier` or `$gauntlet` before closing. **Confirmed** → keep `close-candidate`; don't close here — batch closes in step 4 after plan is visible. **Rejected or inconclusive** → the already-fixed claim is unproven, so the issue needs work: re-verdict as `fix` (subtype from the verifier's evidence; default `non-trivial` when unclear), or `blocked` with reason if even that can't be determined. Persist the transition in the manifest before presenting the plan.
+- `close-not-planned` → preserve the citations, trigger, impact, cycle-cost comparison, and
+  reconsideration condition for the plan and closure comment. This verdict never claims the
+  defect is fixed and never enters a quest wave.
 - `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler.
 
 Record verdicts in manifest `Verdict` column. Reconcile states (`ready-to-merge`, already-closed) live in `Status`.
@@ -133,6 +143,16 @@ Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge
 Present triage/plan table: issue → verdict, wave, assigned numbers, file scope.
 
 Execute **close-candidates** (all remaining ones are confirmed — rejected/inconclusive candidates were re-routed in step 3): post research comment citing fixing code/PR, `gh issue close` each. Set `Status: closed`, append to outcomes log before removing from queue.
+
+Execute **close-not-planned** only after the operator has seen it in the plan. Post a concise
+comment containing the evidence, trigger, likely impact, remediation/quest cost, cost/benefit
+rationale, and reconsideration condition. The comment must succeed before closure; otherwise
+leave the issue open, record an issue-local blocker, and continue draining other rows. Then run
+`gh issue close <N> --reason "not planned"` and verify with
+`gh issue view <N> --json state,stateReason,url`. Only `CLOSED` plus `NOT_PLANNED` authorizes a
+`closed-not-planned` outcome. A failed close, failed readback, or other state records the actual
+state (`unknown/unverified` when unreadable), blocks that row, and never emits a terminal
+closure claim.
 
 ## 5. Execute Fixes
 
@@ -218,7 +238,20 @@ The operator owns them from there, though no longer alone: `$clear-map` classifi
 
 ## 7. Re-Enqueue New Issues
 
-If triage/fixing surfaced new issues (filed with `gh issue create` and linked), add to manifest queue and loop to step 3. Only enqueue issues **traceable to this batch**. Report each enqueue.
+If triage/fixing surfaced new issues, first collect only those **traceable to this batch** and
+present one proposal table: issue number, title, source issue, proposed route, and any
+same-defect-class consolidation. Include bounty-created occurrences that were linked to an open
+sweep and verified closed not planned; they are outcomes to report, not queue entries.
+
+Ask for one explicit operator confirmation before adding any proposed issue to the manifest or
+looping to step 3. A decline leaves already-filed issues outside this campaign, changes no
+manifest row for them, and proceeds to the drained-state check. On confirmation, add the
+approved issues, report each enqueue, and loop to step 3.
+
+For each verified closed occurrence returned by bounty, append its issue number, sweep number,
+and rationale to Outcomes log as `closed-not-planned: occurrence of sweep #N`. If bounty
+reports an open, nonconforming, or unknown/unverified occurrence state, record that actual
+state, block the follow-up, and do not finish the campaign as though it closed.
 
 ## 8. Done
 
@@ -238,6 +271,9 @@ Ensure manifest row and GitHub state agree before moving on.
 
 Flip manifest to `Status: complete` only when every row is `closed` or `merged`. Campaigns containing `blocked` rows stay `active`.
 
-Report final table: issue → outcome (`closed-already-fixed` / `merged-PR#` / `blocked: reason`) → notes.
+Report final table: issue → outcome (`closed-already-fixed` / `closed-not-planned` /
+`closed-not-planned: occurrence of sweep #N` / `merged-PR#` / `blocked: reason`) → notes.
+Every occurrence closure recorded in Outcomes log appears in this table even though it never
+entered a fix wave or remained in the open queue.
 
 List any deferred cleanup alongside it — per row, the branch and the worktree path still on disk, plus the agent whose end of run was never observed where the run still knows it.
