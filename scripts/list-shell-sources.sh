@@ -98,6 +98,19 @@ is_two_space() {
 	esac
 }
 
+# The walk that produces everything below it, captured rather than read from a
+# process substitution. `while ... done < <(git ls-files -z)` reports the loop's
+# status and never git's, so a listing that stopped partway yielded a short
+# inventory and exit 0 -- the same silent miss this script's other two failure
+# modes exist to prevent, in its own producer. It is why the lint and
+# format-check recipes capture this script's output in turn.
+tracked=$(mktemp)
+trap 'rm -f "$tracked"' EXIT
+git ls-files -z >"$tracked" || {
+	printf 'list-shell-sources: could not list the repository'\''s tracked files\n' >&2
+	exit 1
+}
+
 found=0
 while IFS= read -r -d '' path; do
 	source_status=0
@@ -111,10 +124,25 @@ while IFS= read -r -d '' path; do
 	# one instruction, and a message covering all four reads as a broken gate
 	# to whoever hits the common one.
 	*)
+		# Some tracked paths are meant to be absent. A sparse checkout marks
+		# what it left out with skip-worktree (`S`), and assume-unchanged shows
+		# as a lowercase tag; both are supported configurations, and failing on
+		# them would make the repository uncommittable for anyone using one.
+		# `git ls-files -v` is asked only about a path that already faulted, so
+		# the ordinary walk pays nothing. A probe that answers nothing falls
+		# through to the diagnostics rather than deciding.
+		#
+		# [[:lower:]] rather than [a-z]: under en_US.UTF-8 collation the range
+		# a-z matches uppercase letters too, so [a-z] swallowed the ordinary
+		# `H` tag and made every fault silent -- the defect this script is
+		# about, reintroduced by the guard against it.
+		case $(git ls-files -v -- "$path" 2>/dev/null) in
+		S* | [[:lower:]]*) continue ;;
+		esac
 		if [[ -e $path && ! -f $path ]]; then
 			printf 'list-shell-sources: %s is tracked but is not a regular file, so it cannot be classified\n' \
 				"$path" >&2
-		elif [[ -L $path ]]; then
+		elif [[ -L $path && ! -e $path ]]; then
 			printf 'list-shell-sources: %s is a symlink whose target is missing, so it cannot be classified\n' \
 				"$path" >&2
 		elif [[ -e $path ]]; then
@@ -137,7 +165,7 @@ while IFS= read -r -d '' path; do
 	else
 		printf '%s\n' "$path"
 	fi
-done < <(git ls-files -z)
+done <"$tracked"
 
 ((found)) || {
 	printf 'list-shell-sources: no %s shell sources found\n' "$mode" >&2
