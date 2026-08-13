@@ -24,6 +24,14 @@ Add an explicit PR-only tracking mode to `$return-to-town`. It records terminal 
 clears status on the PR while skipping issue closure and cleared-dependent reconciliation. Normal
 issue-backed behavior remains unchanged.
 
+The PR-only lifecycle is `status:in-progress` while restock discovers and prepares the unit,
+`status:in-review` while it evaluates, and `status:awaiting-merge` only for a clean authorized
+`PASS`. Restock owns those three transitions and the PR's `WORK:REVIEW`; `$return-to-town` owns the
+terminal PR `WORK:TRAJECTORY` and removal of active `status:` labels after merge. A non-merge
+terminal evaluation receives `WORK:REVIEW` and has its active status removed by restock. These PR
+labels are restock run state, not an extension of quest-log's issue state machine, and
+issue-backed invocations continue to use that existing state machine and reconciliation behavior.
+
 ## Consequences
 
 Restock no longer carries a second implementation of shared merge and cleanup rules. Temporary
