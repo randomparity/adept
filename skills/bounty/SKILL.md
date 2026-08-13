@@ -32,6 +32,13 @@ the exact draft and target; the open-sweep occurrence path also verifies its not
    collapse unrelated defects, or treat a sweep wrapper as an occurrence. An occurrence reached
    directly and through a sweep counts once.
 
+   Before drafting, also reconcile a matching occurrence issue already created for the current
+   source, trigger, evidence, and target sweep. This is recovery from a prior create-then-close
+   partial failure, not another occurrence. Read its `state,stateReason,url`: if it is already
+   closed not planned, return the existing verified outcome tuple. If it is open, show the exact
+   recovery action and obtain confirmation to retry only its not-planned close and readback; do
+   not create another issue. An unreadable or nonconforming existing occurrence stops recovery.
+
    The proposed occurrence participates in the count. Below four distinct occurrences, retain
    the existing near-match behavior: rank title/token overlap, present every near-match with its
    state, and offer **"comment on #N instead"** before drafting. At the fourth or later:

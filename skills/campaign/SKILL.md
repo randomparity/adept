@@ -82,9 +82,21 @@ Manifest schema:
 
 ## Outcomes log
 <appended per close/merge/block>
+
+## Pending occurrence dispositions
+| Occurrence | Sweep | State | Rationale |
+|------------|-------|-------|-----------|
+| #NNN       | #NNN  | open / unknown-unverified | <public-safe rationale> |
 ```
 
 Status progression: `pending → triaged → in-flight → merged | closed | blocked`
+
+The pending-occurrence table is not a fix queue. Validate unique occurrence numbers and only
+the two nonterminal states shown above. Older manifests without the section backfill an empty
+table before validation. On every resume, read each occurrence with
+`gh issue view <N> --json state,stateReason,url`: remove it and append the verified
+`closed-not-planned: occurrence of sweep #N` outcome only for `CLOSED`/`NOT_PLANNED`; otherwise
+update its actual state and keep it pending. A failed read records `unknown-unverified`.
 
 ## 2. Environment Discovery
 
@@ -251,11 +263,15 @@ approved issues, report each enqueue, and loop to step 3.
 For each verified closed occurrence returned by bounty, append its issue number, sweep number,
 and rationale to Outcomes log as `closed-not-planned: occurrence of sweep #N`. If bounty
 reports an open, nonconforming, or unknown/unverified occurrence state, record that actual
-state, block the follow-up, and do not finish the campaign as though it closed.
+state in Pending occurrence dispositions, block the follow-up, and do not finish the campaign
+as though it closed. Recovery updates the full unique row atomically; it never appends a second
+row for the same occurrence.
 
 ## 8. Done
 
-**Drained** means every row is `closed`, `merged`, or `blocked`. End your turn when drained, leaving manifest `active` if any `blocked` rows remain.
+**Drained** means every queue row is `closed`, `merged`, or `blocked` **and** Pending occurrence
+dispositions is empty. End your turn when drained, leaving manifest `active` if any blocked row
+or pending occurrence remains.
 
 A `merged` row is drained whether or not its branch and worktree have been cleaned (step 6). Deferred cleanup never holds a row, never reopens one, and never keeps the manifest `active` — it is reported, not tracked.
 
@@ -269,7 +285,9 @@ A `merged` row is drained whether or not its branch and worktree have been clean
 
 Ensure manifest row and GitHub state agree before moving on.
 
-Flip manifest to `Status: complete` only when every row is `closed` or `merged`. Campaigns containing `blocked` rows stay `active`.
+Flip manifest to `Status: complete` only when every queue row is `closed` or `merged` and
+Pending occurrence dispositions is empty. Campaigns containing blocked rows or pending
+occurrences stay `active`.
 
 Report final table: issue → outcome (`closed-already-fixed` / `closed-not-planned` /
 `closed-not-planned: occurrence of sweep #N` / `merged-PR#` / `blocked: reason`) → notes.
