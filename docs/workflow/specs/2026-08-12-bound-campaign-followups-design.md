@@ -150,14 +150,17 @@ confirmation, manifest change, and GitHub close reason.
 | E11 closure failure | Open-sweep occurrence creation succeeds; `gh issue close` fails | Report the occurrence as open and stop the follow-up before campaign completion | `closed-not-planned` outcome or continued completion | block |
 
 Repository anatomy rule 4 forbids tests that assert on prose. During branch review, a fresh
-reviewer executes E1–E11 as table-driven contract simulations against the changed campaign and
-bounty skill files. For each fixed Input/setup cell, the reviewer cites the exact skill lines
-that produce the required Pass traits or records a finding for any Forbidden trait still
-permitted. The review artifact records `case | pass/fail | evidence`; every `block` case must
-pass before shipping, and the compact `WORK:REVIEW` summary states `manual eval E1–E11: pass`
-or names the failures. `just verify` separately supplies structural, reference, formatting,
-and plugin validation. No model grades its own generated output, and no LLM verdict is treated
-as automated proof.
+reviewer executes E1–E11 as table-driven, non-mutating workflow simulations against the changed
+campaign and bounty skills. For each fixed Input/setup cell, the reviewer plays the specified
+GitHub reads and operator response into the relevant skill steps without making GitHub writes,
+then captures the resulting verdict, draft, confirmation prompt, intended actions, stop/continue
+decision, and final-report row where applicable. It compares those observed artifacts to the
+Pass and Forbidden traits and cites the instruction lines responsible. The scratch review
+artifact records `case | pass/fail | observed evidence | instruction lines`; every `block` case
+must pass before shipping, and the compact `WORK:REVIEW` summary states
+`manual eval E1–E11: pass` or names the failures. `just verify` separately supplies structural,
+reference, formatting, and plugin validation. The implementing model does not grade its own
+output; the fresh reviewer's transcript is human-reviewable evidence, not an automated proof.
 
 ## Global constraints
 
