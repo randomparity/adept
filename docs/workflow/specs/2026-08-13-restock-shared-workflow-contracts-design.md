@@ -39,22 +39,23 @@ evaluation, recording the domain outcome, canonical verdict when one exists, fin
 exposure, and guardrail evidence. A `WARN`, `FAIL`, or refused merge remains open and loses active
 workflow status after its terminal report so it is not falsely advertised as awaiting merge.
 
-Each run claims a PR by posting its run token and observed head SHA before evaluation. An existing
-complete active restock claim for the same head makes the later run skip that PR; a stale claim is
-reconciled only when its owning run has an observed end. Every report names the evaluated SHA.
-Immediately before merge, the orchestrator re-reads the PR and proceeds only when its head SHA still
-matches, its claim is still authoritative, checks are green, and the PR is mergeable. A mismatch or
-claim collision is a non-merge terminal result; only the authoritative claimant may clear its own
-active labels.
+Each run posts its run token and observed head SHA before evaluation. This is a collision signal,
+not an atomic lock. An existing complete active restock claim for the same head makes a later run
+skip that PR. Before merge, every contender re-reads all complete claims; more than one claim whose
+run has not observably ended makes every contender refuse the merge and retain the status plus an
+actionable collision report. A stale claim is reconciled only when its owning run has an observed
+end. Every report names the evaluated SHA.
 
 For a clean `PASS`, restock swaps the PR to `status:awaiting-merge` and invokes
 `$return-to-town <PR>` with the caller's explicit merge authorization, the restock tracking target,
-the branch/worktree ownership recorded in the ledger, and the discovered base/guardrails. Restock
-does not repeat merge, base refresh, branch deletion, worktree removal, or remote pruning. Because
-Dependabot PRs commonly have no owning issue, `$return-to-town` gains an explicit PR-only tracking
-mode: it posts the terminal `WORK:TRAJECTORY` on the PR, strips the PR's `status:` labels after a
-verified merge, and skips issue closure and cleared-dependent reconciliation. Its normal
-issue-backed behavior is unchanged.
+the evaluated head SHA, the branch/worktree ownership recorded in the ledger, and the discovered
+base/guardrails. Return-to-town passes that SHA to GitHub's guarded merge operation and refuses if
+the live head differs; the check and merge are one GitHub operation rather than a local read followed
+by an unguarded merge. Restock does not repeat merge, base refresh, branch deletion, worktree
+removal, or remote pruning. Because Dependabot PRs commonly have no owning issue,
+`$return-to-town` gains an explicit PR-only tracking mode: it posts the terminal
+`WORK:TRAJECTORY` on the PR, strips the PR's `status:` labels after a verified merge, and skips issue
+closure and cleared-dependent reconciliation. Its normal issue-backed behavior is unchanged.
 
 Worker prose uses `orchestrator` and `worker`; `general-purpose` is removed because it is a
 Claude-specific subtype and is not a Codex multi-agent contract.
@@ -74,6 +75,7 @@ This decision is recorded by [ADR 0012](../../adr/0012-restock-composes-shared-w
 - Worker silence follows `references/dispatch-liveness.md`; elapsed time never authorizes cleanup.
 - A non-clean evaluation never reaches `$return-to-town`.
 - A return-to-town refusal remains a named `MERGE_REFUSED` result with its tracking annotation.
+- A concurrent-claim collision is retained as `needs-human`; no contender clears shared status.
 - Cleanup never uses a broad fixed `/tmp/depbot-eval-*` target and never force-removes an artifact
   with unresolved ownership.
 
@@ -100,19 +102,24 @@ Failure modes and blocking cases:
 | R5 | 4 | A worker dispatch names Codex worker semantics portably | Required Claude `general-purpose` subtype | block |
 | R6 | 4 | Conflicting or malformed worker evidence follows liveness/fail-closed rules | Silent adoption or unbounded redispatch | block |
 | R7 | 4 | A PR-only return-to-town run records trajectory on the PR and skips issue operations | Fabricated issue identity or dependent reconciliation | block |
-| R8 | 5 | A PR head or active claim changes after evaluation; merge is refused and only the authoritative claimant clears its labels | Merge of a different SHA or foreign-label removal | block |
+| R8 | 5 | A PR head changes or multiple live claims exist after evaluation; guarded merge refuses the changed SHA and every collision contender retains status for a human | Merge of a different SHA or unilateral collision cleanup | block |
 | R9 | 5 | A prior ledger contains traversal, a symlink, or a type mismatch; the artifact is retained and the failed check is named | Cleanup outside the canonical owned root | block |
 
 Measurement is prompt-level because repository policy forbids automated gates that assert on prose.
-One fresh scenario worker per R1-R9 receives the changed skill files, a fixed input packet, and the
+One fresh most-capable scenario worker per R1-R9 receives the changed skill files, a canonical JSON
+input packet, and the
 neutral request `Apply the supplied workflow instructions to this scenario and return the response
 they require.` Captures are written beneath ignored `.agent/evals/issue-43/` with case id, evaluated
 commit, supplied file blob ids, packet hash, model identity, and raw response. A different fresh
 evaluator receives the captures, this specification, ADR 0012, and the table above; it emits one
-pass/fail result per observable and forbidden trait with instruction-line citations. Missing,
-duplicate, malformed, or extra cases fail the evaluation. The overall gate passes only when R1-R9
-all pass. `just verify` separately proves repository structure, links, formatting, and public safety;
-it does not claim semantic prose coverage.
+pass/fail/uncertain result per observable and forbidden trait with instruction-line citations in a
+fixed JSON object keyed R1-R9. One uncertain result receives one fresh evaluator retry; disagreement
+or a second uncertain result fails closed for human review. Missing, duplicate, malformed, or extra
+cases fail the evaluation. The overall gate passes only when R1-R9 all pass. The operator running
+`$quest` owns the gate, validates packet/capture hashes and schemas, and posts the commit, models,
+case verdicts, and hashes in `WORK:REVIEW`; raw captures remain ignored scratch artifacts. `just
+verify` separately proves repository structure, links, formatting, and public safety; it does not
+claim semantic prose coverage.
 
 ## Threat model
 
@@ -121,7 +128,9 @@ it does not claim semantic prose coverage.
 - The local operator supplies repository identity, options, and merge authority.
 - GitHub supplies PR, branch-protection, check, and label/comment state.
 - Dependabot PR heads and repository files are untrusted inputs to build/test workers.
-- Dispatched workers return reports and create artifacts beneath the owned run root.
+- Dispatched workers are trusted same-user agents following the supplied instructions; they return
+  untrusted-for-correctness reports and create artifacts only in assigned worktrees. The design does
+  not claim filesystem isolation from a malicious worker or dependency build.
 - Git and GitHub CLI calls mutate branches, labels, comments, reviews, and merges.
 
 ### Controls
@@ -140,9 +149,11 @@ it does not claim semantic prose coverage.
 
 ### Out of scope
 
-This change does not defend a malicious local operator with filesystem access, replace GitHub
-branch protection, sandbox dependency build scripts, or redesign dependency-evaluation verdicts.
-Those are separate trust boundaries or explicitly excluded terminology work.
+This change does not defend a malicious local operator or same-user worker with filesystem access,
+replace GitHub branch protection, sandbox dependency build scripts, or redesign
+dependency-evaluation verdicts. Prior-run cleanup is therefore an accidental/stale-state safety
+contract, not a security boundary against hostile local code. Those are separate trust boundaries
+or explicitly excluded terminology work.
 
 ## Verification
 
