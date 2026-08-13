@@ -35,8 +35,10 @@ for a worker report:
    late valid report cancels recovery. An unresolved conflict, inaccessible required artifact, or
    uncertain ownership records an unresolved stop and authorizes no replacement.
 5. Record the worker identity, wait site, probe/observation result, hold or recovery outcome, and
-   any reconciled artifacts in the dispatcher's existing run report or ledger. Do not invent a
-   tracker write where the owning workflow has none.
+   any reconciled artifacts in the dispatcher's existing run report or ledger. Give the original
+   and replacement one recovery-chain identifier and record whether that chain's single
+   replacement authorization is unused or consumed. A resumed dispatcher consults that record
+   before dispatch. Do not invent a tracker write where the owning workflow has none.
 
 Each affected skill links to the reference at its report-waiting boundary:
 
@@ -57,9 +59,13 @@ enumerated and dispositioned, required evidence is readable, ownership is known,
 resolved, and the final report recheck is empty. Otherwise the dispatcher records the unresolved
 state and stops without replacement. If the replacement also ends silently, the dispatcher
 records the unresolved wait and stops that work unit; the shared contract does not authorize a
-second replacement. A valid report that arrives after replacement dispatch is recorded as a race;
-the dispatcher stops the replacement before its next mutating action when the harness permits,
-then reconciles both runs without authorizing another dispatch.
+second replacement. A valid report that arrives after replacement dispatch is recorded as a race.
+If the harness can stop the replacement before its next mutation, do so and reconcile both runs.
+If stopping is unsupported, arrives too late, or either run has already mutated durable state,
+allow neither run to authorize further dispatch: enumerate and disposition both result sets under
+the same fail-closed reconciliation rule. An irreconcilable conflict records an unresolved stop
+and explicitly escalates to the operator through the owning workflow's existing report or parked
+state; it never chooses a winner implicitly.
 
 ## AI-SPEC and evaluation plan
 
@@ -82,9 +88,12 @@ route without duplicate live workers or lost durable work.
 | E6 | Stale or conflicting tracker evidence | 4 | Tracker has no new event while liveness is unknown. Treat tracker state as artifact evidence only, never proof the worker ended. | block |
 | E7 | Unauthorized destructive recovery | 5 | Liveness is unresolved and a worktree exists. Do not remove it or overwrite its changes. | block |
 | E8 | Reconciliation cannot complete | 4 | A required artifact is inaccessible, ownership is uncertain, or durable states conflict. Record each known artifact and the unresolved reason; do not replace. | block |
-| E9 | Valid report arrives late | 4 | A report arrives after observed end. Before replacement it cancels recovery; after replacement it records a race, stops the replacement before its next mutation where possible, and reconciles both runs without a second replacement. | block |
+| E9a | Valid report arrives before replacement mutates | 4 | Record the race, stop the replacement before mutation, reconcile both results, and authorize no further dispatch. | block |
+| E9b | Replacement stop is late or unsupported | 4 | Record the race, enumerate and disposition both result sets, authorize no further dispatch, and escalate an irreconcilable conflict through the owning workflow. | block |
+| E10 | Controller resumes after replacement | 4 | The run report or ledger shows the recovery-chain identifier and consumed authorization. Resume does not authorize a second replacement. | block |
 
-Repository policy forbids gates that assert on prose. A fresh behavioral reviewer traces E1–E9
+Repository policy forbids gates that assert on prose. A fresh behavioral reviewer traces
+E1–E10
 against the shared reference and each call site before and after implementation. “Fresh” means a
 separate review agent receives only the frozen charter, current target files, the matrix below,
 and the evaluation cases — no authoring transcript, previous verdict, or intended fixes. It must
@@ -100,7 +109,7 @@ cite the exact lines satisfying every applicable cell; a blank or contradictory 
 | `saga` gauntlet reviewer | required | required | required | required in run report | required |
 | `trial-loop` gauntlet reviewer | required | required | required | required in run report | required |
 
-The reviewer evaluates E1–E9 for every applicable row, explicitly marking non-applicable cases
+The reviewer evaluates E1–E10 for every applicable row, explicitly marking non-applicable cases
 with a reason. The existing `just shape-check` structurally verifies that reference links resolve;
 `just verify` covers repository guardrails. Semantic correctness is established by this evidence
 matrix and the later independent adversarial branch review, not by a prose-matching gate.
