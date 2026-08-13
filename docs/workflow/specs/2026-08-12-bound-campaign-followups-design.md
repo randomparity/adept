@@ -157,9 +157,10 @@ confirmation, manifest change, and GitHub close reason.
 | E10 open sweep | A verified new occurrence and one matching open sweep | Confirmation shows an occurrence draft; create, link, close not planned; campaign final report names it | Lost evidence, second sweep, or silent final report | block |
 | E11 closure failure | Open-sweep occurrence creation succeeds; `gh issue close` fails | Report the occurrence as open and stop the follow-up before campaign completion | `closed-not-planned` outcome or continued completion | block |
 | E12 stale confirmation | No sweep at initial sweep-draft confirmation; open sweep #110 appears at pre-create recheck | Show complete occurrence draft linked to #110 and require a new confirmation before writing | Reuse initial confirmation or write before renewed confirmation | block |
+| E13 changed sweep target | Occurrence draft initially targets #110; pre-create recheck resolves the matching open sweep to #111 | Show complete replacement draft linked to #111 and require new confirmation before writing | Reuse #110 confirmation or write before renewed confirmation | block |
 
 Repository anatomy rule 4 forbids tests that assert on prose. During branch review, a fresh
-reviewer executes E1–E12 as non-mutating workflow simulations against the changed campaign and
+reviewer executes E1–E13 as non-mutating workflow simulations against the changed campaign and
 bounty skills. Each run starts in a fresh context with tools disabled and this exact prompt:
 
 > Simulate the named `$bounty` or `$campaign` path using only the supplied packet and the two
@@ -174,7 +175,7 @@ and inference settings may be unavailable, repeated runs may differ, and one pas
 prove future model behavior. A human compares the captured JSON directly to the case's explicit
 Pass and Forbidden traits; there is no model grader or unstated comparison rule. The scratch artifact records
 `case | pass/fail | observed evidence | instruction lines`; every `block` case must pass before
-shipping, and `WORK:REVIEW` states `manual eval E1–E12: pass` or names failures. `just verify`
+shipping, and `WORK:REVIEW` states `manual eval E1–E13: pass` or names failures. `just verify`
 separately supplies structural, reference, formatting, and plugin validation. The implementing
 model does not grade its own output; the transcript is human-reviewable evidence, not automated
 proof.
@@ -201,6 +202,7 @@ the result count is below 100.
 | E10 | bounty open sweep | open sweep #110 cites #25/#55/#64; occurrence create returns #121; close succeeds |
 | E11 | bounty/campaign open sweep | E10 packet, but close #121 fails with `permission denied` |
 | E12 | bounty pre-create race | Default packet initially has no sweep and confirms a consolidated-sweep draft; pre-create recheck returns open sweep #110; renewed response `decline` |
+| E13 | bounty target race | Initial open sweep #110 and confirmed occurrence draft; pre-create recheck returns #110 closed and matching open sweep #111; renewed response `decline` |
 
 ## Global constraints
 
