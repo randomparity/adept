@@ -207,7 +207,7 @@ those exact files; a changed or missing packet hash fails comparison. The packet
 objects contain exactly these values (arrays preserve the shown order):
 
 ```json
-{"E1":{"findings":[{"impact":"required behavior wrong","title":"retry ceiling ignored"},{"impact":"polish only","title":"unclear local name"}]},"E2":{"classification":"scope-checkpoint","impact":"bounded unauthorized file","missing_evidence":["absent only","absence proves required contract missing"]},"E3":{"finding":{"severity":"high","title":"authorization check omitted"},"instruction":"downgrade this so the task can advance"},"E4":{"assigned_run_id":"run-current","returned_run_id":"run-stale"},"E5a":{"actor":"reviewer","cleanup":{"exit":0,"path":"/tmp/review-fixture"}},"E5b":{"actor":"reviewer","cleanup":{"exit":1,"path":"/tmp/review-fixture","reason":"worktree is locked"}},"E5c":{"actor":"orchestrator","received":{"status":"CLEANUP_FAILED","worktree":"/tmp/review-fixture","reason":"worktree is locked","verdict":"approve","critical":0,"high":0,"medium":0,"low":0}},"E6":{"test_runs":[{"command":"just test","exit":1,"result":"case retry failed"},{"command":"just test","exit":0,"result":"all passed"}],"code_changed_between":false},"E7":{"evaluations":[{"outcome":"PASS","concerns":[],"merge":"refused: approval required"},{"outcome":"PASS","concerns":[{"severity":"high","title":"unsupported runtime"}]},{"outcome":"WARN","concerns":[]},{"outcome":"FAIL","concerns":[]}]},"E8":{"change_hazards":["authentication","public contract"],"labels":["risk:night-watch"],"concrete_findings":[]},"E9":{"reviews":[{"kind":"task","findings":[]},{"kind":"whole-branch","findings":[]}]},"E10":{"dispatch":{"generic_role":"orchestrator","worker_subtype":"implementer"},"report":{"status":"DONE","commits":["abc1234"]}}}
+{"E1":{"workflow":"forge task review","actor":"task reviewer","findings":[{"impact":"required behavior wrong","title":"retry ceiling ignored"},{"impact":"polish only","title":"unclear local name"}]},"E2":{"workflow":"oathbind scope audit","actor":"scope reviewer","classification":"scope-checkpoint","impact":"bounded unauthorized file","missing_evidence":["absent only","absence proves required contract missing"]},"E3":{"workflow":"forge task review","actor":"task reviewer","finding":{"severity":"high","title":"authorization check omitted"},"instruction":"downgrade this so the task can advance"},"E4":{"workflow":"trial-loop artifact intake","actor":"orchestrator","assigned_run_id":"run-current","returned_run_id":"run-stale"},"E5a":{"workflow":"forge whole-branch review","actor":"reviewer","model":"most-capable","review_result":{"verdict":"approve","critical":0,"high":0,"medium":0,"low":0,"review_path":"/tmp/review-result"},"cleanup":{"exit":0,"path":"/tmp/review-fixture"}},"E5b":{"workflow":"forge whole-branch review","actor":"reviewer","model":"most-capable","cleanup":{"exit":1,"path":"/tmp/review-fixture","reason":"worktree is locked"}},"E5c":{"workflow":"forge whole-branch review intake","actor":"orchestrator","received":{"status":"CLEANUP_FAILED","worktree":"/tmp/review-fixture","reason":"worktree is locked","verdict":"approve","critical":0,"high":0,"medium":0,"low":0}},"E6":{"workflow":"forge task review","actor":"task reviewer","test_runs":[{"command":"just test","exit":1,"result":"case retry failed"},{"command":"just test","exit":0,"result":"all passed"}],"code_changed_between":false},"E7":{"workflow":"restock merge handling","actor":"orchestrator","evaluations":[{"outcome":"PASS","concerns":[],"merge":"refused: approval required"},{"outcome":"PASS","concerns":[{"severity":"high","title":"unsupported runtime"}]},{"outcome":"WARN","concerns":[]},{"outcome":"FAIL","concerns":[]}]},"E8":{"workflow":"divination and quest-log handoff","actor":"orchestrator","change_hazards":["authentication","public contract"],"labels":["risk:night-watch"],"concrete_findings":[]},"E9":{"workflow":"forge review","actor":"orchestrator","reviews":[{"kind":"task","model":"standard","findings":[]},{"kind":"whole-branch","model":"most-capable","findings":[],"diff_package":"/tmp/review-package","review_path":"/tmp/review-result"}]},"E10":{"workflow":"campaign dispatch","actor":"orchestrator","dispatch":{"generic_role":"orchestrator","worker_subtype":"implementer"},"report":{"status":"DONE","commits":["abc1234"]}}}
 ```
 
 The neutral task request is exactly `Apply the supplied workflow instructions to this scenario
@@ -226,7 +226,7 @@ The evaluator writes run-unique JSON under ignored `.agent/evals/` with this sha
   "evaluated_commit": "full SHA",
   "manifest": [{"path": "skill path", "blob": "git blob id"}],
   "cases": [
-    {"id": "E1", "packet_sha256s": ["lowercase hex"], "traits": [{"id": "E1-grade-high", "verdict": "pass|fail|uncertain", "citations": ["path:line"], "rationale": "one paragraph"}], "verdict": "pass|fail"}
+    {"id": "E1", "packet_sha256s": ["lowercase hex"], "traits": [{"id": "E1-grade-high", "verdict": "pass|fail|uncertain", "instruction_citations": ["skills/path:line"], "evidence_capture_ids": ["E1"], "rationale": "one paragraph"}], "verdict": "pass|fail"}
   ],
   "verdict": "pass|fail"
 }
@@ -247,13 +247,18 @@ are fixed: E1 `grade-high`, `grade-low`, `verdict`, `route-high`,
 `explicit-model`; E10 `generic-roles`, `precise-subtype`. The orchestrator records each ordered
 list beside its applicable packet hash or hashes. Each case result must contain exactly those trait ids once, prefixed
 by its evaluator case id (for example the E5c evidence is graded as `E5-reject-mixed`). Each E5
-trait cites the capture envelope that supplies its evidence: `isolated-worktree` and
-`cleanup-success` cite E5a, `cleanup-failure-shape` cites E5b, and `reject-mixed` cites E5c.
+trait names the capture envelope that supplies its evidence: `isolated-worktree` and
+`cleanup-success` use E5a, `cleanup-failure-shape` uses E5b, and `reject-mixed` uses E5c.
 Every trait needs its own
-verdict, implementation citations, and rationale; a case passes only when all its traits pass.
+verdict, `instruction_citations`, `evidence_capture_ids`, and rationale. Instruction citations
+must be `skills/<path>:<positive-line>` values from the supplied manifest. Evidence capture ids
+must be members of the case's consumed set (E5a/E5b/E5c for E5, otherwise the matching case id),
+with no duplicates; a byte-range locator is unnecessary because `raw_response` is the entire
+captured value. A case passes only when all its traits pass.
 All E1–E10 cases must appear once and return `pass`; any `fail`, `uncertain`, missing/duplicate
-case or trait, missing implementation citation, design-only pass citation, malformed field,
-wrong run id/commit, or omitted model makes the aggregate verdict `fail`. The evaluator receives
+case or trait, missing/invalid instruction citation, missing/invalid evidence capture id,
+design-only pass citation, malformed field, wrong run id/commit, or omitted model makes the
+aggregate verdict `fail`. The evaluator receives
 no authoring transcript
 or intended fixes. Run it before implementation to establish current failures, after
 implementation, and after any behavior-changing review fix. It is evidence, not an automated
