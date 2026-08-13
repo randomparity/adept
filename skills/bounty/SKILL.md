@@ -35,8 +35,12 @@ operator confirmation.
    when three historical occurrences are already verified.
 
    Follow issue links directly cited by a matched consolidated-sweep issue, deduplicated and
-   capped at 100 distinct links. A failed linked-issue read stops filing. Reaching 100 links has
-   the same saturation rule. Title/token overlap selects candidates only; count an issue when
+   capped at 100 distinct links. Normalize every reference against the resolved `owner/name`;
+   accept only same-repository issue numbers and read each with
+   `gh issue view <N> --repo <owner/name> --json number,title,state,body,url`. Treat an external or
+   unparseable link as uncertain and never read or count it. A failed accepted linked-issue read
+   stops filing. Reaching 100 links has the same saturation rule. Title/token overlap selects
+   candidates only; count an issue when
    repository and issue evidence establish every applicable tuple dimension. Present the
    verified history and uncertain candidates. Never count an uncertain candidate, silently
    collapse unrelated defects, or treat a sweep wrapper as an occurrence. An occurrence reached
