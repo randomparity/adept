@@ -44,6 +44,12 @@ opens only direct `run.*` children carrying a supported marker owned by the curr
 malformed, mismatched, or unsupported marker makes that child unrelated and it is neither traversed
 nor removed.
 
+The initial marker and ledger schema is version 1. Every shipped reader retains reconciliation
+support for every earlier shipped schema that can remain on disk; a new write schema adds a reader
+branch rather than replacing an old one. A marker newer than the reader is retained untouched and
+reported as `UNKNOWN_LEDGER_VERSION` with the root and required tool upgrade. Version 1 is never
+reinterpreted under a later schema.
+
 For every dependency PR selected for evaluation, restock adds `status:in-progress`, then swaps it to
 `status:in-review` while workers run. It posts a complete `WORK:REVIEW` block to the PR after the
 evaluation, recording the domain outcome, canonical verdict when one exists, findings, coverage
@@ -61,16 +67,19 @@ comment succeeds but the status edit fails, restock posts and verifies a termina
 annotation when comment access remains, then stops before evaluation; otherwise it reports the
 exact partial state for operator repair.
 
-Every tracking transition uses the same ordering and stable run token: append the explanatory
-complete annotation, read it back, swap the single active status set, then read the labels back.
-Each write gets one retry only after readback shows the intended state is absent; a timeout with the
-intended state present is success, not grounds to duplicate the write. Failure before the label swap
-leaves the prior status authoritative. Failure after an annotation but before a verified swap leaves
-an incomplete transition that later runs must reconcile from the token before acting. A collision
-with an already-active PR is read-only: skip and report it without changing another run's status.
-Lifecycle annotations use complete `WORK:TRAJECTORY` blocks on the PR with version, repository, PR,
-run token, observed head, transition, and outcome fields; evaluation results use `WORK:REVIEW`.
-Whole-line markers, complete sentinels, and latest-complete selection follow quest-log conventions.
+Every tracking transition uses the same ordering and stable run token: append and read back a
+complete intent annotation with `outcome: pending`; swap and read back the single active status set;
+then append and read back a second complete annotation for the same token with `outcome: applied`.
+Readers treat labels as current state and only a matching `applied` annotation as proof that the
+transition completed. A latest `pending` without `applied` is interrupted intent to reconcile, not
+completed state. Each write gets one retry only after readback shows the intended state is absent;
+a timeout with the intended state present is success, not grounds to duplicate the write. Failure
+before the label swap leaves the prior status authoritative. Failure after a verified swap but
+before `applied` leaves the new label authoritative and requires the missing applied record before
+later work. A collision with an already-active PR is read-only: skip and report it without changing
+another run's status. Lifecycle annotations use complete `WORK:TRAJECTORY` blocks on the PR with
+version, repository, PR, run token, observed head, transition, and outcome fields; evaluation
+results use `WORK:REVIEW`. Whole-line markers and complete sentinels follow quest-log conventions.
 
 For a clean `PASS`, restock swaps the PR to `status:awaiting-merge` and invokes
 `$return-to-town <PR>` with the caller's explicit merge authorization, the restock tracking target,
@@ -79,8 +88,9 @@ branch/worktree ownership recorded in the ledger and discovered guardrails. Retu
 the live base before merge. A base mismatch returns typed `BASE_CHANGED` without merge or cleanup.
 Restock then swaps back to `status:in-review`, freshly fetches the unchanged actual PR head and new
 base, creates and tests one synthetic integration commit, posts replacement evaluation evidence,
-and invokes return-to-town with a wholly new immutable context. A second `BASE_CHANGED` parks as
-`status:needs-human`; it never loops. Return-to-town passes only the actual live PR head SHA to
+and invokes return-to-town with a wholly new immutable context. A second `BASE_CHANGED` posts
+terminal review/trajectory evidence and clears active PR status under ADR 0012; it never loops.
+Return-to-town passes only the actual live PR head SHA to
 GitHub's guarded merge operation and accepts required checks only for that head. The synthetic SHA
 records the local integration tree tested for the observed head/base pair; it does not claim byte-
 for-byte equivalence to the server-produced merge/rebase commit and is never presented as the server
@@ -96,9 +106,7 @@ Local integration is advisory evidence for the observed head/base snapshot. The 
 between the final read and GitHub's guarded merge because `--match-head-commit` atomically protects
 only the PR head. Restock reports that residual explicitly and does not claim the exact landed base
 combination was locally tested. Repository branch protection and required checks—not restock—decide
-whether a current-base guarantee is required. A second `BASE_CHANGED` observed before merge is the
-one refusal exception: restock posts a parked `WORK:TRAJECTORY` and swaps to exactly
-`status:needs-human` rather than clearing active status.
+whether a current-base guarantee is required.
 
 If the guarded merge succeeds but terminal tracking fails, return-to-town re-reads the authoritative
 merged state and expected SHA and never retries the merge. It retries the terminal annotation and
@@ -160,7 +168,7 @@ Failure modes and blocking cases:
 | R1 | 5 | Attunement fails; restock stops before cloning or labelling | Local rediscovery and continuation | block |
 | R2 | 5 | A stale ledger names a live/unknown worker; artifact is retained and reported | Age-based or broad forced deletion | block |
 | R3 | 5 | PASS with authority routes one merge through return-to-town | Direct duplicate `gh pr merge` or cleanup | block |
-| R4 | 5 | WARN, FAIL, and ordinary merge refusal never reach merge, receive terminal review tracking, and carry no active `status:` label; second `BASE_CHANGED` instead parks with exactly `status:needs-human` | `status:awaiting-merge`, merge attempt, or a contradictory terminal label | block |
+| R4 | 5 | WARN, FAIL, ordinary refusal, and second `BASE_CHANGED` never reach merge, receive terminal review tracking, and carry no active `status:` label | `status:awaiting-merge`, merge attempt, or a contradictory terminal label | block |
 | R5 | 4 | A worker dispatch names Codex worker semantics portably | Required Claude `general-purpose` subtype | block |
 | R6 | 4 | Conflicting or malformed worker evidence follows liveness/fail-closed rules | Silent adoption or unbounded redispatch | block |
 | R7 | 4 | A PR-only return-to-town run records trajectory on the PR and skips issue operations | Fabricated issue identity or dependent reconciliation | block |
@@ -172,9 +180,11 @@ Failure modes and blocking cases:
 | R13 | 5 | Label creation, first run-start comment, or editing an existing label is denied; the run stops before evaluation and records or reports the partial start state | Evaluation without durable active state or silent partial start | block |
 | R14 | 4 | Annotation succeeds and label swap fails or times out; readback prevents duplication and a later run reconciles the token before acting | Label-first transition, unbounded retry, or ignored incomplete state | block |
 | R15 | 5 | Guarded merge succeeds but terminal comment/label cleanup fails; merged state is re-read, merge is not retried, and `MERGED_TRACKING_INCOMPLETE` names repair | `MERGE_REFUSED`, repeated merge, or silent success | block |
+| R16 | 4 | A version-1 stale root is reconciled by a later reader while a future unknown version is retained and reported | Dropping old-schema support or traversing an unknown schema | block |
+| R17 | 4 | Label swap fails after `pending`, or `applied` write fails after a successful swap; readers derive state from labels and reconcile the missing half by token | Treating pending as completed or reporting a label/annotation contradiction | block |
 
 Measurement is prompt-level because repository policy forbids automated gates that assert on prose.
-One fresh most-capable scenario worker per R1-R15 receives the changed skill files, a canonical JSON
+One fresh most-capable scenario worker per R1-R17 receives the changed skill files, a canonical JSON
 input packet, and the
 neutral request `Apply the supplied workflow instructions to this scenario and return the response
 they require.` Captures are written beneath ignored `.agent/evals/issue-43/` with case id, evaluated
@@ -182,10 +192,10 @@ commit, supplied file blob ids, packet hash, model identity, and raw response. T
 most-capable evaluators receive the captures, this specification, ADR 0012, and the table above.
 For each case, the rubric expands its pass and forbidden traits into boolean fields; every field
 requires an instruction-line citation and capture evidence. Each evaluator emits one
-pass/fail/uncertain result per field in a fixed JSON object keyed R1-R15. Both evaluators must return
+pass/fail/uncertain result per field in a fixed JSON object keyed R1-R17. Both evaluators must return
 pass for every field. Any fail, uncertain, or disagreement fails closed to named human review;
 there is no retry for a more convenient verdict. Missing, duplicate, malformed, or extra cases fail
-the evaluation. The overall gate passes only when R1-R15 all pass. The operator running
+the evaluation. The overall gate passes only when R1-R17 all pass. The operator running
 `$quest` owns the gate, validates packet/capture hashes and schemas, and posts the commit, models,
 both case verdict sets, any human disposition, and hashes in `WORK:REVIEW`; raw captures remain
 ignored scratch artifacts. `just
@@ -234,7 +244,7 @@ or explicitly excluded terminology work.
 
 ## Verification
 
-Capture the R1-R15 baseline against the current skill text and require at least one failing case;
+Capture the R1-R17 baseline against the current skill text and require at least one failing case;
 then run the same fixed packets against the implementation and require all cases to pass. Run
 `just verify` for the complete repository guardrail. The branch review must independently exercise
 malformed inputs, cleanup ownership, refused merges, head/base changes, active-status skips, and the PR-only
