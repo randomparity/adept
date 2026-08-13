@@ -24,14 +24,27 @@ may retain different enums only when their contract includes an explicit, one-wa
 to the canonical vocabulary and states that the domain value is not a finding severity or
 review verdict.
 
+Oathbind's scope classifications stay orthogonal to severity: each defensible concern also
+receives an impact-based canonical severity; `unsupported` is rejection evidence rather than
+a finding. Restock converts `PASS` to `approve` and both `WARN` and `FAIL` to
+`needs-attention`, preserving the local outcome to distinguish human judgment from failed
+evidence. Its matrix assessment is coverage exposure, not a severity.
+
 Reserve `blocked` for a workflow or issue that cannot proceed. Qualify narrower outcomes,
 such as a refused dependency merge, instead of emitting bare `BLOCKED`. Name each risk axis:
 `risk:*` labels are execution-risk policy, divination risk flags are change hazards, and
 restock's matrix assessment is coverage exposure.
 
-Review artifacts use caller-supplied, run-unique paths. The caller owns pre-dispatch cleanup
-and post-consumption disposal; a worker owns only files or temporary worktrees it creates and
-must clean those worktrees before returning.
+Forge's task and branch reviewers both require explicit model selection, use the canonical
+severity and verdict enums, and rely on the implementer's first-run test evidence by default.
+Either may run one focused check for a named unresolved concern, but neither reruns a broad
+suite merely to duplicate evidence. A retry remains nondeterminism evidence. Forge routes
+`critical`, `high`, and `medium` findings to fixes and carries `low` findings to final triage.
+
+Review artifacts use caller-supplied, run-unique paths. The worker may create or overwrite
+only its assigned artifact and must not dispose of it. The orchestrator clears that path
+before dispatch and disposes of the artifact after consumption. Each party removes only the
+temporary worktrees it created; a worker reports a cleanup failure before returning.
 
 ## Consequences
 
@@ -54,4 +67,3 @@ medium and low failure impacts and would change more established command-pipelin
 
 **Treat all vocabulary as local prose.** Rejected because these values drive routing, retry,
 fix, and hand-off decisions across skills; contradictions already change behavior.
-
