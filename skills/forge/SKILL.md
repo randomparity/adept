@@ -185,6 +185,15 @@ Where nobody can be asked, the Global Constraints and the repo's conventions
 govern, and the deviation goes in your report. Escalate before Task 1 only where
 either choice could be wrong.
 
+### Silent party workers
+
+The implementer, task reviewer, fix worker, and whole-branch reviewer are separate report waits.
+Apply [dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md) to
+each. Before any replacement, append the worker, wait site, observations, recovery-chain
+identifier, `unused` or `consumed` replacement budget, and artifact dispositions to
+`progress.md`. The task brief, implementer report, review package, review file, branch commits, and
+worktree state are reconciliation evidence. Do not replace or reclaim a worker on silence alone.
+
 ### The per-task loop
 
 1. Generate the task brief: `scripts/task-brief PLAN_FILE N` writes it to a
@@ -239,9 +248,11 @@ asked report it as a blocker and return. Never default to `main`.
    through step 1 to clear a finished review. A dispatch ending in a stop gets
    no line.
 
-A missing or empty file means the return is not evidence: discard it and
-re-dispatch **once**, then stop and report. That blind retry is for a silent
-failure. A reviewer that returned `WRITE_FAILED` or `PACKAGE_MISSING` has named
+A missing or empty file means the return is not evidence. If the reviewer produced no report,
+apply the silent-party-worker contract above; only a reconciled, harness-observed end may consume
+the chain's one replacement. If a report arrived but the file is missing or empty, keep the
+existing malformed-return behavior: discard it, re-dispatch once, then stop and report. A reviewer
+that returned `WRITE_FAILED` or `PACKAGE_MISSING` has named
 the problem — stop on the first one. Do not retry at a second path; the
 template's read-only rule rests on the reviewer having exactly one writable
 path. A stop means the branch goes on to the rest of the pipeline with no

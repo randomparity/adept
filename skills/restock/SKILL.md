@@ -623,6 +623,16 @@ Format the report the same way as library dep evaluations.
 
 ---
 
+### Silent evaluation workers
+
+Each evaluation unit is a report wait governed by
+[dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md). Retain its
+worker, wait site, observations, recovery-chain identifier, `unused` or `consumed` replacement
+budget, and reconciled artifacts for the current run; include that state in Phase 5's report. The
+Phase 3 worktree and fetched PR heads are part of reconciliation. Do not enter Phase 3c for a unit
+whose worker liveness or artifact ownership is unresolved, because cleanup would destroy evidence
+or disturb a worker that may still be live.
+
 ### 3c. Remove the evaluation worktrees
 
 Once every subagent has reported, remove the worktrees before starting
