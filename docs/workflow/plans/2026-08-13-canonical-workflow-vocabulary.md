@@ -138,8 +138,10 @@ per-run blob map. Produces final evaluation and repository-gate evidence.
    this task at step 1 against the new HEAD with fresh run ids.
 4. Run `git diff --check`, then `just verify` bare. Expected: zero warnings and exit 0.
 5. Review `git diff main...HEAD` for scope, naming, and stale old vocabulary. Record final branch,
-   base, guardrail result, evaluation run ids, and open findings only in the quest's GitHub
-   `WORK:REVIEW`/handoff annotations; do not edit this tracked plan after the proven HEAD.
+   base, guardrail result, evaluation run id, verdict, evaluated commit, evaluator model, stable
+   path manifest, per-run blob map, packet hashes, trait counts, and open findings only in the
+   quest's GitHub `WORK:REVIEW`/handoff annotations; do not edit this tracked plan after the
+   proven HEAD.
 6. A defensible in-scope finding from the final diff review enters step 3's common repair loop.
    Stop instead of handing off when a finding cannot be resolved.
 7. After the final review reports zero open findings and the quest handoff durably records the
@@ -151,10 +153,12 @@ per-run blob map. Produces final evaluation and repository-gate evidence.
 guardrails pass, evaluation artifacts remain untracked, and the branch contains only chartered
 surface.
 
-**Rollback:** before push, revert the implementation commits newest-first while retaining the
-design history only if another change still needs it; after push, use ordinary `git revert`
-commits in that same order. Never rewrite published history. Ignored evaluation artifacts are
-evidence only and can be moved to trash after their run ids and verdicts are recorded.
+**Rollback:** revert only Task 2/Task 3 implementation commits and later implementation-fix
+commits, newest-first. ADR 0011 and its reviewed specification remain durable records; abandoning
+their accepted decision requires a new superseding or rejection record, never deletion. After
+push, use ordinary `git revert` commits in the same order and never rewrite published history.
+Ignored evaluation artifacts are evidence only and can be moved to trash after the durable
+handoff records the provenance named in Task 4 step 5.
 
 ## Progress
 
