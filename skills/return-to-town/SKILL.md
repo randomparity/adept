@@ -17,8 +17,8 @@ gh pr view <N> \
 Interpret `state` before `mergeable` or `mergeStateStatus`:
 
 - `MERGED` is conclusive even when either computed field is `UNKNOWN`. Do not poll those
-  fields and do not repeat the default hand-off. Proceed directly to **After a merge (yours
-  or the user's)** below.
+  fields and do not repeat the default hand-off. Proceed directly to **Post-merge
+  reconciliation** below.
 - `CLOSED` means closed without merge. Stop without post-merge tracking or cleanup and report
   that the pull request was closed unmerged.
 - Only `OPEN` continues below. For an open pull request, retain `$deliver`'s exit condition:
@@ -97,7 +97,13 @@ operator-merge path only:
   close it; strip its `status:` labels; post a `WORK:TRAJECTORY` comment on the issue with
   `outcome: merged via PR #N`, guardrail status, and any surprises.
 
-### Release cleared dependents
+### Post-merge reconciliation
+
+The operator-path issue writes above run only when this invocation performed the merge. On an
+entry snapshot that was already `MERGED`, do not repeat them; verify the merged issue's current
+closed state, then perform the shared dependent reconciliation below.
+
+#### Release cleared dependents
 
 After verifying the merged issue is closed, run the `quest-log` skill's canonical
 recipe in Bash and call `reconcile_cleared_dependencies apply <owner/name>`. This is the primary
