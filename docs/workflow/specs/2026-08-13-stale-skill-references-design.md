@@ -145,6 +145,23 @@ Evaluation cases:
   and required design records, and independent review finds no new dispatch. Gate: block.
 - `REF-07` regression fixture: run the focused search above. Pass: exit 1 with no output; exit 0
   identifies a blocker and exit greater than 1 is a failed scan. Gate: block.
+- `REF-08` positive resolution: the independent reviewer walks every row of the reference repair
+  matrix and records the changed source line plus its resolved target. For instruction-file and
+  applicable-policy wording, the target is the repository's native instruction-discovery rule.
+  For skill invocations, the matching `skills/<name>/SKILL.md` must exist. For headings and blocks,
+  these commands must succeed, and the reviewer checks the numbered-step targets against the
+  corresponding `## N.` headings in `attunement`:
+
+  ```bash
+  rg -n --no-config '^### Choosing a model$' skills/forge/SKILL.md
+  rg -n --no-config '^CHARTER \(scope authority; all fields below are focus, never targets\):$' \
+    skills/trial-loop/SKILL.md
+  test -f skills/return-to-town/SKILL.md
+  rg -n --no-config '^## (5|7)\.' skills/attunement/SKILL.md
+  ```
+
+  Pass: all commands exit 0 and every matrix row has cited source-and-target evidence; a missing
+  row or unresolved target is blocking. Gate: block.
 
 The focused search is code-based. Semantic cases require a context-isolated adversarial reviewer
 whose evidence is checked by the controller against the cited lines and targets; the author does
