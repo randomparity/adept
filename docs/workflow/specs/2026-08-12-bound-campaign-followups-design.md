@@ -22,6 +22,7 @@ re-enqueue. The governing decision is [ADR 0008](../../adr/0008-bound-campaign-f
 | 2 | Issue #91 Expected 2; operator dialogue | Bounty searches all states and routes a proposed fourth-plus same-class instance to one ordinary consolidated sweep |
 | 3 | Operator dialogue | Historical instances remain unchanged and are cited as evidence; an existing sweep is reused |
 | 4 | Issue #91 Expected 3; operator approval | Campaign asks before any traceable follow-ups enter its manifest |
+| 5 | Operator dialogue | An occurrence found beside an open sweep is filed, linked, closed not planned, and disclosed in the campaign's final report |
 
 ## Campaign contract
 
@@ -75,7 +76,9 @@ Below the threshold, bounty follows its existing near-match and issue-draft flow
 threshold it does not draft another instance issue. It instead:
 
 1. searches for an open consolidated sweep for the tuple;
-2. offers to comment on that sweep when found;
+2. when an open sweep is found, substitutes an occurrence draft that preserves the current
+   source, trigger, and evidence and links the sweep; after the existing confirmation, creates
+   the occurrence and immediately closes it as not planned;
 3. when only a closed sweep exists, treats it as history and drafts a new sweep only if current
    evidence shows that the class persists, citing the closed sweep and new occurrence;
 4. otherwise drafts one ordinary consolidated-sweep issue whose Evidence section preserves the
@@ -83,13 +86,19 @@ threshold it does not draft another instance issue. It instead:
    instance, and whose Expected section defines a bounded family-wide fix;
 5. shows that substituted draft at the existing confirmation gate.
 
-The scan is read-only. It never reopens, closes, labels, reparents, or edits historical issues.
-Immediately before the confirmed create, bounty rechecks for an open matching sweep and offers
-that issue instead of knowingly creating a duplicate. The read/create sequence is not atomic;
-concurrent runs can still create duplicate sweeps, which later runs handle through ordinary
-all-state deduplication. Sequential sweeps are allowed only after a prior sweep closed and
-current evidence demonstrates recurrence. The consolidation issue is not an epic unless later
-decomposition independently establishes several PR-sized units.
+The discovery scan is read-only. It never reopens, closes, labels, reparents, or edits
+historical issues. Immediately before the confirmed create, bounty rechecks for an open
+matching sweep and offers an occurrence draft linked to that issue instead of knowingly
+creating a duplicate sweep. The read/create sequence is not atomic; concurrent runs can still
+create duplicate sweeps, which later runs handle through ordinary all-state deduplication.
+Sequential sweeps are allowed only after a prior sweep closed and current evidence demonstrates
+recurrence. The consolidation issue is not an epic unless later decomposition independently
+establishes several PR-sized units.
+
+When bounty runs inside campaign, it returns the closed occurrence number, open sweep number,
+and not-planned rationale. Campaign appends that decision to the manifest outcomes log and its
+final table as `closed-not-planned: occurrence of sweep #N`; it is reported even though the
+closed occurrence never enters a fix wave or the active queue.
 
 ## Failure handling
 
@@ -134,6 +143,7 @@ confirmation, manifest change, and GitHub close reason.
 | E7 observed regression | Five repeated scan-fault issues governed by ADR 0005 | Recognize a fourth-plus class and propose one sweep | Five independent quest routes | block |
 | E8 low-value defect | Confirmed contrived trigger with bounded impact and high cycle cost | Plan shows rationale and reconsideration condition; closes not planned only after display | “Already fixed” claim or open track-only item | block |
 | E9 prior sweep | Three occurrences linked directly and through one closed sweep, plus one current occurrence | Count four distinct occurrences and propose the next sweep only because current evidence persists | Count the sweep as a fifth occurrence | block |
+| E10 open sweep | A verified new occurrence and one matching open sweep | Confirmation shows an occurrence draft; create, link, close not planned; campaign final report names it | Lost evidence, second sweep, or silent final report | block |
 
 Repository anatomy rule 4 forbids tests that assert on prose. Review executes these cases
 against the written state-machine contract, while `just verify` supplies structural,

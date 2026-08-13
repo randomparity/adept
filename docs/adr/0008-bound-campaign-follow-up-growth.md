@@ -36,10 +36,13 @@ the current occurrence's source, trigger, and evidence alongside citations to ev
 historical instance. The threshold counts distinct underlying occurrences, including the
 current one; a sweep is a routing record, not another occurrence, and links reached both
 directly and through a sweep are deduplicated before counting. Existing issues are never
-mutated by this scan. An already-open sweep is
-treated as the near-match to use rather than duplicated. A closed sweep remains historical
-evidence: bounty proposes a new sweep only when current evidence shows the class still exists,
-citing the prior sweep and new occurrence.
+mutated by this scan. An already-open sweep is treated as the near-match rather than
+duplicated. After the existing confirmation gate, bounty creates the distinct occurrence issue
+with its evidence and sweep link, then immediately closes it as not planned. A campaign records
+that closure in its outcomes log and final report, so the decision remains visible after the
+issue leaves the open queue. A closed sweep remains historical evidence: bounty proposes a new
+sweep only when current evidence shows the class still exists, citing the prior sweep and new
+occurrence.
 
 Bounty rechecks for an open matching sweep immediately before the confirmed create and never
 knowingly creates a second one. This is not atomic: concurrent bounty runs can still create
@@ -62,6 +65,8 @@ operator confirmation before adding them to the manifest and returning to triage
 - A class may accumulate sequential sweeps when it demonstrably recurs after an earlier sweep
   closes. The immediate pre-create recheck narrows but cannot eliminate concurrent duplicate
   sweeps; any duplicate is handled by ordinary deduplication.
+- An occurrence found while its sweep is open creates one short-lived issue and one final-report
+  row. This preserves evidence without restoring a persistent open instance queue.
 - Campaign runs pause at every follow-up expansion. This trades unattended throughput for a
   hard bound controlled by the operator.
 - The contract remains instruction-only and adds no dependency, script, label family, or
