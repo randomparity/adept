@@ -108,7 +108,12 @@ Run `$attunement` **once** for the batch to get `BASE_BRANCH`, guardrail command
 **Reconcile state first.** Read the manifest before anything else.
 
 For each queued issue, check for artifacts from prior runs:
-- **Already closed** → done; drop without re-closing
+- **Already closed** → read `state,stateReason,url` before changing the row. For
+  `NOT_PLANNED`, surgically set the full unique row to `closed` and reconstruct its
+  `closed-not-planned` Outcomes entry from the persisted verdict rationale; never re-close. If
+  that rationale is absent or the manifest mutation/readback fails, retain an explicit
+  unreconciled blocker and forbid completion. Other close reasons follow the existing done path
+  without re-closing.
 - **`status:` label set** → map to campaign state: `ready`/`needs-triage` → `pending` (triage); `in-progress`/`in-review` → `in-flight` (reconcile artifacts); `awaiting-merge` → verify PR then `ready-to-merge`; `blocked`/`needs-human` → `blocked`. Treat closed as authoritative regardless of label.
 - **Existing PR green + mergeable** → mark `ready-to-merge`, carry to step 4
 - **Persisted step-4 assignments exist** → read them back, don't re-derive
