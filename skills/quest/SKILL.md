@@ -17,7 +17,7 @@ surprise, or an ambiguous user-facing design decision.
 > which completes the run even though the branch and worktree stay in place;
 > the finished merge and cleanup, if the operator authorized merging; or a
 > blocker you have parked per *On a Blocker* -- naming it in chat is not
-> enough, the issue must carry the state. As a background subagent, an
+> enough, the issue must carry the state. As a background worker, an
 > `approve` from the review loop means proceed now, not wait.
 
 > **Keep the durable facts durable.** Raw phase context -- brainstorm
@@ -65,9 +65,9 @@ behavior it governs. Missing, superseded, conflicting, or no-longer-governing
 evidence sends you to SCOPE CHECKPOINT and full design.
 
 If the operator ran `$divination <issue-number>` this session, adopt its blast
-radius, risk flags, complexity (S/M/L), and decompose verdict -- but re-check
+radius, change hazards, complexity (S/M/L), and decompose verdict -- but re-check
 against the issue body first, since `$divination` writes nothing and its report may
-predate later comments. A dispatched subagent never inherits a `$divination` report,
+predate later comments. A dispatched worker never inherits a `$divination` report,
 so deriving the fields here is the ordinary path.
 
 Set the issue to `status:in-progress` (ensure-create the `status:` labels per
@@ -93,7 +93,7 @@ Record all eight fields:
 - `ambiguities` -- unresolved design-changing ambiguities, or explicit empty;
 - `interaction` -- the root value above.
 
-Also retain the tracking metadata (blast radius, risk flags, complexity,
+Also retain the tracking metadata (blast radius, change hazards, complexity,
 decompose verdict, classification -- plus the decision evidence and acceptance
 criteria for a `governed-small-change`) and read everything back before
 proceeding.

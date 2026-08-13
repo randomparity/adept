@@ -4,6 +4,9 @@ description: "Iteratively run an adversarial challenge review, fix or dispositio
 ---
 # Adversarial Review Loop
 
+The coordinating role is the `orchestrator`; dispatched reviewers and fixers
+are `worker` subtypes. `subagent` refers only to the literal dispatch capability.
+
 Run `$gauntlet` against a target iteratively, fixing findings between passes,
 until it returns `approve` or 5 iterations are exhausted. This is both a
 standalone skill and a subroutine of `$quest` and `$spellcraft`.
@@ -101,7 +104,7 @@ For standalone code or branch review, derive the charter from the user's request
 when the boundary is genuinely unclear. Inside `$quest`, use the frozen `WORK:SCOPE`
 annotation and its external provenance; the plan is evidence, not authority. Inside
 `$spellcraft`, accept only the complete design-artifact input above. Carry every field unchanged
-to `$gauntlet` and append the supplied focus. Also hold the charter in parent state for
+to `$gauntlet` and append the supplied focus. Also hold the charter in orchestrator state for
 cycle validation and reporting. For a design document, still record dependencies and
 exclusions in the document so a post-compaction resume or downstream build can read them;
 doing so does not make the document its own authority.
@@ -270,10 +273,10 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    a concern and its owner, which is what the exclusions already say — and it is bounded,
    because a record carries no verdicts, no finding history, and no intended fixes.
 
-   The subagent is read-only with respect to the target and git state
+   The reviewer worker is read-only with respect to the target and git state
    but **its tool allowlist must include `Write`** — `--out` writes the findings
    file (`$gauntlet`'s sole write exception); without `Write`, `--out` silently
-   no-ops and the loop dead-ends. The subagent's context (not this one) holds the
+   no-ops and the loop dead-ends. The worker's context (not this one) holds the
    full findings; it returns only `{verdict, findings_count, suppressed_count,
    path, run_id}` — `run_id` included, because steps 4 and 5 assert it against the
    artifact and a four-field contract degrades that check to a no-op. That isolation
@@ -282,21 +285,21 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    **One exception, and it is the whole point of the error path.** When `$gauntlet`
    stops with a target-resolution error it produces no verdict, no artifact and no
    `run_id`, so the compact object cannot be built.
-   The subagent then **returns that error text verbatim** instead of the compact
+   The worker then **returns that error text verbatim** instead of the compact
    object. Without this the contract demands an object the
-   subagent cannot construct, so the parent sees only "did not return the compact
-   object" — indistinguishable from a crashed subagent, a denied permission, or a
+   worker cannot construct, so the orchestrator sees only "did not return the compact
+   object" — indistinguishable from a crashed worker, a denied permission, or a
    missing `Write` tool — and a diagnosable failure becomes an undiagnosed one.
 2. Read the returned `verdict`, `findings_count`, and `suppressed_count`. If the
    return is not the expected compact object (or `<findings-path>` was not written),
-   rerun once; if still malformed, stop as blocked — and **quote whatever the subagent
+   rerun once; if still malformed, stop as blocked — and **quote whatever the worker
    returned** in that report rather than discarding it. One return is *specified* rather
    than malformed and must not pay for the rerun: `$gauntlet`'s target-resolution error
    text. Recognise it and stop as blocked immediately, quoting it — the input is
    deterministic, so a rerun reproduces the error rather than clearing it, and labelling
    a precisely diagnosed condition "malformed" buries the diagnosis. That text is where a
    target-resolution error names its cause, and it is the only signal distinguishing a
-   swallowed target from a dead subagent; a rerun on deterministic input reproduces it
+   swallowed target from a dead worker; a rerun on deterministic input reproduces it
    rather than clearing it. Then **read `<findings-path>` and
    assert its `run_id` matches, on every iteration — including an `approve` with zero
    suppressions.** Existence is not freshness: a silently no-opped `--out` write leaves

@@ -1,6 +1,6 @@
 ---
 name: summon-swarm
-description: "Offload high-volume, well-specified generation to parallel OpenAI Codex CLI workers. Use when a job splits into independent worker-sized tasks (content batches, test generation, bulk refactors) and Codex CLI is installed and logged in — The current Codex session decomposes, briefs, spawns worker `codex exec` runs in parallel, and review-gates every output. Not for judgment-dense work this session should do itself, or for coordinating subagents on one complex change."
+description: "Offload high-volume, well-specified generation to parallel OpenAI Codex CLI workers. Use when a job splits into independent worker-sized tasks (content batches, test generation, bulk refactors) and Codex CLI is installed and logged in — The current Codex session decomposes, briefs, spawns worker `codex exec` runs in parallel, and review-gates every output. Not for judgment-dense work this session should do itself, or for coordinating workers on one complex change."
 ---
 
 # Codex Fleet
@@ -10,6 +10,8 @@ Parallel OpenAI Codex CLI workers are the fleet. The orchestrator handles
 judgment; worker processes handle volume. A clear spec plus high volume can go
 to workers; a fuzzy spec or expensive-if-wrong work stays in this session.
 Nothing ships unreviewed.
+
+Reserve `subagent` for a literal harness/API capability, never a workflow role.
 
 Adapted from `suede-codex-fleet` in
 [JasonColapietro/suede-creator-skills](https://github.com/JasonColapietro/suede-creator-skills) (MIT).
