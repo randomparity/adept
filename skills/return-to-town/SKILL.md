@@ -34,15 +34,22 @@ hand-off or operator-authorized merge path:
 ```sh
 gh pr view <N> \
   --json state,mergedAt,mergeable,mergeStateStatus,statusCheckRollup,headRefOid,baseRefOid \
-  --jq '{state, mergedAt, mergeable, mergeState: .mergeStateStatus,
+  --jq '{state, mergedAt, head: .headRefOid, base: .baseRefOid,
+         mergeable, mergeState: .mergeStateStatus,
          checks: [.statusCheckRollup[] | {name, status, conclusion}]}'
 ```
+
+In restock PR-only mode, compare `head` with `$EXPECTED_HEAD_SHA` and `base` with
+`$EVALUATED_BASE_SHA` before any tracking, merge, or cleanup mutation. A head mismatch refuses the
+operation; a base mismatch on the open route returns `BASE_CHANGED`.
 
 Interpret `state` before `mergeable` or `mergeStateStatus`:
 
 - `MERGED` is conclusive even when either computed field is `UNKNOWN`. Do not poll those
-  fields and do not repeat the default hand-off. Proceed directly to **Post-merge
-  reconciliation** below.
+  fields and do not repeat the default hand-off. In issue-backed mode, proceed to **Post-merge
+  reconciliation** below. In restock PR-only mode, verify the expected merged head, reconcile only
+  the terminal PR trajectory/status for the supplied run token, then perform or defer only its
+  scoped unit cleanup. Never enter issue closure or cleared-dependent reconciliation.
 - `CLOSED` means closed without merge. Stop without post-merge tracking or cleanup and report
   that the pull request was closed unmerged.
 - Only `OPEN` continues below. For an open pull request, retain `$deliver`'s exit condition:

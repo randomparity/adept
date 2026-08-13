@@ -61,8 +61,19 @@ owns only paths recorded in its manifest.
 Attunement already supplied `$BASE_BRANCH`. Query only merge capabilities here:
 
 ```bash
-gh repo view "$REPO" --json rebaseMergeAllowed,mergeCommitAllowed,squashMergeAllowed
+gh repo view "$REPO" \
+  --json viewerPermission,rebaseMergeAllowed,mergeCommitAllowed,squashMergeAllowed
 ```
+
+Before the first label or comment, require a `viewerPermission` that supports the planned review,
+label, comment, and merge writes. Also verify the installed CLI exposes the guarded merge option:
+
+```bash
+gh pr merge --help | rg --no-config -q -- '--match-head-commit'
+```
+
+A missing permission signal, insufficient permission, unsupported guard, or absence of every merge
+method stops the run without creating labels or comments and reports the exact missing capability.
 
 `gh repo view` takes the repo as a **positional** argument — it has no `--repo`
 flag and exits `1` with `unknown flag: --repo` if given one, unlike the
