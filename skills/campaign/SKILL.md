@@ -108,7 +108,7 @@ Manifest schema:
 ## Pending occurrence dispositions
 | Occurrence | Sweep | State | State reason | Rationale |
 |------------|-------|-------|--------------|-----------|
-| #NNN       | #NNN  | OPEN / CLOSED / UNKNOWN | <GitHub value or UNVERIFIED> | <public-safe rationale> |
+| #NNN       | #NNN  | OPEN / CLOSED / UNKNOWN | <GitHub value, NONE, or UNVERIFIED> | <public-safe rationale> |
 ```
 
 Status progression: `pending → triaged → in-flight → merged | closed | blocked`
@@ -122,8 +122,9 @@ table and normalize the Completion condition field to the schema text above befo
 On every resume, read each occurrence with
 `gh issue view <N> --json state,stateReason,url`: remove it and append the verified
 `closed-not-planned: occurrence of sweep #N` outcome only for `CLOSED`/`NOT_PLANNED`; otherwise
-update its normalized state and reason and keep it pending. A failed read records state
-`UNKNOWN` and reason `UNVERIFIED`.
+update its normalized state and reason and keep it pending. Normalize a readable null or blank
+`stateReason` to `NONE`; reserve `UNKNOWN`/`UNVERIFIED` for a failed read. Apply the same values to
+worker tuples, pending upserts, validation, and display.
 
 For an `OPEN` occurrence discovered from a valid marker, present the exact close-only recovery
 action, obtain explicit confirmation, and invoke bounty's existing recovery path for that
