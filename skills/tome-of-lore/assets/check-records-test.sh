@@ -1560,6 +1560,78 @@ STUB
     printf 'ok   E-TITLE-MISMATCH suppressed\n'
   fi
 
+  # The ADR supersession banner's Status read (ADR 0008). A faulting awk yielded an empty link
+  # and the rule then passed the record, so a banner naming a record that is not here went
+  # unreported -- the rule's whole purpose. Keyed on `-v want=`, which only section_body uses.
+  stub_bin="$SCRATCH/awk-supersede-bin"
+  mkdir -p "$stub_bin"
+  real_awk=$(command -v awk)
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  want=*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  d=$(adr_dir supersede_scan_fault)
+  b=$(base_of "$d")
+  run_case "supersede link read faults, not a pass" 1 E-SUPERSEDE-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
+
+  # The two anti-erasure diffs. They used to run inside `diff <(section_body …) <(…)`, where
+  # neither the readers nor diff itself could report: a faulting side produced empty output and
+  # diff then counted every base line as removed, or none, depending on which side failed. A
+  # diff stub that faults reaches the converted branch; the appended record keeps the change
+  # from being marker-only, so check_not_rewritten gets past the shape check to the rules.
+  stub_bin="$SCRATCH/diff-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/diff" <<'STUB'
+#!/usr/bin/env bash
+printf 'diff: fixture-fault: simulated I/O error\n' >&2
+exit 2
+STUB
+  chmod +x "$stub_bin/diff"
+  d=$(case_dir append_diff_scan_fault)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/debt/0001-valid.md"
+  run_case "append-only diff faults, not a clean pass" 1 E-APPEND-DIFF-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  d=$(adr_dir preamble_diff_scan_fault)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/adr/0001-first.md"
+  run_case "preamble diff faults, not a clean pass" 1 E-PREAMBLE-DIFF-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
+
+  # E-COUNT-FLOOR's base-ref record listing. `records_in_ref … || true` discarded the return 1
+  # raised when git ls-tree faults, leaving base_count at 0 -- so the rule that refuses a clean
+  # run over nothing was disarmed by a read that never completed. ADR 0005 named this site.
+  stub_bin="$SCRATCH/git-base-list-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = docs/debt ]; then
+      printf 'fatal: fixture-fault: simulated object store failure\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  d=$(case_dir base_list_scan_fault)
+  b=$(base_of "$d")
+  run_case "base record listing faults, floor not disarmed" 1 E-BASE-LIST-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
   # The base-ref blob behind the three anti-erasure rules. `git cat-file blob ... || return 0`
   # read an unreadable copy as an absent one, and absent is the legitimate common case -- a
   # record the change adds has no base copy -- so the record was silently exempted from
@@ -1827,22 +1899,88 @@ STUB
   fi
 
   # grep exits 1 for "no match" and 2 or more for a fault it hit while scanning -- an
-  # unreadable file, a bad encoding. check_sections and check_headings_intact used to fold
-  # that fault into "no match", reporting a spurious E-SECTION-MISSING/E-HEADING-REWRITTEN
-  # (or, downstream of the same collapse, staying silent) instead of naming the scan that
-  # never completed. A record made unreadable in place drives both through the same grep
-  # call the checker makes on the working tree, on the same skip guard as the case above.
+  # unreadable file, a bad encoding. check_sections used to fold that fault into "no match",
+  # reporting a spurious E-SECTION-MISSING instead of naming the scan that never completed.
+  # A record made unreadable in place drives it through the same grep call the checker makes
+  # on the working tree, on the same skip guard as the case above.
+  #
+  # The same fixture reaches the conversion that mattered most in ADR 0008: canonicalise's awk
+  # cannot open the file either, so marker_only_change can no longer say whether the change is
+  # marker-only and reports E-SHAPE-SCAN. Both protected_shape results used to come back empty,
+  # compare equal, and turn all three anti-erasure rules off at once on a run that exited 0.
   if [ "$(id -u)" -eq 0 ]; then
     printf '  skip %-44s running as root; chmod 000 does not deny access\n' "record unreadable (section scan)"
-    printf '  skip %-44s running as root; chmod 000 does not deny access\n' "record unreadable (heading scan)"
+    printf '  skip %-44s running as root; chmod 000 does not deny access\n' "record unreadable (protected shape scan)"
   else
     d=$(case_dir unreadable_record)
     b=$(base_of "$d")
     chmod 000 "$d/docs/debt/0001-valid.md"
     run_case "record unreadable (section scan)" 1 E-SECTION-SCAN "$d" BASE_SHA="$b"
-    run_case "record unreadable (heading scan)" 1 E-HEADING-SCAN "$d" BASE_SHA="$b"
+    run_case "record unreadable (protected shape scan)" 1 E-SHAPE-SCAN "$d" BASE_SHA="$b"
     chmod 644 "$d/docs/debt/0001-valid.md"
   fi
+
+  # The section_body reads ADR 0008 lifted out of their pipelines. An unreadable file cannot
+  # reach them -- check_sections' grep faults first and reports E-SECTION-SCAN -- so these need
+  # a fault that hits awk while grep still works. section_body is the only awk in either script
+  # invoked with `-v want=`, so a stub keyed on that argument faults exactly the reads under
+  # test and leaves canonicalise, preamble and protected_shape's filter alone.
+  #
+  # Each of these codes used to be a false verdict about a section that was never read:
+  # E-SECTION-EMPTY for the body, E-STATUS for the status word, E-TARGET-MISSING for a target
+  # line nothing looked for, E-REVIEWBY-MISSING for a date on an unread Status section.
+  d=$(case_dir section_body_scan_fault)
+  b=$(base_of "$d")
+  stub_bin="$SCRATCH/awk-section-fault-bin"
+  mkdir -p "$stub_bin"
+  real_awk=$(command -v awk)
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  want=*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_case "section body read faults, not empty" 1 E-SECTION-BODY-SCAN "$d" BASE_SHA="$b"
+  run_case "status read faults, no spurious E-STATUS" 1 E-STATUS-SCAN "$d" BASE_SHA="$b"
+  run_case "target read faults, no spurious missing" 1 E-TARGET-SCAN "$d" BASE_SHA="$b"
+  run_case "review-by read faults, no spurious missing" 1 E-REVIEWBY-SCAN "$d" BASE_SHA="$b"
+  PATH=$saved_path
+
+  # check_headings_intact's own scan fault needs a readable record, now that an unreadable one
+  # stops at E-SHAPE-SCAN before the three anti-erasure rules run. A grep stub that faults only
+  # on the H1 lookup reaches it: check_headings_intact is the only rule that greps for the H1
+  # line, so check_sections -- which greps only the `## ` headings -- is left alone, and the
+  # gutted body keeps the change from being marker-only so the rule is reached at all.
+  d=$(case_dir heading_scan_fault)
+  b=$(base_of "$d")
+  sed 's/^A real concern with a body\.$/Nothing much, actually./' "$d/docs/debt/0001-valid.md" >"$d/.t" && mv "$d/.t" "$d/docs/debt/0001-valid.md"
+  stub_bin="$SCRATCH/grep-heading-fault-bin"
+  mkdir -p "$stub_bin"
+  real_grep=$(command -v grep)
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = "# 0001 — test record" ]; then
+    printf 'grep: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+  fi
+done
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_case "heading scan faults, no spurious rewrite" 1 E-HEADING-SCAN "$d" BASE_SHA="$b"
+  PATH=$saved_path
 
   # The same fault, once per profile rather than once per record: profile_check_directory's
   # grep over the ADR index README used to fold a scan fault into "no numbered rows", so
@@ -2728,6 +2866,101 @@ STUB
   saved_path=$PATH
   PATH="$stub_bin:$PATH"
   run_migrator "migrator section scan faults, not silently skipped" 1 E-SECTION-SCAN "$d"
+  PATH=$saved_path
+
+  # The migrator's own pipeline conversions (ADR 0008). Its reads used to start pipelines whose
+  # status went nowhere, so a faulting awk produced an empty section body, an empty status line
+  # and an empty banner -- reported as prose a human still has to write, on a record the
+  # migrator never managed to read. `-v want=` keys section_body alone.
+  d=$(migrator_dir migrate_body_scan_fault)
+  stub_bin="$SCRATCH/awk-migrate-want-bin"
+  mkdir -p "$stub_bin"
+  real_awk=$(command -v awk)
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  want=*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator section body read faults" 1 E-MIGRATE-SECTION-SCAN "$d"
+  run_migrator "migrator status read faults" 1 E-MIGRATE-STATUS-SCAN "$d"
+  PATH=$saved_path
+
+  # The migrator's self-check. marker_only_change went three-valued in ADR 0008, and the `if !`
+  # this replaced collapsed "could not tell" into "not marker-only". The worse direction was
+  # the checker's, where the same collapse read a faulted comparison as "marker-only" and
+  # skipped every anti-erasure rule; here it refuses to write, which is the safe end of the
+  # same defect. Keyed on canonicalise's marker pattern.
+  d=$(migrator_dir migrate_shape_scan_fault)
+  stub_bin="$SCRATCH/awk-migrate-canon-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  *'(target|review-by)'*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator self-check read faults, refuses to write" 1 E-MIGRATE-SHAPE-SCAN "$d"
+  PATH=$saved_path
+  printf '  %-4s %-44s ' "" "the refused run wrote nothing"
+  if git -C "$d" diff --quiet; then
+    passed=$((passed + 1))
+    printf 'ok   record untouched\n'
+  else
+    failed=$((failed + 1))
+    printf 'FAIL the record was rewritten after a failed self-check\n'
+  fi
+
+  # diff decides how many marker lines were rewritten and what the report shows. Its status was
+  # discarded by `| grep -c … || true`, so a diff that could not run reported "0 marker line(s)
+  # rewritten" -- indistinguishable from a record that needed no migration.
+  d=$(migrator_dir migrate_diff_scan_fault)
+  stub_bin="$SCRATCH/diff-migrate-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/diff" <<'STUB'
+#!/usr/bin/env bash
+printf 'diff: fixture-fault: simulated I/O error\n' >&2
+exit 2
+STUB
+  chmod +x "$stub_bin/diff"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator diff faults, not zero rewrites" 1 E-MIGRATE-DIFF-SCAN "$d"
+  PATH=$saved_path
+
+  # The record listing. `find … | sort | grep … || true` swallowed find's status, so an
+  # unreadable record directory yielded an empty listing and the migrator reported
+  # "0 record(s) examined" and exited 0 over a directory it never read.
+  d=$(migrator_dir migrate_list_scan_fault)
+  stub_bin="$SCRATCH/find-migrate-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/find" <<'STUB'
+#!/usr/bin/env bash
+printf 'find: fixture-fault: simulated I/O error\n' >&2
+exit 1
+STUB
+  chmod +x "$stub_bin/find"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator record listing faults, not empty" 1 E-MIGRATE-LIST-SCAN "$d"
   PATH=$saved_path
 
   # The migrator's own profile resolution. A profile that satisfies the checker still has to

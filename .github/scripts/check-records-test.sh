@@ -1560,6 +1560,78 @@ STUB
     printf 'ok   E-TITLE-MISMATCH suppressed\n'
   fi
 
+  # The ADR supersession banner's Status read (ADR 0008). A faulting awk yielded an empty link
+  # and the rule then passed the record, so a banner naming a record that is not here went
+  # unreported -- the rule's whole purpose. Keyed on `-v want=`, which only section_body uses.
+  stub_bin="$SCRATCH/awk-supersede-bin"
+  mkdir -p "$stub_bin"
+  real_awk=$(command -v awk)
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  want=*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  d=$(adr_dir supersede_scan_fault)
+  b=$(base_of "$d")
+  run_case "supersede link read faults, not a pass" 1 E-SUPERSEDE-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
+
+  # The two anti-erasure diffs. They used to run inside `diff <(section_body …) <(…)`, where
+  # neither the readers nor diff itself could report: a faulting side produced empty output and
+  # diff then counted every base line as removed, or none, depending on which side failed. A
+  # diff stub that faults reaches the converted branch; the appended record keeps the change
+  # from being marker-only, so check_not_rewritten gets past the shape check to the rules.
+  stub_bin="$SCRATCH/diff-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/diff" <<'STUB'
+#!/usr/bin/env bash
+printf 'diff: fixture-fault: simulated I/O error\n' >&2
+exit 2
+STUB
+  chmod +x "$stub_bin/diff"
+  d=$(case_dir append_diff_scan_fault)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/debt/0001-valid.md"
+  run_case "append-only diff faults, not a clean pass" 1 E-APPEND-DIFF-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  d=$(adr_dir preamble_diff_scan_fault)
+  b=$(base_of "$d")
+  printf '\nFurther detail found later.\n' >>"$d/docs/adr/0001-first.md"
+  run_case "preamble diff faults, not a clean pass" 1 E-PREAMBLE-DIFF-SCAN "$d" \
+    BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
+
+  # E-COUNT-FLOOR's base-ref record listing. `records_in_ref … || true` discarded the return 1
+  # raised when git ls-tree faults, leaving base_count at 0 -- so the rule that refuses a clean
+  # run over nothing was disarmed by a read that never completed. ADR 0005 named this site.
+  stub_bin="$SCRATCH/git-base-list-bin"
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = docs/debt ]; then
+      printf 'fatal: fixture-fault: simulated object store failure\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  d=$(case_dir base_list_scan_fault)
+  b=$(base_of "$d")
+  run_case "base record listing faults, floor not disarmed" 1 E-BASE-LIST-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
   # The base-ref blob behind the three anti-erasure rules. `git cat-file blob ... || return 0`
   # read an unreadable copy as an absent one, and absent is the legitimate common case -- a
   # record the change adds has no base copy -- so the record was silently exempted from
@@ -2794,6 +2866,101 @@ STUB
   saved_path=$PATH
   PATH="$stub_bin:$PATH"
   run_migrator "migrator section scan faults, not silently skipped" 1 E-SECTION-SCAN "$d"
+  PATH=$saved_path
+
+  # The migrator's own pipeline conversions (ADR 0008). Its reads used to start pipelines whose
+  # status went nowhere, so a faulting awk produced an empty section body, an empty status line
+  # and an empty banner -- reported as prose a human still has to write, on a record the
+  # migrator never managed to read. `-v want=` keys section_body alone.
+  d=$(migrator_dir migrate_body_scan_fault)
+  stub_bin="$SCRATCH/awk-migrate-want-bin"
+  mkdir -p "$stub_bin"
+  real_awk=$(command -v awk)
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  want=*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator section body read faults" 1 E-MIGRATE-SECTION-SCAN "$d"
+  run_migrator "migrator status read faults" 1 E-MIGRATE-STATUS-SCAN "$d"
+  PATH=$saved_path
+
+  # The migrator's self-check. marker_only_change went three-valued in ADR 0008, and the `if !`
+  # this replaced collapsed "could not tell" into "not marker-only". The worse direction was
+  # the checker's, where the same collapse read a faulted comparison as "marker-only" and
+  # skipped every anti-erasure rule; here it refuses to write, which is the safe end of the
+  # same defect. Keyed on canonicalise's marker pattern.
+  d=$(migrator_dir migrate_shape_scan_fault)
+  stub_bin="$SCRATCH/awk-migrate-canon-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  *'(target|review-by)'*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator self-check read faults, refuses to write" 1 E-MIGRATE-SHAPE-SCAN "$d"
+  PATH=$saved_path
+  printf '  %-4s %-44s ' "" "the refused run wrote nothing"
+  if git -C "$d" diff --quiet; then
+    passed=$((passed + 1))
+    printf 'ok   record untouched\n'
+  else
+    failed=$((failed + 1))
+    printf 'FAIL the record was rewritten after a failed self-check\n'
+  fi
+
+  # diff decides how many marker lines were rewritten and what the report shows. Its status was
+  # discarded by `| grep -c … || true`, so a diff that could not run reported "0 marker line(s)
+  # rewritten" -- indistinguishable from a record that needed no migration.
+  d=$(migrator_dir migrate_diff_scan_fault)
+  stub_bin="$SCRATCH/diff-migrate-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/diff" <<'STUB'
+#!/usr/bin/env bash
+printf 'diff: fixture-fault: simulated I/O error\n' >&2
+exit 2
+STUB
+  chmod +x "$stub_bin/diff"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator diff faults, not zero rewrites" 1 E-MIGRATE-DIFF-SCAN "$d"
+  PATH=$saved_path
+
+  # The record listing. `find … | sort | grep … || true` swallowed find's status, so an
+  # unreadable record directory yielded an empty listing and the migrator reported
+  # "0 record(s) examined" and exited 0 over a directory it never read.
+  d=$(migrator_dir migrate_list_scan_fault)
+  stub_bin="$SCRATCH/find-migrate-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/find" <<'STUB'
+#!/usr/bin/env bash
+printf 'find: fixture-fault: simulated I/O error\n' >&2
+exit 1
+STUB
+  chmod +x "$stub_bin/find"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_migrator "migrator record listing faults, not empty" 1 E-MIGRATE-LIST-SCAN "$d"
   PATH=$saved_path
 
   # The migrator's own profile resolution. A profile that satisfies the checker still has to

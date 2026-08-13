@@ -154,19 +154,27 @@ found by reading and are converted here.
 
 ## Consequences
 
-- **Sixteen sites convert** across four scripts and their two mirrors: nine
-  through `read_section`, five capturing a `diff` or `find` upstream directly,
-  one lifting `canonicalise` out of `protected_shape`, and one giving
-  `records_in_ref`'s caller a report instead of a silent empty list.
+- **Seventeen sites convert into sixteen guarded reads** across four scripts and
+  their two mirrors: eight through `read_section`, five capturing a `diff` or
+  `find` upstream directly, one lifting `canonicalise` out of `protected_shape`,
+  one rewriting the `marker_only_change` call the migrator made under `if !`,
+  and one giving `records_in_ref`'s caller a report instead of a silent empty
+  list. Seventeen into sixteen because `report_status_leftover` made two
+  separate unguarded reads of `## Status` — one for the banner, one for the
+  status word — and one guarded read now serves both.
 - New codes, each named per rule so a test can assert which site faulted:
   `E-STATUS-SCAN`, `E-SUPERSEDE-SCAN`, `E-TARGET-SCAN`, `E-REVIEWBY-SCAN`,
   `E-SECTION-BODY-SCAN`, `E-PREAMBLE-DIFF-SCAN`, `E-APPEND-DIFF-SCAN`,
   `E-SHAPE-SCAN`, `E-BASE-LIST-SCAN`. The migrator reports through
   `report_failure`, which already carries per-rule codes, so its sites are named
-  too — `E-MIGRATE-STATUS-SCAN`, `E-MIGRATE-BANNER-SCAN`,
-  `E-MIGRATE-SECTION-SCAN`, `E-MIGRATE-DIFF-SCAN`, `E-MIGRATE-LIST-SCAN` — for
+  too — `E-MIGRATE-STATUS-SCAN`, `E-MIGRATE-SECTION-SCAN`,
+  `E-MIGRATE-SHAPE-SCAN`, `E-MIGRATE-DIFF-SCAN`, `E-MIGRATE-LIST-SCAN` — for
   ADR 0005 decision 1's stated reason, that a test can assert *which* site
   faulted.
+- Every converted site has a regression test that was verified to bite. With
+  `read_section`'s fault return neutralised the suite reports seven failures and
+  the gate **exits 0**; with `marker_only_change`'s neutralised, two more. The
+  silent-pass direction is what the tests pin, not merely the message text.
 - `diff` keeps its status read directly rather than through `read_section`: it
   is the reading stage at those sites, and its 0 and 1 both being ordinary —
   same, and differs — makes `>= 2` the fault test. That is the one place a
@@ -184,10 +192,26 @@ found by reading and are converted here.
   returning 0 silently, since a silent return here would restore the fail-open
   the conversion removes. Each is removed on every path out, including the
   early returns inside `check_sections_append_only`'s loop.
-- `marker_only_change` keeps its two-valued contract. `protected_shape` gains a
-  `dest` argument and a status, on `read_base_blob`'s shape, and
-  `check_not_rewritten` reports `E-SHAPE-SCAN` and returns instead of running
-  the three anti-erasure rules against a comparison it could not make.
+- `protected_shape` and `marker_only_change` both become three-valued, per ADR
+  0005 decision 3 — a predicate that can fault returns a distinct fault value
+  and its caller reports. `check_not_rewritten` reports `E-SHAPE-SCAN` and
+  returns rather than running the three anti-erasure rules against a comparison
+  it could not make, and the migrator's `if ! marker_only_change` becomes a
+  `case`, since `if !` collapses 1 and 2 into one branch and is exactly what
+  0005's Consequences forbid for a three-valued predicate.
+- `E-SHAPE-SCAN` correctly preempts `E-HEADING-SCAN` on an unreadable record:
+  once the shape comparison cannot be made, the rules behind it do not run, so
+  there is one finding rather than three. `check_headings_intact`'s own
+  scan-fault test moves to a `grep` stub keyed on the H1 line to keep that code
+  covered.
+- `E-SECTION-BODY-SCAN` reports through `err_full` where the neighbouring
+  `E-SECTION-SCAN` uses `err`. The difference is real and not cosmetic: the grep
+  behind `E-SECTION-SCAN` reads the working-tree file while the base pass reads
+  a readable temp copy, so only the tree pass faults; `section_body`'s awk
+  faults in both passes, which marks the record non-conforming at base and would
+  downgrade the finding to `W-LEGACY-SHAPE` and exit 0. That `E-SECTION-SCAN`
+  itself uses `err` looks like the same latent defect one idiom earlier; it
+  belongs to #25's sweep rather than this one and is filed as issue #90.
 - The gate keeps reporting exactly one finding per record per rule. A scan
   fault replaces the rule's negative verdict, so a converted site cannot emit
   both `E-STATUS-SCAN` and `E-STATUS`.

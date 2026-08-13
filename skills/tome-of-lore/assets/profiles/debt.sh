@@ -9,8 +9,10 @@
 # "${arr[@]}" on an empty array is fatal under `set -u`.
 #
 # Every value below is read by check-records.sh after it sources this file, never within it;
-# linted standalone, shellcheck cannot see that use.
-# shellcheck disable=SC2034
+# linted standalone, shellcheck cannot see that use. SC2154 is the mirror of that blindness:
+# read_section_out and read_section_status are assigned by read_section in check-records.sh,
+# which sources this file, so a standalone lint sees only the reads.
+# shellcheck disable=SC2034,SC2154
 
 RECORD_DIR="docs/debt"
 
@@ -50,12 +52,20 @@ BANNER_REPLACES_STATUS=yes
 # Called only when no well-formed banner is present, per BANNER_REPLACES_STATUS=yes. Blob-local,
 # so it runs in both passes and takes no notice of which one.
 profile_check_status() {
-  local file=$1 label=$2
-  # A pipeline into grep, not a bare `if grep`/`if rg` — issue #25's literal shape. Telling
-  # the awk stage's own fault from grep's needs ${PIPESTATUS[@]} plus a policy for the
-  # SIGPIPE a truncating `head` produces; that is issue #63, split out of #55 once #55's
-  # sweep of the single-command discards showed the two need different treatment.
-  if section_body "$file" "## Status" | grep -qi '^Open'; then
+  local file=$1 label=$2 status=0
+  # This was the literal shape ADR 0008 was written for: `section_body … | grep -qi '^Open'`,
+  # where a faulting awk emitted nothing, grep read empty input and exited 1, and the `if`
+  # read that as an honest "Status is not Open". The read is lifted out and its status
+  # captured; ${PIPESTATUS[@]} would not have served, since it does not survive a command
+  # substitution and most sites in the sweep were assignments.
+  read_section "$file" "## Status" || status=$?
+  if [ "$status" -ne 0 ]; then
+    err_full "E-STATUS-SCAN: $label: could not read the Status section (awk exit $read_section_status)"
+    return 0
+  fi
+  # In-memory, so this pipeline's status is a legitimate verdict (ADR 0005 decision 1). It
+  # carries no `head`, so 141 cannot reach it — ADR 0008 decision 3.
+  if printf '%s\n' "$read_section_out" | grep -qi '^Open'; then
     return 0
   fi
   err "E-STATUS: $label: Status must be 'Open' or carry a '> **Resolved by ...**' banner"
@@ -70,17 +80,28 @@ profile_check_status() {
 # reports through warn_full because it is not part of conformance and must not be relabelled on
 # a grandfathered record.
 #
-# The loop reads from a process substitution, so it must not report from inside it — it sets
-# `found` and reports after the loop.
+# The reader is lifted above the loop rather than left in the `< <(…)` it used to feed (ADR
+# 0008 decision 6). Inside a process substitution its fault had nowhere to go, and an awk that
+# could not open the file produced no target lines at all — which this rule then reported as
+# E-TARGET-MISSING, a record faulted for lacking a line nothing ever looked for.
 check_targets() {
-  local file=$1 label=$2 pass=$3 target found=0
+  local file=$1 label=$2 pass=$3 target found=0 status=0 targets
+  read_section "$file" "## Provenance" || status=$?
+  if [ "$status" -ne 0 ]; then
+    err_full "E-TARGET-SCAN: $label: could not read the Provenance section (awk exit $read_section_status)"
+    return 0
+  fi
+  # In-memory; discard per ADR 0008 decision 2. sed exits 0 having printed nothing when the
+  # section carries no target line, which is E-TARGET-MISSING's honest case below.
+  targets=$(printf '%s\n' "$read_section_out" | sed -n 's/^target:[[:space:]]*//p') || :
+
   while IFS= read -r target; do
     [ -n "$target" ] || continue
     found=1
     if [ "$pass" = tree ] && [ ! -e "$target" ]; then
       warn_full "W-ORPHAN-TARGET: $label: target '$target' no longer exists — record may be orphaned"
     fi
-  done < <(section_body "$file" "## Provenance" | sed -n 's/^target:[[:space:]]*//p')
+  done <<<"$targets"
 
   if [ "$found" -eq 0 ]; then
     err "E-TARGET-MISSING: $label: Provenance needs at least one 'target: <path>' line"
@@ -98,15 +119,25 @@ check_targets() {
 # still applies — an unparseable date is a field no reader can act on either way, and leaving it
 # uncaught on the records that resolve would make the rule depend on when it was looked at.
 check_review_by() {
-  local file=$1 label=$2 resolved=$3 review_by today review_int today_int
-  review_by=$(section_body "$file" "## Status" | sed -n 's/^review-by:[[:space:]]*//p' | head -1)
+  local file=$1 label=$2 resolved=$3 review_by today review_int today_int status=0
+  # Lifted per ADR 0008 decision 1. A faulted read yielded an empty review_by, which this rule
+  # reported as E-REVIEWBY-MISSING — an open deferral faulted for lacking a date on a Status
+  # section that was never read.
+  read_section "$file" "## Status" || status=$?
+  if [ "$status" -ne 0 ]; then
+    err_full "E-REVIEWBY-SCAN: $label: could not read the Status section to find review-by (awk exit $read_section_status)"
+    return 0
+  fi
+  # In-memory; discard per ADR 0008 decision 2.
+  review_by=$(printf '%s\n' "$read_section_out" | sed -n 's/^review-by:[[:space:]]*//p' | head -1) || :
   if [ -z "$review_by" ]; then
     [ "$resolved" = yes ] && return 0
     err "E-REVIEWBY-MISSING: $label: open deferral needs review-by: YYYY-MM-DD in Status"
     return 0
   fi
 
-  # Same deferral as profile_check_status above: a pipeline into grep, tracked on #63.
+  # `printf` over a shell variable, which ADR 0005 decision 1 places outside the scan rule and
+  # ADR 0008 decision 4 confirms does not convert: there is no could-not-run case to report.
   if ! printf '%s' "$review_by" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
     err "E-REVIEWBY-FORM: $label: review-by '$review_by' is not an ISO-8601 date (YYYY-MM-DD)"
     return 0
