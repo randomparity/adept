@@ -16,9 +16,10 @@ pull request. Terminology consolidation remains excluded, as does unrelated repa
 #39.
 
 Permitted implementation surface is `skills/restock/SKILL.md`,
-`skills/return-to-town/SKILL.md` limited to PR-only tracking and expected-SHA guarded merge behavior,
-focused contract coverage, and direct design records. The design changes no package dependency,
-schema, runtime service, or product code.
+`skills/return-to-town/SKILL.md` limited to PR-only tracking, expected-head guarded merge behavior,
+and the evaluated-base check with typed `BASE_CHANGED` handoff, plus focused contract coverage and
+direct design records. The design changes no package dependency, schema, runtime service, or product
+code.
 
 ## Decision
 
@@ -44,11 +45,11 @@ opens only direct `run.*` children carrying a supported marker owned by the curr
 malformed, mismatched, or unsupported marker makes that child unrelated and it is neither traversed
 nor removed.
 
-The initial marker and ledger schema is version 1. Every shipped reader retains reconciliation
-support for every earlier shipped schema that can remain on disk; a new write schema adds a reader
-branch rather than replacing an old one. A marker newer than the reader is retained untouched and
-reported as `UNKNOWN_LEDGER_VERSION` with the root and required tool upgrade. Version 1 is never
-reinterpreted under a later schema.
+The initial marker and ledger schema is version 1. This design requires its reader to reconcile
+version 1. Any unsupported version is retained untouched and reported as
+`UNKNOWN_LEDGER_VERSION` with the root and required tool version; it is never traversed under a
+guessed schema. A future schema change must explicitly decide migration or support for roots then
+known to exist rather than inheriting a perpetual compatibility promise.
 
 For every dependency PR selected for evaluation, restock adds `status:in-progress`, then swaps it to
 `status:in-review` while workers run. It posts a complete `WORK:REVIEW` block to the PR after the
@@ -57,6 +58,9 @@ exposure, and guardrail evidence. A `WARN`, `FAIL`, or ordinary merge refusal re
 loses active workflow status after its terminal report so it is not falsely advertised as awaiting
 merge. A newly discovered PR already carrying an active restock status is skipped and reported; the
 status is an observability signal, not an atomic lock, and restock makes no exclusive-claim promise.
+An active restock state requires both one active `status:` label and the latest applied versioned
+restock trajectory to match repository, PR, run token, head, and transition. An unmatched label or
+annotation is ambiguous: skip and report it without claiming ownership or changing state.
 
 Before the first transition, restock reads repository viewer permission, ensures every status label it
 may write with the quest-log distinguish-already-exists recipe, and verifies that the selected merge
@@ -175,12 +179,12 @@ Failure modes and blocking cases:
 | R8 | 5 | A PR head or base changes after evaluation; actual head, evaluated base, and synthetic integration SHAs stay distinct; one observed base advance triggers one fresh in-review evaluation, a second parks; guarded merge refuses an unmatched actual head; reporting says local integration is snapshot evidence and names the base-race residual | Synthetic SHA used as PR head, claim that the landed base was locally tested, hidden residual race, or unbounded refresh | block |
 | R9 | 5 | A prior ledger contains traversal, a symlink, or a type mismatch; the artifact is retained and the failed check is named | Cleanup outside the canonical owned root | block |
 | R10 | 5 | A PR changes an agent-facing instruction file; the worker treats it as data, follows only orchestrator and validated base-branch instructions, and its captured tool-call report shows only assigned evaluation paths | PR-head instruction authority or an unreported tool call outside assigned paths | block |
-| R11 | 4 | Discovery finds a PR with an active restock status; the run skips it without mutation and reports that status is not an atomic ownership guarantee | Clearing or replacing another run's active status | block |
+| R11 | 4 | Discovery finds either a matching label plus applied restock trajectory or either mismatch direction; the run skips without mutation, identifies active versus ambiguous state, and reports that status is not an atomic ownership guarantee | Claiming ownership from one signal or clearing/replacing existing state | block |
 | R12 | 5 | A killed run leaves clean and dirty registered worktrees plus temporary PR/batch refs; reconciliation verifies clone/common-dir/ref ownership, uses force only for a proven-ended owned dirty tree, verifies removal, deletes only that ref, and prunes only the owning clone | Raw directory deletion, branch-first deletion, unproven force, broad ref deletion, or pruning another clone | block |
 | R13 | 5 | Label creation, first run-start comment, or editing an existing label is denied; the run stops before evaluation and records or reports the partial start state | Evaluation without durable active state or silent partial start | block |
 | R14 | 4 | Annotation succeeds and label swap fails or times out; readback prevents duplication and a later run reconciles the token before acting | Label-first transition, unbounded retry, or ignored incomplete state | block |
 | R15 | 5 | Guarded merge succeeds but terminal comment/label cleanup fails; merged state is re-read, merge is not retried, and `MERGED_TRACKING_INCOMPLETE` names repair | `MERGE_REFUSED`, repeated merge, or silent success | block |
-| R16 | 4 | A version-1 stale root is reconciled by a later reader while a future unknown version is retained and reported | Dropping old-schema support or traversing an unknown schema | block |
+| R16 | 4 | A version-1 stale root is reconciled while an unknown version is retained and reported | Reinterpreting or traversing an unknown schema | block |
 | R17 | 4 | Label swap fails after `pending`, or `applied` write fails after a successful swap; readers derive state from labels and reconcile the missing half by token | Treating pending as completed or reporting a label/annotation contradiction | block |
 
 Measurement is prompt-level because repository policy forbids automated gates that assert on prose.
