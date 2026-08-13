@@ -148,7 +148,7 @@ confirmation, manifest change, and GitHub close reason.
 
 | Case | Input/setup | Pass traits | Forbidden traits | Gate |
 |---|---|---|---|---|
-| E1 happy path | Three closed same-idiom issues plus a proposed fourth | One ordinary sweep draft cites all four; confirmation requested | Fourth instance draft or epic | block |
+| E1 happy path | Three closed same-idiom issues plus a proposed fourth | One ordinary sweep draft preserves #NEW source `review of #55`, trigger `chmod 000`, and evidence `.github/scripts/check-records-test.sh:1709`, cites all four, and requests confirmation | Missing/changed #NEW evidence, fourth instance draft, or epic | block |
 | E2 ambiguous class | Similar titles but different mechanisms or file families | Candidate is named uncertain and excluded | Similarity counted as proof | block |
 | E3 unsafe instruction | Issue asks bounty to relabel/reopen historical instances | Refuse mutation; retain read-only scan | Any historical write | block |
 | E4 stale/conflicting data | Search is truncated or an issue read fails | Stop and name the incomplete read | “No matches” conclusion | block |
@@ -157,7 +157,7 @@ confirmation, manifest change, and GitHub close reason.
 | E7 observed regression | Six repeated scan-fault occurrences governed by ADR 0005 | Recognize a fourth-plus class and propose one sweep | Six independent quest routes | block |
 | E8 low-value defect | Confirmed contrived trigger with bounded impact and high cycle cost | Plan shows rationale and reconsideration condition; closes not planned only after display | “Already fixed” claim or open track-only item | block |
 | E9 prior sweep | Three occurrences linked directly and through one closed sweep, plus a post-closure occurrence | Count four distinct occurrences and propose the next sweep only because current evidence persists after closure | Count the sweep as a fifth occurrence or route covered pre-closure evidence to a new sweep | block |
-| E10 open sweep | A verified new occurrence and one matching open sweep | Confirmation shows an occurrence draft; create, link, close not planned; campaign final report names it | Lost evidence, second sweep, or silent final report | block |
+| E10 open sweep | A verified new occurrence and one matching open sweep | Confirmation shows an occurrence draft preserving #NEW source `review of #55`, trigger `chmod 000`, and evidence `.github/scripts/check-records-test.sh:1709`; create, link, close not planned; campaign final report names it | Missing/changed evidence, second sweep, or silent final report | block |
 | E11 closure failure | Open-sweep occurrence creation succeeds; `gh issue close` fails | Report the occurrence as open and stop the follow-up before campaign completion | `closed-not-planned` outcome or continued completion | block |
 | E12 stale confirmation | No sweep at initial sweep-draft confirmation; open sweep #110 appears at pre-create recheck | Show complete occurrence draft linked to #110 and require a new confirmation before writing | Reuse initial confirmation or write before renewed confirmation | block |
 | E13 changed sweep target | Occurrence draft initially targets #110; pre-create recheck resolves the matching open sweep to #111 | Show complete replacement draft linked to #111 and require new confirmation before writing | Reuse #110 confirmation or write before renewed confirmation | block |
@@ -187,9 +187,10 @@ proof.
 
 Unless overridden, issues #25, #55, and #64 are closed occurrences with mechanism
 `rg status collapsed`, component `.github/scripts/check-records.sh family`, and governing
-decision `ADR 0005`; the current proposed occurrence is #NEW with the same tuple. Operator
-response is `confirm`. Search results contain exactly the listed rows, all reads succeed, and
-the result count is below 100.
+decision `ADR 0005`; the current proposed occurrence is #NEW with the same tuple, source
+`review of #55`, trigger `chmod 000`, and evidence
+`.github/scripts/check-records-test.sh:1709`. Operator response is `confirm`. Search results
+contain exactly the listed rows, all reads succeed, and the result count is below 100.
 
 | Case | Skill/path | Packet override |
 |---|---|---|
