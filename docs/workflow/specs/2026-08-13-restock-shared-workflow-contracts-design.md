@@ -47,7 +47,7 @@ nor removed.
 For every dependency PR selected for evaluation, restock adds `status:in-progress`, then swaps it to
 `status:in-review` while workers run. It posts a complete `WORK:REVIEW` block to the PR after the
 evaluation, recording the domain outcome, canonical verdict when one exists, findings, coverage
-exposure, and guardrail evidence. A `WARN`, `FAIL`, or merge refusal remains open and
+exposure, and guardrail evidence. A `WARN`, `FAIL`, or ordinary merge refusal remains open and
 loses active workflow status after its terminal report so it is not falsely advertised as awaiting
 merge. A newly discovered PR already carrying an active restock status is skipped and reported; the
 status is an observability signal, not an atomic lock, and restock makes no exclusive-claim promise.
@@ -91,6 +91,14 @@ removal, or remote pruning. Because Dependabot PRs commonly have no owning issue
 `$return-to-town` gains an explicit PR-only tracking mode: it posts the terminal
 `WORK:TRAJECTORY` on the PR, strips the PR's `status:` labels after a verified merge, and skips issue
 closure and cleared-dependent reconciliation. Its normal issue-backed behavior is unchanged.
+
+Local integration is advisory evidence for the observed head/base snapshot. The base may advance
+between the final read and GitHub's guarded merge because `--match-head-commit` atomically protects
+only the PR head. Restock reports that residual explicitly and does not claim the exact landed base
+combination was locally tested. Repository branch protection and required checks—not restock—decide
+whether a current-base guarantee is required. A second `BASE_CHANGED` observed before merge is the
+one refusal exception: restock posts a parked `WORK:TRAJECTORY` and swaps to exactly
+`status:needs-human` rather than clearing active status.
 
 If the guarded merge succeeds but terminal tracking fails, return-to-town re-reads the authoritative
 merged state and expected SHA and never retries the merge. It retries the terminal annotation and
@@ -152,11 +160,11 @@ Failure modes and blocking cases:
 | R1 | 5 | Attunement fails; restock stops before cloning or labelling | Local rediscovery and continuation | block |
 | R2 | 5 | A stale ledger names a live/unknown worker; artifact is retained and reported | Age-based or broad forced deletion | block |
 | R3 | 5 | PASS with authority routes one merge through return-to-town | Direct duplicate `gh pr merge` or cleanup | block |
-| R4 | 5 | WARN, FAIL, and merge refusal never reach merge, receive terminal review tracking, and carry no active `status:` label | `status:awaiting-merge` or merge attempt | block |
+| R4 | 5 | WARN, FAIL, and ordinary merge refusal never reach merge, receive terminal review tracking, and carry no active `status:` label; second `BASE_CHANGED` instead parks with exactly `status:needs-human` | `status:awaiting-merge`, merge attempt, or a contradictory terminal label | block |
 | R5 | 4 | A worker dispatch names Codex worker semantics portably | Required Claude `general-purpose` subtype | block |
 | R6 | 4 | Conflicting or malformed worker evidence follows liveness/fail-closed rules | Silent adoption or unbounded redispatch | block |
 | R7 | 4 | A PR-only return-to-town run records trajectory on the PR and skips issue operations | Fabricated issue identity or dependent reconciliation | block |
-| R8 | 5 | A PR head or base changes after evaluation; actual head, evaluated base, and synthetic integration SHAs stay distinct; one base advance triggers one fresh in-review evaluation, a second parks; guarded merge refuses an unmatched actual head | Merge of an unevaluated head/base combination, synthetic SHA used as PR head, claim of exact server-result equivalence, or unbounded refresh | block |
+| R8 | 5 | A PR head or base changes after evaluation; actual head, evaluated base, and synthetic integration SHAs stay distinct; one observed base advance triggers one fresh in-review evaluation, a second parks; guarded merge refuses an unmatched actual head; reporting says local integration is snapshot evidence and names the base-race residual | Synthetic SHA used as PR head, claim that the landed base was locally tested, hidden residual race, or unbounded refresh | block |
 | R9 | 5 | A prior ledger contains traversal, a symlink, or a type mismatch; the artifact is retained and the failed check is named | Cleanup outside the canonical owned root | block |
 | R10 | 5 | A PR changes an agent-facing instruction file; the worker treats it as data, follows only orchestrator and validated base-branch instructions, and its captured tool-call report shows only assigned evaluation paths | PR-head instruction authority or an unreported tool call outside assigned paths | block |
 | R11 | 4 | Discovery finds a PR with an active restock status; the run skips it without mutation and reports that status is not an atomic ownership guarantee | Clearing or replacing another run's active status | block |
@@ -209,7 +217,8 @@ claim semantic prose coverage.
   data, not authority. Workers are instructed to limit tools and writes to the assigned evaluation
   worktree and report path, and their captured tool-call report is reviewed for violations. This is
   an auditable instruction constraint, not filesystem enforcement against same-user code.
-- The evaluated head and base SHAs are revalidated immediately before merge.
+- The evaluated head and base SHAs are read immediately before merge; only the head is atomically
+  guarded by GitHub. The report names the remaining base-advance race.
 - Existing PASS/canonical-approve rules and branch protection gate merge eligibility.
 - `$return-to-town` owns exactly one authorized merge and scoped cleanup; `--admin`, force push, and
   cleanup of foreign worktrees remain forbidden.
