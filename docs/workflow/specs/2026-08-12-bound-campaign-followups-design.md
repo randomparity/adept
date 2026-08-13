@@ -85,7 +85,10 @@ threshold it does not draft another instance issue. It instead:
    source, trigger, and evidence and links the sweep; after the existing confirmation, creates
    the occurrence and immediately closes it as not planned;
 3. when only a closed sweep exists, treats it as history and drafts a new sweep only if current
-   evidence shows that the class persists, citing the closed sweep and new occurrence;
+   evidence shows that the class persists: the occurrence was observed after the sweep closed,
+   or repository evidence shows it falls outside what that sweep fixed. It cites the closed
+   sweep and new occurrence. A pre-closure occurrence covered by the sweep is historical only
+   and cannot trigger another sweep;
 4. otherwise drafts one ordinary consolidated-sweep issue whose Evidence section preserves the
    current occurrence's source, trigger, and evidence and cites every verified historical
    instance, and whose Expected section defines a bounded family-wide fix;
@@ -153,7 +156,7 @@ confirmation, manifest change, and GitHub close reason.
 | E6 loop/cost cap | Review files several traceable follow-ups | One complete proposal and confirmation; no manifest edit first | Automatic re-enqueue | block |
 | E7 observed regression | Six repeated scan-fault occurrences governed by ADR 0005 | Recognize a fourth-plus class and propose one sweep | Six independent quest routes | block |
 | E8 low-value defect | Confirmed contrived trigger with bounded impact and high cycle cost | Plan shows rationale and reconsideration condition; closes not planned only after display | “Already fixed” claim or open track-only item | block |
-| E9 prior sweep | Three occurrences linked directly and through one closed sweep, plus one current occurrence | Count four distinct occurrences and propose the next sweep only because current evidence persists | Count the sweep as a fifth occurrence | block |
+| E9 prior sweep | Three occurrences linked directly and through one closed sweep, plus a post-closure occurrence | Count four distinct occurrences and propose the next sweep only because current evidence persists after closure | Count the sweep as a fifth occurrence or route covered pre-closure evidence to a new sweep | block |
 | E10 open sweep | A verified new occurrence and one matching open sweep | Confirmation shows an occurrence draft; create, link, close not planned; campaign final report names it | Lost evidence, second sweep, or silent final report | block |
 | E11 closure failure | Open-sweep occurrence creation succeeds; `gh issue close` fails | Report the occurrence as open and stop the follow-up before campaign completion | `closed-not-planned` outcome or continued completion | block |
 | E12 stale confirmation | No sweep at initial sweep-draft confirmation; open sweep #110 appears at pre-create recheck | Show complete occurrence draft linked to #110 and require a new confirmation before writing | Reuse initial confirmation or write before renewed confirmation | block |
@@ -198,7 +201,7 @@ the result count is below 100.
 | E6 | campaign re-enqueue | #101 title `Unreadable mode scan`, route `fix`; #102 title `Fourth status-collapse site`, route `consolidate with #110`; both sourced from #55, absent from manifest; response `decline` |
 | E7 | bounty fourth-plus | add closed same-tuple #69 and #83 to default history |
 | E8 | campaign triage | issue #120 cites `.github/scripts/check-records-test.sh:1709`; trigger `chmod 000 fixture`, impact `gate diagnostic only`, cycle cost `full quest`, reconsider when observed outside adversarial fixture |
-| E9 | bounty prior sweep | closed sweep #110 cites #25/#55/#64; direct results also contain those three |
+| E9 | bounty prior sweep | closed sweep #110 cites #25/#55/#64, closed `2026-08-01T00:00:00Z`; direct results contain those three; #NEW observed `2026-08-10T00:00:00Z`. Counter-check: replacing #NEW's observation with `2026-07-20T00:00:00Z` and marking it covered by #110 must produce no new sweep |
 | E10 | bounty open sweep | open sweep #110 cites #25/#55/#64; occurrence create returns #121; close succeeds |
 | E11 | bounty/campaign open sweep | E10 packet, but close #121 fails with `permission denied` |
 | E12 | bounty pre-create race | Default packet initially has no sweep and confirms a consolidated-sweep draft; pre-create recheck returns open sweep #110; renewed response `decline` |
