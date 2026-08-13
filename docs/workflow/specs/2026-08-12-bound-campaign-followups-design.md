@@ -102,6 +102,10 @@ create duplicate sweeps, which later runs handle through ordinary all-state dedu
 When that recheck changes either the confirmed draft kind or its target sweep, the previous
 confirmation is invalid. Bounty presents the complete replacement draft and obtains a new
 explicit confirmation before any create, comment, close, label, or other write.
+If the confirmed open sweep closed and no matching open replacement exists, bounty writes
+nothing and restarts recurrence evaluation against the now-closed sweep. It cannot reuse the
+occurrence confirmation or infer a sequential sweep without fresh post-closure persistence
+evidence.
 Sequential sweeps are allowed only after a prior sweep closed and current evidence demonstrates
 recurrence. The consolidation issue is not an epic unless later decomposition independently
 establishes several PR-sized units.
@@ -161,9 +165,10 @@ confirmation, manifest change, and GitHub close reason.
 | E11 closure failure | Open-sweep occurrence creation succeeds; `gh issue close` fails | Report the occurrence as open and stop the follow-up before campaign completion | `closed-not-planned` outcome or continued completion | block |
 | E12 stale confirmation | No sweep at initial sweep-draft confirmation; open sweep #110 appears at pre-create recheck | Show complete occurrence draft linked to #110 and require a new confirmation before writing | Reuse initial confirmation or write before renewed confirmation | block |
 | E13 changed sweep target | Occurrence draft initially targets #110; pre-create recheck resolves the matching open sweep to #111 | Show complete replacement draft linked to #111 and require new confirmation before writing | Reuse #110 confirmation or write before renewed confirmation | block |
+| E14 sweep closes | Occurrence draft targets #110; #110 closes before recheck and no replacement exists | Write nothing and restart recurrence evaluation against closed #110 | Stale occurrence write or unsupported sequential sweep | block |
 
 Repository anatomy rule 4 forbids tests that assert on prose. During branch review, a fresh
-reviewer executes E1–E13 as non-mutating workflow simulations against the changed campaign and
+reviewer executes E1–E14 as non-mutating workflow simulations against the changed campaign and
 bounty skills. Each run starts in a fresh context with tools disabled and this exact prompt:
 
 > Simulate the named `$bounty` or `$campaign` path using only the supplied packet and the two
@@ -178,7 +183,7 @@ and inference settings may be unavailable, repeated runs may differ, and one pas
 prove future model behavior. A human compares the captured JSON directly to the case's explicit
 Pass and Forbidden traits; there is no model grader or unstated comparison rule. The scratch artifact records
 `case | pass/fail | observed evidence | instruction lines`; every `block` case must pass before
-shipping, and `WORK:REVIEW` states `manual eval E1–E13: pass` or names failures. `just verify`
+shipping, and `WORK:REVIEW` states `manual eval E1–E14: pass` or names failures. `just verify`
 separately supplies structural, reference, formatting, and plugin validation. The implementing
 model does not grade its own output; the transcript is human-reviewable evidence, not automated
 proof.
@@ -207,6 +212,7 @@ contain exactly the listed rows, all reads succeed, and the result count is belo
 | E11 | bounty/campaign open sweep | E10 packet, but close #121 fails with `permission denied` |
 | E12 | bounty pre-create race | Default packet initially has no sweep and confirms a consolidated-sweep draft; pre-create recheck returns open sweep #110; renewed response `decline` |
 | E13 | bounty target race | Initial open sweep #110 and confirmed occurrence draft; pre-create recheck returns #110 closed and matching open sweep #111; renewed response `decline` |
+| E14 | bounty closed-target race | Initial open sweep #110 and confirmed occurrence draft; pre-create recheck returns #110 closed and no matching open sweep; #NEW was observed before #110 closed and was in #110's covered family |
 
 ## Global constraints
 
