@@ -139,9 +139,13 @@ per-run blob map. Produces final evaluation and repository-gate evidence.
 5. Review `git diff main...HEAD` for scope, naming, and stale old vocabulary. Record final branch,
    base, guardrail result, evaluation run ids, and open findings only in the quest's GitHub
    `WORK:REVIEW`/handoff annotations; do not edit this tracked plan after the proven HEAD.
-6. After the handoff has durably recorded the run ids, move the ignored issue-45 packet, capture,
-   evaluator, oathbind, and gauntlet artifacts to trash. Never delete another run's `.agent/`
-   content.
+6. A defensible in-scope finding from the final diff review enters the same repair loop as step 3:
+   fix and commit it, rerun the complete post-evaluation and `just verify` against the new HEAD,
+   and repeat the diff review. Stop instead of handing off when a finding cannot be resolved.
+7. Only after the final review reports zero open findings and every oathbind, evaluation,
+   adversarial-review, and handoff consumer has finished reading its artifacts, move this run's
+   ignored issue-45 packet, capture, evaluator, oathbind, and gauntlet artifacts to trash. Never
+   delete another run's `.agent/` content.
 
 **Acceptance:** all fixed behavioral traits pass under one independent evaluator, all repository
 guardrails pass, evaluation artifacts remain untracked, and the branch contains only chartered
