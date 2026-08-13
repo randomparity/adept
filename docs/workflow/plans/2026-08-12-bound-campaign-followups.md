@@ -128,9 +128,12 @@ concrete trigger, likely impact, remediation/quest cost, cost/benefit rationale,
 reconsideration condition. Uncertain correctness remains `fix`; uncertain cost/benefit stays
 visible for operator decision.
 
-In Step 4, show the verdict in the plan. After display, post its rationale, close with
+In Step 4, show the verdict in the plan. After display, post its rationale and require that
+comment write to succeed before attempting closure. A failed comment leaves the issue open and
+is a live issue-local blocker. Only after a successful comment, close with
 `gh issue close <N> --reason "not planned"`, verify `state,stateReason`, and record
-`closed-not-planned`. A failed close is a live issue-local blocker, not a closed outcome.
+`closed-not-planned`. A failed close is likewise a live issue-local blocker, not a closed
+outcome; the already-posted rationale remains accurate evidence of the attempted disposition.
 
 Extend manifest recognized terminal outcomes and the final outcome vocabulary without adding a
 new queue status or label.
@@ -155,7 +158,9 @@ line citations at `.agent/evals/issue-91-final.md`.
 
 Expected: every blocking case passes. Specifically E6 declines with no manifest mutation, E8
 closes not planned without claiming fixed, E10 produces the final report row, and E11 stops on
-the actual open occurrence.
+the actual open occurrence. Add a focused E8 fault injection in the same scratch transcript:
+the rationale comment returns `permission denied`; expected is no close attempt, actual open
+state, and a blocked outcome rather than `closed-not-planned`.
 
 Run `just verify` bare.
 
