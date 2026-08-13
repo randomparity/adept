@@ -27,8 +27,10 @@ restock-specific repository capability because attunement does not resolve it.
 
 At startup, the orchestrator allocates one owned run root with `mktemp -d` beneath the session
 scratchpad. The clone, evaluation worktrees, reports, and run ledger all live below that root. A
-run never adopts a path from an earlier invocation. Before evaluating, it reconciles only artifacts
-recorded in its own ledger; an artifact with unresolved ownership is reported and retained. This
+run never adopts a prior root for current work. Before allocating current-run artifacts, it scans
+prior restock run roots beneath the session scratchpad, validates each prior orchestrator-owned
+ledger, and reconciles only ledger-proven artifacts whose worker end was observed. The new ledger
+records only current-run artifacts and every retained prior artifact plus its reason. This
 eliminates cross-run name collisions without deleting unknown state.
 
 For every dependency PR selected for evaluation, restock adds `status:in-progress`, then swaps it to
@@ -36,6 +38,14 @@ For every dependency PR selected for evaluation, restock adds `status:in-progres
 evaluation, recording the domain outcome, canonical verdict when one exists, findings, coverage
 exposure, and guardrail evidence. A `WARN`, `FAIL`, or refused merge remains open and loses active
 workflow status after its terminal report so it is not falsely advertised as awaiting merge.
+
+Each run claims a PR by posting its run token and observed head SHA before evaluation. An existing
+complete active restock claim for the same head makes the later run skip that PR; a stale claim is
+reconciled only when its owning run has an observed end. Every report names the evaluated SHA.
+Immediately before merge, the orchestrator re-reads the PR and proceeds only when its head SHA still
+matches, its claim is still authoritative, checks are green, and the PR is mergeable. A mismatch or
+claim collision is a non-merge terminal result; only the authoritative claimant may clear its own
+active labels.
 
 For a clean `PASS`, restock swaps the PR to `status:awaiting-merge` and invokes
 `$return-to-town <PR>` with the caller's explicit merge authorization, the restock tracking target,
@@ -55,9 +65,12 @@ This decision is recorded by [ADR 0012](../../adr/0012-restock-composes-shared-w
 
 - Attunement failure stops before repository mutation.
 - Scratch allocation failure stops before clone or worktree creation.
-- The ledger records each artifact's creator, path, owning PR/unit, and lifecycle state before use.
-- Startup reconciliation removes only artifacts whose recorded worker has an observed end and whose
-  ownership matches the current run; otherwise it retains them and reports the exact reason.
+- The orchestrator is the sole ledger writer. It records each artifact's creator, canonical root-
+  relative path, owning PR/unit, expected type, and lifecycle state before use.
+- Startup reconciliation validates a prior ledger before acting. The candidate must resolve as a
+  strict descendant of the canonical prior root without following a final symlink and must retain
+  its recorded type. A symlink, traversal, type mismatch, conflicting entry, malformed ledger, or
+  unobserved worker end retains the artifact and reports the exact reason.
 - Worker silence follows `references/dispatch-liveness.md`; elapsed time never authorizes cleanup.
 - A non-clean evaluation never reaches `$return-to-town`.
 - A return-to-town refusal remains a named `MERGE_REFUSED` result with its tracking annotation.
@@ -72,8 +85,9 @@ evaluation reports, tracker state, and authorized merges/cleanup. Allowed source
 results, GitHub state, repository files, worker artifacts, and the run ledger. Workers must not
 invent repository facts, adopt stale artifacts, use a harness-specific subtype as a portable
 contract, or merge outside the authorized clean-PASS path. Missing evidence fails closed. Existing
-turn-budget and liveness bounds remain. Success is structural contract tests plus adversarial review
-showing every shared handoff is explicit.
+turn-budget and liveness bounds remain. Success is a fixed prompt-level scenario evaluation whose
+captured outputs demonstrate every shared handoff and failure branch explicitly, plus repository
+guardrails showing the skill remains structurally valid.
 
 Failure modes and blocking cases:
 
@@ -86,12 +100,19 @@ Failure modes and blocking cases:
 | R5 | 4 | A worker dispatch names Codex worker semantics portably | Required Claude `general-purpose` subtype | block |
 | R6 | 4 | Conflicting or malformed worker evidence follows liveness/fail-closed rules | Silent adoption or unbounded redispatch | block |
 | R7 | 4 | A PR-only return-to-town run records trajectory on the PR and skips issue operations | Fabricated issue identity or dependent reconciliation | block |
+| R8 | 5 | A PR head or active claim changes after evaluation; merge is refused and only the authoritative claimant clears its labels | Merge of a different SHA or foreign-label removal | block |
+| R9 | 5 | A prior ledger contains traversal, a symlink, or a type mismatch; the artifact is retained and the failed check is named | Cleanup outside the canonical owned root | block |
 
-Measurement is structural and deterministic: a shell test extracts the restock and
-return-to-town contracts and asserts required invocations, state transitions, scratch allocation,
-ownership gates, PR-only behavior, and absence of the superseded direct merge/cleanup and fixed-path
-instructions. `just verify` runs the test on Linux and macOS. Adversarial scenario review covers
-ambiguous ownership, stale evidence, missing issues, and refused merges.
+Measurement is prompt-level because repository policy forbids automated gates that assert on prose.
+One fresh scenario worker per R1-R9 receives the changed skill files, a fixed input packet, and the
+neutral request `Apply the supplied workflow instructions to this scenario and return the response
+they require.` Captures are written beneath ignored `.agent/evals/issue-43/` with case id, evaluated
+commit, supplied file blob ids, packet hash, model identity, and raw response. A different fresh
+evaluator receives the captures, this specification, ADR 0012, and the table above; it emits one
+pass/fail result per observable and forbidden trait with instruction-line citations. Missing,
+duplicate, malformed, or extra cases fail the evaluation. The overall gate passes only when R1-R9
+all pass. `just verify` separately proves repository structure, links, formatting, and public safety;
+it does not claim semantic prose coverage.
 
 ## Threat model
 
@@ -107,9 +128,11 @@ ambiguous ownership, stale evidence, missing issues, and refused merges.
 
 - `$attunement` validates instructions, authentication, working-tree state, base branch, and
   architecture context before mutation.
-- Run roots come from `mktemp -d`; derived children remain below the resolved owned root.
-- The ledger and observed worker termination gate cleanup; path age and naming never do.
+- Run roots come from `mktemp -d`; the orchestrator alone writes canonical root-relative ledger
+  entries, and cleanup rejects non-descendants, final symlinks, and type mismatches.
+- A validated prior ledger and observed worker termination gate cleanup; path age and naming never do.
 - Worker output is checked against its assigned unit and artifact before use.
+- The PR claim and evaluated head SHA are revalidated immediately before merge.
 - Existing PASS/canonical-approve rules and branch protection gate merge eligibility.
 - `$return-to-town` owns exactly one authorized merge and scoped cleanup; `--admin`, force push, and
   cleanup of foreign worktrees remain forbidden.
@@ -123,10 +146,11 @@ Those are separate trust boundaries or explicitly excluded terminology work.
 
 ## Verification
 
-The focused test must first fail on the current skill text, then pass after the contract edits.
-Run `just test` for the behavioral suites and `just verify` for the complete repository guardrail.
-The branch review must exercise malformed inputs, cleanup ownership, refused merges, and the
-PR-only tracking path.
+Capture the R1-R9 baseline against the current skill text and require at least one failing case;
+then run the same fixed packets against the implementation and require all cases to pass. Run
+`just verify` for the complete repository guardrail. The branch review must independently exercise
+malformed inputs, cleanup ownership, refused merges, head changes, claim collisions, and the PR-only
+tracking path.
 
 ## Durable workflow context
 
@@ -137,4 +161,3 @@ PR-only tracking path.
 - Architecture relationship: `no-target-declared`
 - Guardrails: `just verify` locally; `just ci` in the Linux/macOS CI matrix
 - ADR/index coupling: not coupled; `docs/adr/README.md` is a directory-index policy, not a table
-
