@@ -119,8 +119,9 @@ classification, reinterpret label policy, silently orphan artifacts, or treat a 
 Fallback behavior for missing evidence is a bounded domain-specific cannot-proceed outcome. It
 becomes `needs-attention` only when the missing evidence itself supports a concrete canonical
 finding; absence alone does not manufacture a verdict. No unbounded loop is introduced. Success
-means fresh scenario workers produce outputs for every case below and an independent evaluator
-can grade those captured outputs consistently against cited governing instructions.
+means fresh scenario workers produce outputs for every case below and one fresh independent
+evaluator grades all fixed captured outputs as passing against cited implementation instructions.
+The evaluation makes no evaluator-to-evaluator consistency claim.
 
 The numeric ratings below are the evaluation-harm scale required by spellcraft's AI-surface
 method, not workflow finding severities: 5 means legal, financial, privacy, security, or
@@ -151,20 +152,27 @@ post-fix runs: `skills/gauntlet/SKILL.md`, `skills/oathbind/SKILL.md`,
 `skills/detect-evil/SKILL.md`, `skills/campaign/SKILL.md`,
 `skills/summon-swarm/SKILL.md`, and `skills/quest-log/SKILL.md`. Each evaluation artifact
 records the full manifest and the git blob id of every entry; a missing file, different manifest,
-or missing blob id makes runs incomparable and the evaluation fails.
+or missing blob id makes runs incomparable and the evaluation fails. The orchestrator resolves
+each blob id with `git cat-file blob <id>`, verifies its hash against the manifest, and supplies
+the exact bytes—not only the path and id—to each scenario worker. Each captured response records
+the paths and blob ids actually supplied.
 
 Evaluation has two read-only stages. First, one fresh most-capable scenario worker per E1–E10
-receives only the frozen charter, ADR, fixed input manifest, its fixed row, and the concrete input
-packet named below. It must return the exact worker/orchestrator response those instructions
+receives only the frozen charter, fixed input manifest with verified file contents, its fixed row,
+and the concrete input packet named below. It treats the supplied skill/template contents as its
+operative instructions; the row is the scenario, not an answer key. It must return the exact
+worker/orchestrator response those instructions
 produce; it does not grade itself. The orchestrator captures each response unchanged in a
 run-unique file under ignored `.agent/evals/`. These are prompt-level simulations: commands,
 tracker writes, and git mutations remain hypothetical, so E5 supplies fixed successful-cleanup,
 failed-cleanup, and mixed-payload command results rather than touching shared git state.
 
-Second, a different fresh most-capable evaluator receives those captured responses plus the
-frozen charter, specification, ADR, fixed input manifest, and E1–E10 table. Its complete prompt
-is: “Grade each captured scenario response against its fixed case. Cite exact skill or design
-lines proving every pass or failure. Do not infer intended fixes from conversation. Numeric
+Second, one different fresh most-capable evaluator receives those captured responses plus the
+frozen charter, specification, ADR, fixed input manifest with verified contents, and E1–E10
+table. Its complete prompt is: “Grade each captured scenario response against its fixed case.
+Every pass trait must cite at least one governing line from the supplied skill or template
+contents. Design or ADR lines may explain an expected requirement or a failure, but cannot prove
+behavioral compliance. Do not infer intended fixes from conversation. Numeric
 evaluation-harm ratings are not canonical finding severities. Write only the required JSON.”
 The dispatch records the actual model identity; an omitted identity is malformed evidence.
 
@@ -198,9 +206,10 @@ The evaluator writes run-unique JSON under ignored `.agent/evals/` with this sha
 }
 ```
 
-All E1–E10 rows must appear once, cite the supplied artifacts, and return `pass`; any `fail`,
-`uncertain`, missing/duplicate case, missing citation, malformed field, wrong run id/commit, or
-omitted model makes the aggregate verdict `fail`. The evaluator receives no authoring transcript
+All E1–E10 rows must appear once, cite at least one governing implementation line for every pass
+trait, and return `pass`; any `fail`, `uncertain`, missing/duplicate case, missing implementation
+citation, design-only pass citation, malformed field, wrong run id/commit, or omitted model makes
+the aggregate verdict `fail`. The evaluator receives no authoring transcript
 or intended fixes. Run it before implementation to establish current failures, after
 implementation, and after any behavior-changing review fix. It is evidence, not an automated
 prose gate; `just verify` remains the deterministic repository gate.
