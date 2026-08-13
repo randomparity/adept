@@ -47,4 +47,3 @@ Record the worker identity, wait site, probe and observation results, hold or re
 artifact dispositions, recovery-chain identifier, and replacement-budget state. Use the owning
 workflow's existing report or ledger. Do not add a tracker or persistence write where that
 workflow has none.
-
