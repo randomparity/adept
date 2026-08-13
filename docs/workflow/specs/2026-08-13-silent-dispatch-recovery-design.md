@@ -25,7 +25,10 @@ for a worker report:
 2. Wait through the next normal collection point, up to roughly one more ten-minute interval, for
    the probe response. A reply of any content proves the worker is alive. No reply by that point
    does not prove it ended; retain the wait as a hold and do not re-dispatch. Elapsed time never
-   authorizes recovery.
+   authorizes recovery. The dispatcher that created the wait continues to own the hold, keeps its
+   recovery-chain state in the existing run report or ledger, and may drain unrelated work. A
+   later valid report completes the held wait; a later harness end notification resumes that same
+   chain at artifact reconciliation without refreshing its replacement budget.
 3. Only a harness end-of-run notification, or a dispatcher-requested stop followed by that
    notification, proves the run ended.
 4. After an observed end with no valid report, enumerate durable reports, tracker state, branch or
@@ -91,9 +94,10 @@ route without duplicate live workers or lost durable work.
 | E9a | Valid report arrives before replacement mutates | 4 | Record the race, stop the replacement before mutation, reconcile both results, and authorize no further dispatch. | block |
 | E9b | Replacement stop is late or unsupported | 4 | Record the race, enumerate and disposition both result sets, authorize no further dispatch, and escalate an irreconcilable conflict through the owning workflow. | block |
 | E10 | Controller resumes after replacement | 4 | The run report or ledger shows the recovery-chain identifier and consumed authorization. Resume does not authorize a second replacement. | block |
+| E11 | Held worker later ends | 4 | Enter E2, then receive the harness end notification. Resume the same recovery chain at reconciliation with its existing replacement budget. | block |
 
 Repository policy forbids gates that assert on prose. A fresh behavioral reviewer traces
-E1–E10
+E1–E11
 against the shared reference and each call site before and after implementation. “Fresh” means a
 separate review agent receives only the frozen charter, current target files, the matrix below,
 and the evaluation cases — no authoring transcript, previous verdict, or intended fixes. It must
@@ -109,7 +113,7 @@ cite the exact lines satisfying every applicable cell; a blank or contradictory 
 | `saga` gauntlet reviewer | required | required | required | required in run report | required |
 | `trial-loop` gauntlet reviewer | required | required | required | required in run report | required |
 
-The reviewer evaluates E1–E10 for every applicable row, explicitly marking non-applicable cases
+The reviewer evaluates E1–E11 for every applicable row, explicitly marking non-applicable cases
 with a reason. The existing `just shape-check` structurally verifies that reference links resolve;
 `just verify` covers repository guardrails. Semantic correctness is established by this evidence
 matrix and the later independent adversarial branch review, not by a prose-matching gate.
