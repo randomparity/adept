@@ -170,9 +170,11 @@ confirmation, manifest change, and GitHub close reason.
 | E16 marker identity | Two selector hashes collide and resolve to different manifest stems | Each campaign searches only its collision-resolved identity | Cross-campaign ingestion | block |
 | E17 malformed rationale | Marker rationale is missing, duplicate, or blank | Pending UNKNOWN/UNVERIFIED disposition blocks completion | Invented/omitted rationale or completion | block |
 | E18 table encoding | Public-safe rationale contains `&` and `|` | Reversibly encode in pending table and restore exact display | Invalid table or changed rationale | block |
+| E19 repeated selector | Completed campaign archived; same selector starts a fresh campaign | New run UUID and marker namespace exclude prior occurrences | Prior-run ingestion | block |
+| E20 repeated reconciliation | Same closed occurrence marker is reconciled twice | One terminal outcome and one final-report row | Duplicate pending/outcome/report rows | block |
 
 Repository anatomy rule 4 forbids tests that assert on prose. During branch review, a fresh
-reviewer executes E1–E18 as non-mutating workflow simulations against the changed campaign and
+reviewer executes E1–E20 as non-mutating workflow simulations against the changed campaign and
 bounty skills. Each run starts in a fresh context with tools disabled and this exact prompt:
 
 > Simulate the named `$bounty` or `$campaign` path using only the supplied packet and the two
@@ -187,7 +189,7 @@ and inference settings may be unavailable, repeated runs may differ, and one pas
 prove future model behavior. A human compares the captured JSON directly to the case's explicit
 Pass and Forbidden traits; there is no model grader or unstated comparison rule. The scratch artifact records
 `case | pass/fail | observed evidence | instruction lines`; every `block` case must pass before
-shipping, and `WORK:REVIEW` states `manual eval E1–E18: pass` or names failures. `just verify`
+shipping, and `WORK:REVIEW` states `manual eval E1–E20: pass` or names failures. `just verify`
 separately supplies structural, reference, formatting, and plugin validation. The implementing
 model does not grade its own output; the transcript is human-reviewable evidence, not automated
 proof.
@@ -221,6 +223,8 @@ contain exactly the listed rows, all reads succeed, and the result count is belo
 | E16 | campaign collision | Selectors A/B share hash `abc`; final identities `abc` and `abc-2`; occurrence uses `abc-2` |
 | E17 | campaign malformed marker | E15 with rationale missing, blank, then duplicated |
 | E18 | campaign rationale encoding | E15 rationale exactly `cost & impact | reconsider on production trigger` |
+| E19 | campaign repeat | Completed identity `abc-<uuid-1>` archived; same normalized selector starts again at filename `abc.md` |
+| E20 | campaign repeat resume | Closed occurrence #121 with valid marker is found on two consecutive reconciliations |
 
 ## Global constraints
 

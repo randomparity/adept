@@ -36,10 +36,13 @@ Use `"$campaign_root/..."` for all reads/writes — a bare `.agent/campaigns/...
 Slug is a short hash of this normal form. Store the full normal form in the manifest as `Normalized-selector`. Use `"$campaign_root/.agent/campaigns/<slug>.md"`.
 
 **Hash collision handling:** On any file match, confirm loaded `Normalized-selector` equals this run's. On mismatch, use `<slug>-2.md`, etc.
-The final collision-resolved manifest filename stem is `Campaign identity`; persist that field
-in the manifest and use its exact value in every bounty prompt, occurrence marker, and recovery
-search. Validate identity and Normalized-selector together before reconciliation; the initial
-short hash alone is never a durable marker namespace.
+On a newly created campaign, mint one opaque public-safe UUID and persist
+`Campaign identity: <collision-resolved-manifest-stem>-<uuid>`. Reuse it unchanged on resume;
+never derive it again. A fresh campaign after an archived completed run mints a new UUID even
+when selector and filename stem repeat. Use the exact identity in every bounty prompt,
+occurrence marker, and recovery search. Validate a non-empty identity and Normalized-selector
+together before reconciliation; neither the initial hash nor filename stem alone is a durable
+marker namespace.
 
 **Keep manifest out of git** without relying on target repo's `.gitignore`** (required before any manifest write or resume mutation**):
 
@@ -72,7 +75,7 @@ Manifest schema:
 - Status: active            # flip to `complete` at end
 - Selector: <raw selector>
 - Normalized-selector: <normal form>
-- Campaign identity: <final manifest filename stem>
+- Campaign identity: <collision-resolved manifest stem>-<run UUID>
 - Completion notes: <text or "none">
 - Public-safe notes: <derived summary or "none">
 - Completion condition: every queued issue closed or merged and pending occurrence dispositions empty
@@ -317,6 +320,12 @@ reports an open, nonconforming, or unreadable occurrence state, record its norma
 occurrence dispositions, block the follow-up, and do not finish the campaign as though it
 closed. Recovery updates the full unique row atomically; it never appends a second row for the
 same occurrence.
+
+Occurrence number is the unique key across Pending occurrence dispositions and occurrence
+Outcomes. Before a terminal append, atomically upsert exactly one outcome for that number and
+remove its pending row in the same manifest write. Re-read and reject any duplicate pending or
+terminal occurrence key. Rediscovering an already-terminal marker changes nothing, so repeated
+resume reconciliation produces one Outcomes entry and one final-report row.
 
 ## 8. Done
 
