@@ -4,6 +4,8 @@
 
 Accepted (2026-08-12)
 
+> **Superseded by [0011](0011-canonical-workflow-review-vocabulary.md)** (2026-08-13)
+
 ## Context
 
 `$forge`'s party mode dispatches three kinds of subagent. The implementer writes

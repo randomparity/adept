@@ -1,4 +1,4 @@
-# 0006 — Canonical workflow review vocabulary
+# 0011 — Canonical workflow review vocabulary
 
 ## Status
 
@@ -40,6 +40,14 @@ severity and verdict enums, and rely on the implementer's first-run test evidenc
 Either may run one focused check for a named unresolved concern, but neither reruns a broad
 suite merely to duplicate evidence. A retry remains nondeterminism evidence. Forge routes
 `critical`, `high`, and `medium` findings to fixes and carries `low` findings to final triage.
+The orchestrator selects models through forge's `Choosing a model` rubric: task reviewers have
+a mid-tier floor and scale with task complexity; the final whole-branch reviewer uses the most
+capable available model. Both templates carry a required explicit model field.
+
+This record supersedes only ADR 0007's decisions to preserve the whole-branch review's
+`Critical / Important / Minor` grades and `Yes | No | With fixes` verdict. ADR 0007 continues
+to govern the packaged diff, file-backed review, bounded return, failure values, verification,
+and conditional reads.
 
 Review artifacts use caller-supplied, run-unique paths. The worker may create or overwrite
 only its assigned artifact and must not dispose of it. The orchestrator clears that path
@@ -57,6 +65,11 @@ the vocabulary is a composed public contract rather than a local wording prefere
 This decision does not rename GitHub `status:*`, `risk:*`, or `priority:*` labels and does not
 change their semantics.
 
+It creates a coordinated wording migration across composed skills and invalidates examples or
+review artifacts that rely on the former enums. That churn is accepted because a partial
+migration would preserve contradictory routing contracts; the branch and its behavioral
+evaluation therefore move together.
+
 ## Considered & rejected
 
 **Keep every local enum and add pairwise conversion tables.** Rejected because the number of
@@ -67,3 +80,12 @@ medium and low failure impacts and would change more established command-pipelin
 
 **Treat all vocabulary as local prose.** Rejected because these values drive routing, retry,
 fix, and hand-off decisions across skills; contradictions already change behavior.
+
+**Do nothing.** Rejected because forge can currently grade the same defect differently by
+review stage, and downstream skills cannot interpret several domain outcomes without local
+guesswork. Leaving that state preserves incorrect routing rather than mere editorial variety.
+
+**Normalize only values that cross skill boundaries.** Rejected because forge's local routing,
+model/test policy, and artifact lifecycle produce the values and evidence that cross those
+boundaries. Standardizing only the handoff would hide contradictions behind a conversion table;
+reconciling both reviewer producers is the smallest change that makes the shared values honest.
