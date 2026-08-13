@@ -60,7 +60,9 @@ consumer having recorded the recovery-chain identifier and unused/consumed repla
 ### Step 1.1 — Establish the failing behavioral evaluation
 
 Dispatch a fresh read-only evaluator with only the frozen charter, the current four skill files,
-and the spec's E1–E11 cases and wait-site matrix. Require JSON rows with these fields:
+the current `references/dispatch-liveness.md` or an explicit `absent` marker, and the spec's
+E1–E11 cases and wait-site matrix. Use a fresh run identifier in the output filename and require
+the evaluated `HEAD` in the top-level JSON. Require rows with these fields:
 
 ```json
 {
@@ -77,8 +79,9 @@ and the spec's E1–E11 cases and wait-site matrix. Require JSON rows with these
 
 The evaluator must cite exact file and line references, explain every `not-applicable`, fail any
 blank or contradictory required cell, and write its output to ignored
-`.agent/evals/issue-48-before.json`. It receives no authoring transcript, earlier verdict, or
-intended fix.
+`.agent/evals/issue-48-before-<run-id>.json`. It receives no authoring transcript, earlier verdict,
+or intended fix. Before consuming it, require its run identifier and evaluated `HEAD` to match the
+current run and pre-implementation commit.
 
 Expected: fail. `restock` and `saga` have no no-report path; `forge` covers only one missing final
 review file and does not apply the contract to every dispatched worker; `trial-loop` retries a
@@ -112,25 +115,33 @@ Keep the reference independent of campaign-specific labels and worktree location
 
 Add short application paragraphs rather than duplicating the reference:
 
-- In `restock`, place the link before “Once every subagent has reported.” Name each evaluation
-  unit as a wait site, the Phase 5 report as the record, and Phase 3 worktrees/PR heads as the
-  reconciliation surface. Forbid Phase 3c reclamation while liveness is unresolved.
+- In `restock`, place the link before “Once every subagent has reported.” Before Phase 3b launches
+  workers, create a unique scratchpad liveness ledger and record its path in the run output. Name
+  each evaluation unit as a wait site and append its chain state before a hold or replacement.
+  Use Phase 3 worktrees/PR heads as the reconciliation surface. Forbid Phase 3c reclamation while
+  liveness is unresolved; Phase 5 incorporates the ledger into the final report.
 - In `forge`, place the link in Party before the per-task loop. Enumerate implementer,
   task-reviewer, fix-worker, and whole-branch reviewer waits. Use `.agent/sdd/progress.md` as the
   ledger, and record chain/budget lines before replacement. Replace the existing final-review
   “silent failure” blind retry with the shared contract; keep `WRITE_FAILED`, `PACKAGE_MISSING`,
   and malformed or non-empty-file validation as first-return error paths.
-- In `saga`, place the link at the one-pass gauntlet dispatch. Use the challenge summary/run report
-  as the record and the draft/findings artifact as reconciliation evidence. If liveness cannot be
-  resolved, stop before the confirmation or tracker writes.
+- In `saga`, place the link at the one-pass gauntlet dispatch. Before dispatch, create a unique
+  scratchpad liveness ledger beside the draft and findings paths and record the chain there before
+  any hold or replacement. Use the draft/findings artifacts as reconciliation evidence. If
+  liveness cannot be resolved, stop before the confirmation or tracker writes and report the
+  ledger path.
 - In `trial-loop`, place the link immediately before the gauntlet subagent dispatch. Explicitly
-  separate “no report/end observed” from step 2's malformed compact-object retry. Use the loop run
-  report as the chain record and the findings path/run ID as reconciliation evidence.
+  separate “no report/end observed” from step 2's malformed compact-object retry. Before iteration
+  1, create a unique scratchpad liveness ledger beside the findings path and append chain state
+  before a hold or replacement. Use the findings path/run ID as reconciliation evidence and carry
+  the ledger result into the loop's run report.
 
 ### Step 1.4 — Re-run the behavioral evaluation
 
-Dispatch a different fresh evaluator with exactly the Step 1.1 inputs and schema, now against the
-changed files. Write `.agent/evals/issue-48-after.json`.
+Dispatch a different fresh evaluator with exactly the Step 1.1 input bundle and schema, now
+against the changed files including `references/dispatch-liveness.md`. Write
+`.agent/evals/issue-48-after-<run-id>.json`; verify its run identifier and evaluated `HEAD` before
+consuming it.
 
 Expected: every required matrix cell cites exact lines; E1–E11 pass for every applicable wait
 site; no consumer contradicts the shared reference; malformed-report paths remain distinct.
@@ -161,6 +172,10 @@ Run an independent adversarial branch review against `main`, including late repo
 resumes, inaccessible artifacts, replacement-budget reuse, and worktree reclamation. Resolve every
 defensible finding and commit each accepted fix separately.
 
+After the final accepted review fix, dispatch another fresh behavioral evaluator with the Step 1.1
+bundle and schema against the final `HEAD`. Require a fresh run identifier, matching evaluated
+`HEAD`, complete matrix, and passing E1–E11 results before full guardrails.
+
 Expected: all criteria and matrix rows have evidence; no implementation path lies outside the
 frozen surface.
 
@@ -174,5 +189,6 @@ Expected: all commands exit 0; status contains only intentional committed branch
 ### Step 2.3 — Rollback and cleanup
 
 The change is instruction-only and reverts with its commits. Do not commit `.agent/` evaluation
-or review artifacts. If an evaluator attempts a repository, tracker, or worktree mutation, stop
-it; all E1–E11 inputs are hypothetical and read-only.
+or review artifacts. After reporting their run identifiers, evaluated commits, and verdicts, move
+the run-specific evaluation artifacts to trash. If an evaluator attempts a repository, tracker,
+or worktree mutation, stop it; all E1–E11 inputs are hypothetical and read-only.
