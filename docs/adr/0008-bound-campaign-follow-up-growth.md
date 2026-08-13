@@ -52,7 +52,9 @@ remains in the open queue.
 Bounty rechecks for an open matching sweep immediately before the confirmed create and never
 knowingly creates a second one. This is not atomic: concurrent bounty runs can still create
 duplicates, which return through the ordinary all-state deduplication flow rather than adding
-locking or classifier state.
+locking or classifier state. If the recheck changes the draft kind or target sweep, the earlier
+confirmation is stale: bounty shows the complete replacement draft and requires a new explicit
+confirmation before any write.
 
 Campaign never automatically expands into review-created work. At re-enqueue it presents all
 new traceable issues, their proposed routing, and any consolidation, then requires explicit
@@ -109,4 +111,5 @@ eleven follow-ups, with repeated quest cycles for one governed gate-script defec
 Decided while designing issue #91, including the operator's decisions to close low-value
 defects as not planned, use an ordinary consolidated issue rather than an epic, make bounty
 discover historical recurrence without mutating old issues, create and close a distinct
-occurrence when its sweep is already open, and surface that closure in campaign's final report.
+occurrence when its sweep is already open, surface that closure in campaign's final report, and
+invalidate confirmation when the pre-create recheck changes the confirmed draft.
