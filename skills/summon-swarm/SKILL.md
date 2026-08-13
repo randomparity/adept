@@ -1,6 +1,6 @@
 ---
 name: summon-swarm
-description: "Offload high-volume, well-specified generation to parallel OpenAI Codex CLI workers. Use when a job splits into independent worker-sized tasks (content batches, test generation, bulk refactors) and Codex CLI is installed and logged in — The current Codex session decomposes, briefs, spawns worker `codex exec` runs in parallel, and review-gates every output. Not for judgment-dense work this session should do itself, or for coordinating subagents on one complex change."
+description: "Offload high-volume, well-specified generation to parallel OpenAI Codex CLI workers. Use when a job splits into independent worker-sized tasks (content batches, test generation, bulk refactors) and Codex CLI is installed and logged in — The current Codex session decomposes, briefs, spawns worker `codex exec` runs in parallel, and review-gates every output. Not for judgment-dense work this session should do itself, or for coordinating workers on one complex change."
 ---
 
 # Codex Fleet

@@ -19,7 +19,7 @@ this skill writes nothing to GitHub, git, or the filesystem. Its output feeds
    beyond what the text and code support.
 4. **Assess and report** (to the user only — no writes; the hand-off to `$quest` is
    **in-session only**, since nothing is persisted for a later session or a dispatched
-   subagent to read):
+   worker to read):
    - **Blast radius** — the files/modules affected, and whether the change is local or
      cross-cutting.
    - **Change hazards** — call out any of: migrations, auth/permissions, public API/contract,

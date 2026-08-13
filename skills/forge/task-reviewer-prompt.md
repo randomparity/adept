@@ -1,15 +1,15 @@
-# Task reviewer subagent prompt
+# Task reviewer worker prompt
 
 The dispatch template for reviewing one completed task. The reviewer reads that
-task's diff once and comes back with two verdicts — whether the work matches
-what was asked for, and whether it is well built.
+task's diff once and comes back with a spec-compliance check plus one canonical
+review verdict covering whether the work matches and is well built.
 
 **Purpose:** confirm one task's implementation does what its requirements say,
 no less and no more, and that the result is clean, tested and maintainable.
 
 Its flaky-test wording restates the policy in `references/true-seeing.md`
 instead of linking it. That duplication is deliberate: this text is pasted into
-a subagent working in the target repository, where a relative link into this
+a worker operating in the target repository, where a relative link into this
 repo's `references/` would not resolve. Do not collapse it into a link.
 
 ```
@@ -137,7 +137,7 @@ Worker (reviewer):
     question you would otherwise dispose of with a bare "yes". Brevity plus
     citations is what the orchestrator can actually act on.
 
-    What you send back *is* the report — lead with the spec verdict. After that,
+    What you send back *is* the report — lead with the spec-compliance check. After that,
     each line is either a verdict, a cited finding, or a check you performed.
     Nothing introducing it, nothing describing your method, nothing rounding it
     off.
@@ -215,4 +215,4 @@ reviewer's verdict at `needs-attention`; the orchestrator may disposition it in
 the ledger and advance.
 
 One fix dispatch can answer spec gaps and quality findings together, and the
-re-review that follows covers both verdicts.
+re-review that follows covers both the check and the canonical verdict.

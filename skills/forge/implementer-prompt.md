@@ -1,10 +1,10 @@
-# Implementer subagent prompt
+# Implementer worker prompt
 
 The dispatch template for handing one plan task to an implementer.
 
 Its flaky-test wording restates the policy in `references/true-seeing.md`
 instead of linking it. That duplication is deliberate: this text is pasted into
-a subagent working in the target repository, where a relative link into this
+a worker operating in the target repository, where a relative link into this
 repo's `references/` would not resolve. Do not collapse it into a link.
 
 ```

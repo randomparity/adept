@@ -1,6 +1,6 @@
 ---
 name: forge
-description: "Implement an approved plan with test-driven development, direct or subagent- driven execution, focused verification, and the repository guardrail suite. Use when asked to build with TDD, execute an implementation plan, or continue the build phase of an issue workflow."
+description: "Implement an approved plan with test-driven development, direct or worker-driven execution, focused verification, and the repository guardrail suite. Use when asked to build with TDD, execute an implementation plan, or continue the build phase of an issue workflow."
 ---
 # Build With TDD
 
@@ -9,7 +9,7 @@ workspace with **pocket dimension**, then pick an execution mode by what
 `$spellcraft` produced:
 
 - **A plan exists and its tasks are mostly independent** → **party**: a fresh
-  implementer subagent per task, each followed by a two-stage review — spec
+  implementer worker per task, each followed by a two-stage review — spec
   compliance, then code quality.
 - **No plan, because this is a trivial bugfix or a caller-verified
   `governed-small-change` — or a plan whose tasks are too tightly coupled to
@@ -19,10 +19,10 @@ workspace with **pocket dimension**, then pick an execution mode by what
 `$dispel`, `$deliver` and `$return-to-town` follow and own integration,
 so neither mode presents an integration menu and neither takes a merge, push, or
 discard. That is a property of the run, so the implementer and reviewer
-subagents dispatched by **party** inherit it; their prompts say so.
+workers dispatched by **party** inherit it; their prompts say so.
 
 **Never start implementation on `main` or `master` without explicit consent.**
-This binds both modes and every subagent either one dispatches.
+This binds both modes and every worker either one dispatches.
 
 When the caller supplies a governed-small-change classification with its revalidated decision reference, decision kind, accepted status, governed behavior, and acceptance criteria, reject any supplied or auto-discovered plan and write and run the focused failing test as the first executable proof.
 
@@ -149,18 +149,18 @@ Stop on a genuine blocker — a missing dependency, a test that will not pass, a
 instruction you do not understand, a verification that fails repeatedly — and
 say so. Guessing past a blocker produces work that looks finished and is not.
 
-## Party — subagent-driven execution
+## Party — worker-driven execution
 
-A fresh implementer subagent per task, a two-stage task review after each, and
+A fresh implementer worker per task, a two-stage task review after each, and
 one broad whole-branch review at the end. The isolated context is the mechanism:
-a subagent that inherits your session's history loses focus, so construct
+a worker that inherits your session's history loses focus, so construct
 exactly what each one needs instead of letting it inherit. It also keeps your
 own context for coordination.
 
-Honor repo-level subagent and worktree rules. If repo instructions require
-mutating subagents to work in separate worktrees, obey that. Otherwise,
-sequential subagent dispatch on the same feature branch is allowed. **Never
-dispatch mutating subagents in parallel in the same working tree** — they
+Honor repo-level worker and worktree rules. If repo instructions require
+mutating workers to use separate worktrees, obey that. Otherwise,
+sequential worker dispatch on the same feature branch is allowed. **Never
+dispatch mutating workers in parallel in the same working tree** — they
 conflict.
 
 Execute all tasks without pausing to check in. The only reasons to stop are a
@@ -327,7 +327,7 @@ single-file mechanical fixes.
 - the TDD requirements below
 - the report-file path, named after the brief (`…/task-N-brief.md` →
   `…/task-N-report.md`)
-- the **subagent report contract** (`AGENTS.md`), last, so the implementer
+- the **worker report contract** (`AGENTS.md`), last, so the implementer
   returns a condensed report — references, not content — rather than its whole
   transcript
 
@@ -338,7 +338,7 @@ A dispatch observed in practice ran to 42k characters, essentially all of it
 that accumulated history.
 
 Hand artifacts over as **files**, not pasted text. Anything you paste into a
-prompt, and anything a subagent prints back, stays resident in your context and
+prompt, and anything a worker prints back, stays resident in your context and
 is re-read on every later turn. The reviewer gets three paths — the brief, the
 report, and the review package — plus the constraints that bind the task. Fix
 dispatches append to the same report file.
@@ -371,7 +371,7 @@ flaked test, where re-running it is the evidence the flake policy under
 *Guardrails* rejects. Dispose of it where reported flakes are dispositioned,
 above, rather than by dispatching a fix that re-runs it.
 
-If the **final** review returns findings, send **one** fix subagent and give it
+If the **final** review returns findings, send **one** fix worker and give it
 the review file's path rather than a list — a list is the resident context cost
 the review file exists to remove. Per-finding fixers each rebuild context and
 re-run suites, and one real session's final-review wave cost more than all its
@@ -435,7 +435,7 @@ commits they name are on disk whether or not you recall making them.
 ### Never
 
 - Let a task through unreviewed, or settle for a report carrying only one of the
-  two verdicts. Both are required: does it meet the spec, and is it good code.
+  a spec-compliance check and canonical verdict. Both are required.
 - Accept "close enough" on spec compliance, or let an implementer's self-review
   stand in for the task review.
 - Make a worker read the whole plan file instead of its brief.
@@ -449,7 +449,7 @@ separate classifications and never map to severity.
 
 ## TDD rules
 
-Whoever writes code — subagent or this session — works to the standard in
+Whoever writes code — a worker or this session — works to the standard in
 [trial-by-fire](../../references/trial-by-fire.md):
 
 1. Write the failing test first.

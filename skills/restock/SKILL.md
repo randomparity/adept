@@ -221,7 +221,7 @@ Verify the default branch is healthy before evaluating any PR.
 
 1. `git checkout "$DEFAULT_BRANCH"`
 2. Discover the build system — follow the same discovery process
-   described in Phase 3's subagent instructions (read CI workflows
+   described in Phase 3's worker instructions (read CI workflows
    first, then Makefile, then language-specific defaults)
 3. Run the build command. If it fails, **stop the entire command**
    and report: "`$DEFAULT_BRANCH` build is broken. Fix it before
@@ -243,7 +243,7 @@ Verify the default branch is healthy before evaluating any PR.
    - List of passing tests
    - Build output summary
 
-Store the baseline data — subagents need it for comparison.
+Store the baseline data — workers need it for comparison.
 
 ## Phase 2: Dependency Graph Analysis
 
@@ -307,7 +307,7 @@ git fetch origin pull/{number}/head:pr-{number}
 ```
 
 Then give each work unit its own worktree. Phase 3b runs up to 5 units
-concurrently against this one clone, so a `git checkout` per subagent would
+concurrently against this one clone, so a `git checkout` per worker would
 have them overwrite each other's files mid-build. Worktrees go outside the
 clone, so repo-wide tooling inside it never walks another unit's tree:
 
@@ -330,26 +330,26 @@ instead of sharing one warm tree — that sharing is what was corrupting the
 results. And because the clone is blobless, checking out a worktree fetches the
 blobs it needs, so these commands need network, not just the clone.
 
-### 3b. Launch subagents
+### 3b. Launch workers
 
-Launch up to 5 subagents in parallel using Codex multi-agent tooling. Each
+Launch up to 5 workers in parallel using Codex multi-agent tooling. Each
 call must use:
 - `subagent_type: "general-purpose"`
 - The appropriate prompt below (library or actions)
 
-Send all subagent dispatches in a **single message** for parallel execution.
+Send all worker dispatches in a **single message** for parallel execution.
 If more than 5 work units, wait for the current wave to complete
 before launching the next.
 
-Pass each subagent:
+Pass each worker:
 - The repo directory path
 - The worktree path created for its unit in Phase 3a
 - The PR number(s) and title(s)
 - The baseline dependency tree from Phase 1
 - The repo's build and test commands discovered in Phase 1
-- `$DEFAULT_BRANCH` — a subagent diffs and merges against it and has no way to
+- `$DEFAULT_BRANCH` — a worker diffs and merges against it and has no way to
   resolve it itself, so substitute the resolved name into `{default_branch}`
-  below rather than leaving the placeholder for the subagent to guess
+  below rather than leaving the placeholder for the worker to guess
 
 ### Subagent prompt: Library Dep Evaluation
 
