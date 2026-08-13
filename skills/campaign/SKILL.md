@@ -363,7 +363,7 @@ A `merged` row is drained whether or not its branch and worktree have been clean
 **Issue-local blockers** don't halt the batch. Drain ready work, mark blocked with reason, continue.
 
 **GitHub is the parked state** (quest-log skill). Who writes the label depends on who parked it:
-- **Subagent reported blocker** → it already posted `WORK:TRAJECTORY` and set `status:blocked`/`status:needs-human`. Record `Status: blocked` with reason from report. Don't rewrite label.
+- **Worker reported blocker** → it already posted `WORK:TRAJECTORY` and set `status:blocked`/`status:needs-human`. Record `Status: blocked` with reason from report. Don't rewrite label.
 - **You block it** (triage inconclusive, merge-phase blocker, orchestrator decision) → post `WORK:TRAJECTORY` note, ensure-create and set label (`status:blocked` for external dependency, `status:needs-human` for human diagnosis).
 
 Ensure manifest row and GitHub state agree before moving on.

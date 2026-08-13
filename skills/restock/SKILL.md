@@ -351,7 +351,7 @@ Pass each worker:
   resolve it itself, so substitute the resolved name into `{default_branch}`
   below rather than leaving the placeholder for the worker to guess
 
-### Subagent prompt: Library Dep Evaluation
+### Worker prompt: Library Dep Evaluation
 
 Use this prompt for each library dep work unit.
 
@@ -548,7 +548,7 @@ Format the final report:
 
 ---
 
-### Subagent prompt: Actions Dep Evaluation
+### Worker prompt: Actions Dep Evaluation
 
 Use this prompt for each GitHub Actions version bump PR.
 
