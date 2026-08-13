@@ -61,9 +61,13 @@ exact prompt, substituting the full current skill text for `<SKILL>` and the pac
 ```text
 You are a read-only behavioral evaluator. Use only the supplied skill text and hypothetical
 packet; do not call tools or GitHub. Trace the instructions from invocation until stop. Return
-JSON only with: packet, route, state_read_before_routing, mergeability_read_before_state,
-polls_computed_fields, enters_post_merge_cleanup, result, instruction_lines, pass. The pass
-field is true only when the observed route exactly matches the packet's expected result.
+JSON only with: packet, route, state_dispatched_before_computed_field_interpretation,
+polls_computed_fields, enters_post_merge_cleanup, result, instruction_lines, pass. Querying all
+fields in one snapshot is not interpretation. Set pass using these packet-specific predicates:
+V1 and V1b require state-first dispatch, no computed-field poll, and cleanup entered; V2
+requires state-first OPEN dispatch followed by computed-field evaluation and the existing open
+route; V3 requires state-first dispatch, no computed-field poll, and no cleanup. The observed
+route must also match the packet's expected result.
 
 SKILL:
 <SKILL>
@@ -95,8 +99,8 @@ and cleanup, `CLOSED` stops without cleanup, and only `OPEN` evaluates or polls
 Give a fresh, tools-disabled reviewer the changed skill and fixed packets V1, V1b, V2, and V3
 from the spec, using the exact Step 1.1 prompt independently for each packet. Save the complete
 results as a JSON array in ignored `.agent/evals/issue-76-after.json`. Each result must cite
-the instruction lines that decide routing and explicitly report whether mergeability was read
-or computed fields were polled before state dispatch.
+the instruction lines that decide routing and explicitly report state/computed-field ordering
+and polling. Every packet-specific predicate in Step 1.1 must be satisfied.
 
 Expected: all pass. V1 performs no poll, V2 preserves open-PR behavior, and V3 performs no
 post-merge cleanup.
