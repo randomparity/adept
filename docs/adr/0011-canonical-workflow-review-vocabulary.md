@@ -33,9 +33,15 @@ orchestrator does with it.
 
 Oathbind's scope classifications stay orthogonal to severity: each defensible concern also
 receives an impact-based canonical severity; `unsupported` is rejection evidence rather than
-a finding. Restock converts `PASS` to `approve` and both `WARN` and `FAIL` to
-`needs-attention`, preserving the local outcome to distinguish human judgment from failed
-evidence. Its matrix assessment is coverage exposure, not a severity.
+a finding. Oathbind returns `approve` only when it has no defensible scope finding and otherwise
+returns `needs-attention`.
+
+Restock's `PASS | WARN | FAIL` remain evaluation outcomes, not review verdicts. When a consumer
+needs a canonical verdict, `PASS` maps to `approve` only with no defensible concern; `WARN` or
+`FAIL` maps to `needs-attention` only when accompanied by at least one canonical finding. An
+outcome without those preconditions has no canonical verdict and stays in restock's domain
+routing. Restock preserves the local outcome to distinguish judgment, failed evidence, and a
+clean evaluation. Its matrix assessment is coverage exposure, not a severity.
 
 Reserve `blocked` for a workflow or issue that cannot proceed. Qualify narrower outcomes,
 such as a refused dependency merge, instead of emitting bare `BLOCKED`. Name each risk axis:
