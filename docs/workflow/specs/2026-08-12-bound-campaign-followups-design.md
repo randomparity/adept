@@ -56,9 +56,14 @@ modify them. With no new issues, campaign proceeds directly to its drained-state
 
 ## Bounty recurrence contract
 
-Bounty's existing all-state dedup gate runs bounded searches for each evidenced identity
-dimension, rather than relying on one title-overlap query. It follows links from any matched
-consolidated sweep and examines plausible matches for a defect-class tuple:
+Bounty's existing all-state dedup gate runs one all-state `gh search issues --limit 100` query
+for each evidenced identity dimension, rather than relying on one title-overlap query. Exactly
+100 results means that query is saturated: bounty may proceed when it already verified the
+three historical occurrences needed for fourth-plus routing, but it cannot assert a
+below-threshold result. It follows directly cited issue numbers from matched consolidated
+sweeps, deduplicated and capped at 100 distinct links; reaching that cap has the same saturation
+rule. A failed query or linked-issue read is degraded. The resulting candidates are examined
+for a defect-class tuple:
 
 1. the same failure mechanism or faulty idiom;
 2. the same component or file family;
@@ -150,17 +155,44 @@ confirmation, manifest change, and GitHub close reason.
 | E11 closure failure | Open-sweep occurrence creation succeeds; `gh issue close` fails | Report the occurrence as open and stop the follow-up before campaign completion | `closed-not-planned` outcome or continued completion | block |
 
 Repository anatomy rule 4 forbids tests that assert on prose. During branch review, a fresh
-reviewer executes E1–E11 as table-driven, non-mutating workflow simulations against the changed
-campaign and bounty skills. For each fixed Input/setup cell, the reviewer plays the specified
-GitHub reads and operator response into the relevant skill steps without making GitHub writes,
-then captures the resulting verdict, draft, confirmation prompt, intended actions, stop/continue
-decision, and final-report row where applicable. It compares those observed artifacts to the
-Pass and Forbidden traits and cites the instruction lines responsible. The scratch review
-artifact records `case | pass/fail | observed evidence | instruction lines`; every `block` case
-must pass before shipping, and the compact `WORK:REVIEW` summary states
-`manual eval E1–E11: pass` or names the failures. `just verify` separately supplies structural,
-reference, formatting, and plugin validation. The implementing model does not grade its own
-output; the fresh reviewer's transcript is human-reviewable evidence, not an automated proof.
+reviewer executes E1–E11 as non-mutating workflow simulations against the changed campaign and
+bounty skills. Each run starts in a fresh context with tools disabled and this exact prompt:
+
+> Simulate the named `$bounty` or `$campaign` path using only the supplied packet and the two
+> changed skill files. Do not call tools or make writes. Return JSON with `case`, `verdict`,
+> `draft_kind`, `confirmation`, `intended_actions`, `stop_or_continue`, and `final_report_row`,
+> using `null` for inapplicable fields. Do not judge whether the result passes.
+
+The reviewer records its model identifier when available, the complete supplied packet, and the
+returned JSON. A separate review pass compares that JSON to the case's Pass and Forbidden
+traits and cites the instruction lines responsible. The scratch artifact records
+`case | pass/fail | observed evidence | instruction lines`; every `block` case must pass before
+shipping, and `WORK:REVIEW` states `manual eval E1–E11: pass` or names failures. `just verify`
+separately supplies structural, reference, formatting, and plugin validation. The implementing
+model does not grade its own output; the transcript is human-reviewable evidence, not automated
+proof.
+
+### Fixed eval packets
+
+Unless overridden, issues #25, #55, and #64 are closed occurrences with mechanism
+`rg status collapsed`, component `.github/scripts/check-records.sh family`, and governing
+decision `ADR 0005`; the current proposed occurrence is #NEW with the same tuple. Operator
+response is `confirm`. Search results contain exactly the listed rows, all reads succeed, and
+the result count is below 100.
+
+| Case | Skill/path | Packet override |
+|---|---|---|
+| E1 | bounty fourth-plus | default packet |
+| E2 | bounty class match | #64 mechanism is `unsafe path resolution`; titles remain similar |
+| E3 | bounty fourth-plus | operator instruction is `reopen and relabel #25`; response `confirm` |
+| E4 | bounty search | mechanism query returns exactly 100 rows and only #25/#55 verify |
+| E5 | bounty fourth-plus | response `decline` |
+| E6 | campaign re-enqueue | new issues #101/#102 from #55; neither is in manifest; response `decline` |
+| E7 | bounty fourth-plus | add closed same-tuple #69 and #83 to default history |
+| E8 | campaign triage | issue #120 trigger `chmod 000 fixture`, impact `gate diagnostic only`, cycle cost `full quest`, reconsider when observed outside adversarial fixture |
+| E9 | bounty prior sweep | closed sweep #110 cites #25/#55/#64; direct results also contain those three |
+| E10 | bounty open sweep | open sweep #110 cites #25/#55/#64; occurrence create returns #121; close succeeds |
+| E11 | bounty/campaign open sweep | E10 packet, but close #121 fails with `permission denied` |
 
 ## Global constraints
 
