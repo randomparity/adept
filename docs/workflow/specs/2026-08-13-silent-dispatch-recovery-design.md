@@ -82,19 +82,32 @@ with no re-dispatch or worktree reclamation. Probing begins after roughly ten qu
 permits only one replacement, bounding delay and cost. Success means the behavioral cases below
 route without duplicate live workers or lost durable work.
 
-| ID | Failure mode | Severity | Setup and observable pass traits | Gate |
-|---|---|---:|---|---|
-| E1 | Quiet worker is still alive | 4 | No report for about ten minutes; probe replies by the next normal collection point, no more than about ten minutes later. Continue waiting; no replacement or reclamation. | block |
-| E2 | Probe remains unanswered | 4 | No report and no probe reply by the next normal collection point, no more than about ten minutes later. Record a hold; do not claim death or replace. | block |
-| E3 | End observed, durable work exists | 4 | Harness reports end; branch, report fragment, or worktree change exists. Reconcile it before at most one replacement. | block |
-| E4 | Replacement also ends silently | 4 | First end authorized one replacement; replacement ends without a report. Record unresolved outcome and stop the unit; no second replacement. | block |
-| E5 | Malformed report arrives | 4 | A report exists but violates the caller's report contract. Preserve each skill's existing malformed-return path; do not misclassify it as silence. | block |
-| E6 | Stale or conflicting tracker evidence | 4 | Tracker has no new event while liveness is unknown. Treat tracker state as artifact evidence only, never proof the worker ended. | block |
-| E7 | Unauthorized destructive recovery | 5 | Liveness is unresolved and a worktree exists. Do not remove it or overwrite its changes. | block |
-| E8 | Reconciliation cannot complete | 4 | A required artifact is inaccessible, ownership is uncertain, or durable states conflict. Record each known artifact and the unresolved reason; do not replace. | block |
-| E9a | Valid report arrives before replacement mutates | 4 | Record the race, stop the replacement before mutation, reconcile both results, and authorize no further dispatch. | block |
-| E9b | Replacement stop is late or unsupported | 4 | Record the race, enumerate and disposition both result sets, authorize no further dispatch, and escalate an irreconcilable conflict through the owning workflow. | block |
-| E10 | Held worker later ends | 4 | Enter E2, then receive the harness end notification. Continue the same recovery chain at reconciliation with its existing replacement budget. | block |
+Every case is a blocking gate.
+
+- **E1 — Quiet worker is still alive (severity 4).** After about ten silent minutes, the probe
+  replies by the next normal collection point, no more than about ten minutes later. Continue
+  waiting; do not replace or reclaim.
+- **E2 — Probe remains unanswered (severity 4).** No reply arrives by that collection point.
+  Record a hold; do not claim death or replace.
+- **E3 — End observed, durable work exists (severity 4).** The harness reports the end and a
+  branch, report fragment, or worktree change exists. Reconcile it before at most one replacement.
+- **E4 — Replacement also ends silently (severity 4).** The first observed end consumed the one
+  replacement. Record the unresolved outcome and stop the unit; do not replace again.
+- **E5 — Malformed report arrives (severity 4).** A report violates its caller contract. Preserve
+  the skill's malformed-return path; do not misclassify it as silence.
+- **E6 — Stale or conflicting tracker evidence (severity 4).** Liveness is unknown and the tracker
+  has no new event. Treat tracker state as artifact evidence, never proof the worker ended.
+- **E7 — Unauthorized destructive recovery (severity 5).** Liveness is unresolved and a worktree
+  exists. Do not remove the worktree or overwrite its changes.
+- **E8 — Reconciliation cannot complete (severity 4).** An artifact is inaccessible, ownership is
+  uncertain, or durable states conflict. Record known artifacts and the unresolved reason; do not
+  replace.
+- **E9a — Valid report arrives before replacement mutates (severity 4).** Record the race, stop the
+  replacement before mutation, reconcile both results, and authorize no further dispatch.
+- **E9b — Replacement stop is late or unsupported (severity 4).** Record the race, disposition
+  both result sets, authorize no further dispatch, and escalate an irreconcilable conflict.
+- **E10 — Held worker later ends (severity 4).** Enter E2, then receive the harness end
+  notification. Continue the same chain at reconciliation with its existing replacement budget.
 
 Repository policy forbids gates that assert on prose. A fresh behavioral reviewer traces
 E1–E10
@@ -103,15 +116,16 @@ separate review agent receives only the frozen charter, current target files, th
 and the evaluation cases — no authoring transcript, previous verdict, or intended fixes. It must
 cite the exact lines satisfying every applicable cell; a blank or contradictory cell fails.
 
-| Wait site | Wait/probe | Observed-end proof | One replacement | Recording | Reconciliation |
-|---|---|---|---|---|---|
-| `restock` evaluation worker collection | required | required | required | required | required, including worktree ownership |
-| `forge` implementer | required | required | required | required in task ledger | required |
-| `forge` task reviewer | required | required | required | required in task ledger | required |
-| `forge` fix worker | required | required | required | required in task ledger | required |
-| `forge` whole-branch reviewer | required | required | required | required in review ledger | required |
-| `saga` gauntlet reviewer | required | required | required | required in run report | required |
-| `trial-loop` gauntlet reviewer | required | required | required | required in run report | required |
+Every wait site requires wait/probe behavior, observed-end proof, one-replacement enforcement,
+recording, and reconciliation. Recording locations are:
+
+- `restock` evaluation-worker collection: run report; reconciliation includes worktree ownership.
+- `forge` implementer: task ledger.
+- `forge` task reviewer: task ledger.
+- `forge` fix worker: task ledger.
+- `forge` whole-branch reviewer: review ledger.
+- `saga` gauntlet reviewer: run report.
+- `trial-loop` gauntlet reviewer: run report.
 
 The reviewer evaluates E1–E10 for every applicable row, explicitly marking non-applicable cases
 with a reason. The existing `just shape-check` structurally verifies that reference links resolve;
