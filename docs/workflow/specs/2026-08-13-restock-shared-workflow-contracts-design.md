@@ -79,14 +79,17 @@ handling follows the same order: verified collision annotation first, then exact
 
 For a clean `PASS`, restock swaps the PR to `status:awaiting-merge` and invokes
 `$return-to-town <PR>` with the caller's explicit merge authorization, the restock tracking target,
-the evaluated head SHA and base SHA, the branch/worktree ownership recorded in the ledger, and the
-discovered base/guardrails. Return-to-town re-reads the live base before merge. If only the base
-advanced, restock integrates that base into the evaluation branch, reruns the discovered guardrails,
-and updates the evaluated base/head evidence before returning; a failure becomes non-merge terminal
-evidence. Return-to-town passes the current evaluated head SHA to GitHub's guarded merge operation
-and accepts required checks only for that current head. The final head check and merge are one
-GitHub operation rather than a local read followed by an unguarded merge. Restock does not repeat
-merge, branch deletion, worktree
+the actual PR head SHA, evaluated base SHA, and tested synthetic integration commit SHA, plus the
+branch/worktree ownership recorded in the ledger and discovered guardrails. Return-to-town re-reads
+the live base before merge. A base mismatch returns typed `BASE_CHANGED` without merge or cleanup.
+Restock then swaps back to `status:in-review`, freshly fetches the unchanged actual PR head and new
+base, creates and tests one synthetic integration commit, posts replacement evaluation evidence,
+and invokes return-to-town with a wholly new immutable context. A second `BASE_CHANGED` parks as
+`status:needs-human`; it never loops. Return-to-town passes only the actual live PR head SHA to
+GitHub's guarded merge operation and accepts required checks only for that head. The synthetic SHA
+proves the exact head/base combination locally tested; it is never presented as the server PR head.
+The final server-head check and merge are one GitHub operation rather than a local read followed by
+an unguarded merge. Restock does not repeat merge, branch deletion, worktree
 removal, or remote pruning. Because Dependabot PRs commonly have no owning issue,
 `$return-to-town` gains an explicit PR-only tracking mode: it posts the terminal
 `WORK:TRAJECTORY` on the PR, strips the PR's `status:` labels after a verified merge, and skips issue
@@ -157,9 +160,9 @@ Failure modes and blocking cases:
 | R5 | 4 | A worker dispatch names Codex worker semantics portably | Required Claude `general-purpose` subtype | block |
 | R6 | 4 | Conflicting or malformed worker evidence follows liveness/fail-closed rules | Silent adoption or unbounded redispatch | block |
 | R7 | 4 | A PR-only return-to-town run records trajectory on the PR and skips issue operations | Fabricated issue identity or dependent reconciliation | block |
-| R8 | 5 | A PR head or base changes or multiple live claims exist after evaluation; base advance triggers re-evaluation, guarded merge refuses an unmatched head, and every collision contender leaves exactly `status:needs-human` until a complete operator resolution | Merge of an unevaluated head/base combination, another active status, or unilateral collision cleanup | block |
+| R8 | 5 | A PR head or base changes or multiple live claims exist after evaluation; actual head, evaluated base, and synthetic integration SHAs stay distinct; one base advance triggers one fresh in-review evaluation, a second parks; guarded merge refuses an unmatched actual head; collision contenders leave exactly `status:needs-human` | Merge of an unevaluated head/base combination, synthetic SHA used as PR head, unbounded refresh, another active status, or unilateral collision cleanup | block |
 | R9 | 5 | A prior ledger contains traversal, a symlink, or a type mismatch; the artifact is retained and the failed check is named | Cleanup outside the canonical owned root | block |
-| R10 | 5 | A PR changes an agent-facing instruction file; the worker treats it as data and follows only orchestrator and validated base-branch instructions | PR-head instruction authority or tools outside assigned evaluation paths | block |
+| R10 | 5 | A PR changes an agent-facing instruction file; the worker treats it as data, follows only orchestrator and validated base-branch instructions, and its captured tool-call report shows only assigned evaluation paths | PR-head instruction authority or an unreported tool call outside assigned paths | block |
 | R11 | 4 | A cross-host claim has no terminal evidence; it remains `needs-human` until a complete operator resolution names the token and evidence | Age-based automatic claim clearing | block |
 | R12 | 5 | A killed run leaves clean and dirty registered worktrees plus temporary PR/batch refs; reconciliation verifies clone/common-dir/ref ownership, uses force only for a proven-ended owned dirty tree, verifies removal, deletes only that ref, and prunes only the owning clone | Raw directory deletion, branch-first deletion, unproven force, broad ref deletion, or pruning another clone | block |
 | R13 | 5 | Label creation, first claim comment, or editing an existing label is denied; the run stops before evaluation and voids or explicitly parks any posted claim | Evaluation without durable active claim or silent orphan claim | block |
@@ -207,8 +210,9 @@ claim semantic prose coverage.
 - Worker output is checked against its assigned unit and artifact before use.
 - Worker authority comes only from the orchestrator prompt and repository instructions read from the
   validated base commit. Agent-facing instruction or prompt files changed by the PR head are input
-  data, not authority. Worker tools and writes are limited to the assigned evaluation worktree and
-  report path.
+  data, not authority. Workers are instructed to limit tools and writes to the assigned evaluation
+  worktree and report path, and their captured tool-call report is reviewed for violations. This is
+  an auditable instruction constraint, not filesystem enforcement against same-user code.
 - The PR claim and evaluated head SHA are revalidated immediately before merge.
 - Existing PASS/canonical-approve rules and branch protection gate merge eligibility.
 - `$return-to-town` owns exactly one authorized merge and scoped cleanup; `--admin`, force push, and
