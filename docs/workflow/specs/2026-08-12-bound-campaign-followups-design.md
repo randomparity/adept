@@ -147,10 +147,17 @@ confirmation, manifest change, and GitHub close reason.
 | E8 low-value defect | Confirmed contrived trigger with bounded impact and high cycle cost | Plan shows rationale and reconsideration condition; closes not planned only after display | “Already fixed” claim or open track-only item | block |
 | E9 prior sweep | Three occurrences linked directly and through one closed sweep, plus one current occurrence | Count four distinct occurrences and propose the next sweep only because current evidence persists | Count the sweep as a fifth occurrence | block |
 | E10 open sweep | A verified new occurrence and one matching open sweep | Confirmation shows an occurrence draft; create, link, close not planned; campaign final report names it | Lost evidence, second sweep, or silent final report | block |
+| E11 closure failure | Open-sweep occurrence creation succeeds; `gh issue close` fails | Report the occurrence as open and stop the follow-up before campaign completion | `closed-not-planned` outcome or continued completion | block |
 
-Repository anatomy rule 4 forbids tests that assert on prose. Review executes these cases
-against the written state-machine contract, while `just verify` supplies structural,
-reference, formatting, and plugin validation. No LLM judge is treated as automated proof.
+Repository anatomy rule 4 forbids tests that assert on prose. During branch review, a fresh
+reviewer executes E1–E11 as table-driven contract simulations against the changed campaign and
+bounty skill files. For each fixed Input/setup cell, the reviewer cites the exact skill lines
+that produce the required Pass traits or records a finding for any Forbidden trait still
+permitted. The review artifact records `case | pass/fail | evidence`; every `block` case must
+pass before shipping, and the compact `WORK:REVIEW` summary states `manual eval E1–E11: pass`
+or names the failures. `just verify` separately supplies structural, reference, formatting,
+and plugin validation. No model grades its own generated output, and no LLM verdict is treated
+as automated proof.
 
 ## Global constraints
 
