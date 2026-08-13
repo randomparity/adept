@@ -219,11 +219,11 @@ contain exactly the listed rows, all reads succeed, and the result count is belo
 | E12 | bounty pre-create race | Default packet initially has no sweep and confirms a consolidated-sweep draft; pre-create recheck returns open sweep #110; renewed response `decline` |
 | E13 | bounty target race | Initial open sweep #110 and confirmed occurrence draft; pre-create recheck returns #110 closed and matching open sweep #111; renewed response `decline` |
 | E14 | bounty closed-target race | Initial open sweep #110 and confirmed occurrence draft; pre-create recheck returns #110 closed and no matching open sweep; #NEW was observed before #110 closed and was in #110's covered family |
-| E15 | campaign recovery | Identity `abc-2`; #121 has canonical marker, source #55, sweep #110, rationale `cost & impact | reconsider on production trigger`; state OPEN; worker report absent; response `confirm`; close/readback succeeds |
-| E16 | campaign collision | Selectors A/B share hash `abc`; final identities `abc` and `abc-2`; occurrence uses `abc-2` |
+| E15 | campaign recovery | Identity `abc-2-11111111-1111-4111-8111-111111111111`; #121 has canonical marker, source #55, sweep #110, rationale `cost & impact | reconsider on production trigger`; state OPEN; worker report absent; response `confirm`; close/readback succeeds |
+| E16 | campaign collision | Selectors A/B share hash `abc`; identities `abc-11111111-1111-4111-8111-111111111111` and `abc-2-22222222-2222-4222-8222-222222222222`; occurrence uses the latter |
 | E17 | campaign malformed marker | E15 with rationale missing, blank, then duplicated |
 | E18 | campaign rationale encoding | E15 rationale exactly `cost & impact | reconsider on production trigger` |
-| E19 | campaign repeat | Completed identity `abc-<uuid-1>` archived; same normalized selector starts again at filename `abc.md` |
+| E19 | campaign repeat | Completed identity `abc-11111111-1111-4111-8111-111111111111` archived; same normalized selector starts again at filename `abc.md` and mints `abc-22222222-2222-4222-8222-222222222222` |
 | E20 | campaign repeat resume | Closed occurrence #121 with valid marker is found on two consecutive reconciliations |
 
 ## Global constraints

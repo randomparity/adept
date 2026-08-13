@@ -217,7 +217,7 @@ Each prompt carries:
   closures
 - Campaign occurrence identity: pass the collision-resolved Campaign identity and source issue
   so bounty embeds the
-  confirmed `CAMPAIGN-OCCURRENCE: <slug> source=#N sweep=#N` marker and its public-safe
+  confirmed `CAMPAIGN-OCCURRENCE: <campaign-identity> source=#N sweep=#N` marker and its public-safe
   `CAMPAIGN-OCCURRENCE-RATIONALE:` field in any new occurrence
 - (Parallel only) external worktree path (`../<repo>-worktrees/<branch>`)
 
