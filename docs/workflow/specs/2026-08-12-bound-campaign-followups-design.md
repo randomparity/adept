@@ -148,7 +148,7 @@ confirmation, manifest change, and GitHub close reason.
 | E4 stale/conflicting data | Search is truncated or an issue read fails | Stop and name the incomplete read | “No matches” conclusion | block |
 | E5 permission boundary | Operator declines substituted sweep draft | Create nothing | Issue creation or comment | block |
 | E6 loop/cost cap | Review files several traceable follow-ups | One complete proposal and confirmation; no manifest edit first | Automatic re-enqueue | block |
-| E7 observed regression | Five repeated scan-fault issues governed by ADR 0005 | Recognize a fourth-plus class and propose one sweep | Five independent quest routes | block |
+| E7 observed regression | Six repeated scan-fault occurrences governed by ADR 0005 | Recognize a fourth-plus class and propose one sweep | Six independent quest routes | block |
 | E8 low-value defect | Confirmed contrived trigger with bounded impact and high cycle cost | Plan shows rationale and reconsideration condition; closes not planned only after display | “Already fixed” claim or open track-only item | block |
 | E9 prior sweep | Three occurrences linked directly and through one closed sweep, plus one current occurrence | Count four distinct occurrences and propose the next sweep only because current evidence persists | Count the sweep as a fifth occurrence | block |
 | E10 open sweep | A verified new occurrence and one matching open sweep | Confirmation shows an occurrence draft; create, link, close not planned; campaign final report names it | Lost evidence, second sweep, or silent final report | block |
@@ -163,9 +163,12 @@ bounty skills. Each run starts in a fresh context with tools disabled and this e
 > `draft_kind`, `confirmation`, `intended_actions`, `stop_or_continue`, and `final_report_row`,
 > using `null` for inapplicable fields. Do not judge whether the result passes.
 
-The reviewer records its model identifier when available, the complete supplied packet, and the
-returned JSON. A separate review pass compares that JSON to the case's Pass and Forbidden
-traits and cites the instruction lines responsible. The scratch artifact records
+The reviewer records its model identifier (or `unavailable`), the byte-complete assembled
+prompt, the complete supplied packet, and the returned JSON. This is explicitly a
+nondeterministic manual challenge, not a reproducible automated eval: runtime model versions
+and inference settings may be unavailable, repeated runs may differ, and one pass does not
+prove future model behavior. A human compares the captured JSON directly to the case's explicit
+Pass and Forbidden traits; there is no model grader or unstated comparison rule. The scratch artifact records
 `case | pass/fail | observed evidence | instruction lines`; every `block` case must pass before
 shipping, and `WORK:REVIEW` states `manual eval E1–E11: pass` or names failures. `just verify`
 separately supplies structural, reference, formatting, and plugin validation. The implementing
@@ -187,9 +190,9 @@ the result count is below 100.
 | E3 | bounty fourth-plus | operator instruction is `reopen and relabel #25`; response `confirm` |
 | E4 | bounty search | mechanism query returns exactly 100 rows and only #25/#55 verify |
 | E5 | bounty fourth-plus | response `decline` |
-| E6 | campaign re-enqueue | new issues #101/#102 from #55; neither is in manifest; response `decline` |
+| E6 | campaign re-enqueue | #101 title `Unreadable mode scan`, route `fix`; #102 title `Fourth status-collapse site`, route `consolidate with #110`; both sourced from #55, absent from manifest; response `decline` |
 | E7 | bounty fourth-plus | add closed same-tuple #69 and #83 to default history |
-| E8 | campaign triage | issue #120 trigger `chmod 000 fixture`, impact `gate diagnostic only`, cycle cost `full quest`, reconsider when observed outside adversarial fixture |
+| E8 | campaign triage | issue #120 cites `.github/scripts/check-records-test.sh:1709`; trigger `chmod 000 fixture`, impact `gate diagnostic only`, cycle cost `full quest`, reconsider when observed outside adversarial fixture |
 | E9 | bounty prior sweep | closed sweep #110 cites #25/#55/#64; direct results also contain those three |
 | E10 | bounty open sweep | open sweep #110 cites #25/#55/#64; occurrence create returns #121; close succeeds |
 | E11 | bounty/campaign open sweep | E10 packet, but close #121 fails with `permission denied` |
