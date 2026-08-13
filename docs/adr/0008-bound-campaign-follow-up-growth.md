@@ -49,8 +49,8 @@ operator confirmation before adding them to the manifest and returning to triage
 
 ## Consequences
 
-- The active issue queue represents intended work; confirmed low-value defects remain
-  searchable among closed issues.
+- Campaign does not retain its confirmed low-value defects as open backlog items; they remain
+  searchable among closed issues. Other issue-creation paths keep their existing queue policy.
 - Defect-class identity is evidence-based, not title similarity alone. Uncertain matches stay
   separate rather than silently collapsing unrelated defects, and incomplete discovery stops
   filing rather than silently undercounting the class.
@@ -78,6 +78,11 @@ evidence.
 **Let campaign infer recurrence only from issues created during its current run.** Rejected
 because closed historical instances are the evidence that establishes recurrence. Bounty
 already searches all states before filing and is the narrowest owner for that discovery.
+
+**Keep bounty's current near-match prompt and let the operator consolidate case by case.**
+Rejected because it recreates the same instance-versus-sweep judgment on every recurrence and
+provides no consistent fourth-plus routing. The confirmation gate still chooses whether to
+file; the class tuple and threshold make what it is choosing consistent.
 
 **Automatically enqueue up to a numeric per-wave cap.** Rejected because any chosen cap allows
 some unapproved scope expansion and becomes arbitrary policy. One explicit confirmation at the
