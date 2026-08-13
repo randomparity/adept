@@ -250,6 +250,12 @@ asked report it as a blocker and return. Never default to `main`.
    after, because a run that dies mid-wave leaving no line sends the next one
    through step 1 to clear a finished review. A dispatch ending in a stop gets
    no line.
+6. After the final consumer has read the artifact — immediate approval, a
+   completed fix wave, or a terminal path that already consumed it — move the
+   review file to trash and append `review artifact disposed` with its former
+   path to the ledger. The historical review line retains that former path as
+   provenance, not as a promise that the ignored artifact remains on disk.
+   Never dispose an unconsumed artifact or one still needed by a live worker.
 
 A missing or empty file means the return is not evidence. If the reviewer produced no report,
 apply the silent-party-worker contract above; only a reconciled, harness-observed end may consume
