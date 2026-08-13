@@ -166,6 +166,14 @@ focus: <review focus, unchanged>
 
 Repeat up to 5 iterations:
 
+Each gauntlet dispatch below is a report wait governed by
+[dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md). Retain the
+worker, iteration wait site, observations, recovery-chain identifier, `unused` or `consumed`
+replacement budget, and findings-path/run-ID dispositions for the current run; include the result
+in the run report. A missing report follows that contract. A returned target-resolution error or
+malformed compact object follows step 2 instead, because a report that arrived is not a silent
+worker. Do not use step 2's malformed-return retry to replace a worker whose end was not observed.
+
 1. **Petition the council** — run `$gauntlet` in a **subagent** with
    `--json --out <findings-path> <challenge-args>`, then the exact
    `review-dispatch` block above as the labeled trailing block.
