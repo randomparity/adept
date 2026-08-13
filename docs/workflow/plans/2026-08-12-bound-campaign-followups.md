@@ -35,7 +35,9 @@ script, dependency, label taxonomy, or prose-sensitive automated test is added.
 
 ## Pre-implementation scope check
 
-Before Task 1, read issue #91's latest complete `WORK:SCOPE` block with the bounded `gh issue
+Before Task 1, run `git branch --show-current` and `git status --short --untracked-files=all`.
+Require branch `feat/bound-campaign-followups-91`; stop before edits if branch setup differs or
+the tree contains changes not owned by this quest. Then read issue #91's latest complete `WORK:SCOPE` block with the bounded `gh issue
 view --json comments --jq` command in Task 3 Step 3.1. Verify token
 `68863689-6849-47C1-B56D-41C43F790D66-v5`. A missing or different token stops before any
 implementation edit. Task 3 repeats this as a final drift check.
@@ -94,6 +96,8 @@ evaluation. After confirmed occurrence creation, close it with
 `gh issue close <N> --reason "not planned"`; verify state with
 `gh issue view <N> --json state,stateReason,url`. If closure fails or readback is not closed/not
 planned, return the actual open state and stop; never claim success.
+If the readback command fails, return `state: unknown/unverified`, stop, and forbid a successful
+closure outcome until a later read verifies closed/not planned.
 
 Update Hard constraints: discovery never mutates historical issues; only the confirmed new
 issue may be created and closed; every changed draft needs renewed confirmation.
@@ -144,6 +148,8 @@ is a live issue-local blocker. Only after a successful comment, close with
 `gh issue close <N> --reason "not planned"`, verify `state,stateReason`, and record
 `closed-not-planned`. A failed close is likewise a live issue-local blocker, not a closed
 outcome; the already-posted rationale remains accurate evidence of the attempted disposition.
+If close returns success but the `state,stateReason` read fails, record unknown/unverified state
+and block; a successful close command alone never proves `closed-not-planned`.
 
 Extend manifest recognized terminal outcomes and the final outcome vocabulary without adding a
 new queue status or label.
@@ -175,7 +181,10 @@ state, and a blocked outcome rather than `closed-not-planned`. Add two more E8 v
 the rationale succeeds but `gh issue close` returns `permission denied`; (2) comment and close
 return success but readback reports an open issue or a closed reason other than not planned.
 Both must report the actual state, produce a blocked outcome, and forbid
-`closed-not-planned`.
+`closed-not-planned`. Add a third variant where close succeeds but
+`gh issue view --json state,stateReason,url` fails; expected is unknown/unverified state, a
+blocked outcome, no terminal row, and no campaign completion. Mirror this readback-failure
+variant for bounty's open-sweep occurrence closure.
 
 Run `just verify` bare.
 
