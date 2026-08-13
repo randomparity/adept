@@ -98,10 +98,14 @@ Bash 3.2-compatible command examples.
 3. Allocate `run.XXXXXX` with `mktemp -d`, then write one version-1 ownership manifest containing
    root/repository/run identity and unit/run-owned artifacts. Record canonical relative paths,
    types, clone/common-dir, worktree registration, temporary ref, worker lifecycle, and completed
-   cleanup steps.
+   cleanup steps. Every manifest transition writes and fsyncs a sibling file, atomically renames it
+   over the live manifest, and reads back the expected state before the next mutation.
 4. Reconcile proven-ended units in Git-aware order: validate containment/type/registration/ref,
-   remove exact worktree (force only for proven-owned dirty ended work), verify unregistered, delete
-   exact ref, prune only owning clone. Retain and report any mismatch.
+   persist/read back `cleanup: worktree-pending`, remove the exact worktree (force only for proven-
+   owned dirty ended work), verify unregistered, persist/read back `worktree-removed`, delete the
+   exact ref, persist/read back `ref-removed`, then prune only the owning clone and persist/read back
+   `unit-clean`. On restart, verify the Git state expected by the last persisted step before either
+   completing the pending operation or advancing; a mismatch retains and reports the unit.
 5. Before selecting a PR, classify existing restock activity only when active label and latest
    applied restock trajectory match repository/PR/token/head/transition. Skip active or ambiguous
    state without mutation.
@@ -137,9 +141,16 @@ Bash 3.2-compatible command examples.
    expansion. Expected: clean diff and only the planned files/records.
 5. Record case verdicts, models, commit, packet hashes, guardrail result, and any human disposition in
    the compact review summary. Do not commit `.agent/evals/` artifacts.
+6. If either evaluator fails, is uncertain, disagrees, or returns malformed evidence, verify each
+   failed field against the skill text, edit only the planned two-skill surface for defensible
+   findings, run focused guardrails, and commit each correction separately. Rerun all unchanged
+   R1–R20 packets with fresh workers and both fresh evaluators after every correction round. Stop for
+   human disposition after five rounds without a complete pass; never weaken packets or rubric to
+   obtain green.
 
 ## Rollback and cleanup
 
-Each implementation task is one commit and can be reverted independently. Failed evaluation leaves
-ignored captures for diagnosis. Never delete unknown scratch roots or foreign worktrees. Before
-shipping, verify the feature branch working tree is clean and no evaluation worker remains live.
+Task 3 depends on Task 2. Roll back Task 3 before Task 2, or revert both together; Task 2 may remain
+without Task 3, but Task 3 may not remain without Task 2. Failed evaluation leaves ignored captures
+for diagnosis. Never delete unknown scratch roots or foreign worktrees. Before shipping, verify the
+feature branch working tree is clean and no evaluation worker remains live.
