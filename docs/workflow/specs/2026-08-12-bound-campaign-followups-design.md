@@ -55,28 +55,35 @@ modify them. With no new issues, campaign proceeds directly to its drained-state
 
 ## Bounty recurrence contract
 
-Bounty's existing all-state dedup search examines plausible matches for a defect-class tuple:
+Bounty's existing all-state dedup gate runs bounded searches for each evidenced identity
+dimension, rather than relying on one title-overlap query. It follows links from any matched
+consolidated sweep and examines plausible matches for a defect-class tuple:
 
 1. the same failure mechanism or faulty idiom;
 2. the same component or file family;
 3. the same governing ADR or other accepted decision, when one exists.
 
-Title overlap is only a candidate signal. File and issue evidence must support the tuple. An
-uncertain tuple is not counted. The proposed issue counts as the next instance, so three
-verified historical instances trigger fourth-plus routing.
+Title overlap is only a candidate signal. File and issue evidence must support the tuple. The
+operator sees the candidate history and uncertain matches. An uncertain tuple is not counted,
+but uncertainty about search completeness stops filing rather than proving a below-threshold
+result. The proposed issue counts as the next instance, so three verified historical instances
+trigger fourth-plus routing.
 
 Below the threshold, bounty follows its existing near-match and issue-draft flow. At the
 threshold it does not draft another instance issue. It instead:
 
 1. searches for an open consolidated sweep for the tuple;
 2. offers to comment on that sweep when found;
-3. otherwise drafts one ordinary consolidated-sweep issue whose Evidence section cites every
+3. when only a closed sweep exists, treats it as history and drafts a new sweep only if current
+   evidence shows that the class persists, citing the closed sweep and new occurrence;
+4. otherwise drafts one ordinary consolidated-sweep issue whose Evidence section cites every
    verified instance and whose Expected section defines a bounded family-wide fix;
-4. shows that substituted draft at the existing confirmation gate.
+5. shows that substituted draft at the existing confirmation gate.
 
 The scan is read-only. It never reopens, closes, labels, reparents, or edits historical issues.
-The consolidation issue is not an epic unless later decomposition independently establishes
-several PR-sized units.
+At most one sweep for a class is open; sequential sweeps are allowed only after a prior sweep
+closed and current evidence demonstrates recurrence. The consolidation issue is not an epic
+unless later decomposition independently establishes several PR-sized units.
 
 ## Failure handling
 

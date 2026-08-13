@@ -22,12 +22,21 @@ impact do not justify its remediation cost. The verdict records the evidence, co
 rationale, and reconsideration condition. Campaign presents it in the batch plan, then closes
 the issue with GitHub's not-planned reason. It is durable evidence, not an open backlog item.
 
-Bounty's existing all-state deduplication owns recurrence discovery. It groups issues only
-when evidence establishes the same failure mechanism or idiom, component or file family, and
-governing decision when one exists. When the proposed instance would be the fourth or later in
-that class, bounty proposes one ordinary consolidated-sweep issue citing the historical
-instances instead of another instance issue. Existing issues are never mutated by this scan.
-An already-open sweep is treated as the near-match to use rather than duplicated.
+Bounty's existing all-state deduplication owns recurrence discovery. It searches separately
+for the evidenced mechanism or idiom, component or file family, and governing-decision
+reference, then follows links from matched consolidation issues. It presents the candidate
+history and any uncertain matches rather than treating title overlap as a complete inventory.
+It groups only issues whose evidence establishes all applicable identity dimensions; a failed,
+truncated, or inconclusive search stops filing rather than asserting that the threshold was not
+met.
+
+When the proposed instance would be the fourth or later in that class, bounty proposes one
+ordinary consolidated-sweep issue citing the historical instances instead of another instance
+issue. Existing issues are never mutated by this scan. An already-open sweep is treated as the
+near-match to use rather than duplicated. A closed sweep remains historical evidence: bounty
+proposes a new sweep only when current evidence shows the class still exists, citing the prior
+sweep and new occurrence. There is never more than one open sweep for a class, although a class
+that recurs after remediation can have sequential closed sweeps.
 
 Campaign never automatically expands into review-created work. At re-enqueue it presents all
 new traceable issues, their proposed routing, and any consolidation, then requires explicit
@@ -38,9 +47,12 @@ operator confirmation before adding them to the manifest and returning to triage
 - The active issue queue represents intended work; confirmed low-value defects remain
   searchable among closed issues.
 - Defect-class identity is evidence-based, not title similarity alone. Uncertain matches stay
-  separate rather than silently collapsing unrelated defects.
+  separate rather than silently collapsing unrelated defects, and incomplete discovery stops
+  filing rather than silently undercounting the class.
 - A consolidated sweep is one executable issue. It becomes an epic only if later scoping shows
   that it genuinely requires several independently mergeable changes.
+- A class may accumulate sequential sweeps when it demonstrably recurs after an earlier sweep
+  closes, but never multiple open sweeps at once.
 - Campaign runs pause at every follow-up expansion. This trades unattended throughput for a
   hard bound controlled by the operator.
 - The contract remains instruction-only and adds no dependency, script, label family, or
