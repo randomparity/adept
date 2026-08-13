@@ -150,9 +150,11 @@ post-fix runs: `skills/gauntlet/SKILL.md`, `skills/oathbind/SKILL.md`,
 `skills/forge/implementer-prompt.md`, `skills/forge/task-reviewer-prompt.md`,
 `skills/forge/code-reviewer.md`, `skills/trial-loop/SKILL.md`,
 `skills/detect-evil/SKILL.md`, `skills/campaign/SKILL.md`,
-`skills/summon-swarm/SKILL.md`, and `skills/quest-log/SKILL.md`. Each evaluation artifact
-records the full manifest and the git blob id of every entry; a missing file, different manifest,
-or missing blob id makes runs incomparable and the evaluation fails. The orchestrator resolves
+`skills/summon-swarm/SKILL.md`, and `skills/quest-log/SKILL.md`. This stable manifest is the path
+set only. Each run records the git blob id of every entry; missing or different paths make runs
+incomparable, while blob-id changes are expected implementation provenance. The baseline and
+post-run blob maps must differ for at least one implementation path, and each run is graded only
+against the bytes verified for its own evaluated commit. The orchestrator resolves
 each blob id with `git cat-file blob <id>`, verifies its hash against the manifest, and supplies
 the exact bytes—not only the path and id—to each scenario worker. Each captured response records
 the paths and blob ids actually supplied in the capture envelope, never in the worker response.
@@ -219,16 +221,26 @@ The evaluator writes run-unique JSON under ignored `.agent/evals/` with this sha
   "evaluated_commit": "full SHA",
   "manifest": [{"path": "skill path", "blob": "git blob id"}],
   "cases": [
-    {"id": "E1", "verdict": "pass|fail|uncertain", "citations": ["path:line"], "rationale": "one paragraph"}
+    {"id": "E1", "traits": [{"id": "E1-grade-high", "verdict": "pass|fail|uncertain", "citations": ["path:line"], "rationale": "one paragraph"}], "verdict": "pass|fail"}
   ],
   "verdict": "pass|fail"
 }
 ```
 
-All E1–E10 rows must appear once, cite at least one governing implementation line for every pass
-trait, and return `pass`; any `fail`, `uncertain`, missing/duplicate case, missing implementation
-citation, design-only pass citation, malformed field, wrong run id/commit, or omitted model makes
-the aggregate verdict `fail`. The evaluator receives no authoring transcript
+The required trait ids are fixed: E1 `grade-high`, `grade-low`, `verdict`, `route-high`,
+`route-low`; E2 `separate-classification`, `impact-severity`, `missing-evidence`; E3
+`resist-downgrade`; E4 `reject-stale`; E5 `isolated-worktree`, `cleanup-success`,
+`cleanup-failure-shape`, `reject-mixed`; E6 `no-rerun`, `nondeterminism-finding`; E7
+`merge-refused`, `pass-conversion`, `counter-cases`; E8 `separate-risk-axes`,
+`concrete-only-severity`; E9 `common-verdict`, `common-counts`, `transport-difference`,
+`explicit-model`; E10 `generic-roles`, `precise-subtype`. The orchestrator records each ordered
+list beside its packet hash. Each case result must contain exactly those trait ids once, prefixed
+by its case id (for example `E5-reject-mixed`). Every trait needs its own
+verdict, implementation citations, and rationale; a case passes only when all its traits pass.
+All E1–E10 cases must appear once and return `pass`; any `fail`, `uncertain`, missing/duplicate
+case or trait, missing implementation citation, design-only pass citation, malformed field,
+wrong run id/commit, or omitted model makes the aggregate verdict `fail`. The evaluator receives
+no authoring transcript
 or intended fixes. Run it before implementation to establish current failures, after
 implementation, and after any behavior-changing review fix. It is evidence, not an automated
 prose gate; `just verify` remains the deterministic repository gate.
