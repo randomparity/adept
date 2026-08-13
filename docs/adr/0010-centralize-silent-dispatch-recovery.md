@@ -32,6 +32,9 @@ its existing run report or ledger and reconciles durable artifacts before re-dis
 
 ## Considered & rejected
 
+**Do nothing.** Rejected because the named dispatchers would retain undefined behavior when a
+worker never reports, leaving operators to improvise unsafe retries or wait indefinitely.
+
 **Repeat the full rule in every dispatching skill.** Rejected because independent copies will
 diverge as the observed-end-of-run rule evolves.
 
@@ -40,4 +43,3 @@ own dispatch generally; a neutral reference makes the ownership boundary explici
 
 **Treat a timeout as proof that a worker ended.** Rejected because a live worker may be inside a
 long tool call, and re-dispatching it can produce competing writes, branches, or reports.
-
