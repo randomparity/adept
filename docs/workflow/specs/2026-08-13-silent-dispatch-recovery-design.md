@@ -102,8 +102,8 @@ Every case is a blocking gate.
 - **E8 — Reconciliation cannot complete (severity 4).** An artifact is inaccessible, ownership is
   uncertain, or durable states conflict. Record known artifacts and the unresolved reason; do not
   replace.
-- **E9a — Valid report arrives before replacement mutates (severity 4).** Record the race, stop the
-  replacement before mutation, reconcile both results, and authorize no further dispatch.
+- **E9a — Valid report arrives before replacement mutates (severity 4).** Record the race. Stop
+  the replacement before mutation, reconcile both results, and authorize no further dispatch.
 - **E9b — Replacement stop is late or unsupported (severity 4).** Record the race, disposition
   both result sets, authorize no further dispatch, and escalate an irreconcilable conflict.
 - **E10 — Held worker later ends (severity 4).** Enter E2, then receive the harness end
