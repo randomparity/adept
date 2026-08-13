@@ -28,11 +28,12 @@ uses its `BASE_BRANCH`, guardrail recipe, authentication result, repository inst
 architecture context instead of rediscovering those facts. Merge-method availability remains a
 restock-specific repository capability because attunement does not resolve it.
 
-At startup, the orchestrator allocates one owned run root with `mktemp -d` beneath the session
-scratchpad. The clone, evaluation worktrees, reports, and run ledger all live below that root. A
-run never adopts a prior root for current work. Before allocating current-run artifacts, it scans
-prior restock run roots beneath the session scratchpad, validates each prior orchestrator-owned
-ledger, and reconciles only ledger-proven artifacts whose worker end was observed. The new ledger
+At startup, the orchestrator first scans prior restock run roots beneath the session scratchpad,
+validates each prior orchestrator-owned ledger, and reconciles only ledger-proven artifacts whose
+worker end was observed. Only after that scan completes does it allocate one owned run root with
+`mktemp -d`; the current token and root therefore cannot enter the prior scan. The clone, evaluation
+worktrees, reports, and run ledger all live below that root. A run never adopts a prior root for
+current work. The new ledger
 records only current-run artifacts. Retained prior artifacts stay owned solely by their original
 ledger and appear in the current run's reconciliation report as references containing prior run
 token, ledger identity, unit, and reason. Future scans continue to consult the original ledger. This
@@ -88,7 +89,8 @@ results use `WORK:REVIEW`. Whole-line markers and complete sentinels follow ques
 For a clean `PASS`, restock swaps the PR to `status:awaiting-merge` and invokes
 `$return-to-town <PR>` with the caller's explicit merge authorization, the restock tracking target,
 the actual PR head SHA, evaluated base SHA, and tested synthetic integration commit SHA, plus the
-branch/worktree ownership recorded in the ledger and discovered guardrails. Return-to-town re-reads
+unit-owned worktree and temporary ref recorded in the ledger, an explicit `shared: retain`
+disposition for the run-owned clone/root/ledger/reports, and discovered guardrails. Return-to-town re-reads
 the live base before merge. A base mismatch returns typed `BASE_CHANGED` without merge or cleanup.
 Restock then swaps back to `status:in-review`, freshly fetches the unchanged actual PR head and new
 base, creates and tests one synthetic integration commit, posts replacement evaluation evidence,
@@ -100,8 +102,9 @@ records the local integration tree tested for the observed head/base pair; it do
 for-byte equivalence to the server-produced merge/rebase commit and is never presented as the server
 PR head. Branch protection and required server checks remain the authority for the landed method.
 The final server-head check and merge are one GitHub operation rather than a local read followed by
-an unguarded merge. Restock does not repeat merge, branch deletion, worktree
-removal, or remote pruning. Because Dependabot PRs commonly have no owning issue,
+an unguarded merge. Return-to-town cleans only that terminal PR unit's worktree and ref. Restock
+retains shared run artifacts until every unit is terminal and every worker end is observed, then
+owns one run-finalization cleanup. It does not repeat unit merge or cleanup. Because Dependabot PRs commonly have no owning issue,
 `$return-to-town` gains an explicit PR-only tracking mode: it posts the terminal
 `WORK:TRAJECTORY` on the PR, strips the PR's `status:` labels after a verified merge, and skips issue
 closure and cleared-dependent reconciliation. Its normal issue-backed behavior is unchanged.
@@ -145,6 +148,11 @@ This decision is recorded by [ADR 0012](../../adr/0012-restock-composes-shared-w
   forced removal. A mismatch or failed step stops reconciliation for that unit, retains every
   remaining artifact and ref, and reports the failed invariant. Raw directory deletion is not a
   substitute.
+- When every ledger unit is terminal and no worker remains live, run finalization verifies no
+  registered worktree remains, records a complete finalization outcome, removes owned reports and
+  clone, then removes the ledger, marker, and exact canonical run root. The ledger records each
+  completed destructive step before the next, so a resumed partial finalization does not repeat it.
+  Any failed invariant retains the remaining root with the completed-step record and exact failure.
 - Worker silence follows `references/dispatch-liveness.md`; elapsed time never authorizes cleanup.
 - A non-clean evaluation never reaches `$return-to-town`.
 - A return-to-town refusal remains a named `MERGE_REFUSED` result with its tracking annotation.
@@ -186,9 +194,11 @@ Failure modes and blocking cases:
 | R15 | 5 | Guarded merge succeeds but terminal comment/label cleanup fails; merged state is re-read, merge is not retried, and `MERGED_TRACKING_INCOMPLETE` names repair | `MERGE_REFUSED`, repeated merge, or silent success | block |
 | R16 | 4 | A version-1 stale root is reconciled while an unknown version is retained and reported | Reinterpreting or traversing an unknown schema | block |
 | R17 | 4 | Label swap fails after `pending`, or `applied` write fails after a successful swap; readers derive state from labels and reconcile the missing half by token | Treating pending as completed or reporting a label/annotation contradiction | block |
+| R18 | 4 | Prior reconciliation runs before current-root allocation; a current token/root is never traversed as prior state | Classifying current work as stale | block |
+| R19 | 5 | Two serial PR units share a clone; first-unit return-to-town cleans only its unit while restock retains and finally removes shared artifacts after all units end | First-unit shared-clone deletion or orphaned final run root | block |
 
 Measurement is prompt-level because repository policy forbids automated gates that assert on prose.
-One fresh most-capable scenario worker per R1-R17 receives the changed skill files, a canonical JSON
+One fresh most-capable scenario worker per R1-R19 receives the changed skill files, a canonical JSON
 input packet, and the
 neutral request `Apply the supplied workflow instructions to this scenario and return the response
 they require.` Captures are written beneath ignored `.agent/evals/issue-43/` with case id, evaluated
@@ -196,10 +206,10 @@ commit, supplied file blob ids, packet hash, model identity, and raw response. T
 most-capable evaluators receive the captures, this specification, ADR 0012, and the table above.
 For each case, the rubric expands its pass and forbidden traits into boolean fields; every field
 requires an instruction-line citation and capture evidence. Each evaluator emits one
-pass/fail/uncertain result per field in a fixed JSON object keyed R1-R17. Both evaluators must return
+pass/fail/uncertain result per field in a fixed JSON object keyed R1-R19. Both evaluators must return
 pass for every field. Any fail, uncertain, or disagreement fails closed to named human review;
 there is no retry for a more convenient verdict. Missing, duplicate, malformed, or extra cases fail
-the evaluation. The overall gate passes only when R1-R17 all pass. The operator running
+the evaluation. The overall gate passes only when R1-R19 all pass. The operator running
 `$quest` owns the gate, validates packet/capture hashes and schemas, and posts the commit, models,
 both case verdict sets, any human disposition, and hashes in `WORK:REVIEW`; raw captures remain
 ignored scratch artifacts. `just
@@ -248,7 +258,7 @@ or explicitly excluded terminology work.
 
 ## Verification
 
-Capture the R1-R17 baseline against the current skill text and require at least one failing case;
+Capture the R1-R19 baseline against the current skill text and require at least one failing case;
 then run the same fixed packets against the implementation and require all cases to pass. Run
 `just verify` for the complete repository guardrail. The branch review must independently exercise
 malformed inputs, cleanup ownership, refused merges, head/base changes, active-status skips, and the PR-only
