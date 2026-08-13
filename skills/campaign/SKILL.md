@@ -84,20 +84,22 @@ Manifest schema:
 <appended per close/merge/block>
 
 ## Pending occurrence dispositions
-| Occurrence | Sweep | State | Rationale |
-|------------|-------|-------|-----------|
-| #NNN       | #NNN  | open / unknown-unverified | <public-safe rationale> |
+| Occurrence | Sweep | State | State reason | Rationale |
+|------------|-------|-------|--------------|-----------|
+| #NNN       | #NNN  | OPEN / CLOSED / UNKNOWN | <GitHub value or UNVERIFIED> | <public-safe rationale> |
 ```
 
 Status progression: `pending → triaged → in-flight → merged | closed | blocked`
 
-The pending-occurrence table is not a fix queue. Validate unique occurrence numbers and only
-the two nonterminal states shown above. Older manifests without the section backfill an empty
+The pending-occurrence table is not a fix queue. Validate unique occurrence numbers, the three
+normalized states shown above, and a non-empty state reason. `CLOSED` remains pending unless its
+reason is `NOT_PLANNED`. Older manifests without the section backfill an empty
 table and normalize the Completion condition field to the schema text above before validation.
 On every resume, read each occurrence with
 `gh issue view <N> --json state,stateReason,url`: remove it and append the verified
 `closed-not-planned: occurrence of sweep #N` outcome only for `CLOSED`/`NOT_PLANNED`; otherwise
-update its actual state and keep it pending. A failed read records `unknown-unverified`.
+update its normalized state and reason and keep it pending. A failed read records state
+`UNKNOWN` and reason `UNVERIFIED`.
 
 ## 2. Environment Discovery
 
@@ -108,12 +110,12 @@ Run `$attunement` **once** for the batch to get `BASE_BRANCH`, guardrail command
 **Reconcile state first.** Read the manifest before anything else.
 
 For each queued issue, check for artifacts from prior runs:
-- **Already closed** → read `state,stateReason,url` before changing the row. For
+- **Already closed** → read `state,stateReason,url,comments` before changing the row. For
   `NOT_PLANNED`, surgically set the full unique row to `closed` and reconstruct its
-  `closed-not-planned` Outcomes entry from the persisted verdict rationale; never re-close. If
-  that rationale is absent or the manifest mutation/readback fails, retain an explicit
-  unreconciled blocker and forbid completion. Other close reasons follow the existing done path
-  without re-closing.
+  `closed-not-planned` Outcomes entry from the latest complete campaign-authored
+  `WORK:CLOSE-NOT-PLANNED` annotation; never re-close. If that annotation is absent or the
+  manifest mutation/readback fails, retain an explicit unreconciled blocker and forbid
+  completion. Other close reasons follow the existing done path without re-closing.
 - **`status:` label set** → map to campaign state: `ready`/`needs-triage` → `pending` (triage); `in-progress`/`in-review` → `in-flight` (reconcile artifacts); `awaiting-merge` → verify PR then `ready-to-merge`; `blocked`/`needs-human` → `blocked`. Treat closed as authoritative regardless of label.
 - **Existing PR green + mergeable** → mark `ready-to-merge`, carry to step 4
 - **Persisted step-4 assignments exist** → read them back, don't re-derive
@@ -162,9 +164,12 @@ Present triage/plan table: issue → verdict, wave, assigned numbers, file scope
 
 Execute **close-candidates** (all remaining ones are confirmed — rejected/inconclusive candidates were re-routed in step 3): post research comment citing fixing code/PR, `gh issue close` each. Set `Status: closed`, append to outcomes log before removing from queue.
 
-Execute **close-not-planned** only after the operator has seen it in the plan. Post a concise
-comment containing the evidence, trigger, likely impact, remediation/quest cost, cost/benefit
-rationale, and reconsideration condition. The comment must succeed before closure; otherwise
+Execute **close-not-planned** only after the operator has seen it in the plan. Post a complete
+`WORK:CLOSE-NOT-PLANNED` annotation containing the evidence, trigger, likely impact,
+remediation/quest cost, cost/benefit rationale, reconsideration condition, and completion
+sentinel (`<!-- WORK:CLOSE-NOT-PLANNED -->` through
+`<!-- CLOSE-NOT-PLANNED:COMPLETE -->`). The annotation must succeed and be read back before
+closure; otherwise
 leave the issue open, record an issue-local blocker, and continue draining other rows. Then run
 `gh issue close <N> --reason "not planned"` and verify with
 `gh issue view <N> --json state,stateReason,url`. Only `CLOSED` plus `NOT_PLANNED` authorizes a
@@ -182,7 +187,7 @@ until the manifest can be reconciled.
 
 When issue goes **in-flight**, flip status and **read back the actual branch name** from subagent report or `gh pr view --json headRefName`. Record in `Branch` column. Don't pre-assign — `$quest` derives its own `feat/<short-slug>-<n>`.
 
-**Every fix is a subagent running `$quest <n>` to green + mergeable PR, then stopping.** Subagent must reflect the **public-safe summary** of the completion notes — never the verbatim notes — in acceptance criteria and PR body. No merge authorization to subagents. Subagent report (per `AGENTS.md`): ~1-2k token summary with outcome, branch/PR ref, files touched, guardrail status, blockers. No diffs/logs/file bodies.
+**Every fix is a subagent running `$quest <n>` to green + mergeable PR, then stopping.** Subagent must reflect the **public-safe summary** of the completion notes — never the verbatim notes — in acceptance criteria and PR body. No merge authorization to subagents. Subagent report (per `AGENTS.md`): ~1-2k token summary with outcome, branch/PR ref, files touched, guardrail status, blockers, and every discovered/finalized follow-up. For each bounty open-sweep occurrence it includes occurrence number, sweep number, rationale, state, and state reason. No diffs/logs/file bodies.
 
 Each prompt carries:
 - Issue number, acceptance criteria, **completion notes verbatim** (private dispatch context) and the **public-safe summary** (the only form allowed on public surfaces: acceptance criteria, `WORK:` annotations, PR bodies)
@@ -191,6 +196,9 @@ Each prompt carries:
 - Assigned ADR/migration numbers, file scope
 - Guardrail commands, `BASE_BRANCH`, ADR-index coupling verdict
 - Model tier from triage
+- Mandatory follow-up return contract: every discovered/finalized issue and complete bounty
+  occurrence tuple (occurrence, sweep, rationale, state, state reason), including verified
+  closures
 - (Parallel only) external worktree path (`../<repo>-worktrees/<branch>`)
 
 **Serial:** dispatch one, wait for green + mergeable PR, merge (step 6), repeat.
@@ -272,12 +280,15 @@ looping to step 3. A decline leaves already-filed issues outside this campaign, 
 manifest row for them, and proceeds to the drained-state check. On confirmation, add the
 approved issues, report each enqueue, and loop to step 3.
 
-For each verified closed occurrence returned by bounty, append its issue number, sweep number,
+Before the drained check, reconcile every occurrence tuple returned by each quest worker; a
+worker report with an incomplete tuple is a blocker, never “no follow-ups.” For each verified
+closed occurrence returned by bounty, append its issue number, sweep number,
 and rationale to Outcomes log as `closed-not-planned: occurrence of sweep #N`. If bounty
-reports an open, nonconforming, or unknown/unverified occurrence state, record that actual
-state in Pending occurrence dispositions, block the follow-up, and do not finish the campaign
-as though it closed. Recovery updates the full unique row atomically; it never appends a second
-row for the same occurrence.
+reports an open, nonconforming, or unreadable occurrence state, record its normalized state
+(`UNKNOWN` when unreadable) and state reason (`UNVERIFIED` when unreadable) in Pending
+occurrence dispositions, block the follow-up, and do not finish the campaign as though it
+closed. Recovery updates the full unique row atomically; it never appends a second row for the
+same occurrence.
 
 ## 8. Done
 
