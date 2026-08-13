@@ -2,8 +2,8 @@
 
 One page of "which skill do I run." Full detail lives in each skill's
 `SKILL.md`; this is the printable summary. Invoke a skill by typing its slash
-command (`/quest 42`) or asking for it by name — the skill descriptions below
-are what the harness matches against.
+command (`/quest 42`) in Claude Code or (`$quest 42`) in Codex, or asking for
+it by name — the skill descriptions below are what the harness matches against.
 
 ## Start here
 
