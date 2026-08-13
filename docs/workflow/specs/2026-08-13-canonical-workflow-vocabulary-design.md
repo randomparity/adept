@@ -143,8 +143,18 @@ stale artifact consumption and unbounded redispatch rate 4.
 | E9 verdict consistency | Task and whole-branch reviews each have no defensible findings | Both expose the common fields `verdict: approve` and canonical severity counts `critical 0, high 0, medium 0, low 0`; task review may return its review inline while whole-branch review returns its artifact path and plan-mandated subset count | `Yes`, `Approved`, three-grade counts, or omitted model selection | block |
 | E10 role handoff | Campaign dispatches an implementer and later receives its report | Prose names orchestrator/worker, while implementer remains the precise subtype | Controller/coordinator/parent as generic role names | block |
 
+Evaluation uses this fixed prospective input manifest for baseline, post-implementation, and
+post-fix runs: `skills/gauntlet/SKILL.md`, `skills/oathbind/SKILL.md`,
+`skills/restock/SKILL.md`, `skills/divination/SKILL.md`, `skills/forge/SKILL.md`,
+`skills/forge/implementer-prompt.md`, `skills/forge/task-reviewer-prompt.md`,
+`skills/forge/code-reviewer.md`, `skills/trial-loop/SKILL.md`,
+`skills/detect-evil/SKILL.md`, `skills/campaign/SKILL.md`,
+`skills/summon-swarm/SKILL.md`, and `skills/quest-log/SKILL.md`. Each evaluation artifact
+records the full manifest and the git blob id of every entry; a missing file, different manifest,
+or missing blob id makes runs incomparable and the evaluation fails.
+
 Evaluation has two read-only stages. First, one fresh most-capable scenario worker per E1–E10
-receives only the frozen charter, ADR, changed skill files, its fixed row, and the concrete input
+receives only the frozen charter, ADR, fixed input manifest, its fixed row, and the concrete input
 packet named below. It must return the exact worker/orchestrator response those instructions
 produce; it does not grade itself. The orchestrator captures each response unchanged in a
 run-unique file under ignored `.agent/evals/`. These are prompt-level simulations: commands,
@@ -152,7 +162,7 @@ tracker writes, and git mutations remain hypothetical, so E5 supplies fixed succ
 failed-cleanup, and mixed-payload command results rather than touching shared git state.
 
 Second, a different fresh most-capable evaluator receives those captured responses plus the
-frozen charter, specification, ADR, changed skill files, and E1–E10 table. Its complete prompt
+frozen charter, specification, ADR, fixed input manifest, and E1–E10 table. Its complete prompt
 is: “Grade each captured scenario response against its fixed case. Cite exact skill or design
 lines proving every pass or failure. Do not infer intended fixes from conversation. Numeric
 evaluation-harm ratings are not canonical finding severities. Write only the required JSON.”
@@ -176,6 +186,7 @@ The evaluator writes run-unique JSON under ignored `.agent/evals/` with this sha
   "run_id": "unique token",
   "model": "actual model identity",
   "evaluated_commit": "full SHA",
+  "manifest": [{"path": "skill path", "blob": "git blob id"}],
   "cases": [
     {"id": "E1", "verdict": "pass|fail|uncertain", "citations": ["path:line"], "rationale": "one paragraph"}
   ],
