@@ -1827,22 +1827,88 @@ STUB
   fi
 
   # grep exits 1 for "no match" and 2 or more for a fault it hit while scanning -- an
-  # unreadable file, a bad encoding. check_sections and check_headings_intact used to fold
-  # that fault into "no match", reporting a spurious E-SECTION-MISSING/E-HEADING-REWRITTEN
-  # (or, downstream of the same collapse, staying silent) instead of naming the scan that
-  # never completed. A record made unreadable in place drives both through the same grep
-  # call the checker makes on the working tree, on the same skip guard as the case above.
+  # unreadable file, a bad encoding. check_sections used to fold that fault into "no match",
+  # reporting a spurious E-SECTION-MISSING instead of naming the scan that never completed.
+  # A record made unreadable in place drives it through the same grep call the checker makes
+  # on the working tree, on the same skip guard as the case above.
+  #
+  # The same fixture reaches the conversion that mattered most in ADR 0008: canonicalise's awk
+  # cannot open the file either, so marker_only_change can no longer say whether the change is
+  # marker-only and reports E-SHAPE-SCAN. Both protected_shape results used to come back empty,
+  # compare equal, and turn all three anti-erasure rules off at once on a run that exited 0.
   if [ "$(id -u)" -eq 0 ]; then
     printf '  skip %-44s running as root; chmod 000 does not deny access\n' "record unreadable (section scan)"
-    printf '  skip %-44s running as root; chmod 000 does not deny access\n' "record unreadable (heading scan)"
+    printf '  skip %-44s running as root; chmod 000 does not deny access\n' "record unreadable (protected shape scan)"
   else
     d=$(case_dir unreadable_record)
     b=$(base_of "$d")
     chmod 000 "$d/docs/debt/0001-valid.md"
     run_case "record unreadable (section scan)" 1 E-SECTION-SCAN "$d" BASE_SHA="$b"
-    run_case "record unreadable (heading scan)" 1 E-HEADING-SCAN "$d" BASE_SHA="$b"
+    run_case "record unreadable (protected shape scan)" 1 E-SHAPE-SCAN "$d" BASE_SHA="$b"
     chmod 644 "$d/docs/debt/0001-valid.md"
   fi
+
+  # The section_body reads ADR 0008 lifted out of their pipelines. An unreadable file cannot
+  # reach them -- check_sections' grep faults first and reports E-SECTION-SCAN -- so these need
+  # a fault that hits awk while grep still works. section_body is the only awk in either script
+  # invoked with `-v want=`, so a stub keyed on that argument faults exactly the reads under
+  # test and leaves canonicalise, preamble and protected_shape's filter alone.
+  #
+  # Each of these codes used to be a false verdict about a section that was never read:
+  # E-SECTION-EMPTY for the body, E-STATUS for the status word, E-TARGET-MISSING for a target
+  # line nothing looked for, E-REVIEWBY-MISSING for a date on an unread Status section.
+  d=$(case_dir section_body_scan_fault)
+  b=$(base_of "$d")
+  stub_bin="$SCRATCH/awk-section-fault-bin"
+  mkdir -p "$stub_bin"
+  real_awk=$(command -v awk)
+  cat >"$stub_bin/awk" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+  want=*)
+    printf 'awk: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+    ;;
+  esac
+done
+exec "$real_awk" "\$@"
+STUB
+  chmod +x "$stub_bin/awk"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_case "section body read faults, not empty" 1 E-SECTION-BODY-SCAN "$d" BASE_SHA="$b"
+  run_case "status read faults, no spurious E-STATUS" 1 E-STATUS-SCAN "$d" BASE_SHA="$b"
+  run_case "target read faults, no spurious missing" 1 E-TARGET-SCAN "$d" BASE_SHA="$b"
+  run_case "review-by read faults, no spurious missing" 1 E-REVIEWBY-SCAN "$d" BASE_SHA="$b"
+  PATH=$saved_path
+
+  # check_headings_intact's own scan fault needs a readable record, now that an unreadable one
+  # stops at E-SHAPE-SCAN before the three anti-erasure rules run. A grep stub that faults only
+  # on the H1 lookup reaches it: check_headings_intact is the only rule that greps for the H1
+  # line, so check_sections -- which greps only the `## ` headings -- is left alone, and the
+  # gutted body keeps the change from being marker-only so the rule is reached at all.
+  d=$(case_dir heading_scan_fault)
+  b=$(base_of "$d")
+  sed 's/^A real concern with a body\.$/Nothing much, actually./' "$d/docs/debt/0001-valid.md" >"$d/.t" && mv "$d/.t" "$d/docs/debt/0001-valid.md"
+  stub_bin="$SCRATCH/grep-heading-fault-bin"
+  mkdir -p "$stub_bin"
+  real_grep=$(command -v grep)
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [ "\$arg" = "# 0001 — test record" ]; then
+    printf 'grep: fixture-fault: simulated I/O error\n' >&2
+    exit 2
+  fi
+done
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  saved_path=$PATH
+  PATH="$stub_bin:$PATH"
+  run_case "heading scan faults, no spurious rewrite" 1 E-HEADING-SCAN "$d" BASE_SHA="$b"
+  PATH=$saved_path
 
   # The same fault, once per profile rather than once per record: profile_check_directory's
   # grep over the ADR index README used to fold a scan fault into "no numbered rows", so

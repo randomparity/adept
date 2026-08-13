@@ -167,6 +167,34 @@ section_body() {
   ' "$file"
 }
 
+# section_body with its awk's own exit status kept: 0 the body is in read_section_out, 2 the
+# read could not run. There is no 1 — an absent or empty section yields empty output at status
+# 0, which is an ordinary verdict E-SECTION-EMPTY already owns, unlike path_exists_at where
+# absence is a third distinct answer.
+#
+# The body comes back in a global rather than on stdout because a caller that ran this in `$( )`
+# could not see the status: PIPESTATUS does not survive a command substitution either, so
+# `var=$(section_body … | grep …)` had no way to tell an awk that could not open the file from a
+# grep that honestly matched nothing. That is the defect ADR 0008 closes, and returning the body
+# by value is what makes the status reachable.
+#
+# awk's real status is left in read_section_status for the caller's diagnostic, the way
+# path_exists_at leaves its own: this reader's 2 is a sentinel, and reporting it would name a
+# status awk never returned.
+read_section_out=""
+read_section_status=0
+read_section() {
+  local file=$1 heading=$2 status=0
+  read_section_out=""
+  read_section_status=0
+  read_section_out=$(section_body "$file" "$heading") || status=$?
+  if [ "$status" -ne 0 ]; then
+    read_section_status=$status
+    return 2
+  fi
+  return 0
+}
+
 # The single definition of what counts as a marker. Line-local, and it discards nothing: every
 # word of prose, all indentation and nesting outside marker lines, every heading's text and the
 # preamble survive into the output, so a comparison over the result is still order-sensitive and
@@ -227,11 +255,34 @@ preamble() {
 # The heading line itself stays: `## Status` is a heading, and a heading is protected.
 # canonicalise has already lowercased it, so `## Status:` and `## status` both arrive here
 # as `## status` and the same test recognises either spelling.
+#
+# `canonicalise` is an awk reading the file, and it used to be the first stage of a pipeline
+# whose status went nowhere. When that read faulted, this emitted nothing, marker_only_change
+# compared two empty shapes as equal, and check_not_rewritten returned before any anti-erasure
+# rule ran — a merged record with a protected section deleted reported E-REWRITE on a working
+# toolchain and `Records OK.` on a faulting one. The read is lifted out and its status captured;
+# the awk that remains filters a shell variable, which ADR 0005 decision 1 exempts.
+#
+# The shape comes back in a global for read_section's reason: a caller running this in `$( )`
+# could not see the status. Comparing captured strings is safe here in a way it is not at the
+# `diff` sites — `$( )` strips trailing newlines from both sides identically, so equality is
+# unchanged from the pipeline this replaces.
+protected_shape_out=""
+protected_shape_status=0
 protected_shape() {
-  canonicalise "$1" | awk '
+  local file=$1 canon status=0
+  protected_shape_out=""
+  protected_shape_status=0
+  canon=$(canonicalise "$file") || status=$?
+  if [ "$status" -ne 0 ]; then
+    protected_shape_status=$status
+    return 2
+  fi
+  protected_shape_out=$(printf '%s\n' "$canon" | awk '
     /^## / { in_status = ($0 == "## status"); print; next }
     !in_status { print }
-  '
+  ')
+  return 0
 }
 
 # The marker-only allowance. Migration edits merged records, which E-REWRITE exists to
@@ -242,12 +293,33 @@ protected_shape() {
 # The permission is a property of the diff, which the author cannot fake: there is no
 # one-time escape hatch to forget to remove, and no way to smuggle a word of prose, a
 # re-indented sub-bullet or a reworded heading past it.
+#
+# Three-valued per ADR 0005 decision 3, because protected_shape can now fault: 0 marker-only,
+# 1 not marker-only, 2 the comparison could not be made. Never call it under `if !` or in an
+# `&&`/`||` chain that branches on it — both collapse 1 and 2 and reinstate the silent pass.
+marker_only_status=0
 marker_only_change() {
-  [ "$(protected_shape "$1")" = "$(protected_shape "$2")" ]
+  local a=$1 b=$2 shape_a status=0
+  marker_only_status=0
+  protected_shape "$a" || status=$?
+  if [ "$status" -ne 0 ]; then
+    marker_only_status=$protected_shape_status
+    return 2
+  fi
+  shape_a=$protected_shape_out
+
+  status=0
+  protected_shape "$b" || status=$?
+  if [ "$status" -ne 0 ]; then
+    marker_only_status=$protected_shape_status
+    return 2
+  fi
+
+  [ "$shape_a" = "$protected_shape_out" ]
 }
 
 check_sections() {
-  local file=$1 label=$2 section body grep_status
+  local file=$1 label=$2 section body grep_status body_status
   while IFS= read -r section; do
     [ -n "$section" ] || continue
     # grep exits 1 for "no match" and 2 or more for a fault it hit while
@@ -267,7 +339,22 @@ check_sections() {
       continue
       ;;
     esac
-    body=$(section_body "$file" "$section" | tr -d '[:space:]')
+    # `section_body … | tr -d` folded an awk that could not open the file into an empty body,
+    # reporting E-SECTION-EMPTY against a section it never read. The read is lifted out and its
+    # status captured; the `tr` that remains reads a shell variable, which ADR 0005 decision 1
+    # places outside the scan rule.
+    # err_full, not err: a scan fault describes the scan, not the record, so it must not be
+    # downgraded to W-LEGACY-SHAPE for a record that was already non-conforming at the base ref
+    # (ADR 0005). This read faults in both passes when it faults at all -- unlike the grep
+    # above, which reads the working-tree file while the base pass reads a readable temp copy --
+    # so `err` would leave the gate at exit 0 over a section it never read.
+    body_status=0
+    read_section "$file" "$section" || body_status=$?
+    if [ "$body_status" -ne 0 ]; then
+      err_full "E-SECTION-BODY-SCAN: $label: could not read the body of section '$section' in $file (awk exit $read_section_status)"
+      continue
+    fi
+    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]')
     if [ -z "$body" ]; then
       err "E-SECTION-EMPTY: $label: section '$section' is empty — a heading with no content is not a record"
     fi
@@ -559,9 +646,48 @@ check_headings_intact() {
 
 # The lines between the H1 and the first `## ` belong to no section at all, so section_body
 # never reaches them either — it is where a pre-template record keeps its metadata bullets.
+#
+# Both sides go to temp files rather than into `diff <(preamble …)`. A reader inside a process
+# substitution has no way to report — ADR 0005 — and an awk that could not open the file used to
+# yield an empty side, which diff then read as every line removed or none, depending on which
+# side faulted. Temp files rather than captured strings because `$( )` strips trailing newlines
+# and diff counts them; ADR 0008 records why the printf repairs do not work.
 check_preamble_intact() {
-  local tmp=$1 path=$2 removed
-  removed=$(diff <(preamble "$tmp") <(preamble "$path") | grep -c '^<' || true)
+  local tmp=$1 path=$2 removed base_pre tree_pre read_status=0 diff_out diff_status=0
+  base_pre=$(mktemp) || {
+    err_full "E-TMPFILE: $path: cannot create a temp file to compare the preamble"
+    return 0
+  }
+  tree_pre=$(mktemp) || {
+    rm -f "$base_pre"
+    err_full "E-TMPFILE: $path: cannot create a temp file to compare the preamble"
+    return 0
+  }
+
+  preamble "$tmp" >"$base_pre" || read_status=$?
+  if [ "$read_status" -eq 0 ]; then
+    preamble "$path" >"$tree_pre" || read_status=$?
+  fi
+  if [ "$read_status" -ne 0 ]; then
+    rm -f "$base_pre" "$tree_pre"
+    err_full "E-PREAMBLE-DIFF-SCAN: $path: could not read the preamble of it or of the base ref's copy, so the rule did not run (awk exit $read_status)"
+    return 0
+  fi
+
+  # diff exits 0 for identical, 1 for differing, 2 or more for trouble. Only the third is a
+  # fault, which is why this is the one captured status compared against 2 rather than switched
+  # three ways.
+  diff_out=$(diff "$base_pre" "$tree_pre") || diff_status=$?
+  rm -f "$base_pre" "$tree_pre"
+  if [ "$diff_status" -ge 2 ]; then
+    err_full "E-PREAMBLE-DIFF-SCAN: $path: could not compare the preamble against the base ref's copy (diff exit $diff_status)"
+    return 0
+  fi
+
+  # In-memory, so ADR 0005 decision 1 exempts it and ADR 0008 decision 2 requires the discard be
+  # written here rather than left to the caller's ambient `set -e` suppression. grep -c prints 0
+  # and exits 1 when nothing matched, which is the ordinary "nothing was removed" answer.
+  removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
   if [ "$removed" -gt 0 ]; then
     err_full "E-PREAMBLE-REWRITTEN: $path drops $removed line(s) between the title and the first section that the base ref had"
   fi
@@ -578,6 +704,7 @@ check_preamble_intact() {
 # forbid exactly the edit the format permits.
 check_sections_append_only() {
   local tmp=$1 path=$2 section removed list_status=0 all_sections
+  local base_sec tree_sec read_status diff_out diff_status
   # "*" means every level-2 heading the base ref had except ## Status. Level 2 only, matching
   # section_body's `^## ` terminator: a deeper heading is body content inside its enclosing
   # section, and enumerating one as a section of its own would produce overlapping bodies and
@@ -600,7 +727,40 @@ check_sections_append_only() {
 
   while IFS= read -r section; do
     [ -n "$section" ] || continue
-    removed=$(diff <(section_body "$tmp" "$section") <(section_body "$path" "$section") | grep -c '^<' || true)
+    # Same shape as check_preamble_intact, and temp files for the same two reasons: a reader in
+    # a process substitution cannot report, and diff counts the trailing newlines string capture
+    # would drop. Both files are removed on every path out of the iteration.
+    base_sec=$(mktemp) || {
+      err_full "E-TMPFILE: $path: cannot create a temp file to compare '$section'"
+      continue
+    }
+    tree_sec=$(mktemp) || {
+      rm -f "$base_sec"
+      err_full "E-TMPFILE: $path: cannot create a temp file to compare '$section'"
+      continue
+    }
+
+    read_status=0
+    section_body "$tmp" "$section" >"$base_sec" || read_status=$?
+    if [ "$read_status" -eq 0 ]; then
+      section_body "$path" "$section" >"$tree_sec" || read_status=$?
+    fi
+    if [ "$read_status" -ne 0 ]; then
+      rm -f "$base_sec" "$tree_sec"
+      err_full "E-APPEND-DIFF-SCAN: $path: could not read '$section' from it or from the base ref's copy, so the rule did not run for that section (awk exit $read_status)"
+      continue
+    fi
+
+    diff_status=0
+    diff_out=$(diff "$base_sec" "$tree_sec") || diff_status=$?
+    rm -f "$base_sec" "$tree_sec"
+    if [ "$diff_status" -ge 2 ]; then
+      err_full "E-APPEND-DIFF-SCAN: $path: could not compare '$section' against the base ref's copy (diff exit $diff_status)"
+      continue
+    fi
+
+    # In-memory; see check_preamble_intact for why the discard is written here.
+    removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
     if [ "$removed" -gt 0 ]; then
       err_full "E-REWRITE: $path drops $removed line(s) from '$section' that the base ref had — a merged record is append-only there; resolve it with a banner rather than rewriting it"
     fi
@@ -608,7 +768,7 @@ check_sections_append_only() {
 }
 
 check_not_rewritten() {
-  local base=$1 path=$2 tmp blob_status=0
+  local base=$1 path=$2 tmp blob_status=0 marker_status
   tmp=$(mktemp) || return 0
   read_base_blob "$base" "$path" "$tmp" || blob_status=$?
   case $blob_status in
@@ -634,10 +794,23 @@ check_not_rewritten() {
   # The one permitted class of edit to a merged record's protected regions. Checked before
   # any of the three rules rather than inside each, so all three answer to one predicate and
   # a change is either marker-only or it is not.
-  if marker_only_change "$tmp" "$path"; then
+  marker_status=0
+  marker_only_change "$tmp" "$path" || marker_status=$?
+  case $marker_status in
+  0)
     rm -f "$tmp"
     return 0
-  fi
+    ;;
+  1) ;;
+  # Neither shape could be built, so "is this change marker-only" has no answer. Reporting is
+  # the whole point: the `if marker_only_change` this replaces read a faulted read as "yes,
+  # marker-only" and turned all three anti-erasure rules off at once, silently.
+  *)
+    rm -f "$tmp"
+    err_full "E-SHAPE-SCAN: $path: could not canonicalise it or the base ref's copy, so the append-only rules did not run (awk exit $marker_only_status)"
+    return 0
+    ;;
+  esac
 
   check_sections_append_only "$tmp" "$path"
   check_headings_intact "$tmp" "$path"
@@ -1280,7 +1453,7 @@ run_profile() {
   local name=$1
   load_profile "$name" || return 1
 
-  local records="" record_count base_records="" base_count dir_status=0
+  local records="" record_count base_records="" base_count dir_status=0 list_status
   # `if ! dir_in_ref` would collapse "absent at base" and "could not tell" into one branch,
   # which is the defect this rule was converted to remove. Branch on the captured status.
   if [ ! -d "$RECORD_DIR" ]; then
@@ -1309,10 +1482,19 @@ run_profile() {
   # under E-BASE-TREE instead of just E-BASE-REF, once per profile.
   if [ -n "${BASE_SHA:-}" ] && [ "$base_valid" -eq 1 ]; then
     check_no_disappearances "${BASE_SHA}"
-    base_records=$(records_in_ref "${BASE_SHA}" || true)
-    base_count=$(count_lines "$base_records")
-    if [ "$base_count" -gt 0 ] && [ "$record_count" -eq 0 ]; then
-      err "E-COUNT-FLOOR: $BASE_SHA held $base_count $RECORD_LABEL record(s) but none are readable now — refusing to report a clean run over nothing"
+    # `|| true` here discarded the `return 1` records_in_ref raises when its `git ls-tree`
+    # faults on the base ref. The list came back empty, base_count was 0, and E-COUNT-FLOOR —
+    # the rule that exists to refuse a clean run over nothing — was disarmed by a read that
+    # never completed. ADR 0005 named this site and assigned it to #63.
+    list_status=0
+    base_records=$(records_in_ref "${BASE_SHA}") || list_status=$?
+    if [ "$list_status" -ne 0 ]; then
+      err_full "E-BASE-LIST-SCAN: $BASE_SHA: could not list the $RECORD_LABEL records at the base ref, so E-COUNT-FLOOR did not run (git exit $list_status)"
+    else
+      base_count=$(count_lines "$base_records")
+      if [ "$base_count" -gt 0 ] && [ "$record_count" -eq 0 ]; then
+        err "E-COUNT-FLOOR: $BASE_SHA held $base_count $RECORD_LABEL record(s) but none are readable now — refusing to report a clean run over nothing"
+      fi
     fi
   fi
 
