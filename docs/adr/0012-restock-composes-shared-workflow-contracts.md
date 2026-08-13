@@ -32,6 +32,12 @@ terminal evaluation receives `WORK:REVIEW` and has its active status removed by 
 labels are restock run state, not an extension of quest-log's issue state machine, and
 issue-backed invocations continue to use that existing state machine and reconciliation behavior.
 
+Before allocating current-run artifacts, restock scans prior restock run roots beneath the session
+scratchpad and reads their ownership ledgers. It removes an artifact only when the ledger proves
+its owner and the worker's end was observed under the dispatch-liveness contract. Missing,
+conflicting, or incomplete ownership evidence preserves the artifact and produces an actionable
+report; path shape and elapsed age never authorize deletion.
+
 ## Consequences
 
 Restock no longer carries a second implementation of shared merge and cleanup rules. Temporary
