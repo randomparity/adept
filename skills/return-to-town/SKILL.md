@@ -4,8 +4,31 @@ description: "Hand off a green, mergeable pull request or merge it when explicit
 ---
 # Hand Off or Merge, Then Clean Up
 
-When `$deliver`'s exit condition holds — required checks green and the PR is
-mergeable — you are at the hand-off point.
+At entry, resolve the pull request and take one status snapshot before choosing the default
+hand-off or operator-authorized merge path:
+
+```sh
+gh pr view <N> \
+  --json state,mergedAt,mergeable,mergeStateStatus,statusCheckRollup \
+  --jq '{state, mergedAt, mergeable, mergeState: .mergeStateStatus,
+         checks: [.statusCheckRollup[] | {name, status, conclusion}]}'
+```
+
+Interpret `state` before `mergeable` or `mergeStateStatus`:
+
+- `MERGED` is conclusive even when either computed field is `UNKNOWN`. Do not poll those
+  fields and do not repeat the default hand-off. Proceed directly to **Post-merge
+  reconciliation** below.
+- `CLOSED` means closed without merge. Stop without post-merge tracking or cleanup and report
+  that the pull request was closed unmerged.
+- Only `OPEN` continues below. For an open pull request, retain `$deliver`'s exit condition:
+  required checks are green and the pull request is mergeable. Recheck computed fields when
+  needed only on this route.
+
+A failed snapshot or an unexpected or missing `state` cannot authorize hand-off, merge, or
+cleanup. Stop with the read failure or unexpected value.
+
+When the `OPEN` route satisfies `$deliver`'s exit condition, you are at the hand-off point.
 
 ## Default: hand off, do not self-merge
 
@@ -74,7 +97,13 @@ operator-merge path only:
   close it; strip its `status:` labels; post a `WORK:TRAJECTORY` comment on the issue with
   `outcome: merged via PR #N`, guardrail status, and any surprises.
 
-### Release cleared dependents
+### Post-merge reconciliation
+
+The operator-path issue writes above run only when this invocation performed the merge. On an
+entry snapshot that was already `MERGED`, do not repeat them; verify the merged issue's current
+closed state, then perform the shared dependent reconciliation below.
+
+#### Release cleared dependents
 
 After verifying the merged issue is closed, run the `quest-log` skill's canonical
 recipe in Bash and call `reconcile_cleared_dependencies apply <owner/name>`. This is the primary
