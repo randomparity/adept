@@ -230,7 +230,8 @@ asked report it as a blocker and return. Never default to `main`.
 1. **Read the ledger first.** No `Final review` line for this range: dispatch.
    A verdict line and no `closed` line: the review ran and its file is on disk,
    so resume at the fix wave — do not regenerate, do not clear, do not
-   re-dispatch. Both lines: the phase is done.
+   re-dispatch. Verdict and `closed` lines without `review artifact disposed`:
+   resume at step 6. All three lines: the phase is done.
 2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
    and print a non-zero commit count and a non-zero byte count. Report and stop
    rather than dispatching: this file is the reviewer's whole input.
@@ -254,8 +255,11 @@ asked report it as a blocker and return. Never default to `main`.
    and append `review artifact disposed` with its former path to the ledger.
    The historical review line retains that former path as provenance, not as a
    promise that the ignored artifact remains on disk. A terminal path without
-   `closed` remains resumable, so retain its artifact. Never dispose an
-   unconsumed artifact or one still needed by a live worker.
+   `closed` remains resumable, so retain its artifact. On restart, if the file
+   is already absent, treat the prior trash operation as complete and append
+   the same disposal marker; this closes a crash between those two actions
+   without attempting a second deletion. Never dispose an unconsumed artifact
+   or one still needed by a live worker.
 
 A missing or empty file means the return is not evidence. If the reviewer produced no report,
 apply the silent-party-worker contract above; only a reconciled, harness-observed end may consume
