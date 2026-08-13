@@ -71,7 +71,11 @@ decisions above and replaces only the former `Critical / Important / Minor` grad
 Review artifacts use caller-supplied, run-unique paths. The worker may create or overwrite
 only its assigned artifact and must not dispose of it. The orchestrator clears that path
 before dispatch and disposes of the artifact after consumption. Each party removes only the
-temporary worktrees it created; a worker reports a cleanup failure before returning.
+temporary worktrees it created. A reviewer-created temporary worktree is permitted only for a
+revision that genuinely needs files laid out on disk. The reviewer removes it before returning;
+if cleanup fails, bounded `CLEANUP_FAILED` plus the path and failure reason replaces the verdict.
+The orchestrator treats it as a cannot-proceed worker failure and does not consume or act on a
+review verdict from that dispatch.
 
 ## Consequences
 

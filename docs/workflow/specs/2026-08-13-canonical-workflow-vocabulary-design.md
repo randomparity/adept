@@ -76,6 +76,8 @@ returned run identity where the schema carries one, reads the artifact, and disp
 the workflow no longer needs it. A worker writes only its assigned artifact. If a reviewer
 creates a temporary worktree to inspect another revision, that worker removes its clean
 worktree before returning; failure to clean it is reported instead of silently orphaning it.
+That report is bounded `CLEANUP_FAILED` with the path and failure reason, replaces the ordinary
+review verdict, and stops the orchestrator from consuming the review as completed evidence.
 
 ## Forge reconciliation
 
