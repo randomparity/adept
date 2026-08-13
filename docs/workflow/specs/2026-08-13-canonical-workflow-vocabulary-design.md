@@ -155,7 +155,7 @@ records the full manifest and the git blob id of every entry; a missing file, di
 or missing blob id makes runs incomparable and the evaluation fails. The orchestrator resolves
 each blob id with `git cat-file blob <id>`, verifies its hash against the manifest, and supplies
 the exact bytes—not only the path and id—to each scenario worker. Each captured response records
-the paths and blob ids actually supplied.
+the paths and blob ids actually supplied in the capture envelope, never in the worker response.
 
 Evaluation has two read-only stages. First, one fresh most-capable scenario worker per E1–E10
 receives only the frozen charter, fixed input manifest with verified file contents, its fixed row,
@@ -176,10 +176,29 @@ behavioral compliance. Do not infer intended fixes from conversation. Numeric
 evaluation-harm ratings are not canonical finding severities. Write only the required JSON.”
 The dispatch records the actual model identity; an omitted identity is malformed evidence.
 
+Each scenario capture is an orchestrator-owned JSON envelope with this exact shape:
+
+```json
+{
+  "run_id": "unique token",
+  "case_id": "E1",
+  "scenario_model": "actual model identity",
+  "evaluated_commit": "full SHA",
+  "packet_sha256": "lowercase hex",
+  "supplied_manifest": [{"path": "skill path", "blob": "git blob id"}],
+  "raw_response": "worker response preserved byte-for-byte"
+}
+```
+
+Exact-return assertions apply only to `raw_response`; the worker never sees or emits the
+envelope fields. The orchestrator serializes the envelope after the worker returns. A missing,
+extra, malformed, or mismatched envelope field fails the scenario before grading.
+
 Before the baseline, the orchestrator writes one canonical JSON file per case under
 `.agent/evals/issue-45-packets/`, using sorted object keys, UTF-8, two-space indentation, and one
-terminal newline. It records each file's SHA-256 in every scenario response and evaluator result.
-Later runs reuse those exact files; a changed or missing packet hash fails comparison. The packet
+terminal newline. It records each file's SHA-256 in every scenario capture envelope and evaluator
+result, never in `raw_response`. Later runs reuse
+those exact files; a changed or missing packet hash fails comparison. The packet
 objects contain exactly these values (arrays preserve the shown order):
 
 ```json
