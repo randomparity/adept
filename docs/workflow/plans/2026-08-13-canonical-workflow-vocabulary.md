@@ -133,19 +133,19 @@ per-run blob map. Produces final evaluation and repository-gate evidence.
    different fresh evaluator. Require exact structure and `pass` for every fixed trait.
 2. Verify the post-run path set and packet hashes equal baseline, the evaluated commit equals
    HEAD, and at least one implementation blob differs from baseline. Expected: aggregate `pass`.
-3. If a behavioral defect requires tracked edits, fix it, commit one logical change, and rerun the
-   entire post-evaluation against the new HEAD with fresh run ids.
+3. Any tracked edit after a post-evaluation—whether prompted by behavioral evidence, a guardrail,
+   or final diff review—invalidates that proof. Fix and commit one logical change, then restart
+   this task at step 1 against the new HEAD with fresh run ids.
 4. Run `git diff --check`, then `just verify` bare. Expected: zero warnings and exit 0.
 5. Review `git diff main...HEAD` for scope, naming, and stale old vocabulary. Record final branch,
    base, guardrail result, evaluation run ids, and open findings only in the quest's GitHub
    `WORK:REVIEW`/handoff annotations; do not edit this tracked plan after the proven HEAD.
-6. A defensible in-scope finding from the final diff review enters the same repair loop as step 3:
-   fix and commit it, rerun the complete post-evaluation and `just verify` against the new HEAD,
-   and repeat the diff review. Stop instead of handing off when a finding cannot be resolved.
-7. Only after the final review reports zero open findings and every oathbind, evaluation,
-   adversarial-review, and handoff consumer has finished reading its artifacts, move this run's
-   ignored issue-45 packet, capture, evaluator, oathbind, and gauntlet artifacts to trash. Never
-   delete another run's `.agent/` content.
+6. A defensible in-scope finding from the final diff review enters step 3's common repair loop.
+   Stop instead of handing off when a finding cannot be resolved.
+7. After the final review reports zero open findings and the quest handoff durably records the
+   evaluation run ids, move only this plan's ignored issue-45 packet, capture, and evaluator
+   artifacts to trash. Oathbind, gauntlet, and later quest-review artifacts are owned and disposed
+   by those workflow phases, not this plan. Never delete another run's `.agent/` content.
 
 **Acceptance:** all fixed behavioral traits pass under one independent evaluator, all repository
 guardrails pass, evaluation artifacts remain untracked, and the branch contains only chartered
