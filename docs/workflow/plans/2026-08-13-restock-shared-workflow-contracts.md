@@ -123,7 +123,11 @@ Bash 3.2-compatible command examples.
 9. For clean PASS, call return-to-town with immutable PR/unit context. On first `BASE_CHANGED`, move
    to in-review and perform one fresh snapshot evaluation; on second, post terminal evidence and
    clear active status. For WARN/FAIL/refusal, restock cleans the unit itself. Never duplicate shared
-   merge/cleanup commands.
+   merge/cleanup commands. On `MERGED_TRACKING_INCOMPLETE`, re-read and record the authoritative
+   merged state, never retry merge, retain the ownership manifest plus required branch/tracking
+   evidence, and emit the exact operator repair. Mark the unit retained-partial rather than terminal
+   and block ordinary run finalization until an operator-recorded disposition verifies the missing
+   tracking state. Map R15's packet explicitly to this branch.
 10. After every unit is terminal and worker end observed, finalize the run: remove shared owned
     artifacts only after persisting/readback of `finalization-pending`. Persist/read back progress
     after each exact report/clone removal, and on startup resume a live manifest from its recorded
