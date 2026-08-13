@@ -25,11 +25,12 @@ operator confirmation.
    proposed defect's evidenced class tuple: (a) failure mechanism or faulty idiom, (b) component
    or file family, and (c) governing accepted decision when one exists. Run one bounded search
    per evidenced dimension:
-   `gh search issues --repo <owner/name> <dimension> --json number,title,state,body,url --limit 100`
+   `gh search issues --repo <owner/name> --json number,title,state,body,url --limit 100 -- <dimension>`
    (omit `--state`; it accepts only `open`/`closed`, never `all`). A failed query stops filing.
-   Pass each dimension as one separately quoted argument or as a parameterized API variable;
-   never interpolate it into shell syntax or use `eval`. Reject a dimension containing NUL or a
-   newline because it cannot be represented as one query argument.
+   Put every trusted flag before `--`, then pass each dimension after it as one separately quoted
+   argument; quoting alone does not prevent option injection. A parameterized API variable is also
+   valid. Never interpolate a dimension into shell syntax or use `eval`. Reject a dimension
+   containing NUL or a newline because it cannot be represented as one query argument.
    Exactly 100 results is saturated: it cannot prove a below-threshold result, but may proceed
    when three historical occurrences are already verified.
 
