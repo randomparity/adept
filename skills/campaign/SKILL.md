@@ -199,6 +199,8 @@ Each prompt carries:
 - Mandatory follow-up return contract: every discovered/finalized issue and complete bounty
   occurrence tuple (occurrence, sweep, rationale, state, state reason), including verified
   closures
+- Campaign occurrence identity: pass the manifest slug and source issue so bounty embeds the
+  confirmed `CAMPAIGN-OCCURRENCE: <slug> source=#N sweep=#N` marker in any new occurrence
 - (Parallel only) external worktree path (`../<repo>-worktrees/<branch>`)
 
 **Serial:** dispatch one, wait for green + mergeable PR, merge (step 6), repeat.
@@ -280,9 +282,16 @@ looping to step 3. A decline leaves already-filed issues outside this campaign, 
 manifest row for them, and proceeds to the drained-state check. On confirmation, add the
 approved issues, report each enqueue, and loop to step 3.
 
-Before the drained check, reconcile every occurrence tuple returned by each quest worker; a
-worker report with an incomplete tuple is a blocker, never “no follow-ups.” For each verified
-closed occurrence returned by bounty, append its issue number, sweep number,
+Before the drained check—and on every resume—search all issue states for the exact public-safe
+`CAMPAIGN-OCCURRENCE: <slug>` marker with
+`gh search issues --repo <owner/name> --match body "CAMPAIGN-OCCURRENCE: <slug>" --json number,body,state,url --limit 100`.
+Exactly 100 results is incomplete and blocks completion; a failed search is degraded and blocks
+completion. Parse only canonical whole-line markers for this slug, reject duplicate occurrence
+numbers or malformed source/sweep fields, and read each occurrence's `state,stateReason,url`.
+Idempotently reconcile the union of these durable discoveries and every tuple returned by each
+quest worker; a worker report with an incomplete tuple is a blocker, never “no follow-ups.” A
+manifest append failure does not lose the marker: the next reconciliation repeats the search.
+For each verified closed occurrence in that reconciled union, append its issue number, sweep number,
 and rationale to Outcomes log as `closed-not-planned: occurrence of sweep #N`. If bounty
 reports an open, nonconforming, or unreadable occurrence state, record its normalized state
 (`UNKNOWN` when unreadable) and state reason (`UNVERIFIED` when unreadable) in Pending
