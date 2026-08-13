@@ -76,14 +76,18 @@ threshold it does not draft another instance issue. It instead:
 2. offers to comment on that sweep when found;
 3. when only a closed sweep exists, treats it as history and drafts a new sweep only if current
    evidence shows that the class persists, citing the closed sweep and new occurrence;
-4. otherwise drafts one ordinary consolidated-sweep issue whose Evidence section cites every
-   verified instance and whose Expected section defines a bounded family-wide fix;
+4. otherwise drafts one ordinary consolidated-sweep issue whose Evidence section preserves the
+   current occurrence's source, trigger, and evidence and cites every verified historical
+   instance, and whose Expected section defines a bounded family-wide fix;
 5. shows that substituted draft at the existing confirmation gate.
 
 The scan is read-only. It never reopens, closes, labels, reparents, or edits historical issues.
-At most one sweep for a class is open; sequential sweeps are allowed only after a prior sweep
-closed and current evidence demonstrates recurrence. The consolidation issue is not an epic
-unless later decomposition independently establishes several PR-sized units.
+Immediately before the confirmed create, bounty rechecks for an open matching sweep and offers
+that issue instead of knowingly creating a duplicate. The read/create sequence is not atomic;
+concurrent runs can still create duplicate sweeps, which later runs handle through ordinary
+all-state deduplication. Sequential sweeps are allowed only after a prior sweep closed and
+current evidence demonstrates recurrence. The consolidation issue is not an epic unless later
+decomposition independently establishes several PR-sized units.
 
 ## Failure handling
 

@@ -31,12 +31,17 @@ truncated, or inconclusive search stops filing rather than asserting that the th
 met.
 
 When the proposed instance would be the fourth or later in that class, bounty proposes one
-ordinary consolidated-sweep issue citing the historical instances instead of another instance
-issue. Existing issues are never mutated by this scan. An already-open sweep is treated as the
-near-match to use rather than duplicated. A closed sweep remains historical evidence: bounty
-proposes a new sweep only when current evidence shows the class still exists, citing the prior
-sweep and new occurrence. There is never more than one open sweep for a class, although a class
-that recurs after remediation can have sequential closed sweeps.
+ordinary consolidated-sweep issue instead of another instance issue. Its Evidence preserves
+the current occurrence's source, trigger, and evidence alongside citations to every verified
+historical instance. Existing issues are never mutated by this scan. An already-open sweep is
+treated as the near-match to use rather than duplicated. A closed sweep remains historical
+evidence: bounty proposes a new sweep only when current evidence shows the class still exists,
+citing the prior sweep and new occurrence.
+
+Bounty rechecks for an open matching sweep immediately before the confirmed create and never
+knowingly creates a second one. This is not atomic: concurrent bounty runs can still create
+duplicates, which return through the ordinary all-state deduplication flow rather than adding
+locking or classifier state.
 
 Campaign never automatically expands into review-created work. At re-enqueue it presents all
 new traceable issues, their proposed routing, and any consolidation, then requires explicit
@@ -52,7 +57,8 @@ operator confirmation before adding them to the manifest and returning to triage
 - A consolidated sweep is one executable issue. It becomes an epic only if later scoping shows
   that it genuinely requires several independently mergeable changes.
 - A class may accumulate sequential sweeps when it demonstrably recurs after an earlier sweep
-  closes, but never multiple open sweeps at once.
+  closes. The immediate pre-create recheck narrows but cannot eliminate concurrent duplicate
+  sweeps; any duplicate is handled by ordinary deduplication.
 - Campaign runs pause at every follow-up expansion. This trades unattended throughput for a
   hard bound controlled by the operator.
 - The contract remains instruction-only and adds no dependency, script, label family, or
