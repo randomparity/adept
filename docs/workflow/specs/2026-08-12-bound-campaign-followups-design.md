@@ -109,6 +109,9 @@ closed occurrence never enters a fix wave or the active queue.
   the operator to narrow it.
 - A failed campaign confirmation leaves the manifest unchanged. Already-filed issues remain
   ordinary project issues discoverable by later triage.
+- If an open-sweep occurrence is created but its not-planned closure fails, campaign records the
+  actual open issue, does not emit a `closed-not-planned` outcome, and stops that follow-up for
+  retry or operator intervention.
 
 ## AI surface and eval plan
 

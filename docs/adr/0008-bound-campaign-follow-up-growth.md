@@ -44,6 +44,11 @@ issue leaves the open queue. A closed sweep remains historical evidence: bounty 
 sweep only when current evidence shows the class still exists, citing the prior sweep and new
 occurrence.
 
+Creation and closure are not atomic. If creation succeeds but closure fails, campaign records
+the occurrence's actual open state, does not claim `closed-not-planned`, and stops that
+follow-up for retry or operator intervention. It cannot complete while the low-value occurrence
+remains in the open queue.
+
 Bounty rechecks for an open matching sweep immediately before the confirmed create and never
 knowingly creates a second one. This is not atomic: concurrent bounty runs can still create
 duplicates, which return through the ordinary all-state deduplication flow rather than adding
@@ -102,5 +107,6 @@ eleven follow-ups, with repeated quest cycles for one governed gate-script defec
 ## Provenance
 
 Decided while designing issue #91, including the operator's decisions to close low-value
-defects as not planned, use an ordinary consolidated issue rather than an epic, and make bounty
-discover historical recurrence without mutating old issues.
+defects as not planned, use an ordinary consolidated issue rather than an epic, make bounty
+discover historical recurrence without mutating old issues, create and close a distinct
+occurrence when its sweep is already open, and surface that closure in campaign's final report.
