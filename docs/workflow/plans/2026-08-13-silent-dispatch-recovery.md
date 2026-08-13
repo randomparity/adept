@@ -54,14 +54,14 @@ mismatch.
 **Interfaces:** each consumer links to `../../references/dispatch-liveness.md` and supplies its
 worker identity, wait-site name, existing run report or ledger, accessible durable artifacts, and
 harness liveness events. The reference returns one of: continue waiting, recorded hold, completed
-valid report, one reconciled replacement, or unresolved stop. Later workflow phases rely on the
-consumer having recorded the recovery-chain identifier and unused/consumed replacement budget.
+valid report, one reconciled replacement, or unresolved stop. Later phases in the current run rely
+on the recorded recovery-chain identifier and unused/consumed replacement budget.
 
 ### Step 1.1 — Establish the failing behavioral evaluation
 
 Dispatch a fresh read-only evaluator with only the frozen charter, the current four skill files,
 the current `references/dispatch-liveness.md` or an explicit `absent` marker, and the spec's
-E1–E11 cases and wait-site matrix. Use a fresh run identifier in the output filename and require
+E1–E10 cases and wait-site matrix. Use a fresh run identifier in the output filename and require
 the evaluated `HEAD` in the top-level JSON. Require rows with these fields:
 
 ```json
@@ -100,8 +100,8 @@ Create `references/dispatch-liveness.md` with these sections and guarantees:
 - **Reconciliation:** enumerate and disposition accessible reports, tracker state, branch/commit
   state, and worktree changes; resolve ownership/conflicts; perform a final late-report check.
   Inaccessible required evidence or unresolved state stops without replacement.
-- **One replacement:** record a recovery-chain identifier and unused/consumed budget; consult it on
-  resume; at most one replacement follows successful reconciliation.
+- **One replacement:** record a recovery-chain identifier and unused/consumed budget; the current
+  dispatcher consults it before replacement; at most one follows successful reconciliation.
 - **Late report:** cancel pre-dispatch recovery; after dispatch, stop before mutation when possible,
   otherwise disposition both result sets and escalate an irreconcilable conflict without another
   dispatch.
@@ -115,26 +115,23 @@ Keep the reference independent of campaign-specific labels and worktree location
 
 Add short application paragraphs rather than duplicating the reference:
 
-- In `restock`, place the link before “Once every subagent has reported.” Before Phase 3b launches
-  workers, create a unique scratchpad liveness ledger and record its path in the run output. Name
-  each evaluation unit as a wait site and append its chain state before a hold or replacement.
+- In `restock`, place the link before “Once every subagent has reported.” Name each evaluation
+  unit as a wait site and retain its chain state for the current run before a hold or replacement.
   Use Phase 3 worktrees/PR heads as the reconciliation surface. Forbid Phase 3c reclamation while
-  liveness is unresolved; Phase 5 incorporates the ledger into the final report.
+  liveness is unresolved; Phase 5 includes the chain state in the final report.
 - In `forge`, place the link in Party before the per-task loop. Enumerate implementer,
   task-reviewer, fix-worker, and whole-branch reviewer waits. Use `.agent/sdd/progress.md` as the
   ledger, and record chain/budget lines before replacement. Replace the existing final-review
   “silent failure” blind retry with the shared contract; keep `WRITE_FAILED`, `PACKAGE_MISSING`,
   and malformed or non-empty-file validation as first-return error paths.
-- In `saga`, place the link at the one-pass gauntlet dispatch. Before dispatch, create a unique
-  scratchpad liveness ledger beside the draft and findings paths and record the chain there before
-  any hold or replacement. Use the draft/findings artifacts as reconciliation evidence. If
-  liveness cannot be resolved, stop before the confirmation or tracker writes and report the
-  ledger path.
+- In `saga`, place the link at the one-pass gauntlet dispatch. Retain the chain state for the
+  current run before any hold or replacement and include it in the challenge summary. Use the
+  draft/findings artifacts as reconciliation evidence. If liveness cannot be resolved, stop before
+  confirmation or tracker writes and report the held chain.
 - In `trial-loop`, place the link immediately before the gauntlet subagent dispatch. Explicitly
-  separate “no report/end observed” from step 2's malformed compact-object retry. Before iteration
-  1, create a unique scratchpad liveness ledger beside the findings path and append chain state
-  before a hold or replacement. Use the findings path/run ID as reconciliation evidence and carry
-  the ledger result into the loop's run report.
+  separate “no report/end observed” from step 2's malformed compact-object retry. Retain chain
+  state for the current run before a hold or replacement. Use the findings path/run ID as
+  reconciliation evidence and carry the chain result into the loop's run report.
 
 ### Step 1.4 — Re-run the behavioral evaluation
 
@@ -143,7 +140,7 @@ against the changed files including `references/dispatch-liveness.md`. Write
 `.agent/evals/issue-48-after-<run-id>.json`; verify its run identifier and evaluated `HEAD` before
 consuming it.
 
-Expected: every required matrix cell cites exact lines; E1–E11 pass for every applicable wait
+Expected: every required matrix cell cites exact lines; E1–E10 pass for every applicable wait
 site; no consumer contradicts the shared reference; malformed-report paths remain distinct.
 
 Run `just shape-check`, `just public-safety`, and `git diff --check` bare.
@@ -168,13 +165,13 @@ Read issue #48's latest complete `WORK:SCOPE` and require token
 `scope-48-20260813T1500Z-a81d6c2e`. Map each completion criterion to exact current lines. Compare
 the changed consumer inventory to the spec matrix; a missing wait site is a blocking gap.
 
-Run an independent adversarial branch review against `main`, including late reports, interrupted
-resumes, inaccessible artifacts, replacement-budget reuse, and worktree reclamation. Resolve every
-defensible finding and commit each accepted fix separately.
+Run an independent adversarial branch review against `main`, including late reports, held-wait
+continuation, inaccessible artifacts, replacement-budget reuse, and worktree reclamation. Resolve
+every defensible finding and commit each accepted fix separately.
 
 After the final accepted review fix, dispatch another fresh behavioral evaluator with the Step 1.1
 bundle and schema against the final `HEAD`. Require a fresh run identifier, matching evaluated
-`HEAD`, complete matrix, and passing E1–E11 results before full guardrails.
+`HEAD`, complete matrix, and passing E1–E10 results before full guardrails.
 
 Expected: all criteria and matrix rows have evidence; no implementation path lies outside the
 frozen surface.
@@ -191,4 +188,4 @@ Expected: all commands exit 0; status contains only intentional committed branch
 The change is instruction-only and reverts with its commits. Do not commit `.agent/` evaluation
 or review artifacts. After reporting their run identifiers, evaluated commits, and verdicts, move
 the run-specific evaluation artifacts to trash. If an evaluator attempts a repository, tracker,
-or worktree mutation, stop it; all E1–E11 inputs are hypothetical and read-only.
+or worktree mutation, stop it; all E1–E10 inputs are hypothetical and read-only.

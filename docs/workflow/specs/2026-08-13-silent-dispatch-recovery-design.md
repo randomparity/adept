@@ -40,8 +40,9 @@ for a worker report:
 5. Record the worker identity, wait site, probe/observation result, hold or recovery outcome, and
    any reconciled artifacts in the dispatcher's existing run report or ledger. Give the original
    and replacement one recovery-chain identifier and record whether that chain's single
-   replacement authorization is unused or consumed. A resumed dispatcher consults that record
-   before dispatch. Do not invent a tracker write where the owning workflow has none.
+   replacement authorization is unused or consumed. The current dispatcher consults that record
+   before dispatch. Do not invent a tracker or persistence write where the owning workflow has
+   none.
 
 Each affected skill links to the reference at its report-waiting boundary:
 
@@ -93,11 +94,10 @@ route without duplicate live workers or lost durable work.
 | E8 | Reconciliation cannot complete | 4 | A required artifact is inaccessible, ownership is uncertain, or durable states conflict. Record each known artifact and the unresolved reason; do not replace. | block |
 | E9a | Valid report arrives before replacement mutates | 4 | Record the race, stop the replacement before mutation, reconcile both results, and authorize no further dispatch. | block |
 | E9b | Replacement stop is late or unsupported | 4 | Record the race, enumerate and disposition both result sets, authorize no further dispatch, and escalate an irreconcilable conflict through the owning workflow. | block |
-| E10 | Controller resumes after replacement | 4 | The run report or ledger shows the recovery-chain identifier and consumed authorization. Resume does not authorize a second replacement. | block |
-| E11 | Held worker later ends | 4 | Enter E2, then receive the harness end notification. Resume the same recovery chain at reconciliation with its existing replacement budget. | block |
+| E10 | Held worker later ends | 4 | Enter E2, then receive the harness end notification. Continue the same recovery chain at reconciliation with its existing replacement budget. | block |
 
 Repository policy forbids gates that assert on prose. A fresh behavioral reviewer traces
-E1–E11
+E1–E10
 against the shared reference and each call site before and after implementation. “Fresh” means a
 separate review agent receives only the frozen charter, current target files, the matrix below,
 and the evaluation cases — no authoring transcript, previous verdict, or intended fixes. It must
@@ -113,7 +113,7 @@ cite the exact lines satisfying every applicable cell; a blank or contradictory 
 | `saga` gauntlet reviewer | required | required | required | required in run report | required |
 | `trial-loop` gauntlet reviewer | required | required | required | required in run report | required |
 
-The reviewer evaluates E1–E11 for every applicable row, explicitly marking non-applicable cases
+The reviewer evaluates E1–E10 for every applicable row, explicitly marking non-applicable cases
 with a reason. The existing `just shape-check` structurally verifies that reference links resolve;
 `just verify` covers repository guardrails. Semantic correctness is established by this evidence
 matrix and the later independent adversarial branch review, not by a prose-matching gate.
@@ -124,6 +124,8 @@ matrix and the later independent adversarial branch review, not by a prose-match
 - No daemon, timer process, harness API, dependency, or executable helper.
 - No generic guarantee that a silent worker has died.
 - No prose-sensitive automated test.
+- No recovery across a controller restart where the owning workflow has no existing durable
+  ledger; the current dispatcher records and owns the chain for the current run.
 
 ## Global constraints
 
