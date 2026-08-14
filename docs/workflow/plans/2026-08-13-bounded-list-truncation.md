@@ -39,7 +39,8 @@ warning is carried into that workflow's report.
 
 Run `git branch --show-current`, `git status --short --untracked-files=all`, and read issue #40's
 latest complete `WORK:SCOPE`. Require branch `feat/bounded-list-truncation-40`, no uncommitted
-changes, and token `58D4B37E-9BCE-4C30-A45A-4BA5E261B3CE`. Stop on a mismatch.
+changes, and token `A78B94C5-D5CB-42FF-A9DA-98E93FC6DA65`. Select the latest complete annotation
+with the `quest-log` recipe; stop on a mismatch.
 
 ## Task 1 — Establish the failing behavior
 
@@ -170,9 +171,11 @@ evidence.
 
 Read issue #40's latest complete `WORK:SCOPE` and require token
 `A78B94C5-D5CB-42FF-A9DA-98E93FC6DA65`. Map all completion criteria to controlling skill lines.
-Remove the accidentally tracked `.agent/sdd/final-fix-report.md`; the ignored workspace remains
-the transient evidence location. Run the complete E1–E9 bounded human review and record pass/fail,
-affected population, controlling lines, and a one-sentence reason per case.
+Verify `.agent/sdd/task-5-report.md` is ignored with `git check-ignore -q` before writing transient
+evidence there. Remove the accidentally tracked `.agent/sdd/final-fix-report.md`, stage its
+deletion explicitly, and commit `chore: remove tracked review artifact`. Run the complete E1–E9
+bounded human review and record pass/fail, affected population, controlling lines, and a one-
+sentence reason per case in `.agent/sdd/task-5-report.md`.
 
 Expected: E1–E7 pass; E8–E9 have no blocking behavior.
 
@@ -180,10 +183,11 @@ Expected: E1–E7 pass; E8–E9 have no blocking behavior.
 
 Run `just verify`, `git diff --check`, and `git status --short --untracked-files=all` bare.
 
-Expected: every command exits 0 and the worktree is clean.
+Expected: every command exits 0. The status command must also print no output; any output stops
+handoff even though `git status` itself exits 0.
 
 ### Step 5.3 — Rollback and cleanup
 
 Each implementation commit changes one skill and can be reverted independently. Review artifacts
-stay outside the repository. A behavioral reviewer must not call GitHub or mutate repository
-state.
+stay in the verified-ignored `.agent/sdd` workspace and outside tracked repository state. A
+behavioral reviewer must not call GitHub or mutate repository state.
