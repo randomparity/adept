@@ -173,7 +173,7 @@ Stable cases: `PFR-1` snapshots and publishes a safe non-empty review, verifies 
 disposes both artifacts; its framing cases cover empty lines, absent/present final LF, CRLF, bare
 CR, and invalid UTF-8/NUL. `PFR-2` rejects a review containing a denied host path and proves source
 or snapshot mutation after scanning cannot change the canonical bytes posted. It also crashes
-before and during the atomic snapshot copy, then proves resume reclaims only the owned temporary path
+before and during the atomic snapshot copy. Resume reclaims only the owned temporary path
 and adopts a completed final snapshot. `PFR-3` proves both state arms:
 a verified no-review mode may
 publish `forge review: not required`, while a failed required review cannot reach delivery. `PFR-4`
