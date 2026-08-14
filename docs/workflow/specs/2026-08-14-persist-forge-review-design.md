@@ -60,8 +60,8 @@ pre-existing unrecorded destination and never refreshes a completed snapshot fro
 
 Resume reads the intent rather than minting new paths. A recorded final snapshot is adopted only
 after its type, non-emptiness, digest, and public-safety scan pass. If a recorded temporary exists
-without the final snapshot, it is an incomplete owned copy: resume moves that exact path to trash and
-restarts the copy. Any path/type mismatch stops with both artifacts retained. Once the final
+without the final snapshot, it is an incomplete owned copy. Resume moves that exact path to trash
+and restarts the copy. Any path/type mismatch stops with both artifacts retained. Once the final
 snapshot passes, `$quest` computes its SHA-256, appends `review publication pending` with the token,
 final path, and digest, and verifies that append. Comment composition reads only that recorded
 snapshot and records the token in a named outer `publication token` field. The token, ownership,
@@ -171,10 +171,9 @@ cost do not change; success is a verified complete PR annotation followed by ver
 
 Stable cases: `PFR-1` snapshots and publishes a safe non-empty review, verifies its digest, and then
 disposes both artifacts; its framing cases cover empty lines, absent/present final LF, CRLF, bare
-CR, and invalid UTF-8/NUL. `PFR-2` rejects a review containing a denied host path and proves a source
-or snapshot mutation after scanning cannot change the canonical bytes posted; it also crashes
-before and
-during the atomic snapshot copy, then proves resume reclaims only the ledger-owned temporary path
+CR, and invalid UTF-8/NUL. `PFR-2` rejects a review containing a denied host path and proves source
+or snapshot mutation after scanning cannot change the canonical bytes posted. It also crashes
+before and during the atomic snapshot copy, then proves resume reclaims only the owned temporary path
 and adopts a completed final snapshot. `PFR-3` proves both state arms:
 a verified no-review mode may
 publish `forge review: not required`, while a failed required review cannot reach delivery. `PFR-4`
