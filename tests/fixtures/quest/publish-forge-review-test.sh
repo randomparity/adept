@@ -9,6 +9,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 clear_git_env
 SCRIPT="$SCRIPT_DIR/../../../skills/quest/scripts/publish-forge-review"
 ORIGINAL_PATH=$PATH
+SYSTEM_TAIL=$(command -v tail)
 passed=0
 failed=0
 fixture_init publish-forge-review-test
@@ -47,10 +48,13 @@ pr)
 		esac
 	done
 	[ -n "$body" ] || exit 96
+	printf 'comment-invocation\n' >>"$state/events"
+	case ${GH_MODE:-success} in
+	comment-fail) exit 1 ;;
+	esac
 	printf 'post\n' >>"$state/events"
 	cp "$body" "$state/comment-body"
 	case ${GH_MODE:-success} in
-	comment-fail) exit 1 ;;
 	after-write) exit 1 ;;
 	missing-url) printf '\n' ;;
 	malformed-url) printf '%s\n' 'https://github.com/wrong/repo/pull/42#issuecomment-nope' ;;
@@ -69,6 +73,15 @@ api)
 *) exit 95 ;;
 esac
 EOF
+	cat >"$bin/tail" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "${TAIL_MODE:-success}" = fail ]; then
+	exit 1
+fi
+exec "$REAL_TAIL" "$@"
+EOF
 	cat >"$bin/trash" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -85,7 +98,7 @@ if [ "${FAIL_TRASH_ON:-}" = "$name" ]; then
 fi
 mv "$path" "$FAKE_STATE/trash/$name"
 EOF
-	chmod +x "$bin/gh" "$bin/trash"
+	chmod +x "$bin/gh" "$bin/tail" "$bin/trash"
 }
 
 new_case() {
@@ -114,7 +127,7 @@ run_helper() {
 	shift 2
 	STATUS=0
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
-		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" \
+		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_TAIL="$SYSTEM_TAIL" \
 		"$@" "$SCRIPT" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
 		2>"$REPO/error") || STATUS=$?
 }
@@ -122,6 +135,14 @@ run_helper() {
 post_count() {
 	if [ -f "$STATE/events" ]; then
 		grep -c '^post$' "$STATE/events" || :
+	else
+		printf '0\n'
+	fi
+}
+
+comment_invocation_count() {
+	if [ -f "$STATE/events" ]; then
+		grep -c '^comment-invocation$' "$STATE/events" || :
 	else
 		printf '0\n'
 	fi
@@ -250,7 +271,15 @@ case_publication_modes() {
 case_comment_failures_never_retry() {
 	local name='PFR-4 comment failure and ambiguity never retry'
 	local mode
-	for mode in comment-fail missing-url malformed-url after-write; do
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=comment-fail
+	if [ "$STATUS" -eq 0 ] || [ "$(comment_invocation_count)" != 1 ] ||
+		[ "$(post_count)" != 0 ] || [ -e "$STATE/comment-body" ] ||
+		! assert_retained "$name"; then
+		fail "$name" 'pre-write comment failure did not retain evidence without writing'
+		return
+	fi
+	for mode in missing-url malformed-url after-write; do
 		new_case
 		run_helper required "$REVIEW" env GH_MODE="$mode"
 		if [ "$STATUS" -eq 0 ] || [ "$(post_count)" != 1 ] || ! assert_retained "$name"; then
@@ -284,6 +313,15 @@ case_ledger_and_disposal_failures_retain_paths() {
 	if [ "$STATUS" -eq 0 ] || ! assert_retained "$name" ||
 		! grep -qF 'https://github.com/acme/widgets/pull/42#issuecomment-73' "$REPO/error"; then
 		fail "$name" 'ledger failure did not retain the verified comment identity'
+		return
+	fi
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=success TAIL_MODE=fail
+	if [ "$STATUS" -eq 0 ] || ! assert_retained "$name" ||
+		! grep -q '^review-publication-verified:' "$LEDGER" ||
+		grep -q '^review-publication-disposed:' "$LEDGER" ||
+		! grep -qF 'https://github.com/acme/widgets/pull/42#issuecomment-73' "$REPO/error"; then
+		fail "$name" 'ledger readback failure did not retain verified publication evidence'
 		return
 	fi
 	new_case
