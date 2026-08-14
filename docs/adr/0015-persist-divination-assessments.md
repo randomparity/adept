@@ -15,9 +15,12 @@ already owned by quest's frozen external-authority charter and serves as its liv
 ## Decision
 
 `$divination` posts its assessment to the scoped issue as a complete `WORK:DIVINATION`
-annotation. The annotation contains the assessed issue URL, a token, source revision evidence,
-blast radius, change hazards, complexity, and decompose verdict. It follows the shared
-whole-line markers, completion sentinel, and latest-complete-wins rules.
+annotation. The annotation contains the assessed issue URL, a token, the issue's observed
+`updatedAt`, the producer worktree's full `HEAD` commit SHA, and blast radius, change hazards,
+complexity, and decompose verdict. Each assessment field cites the issue fact, linked tracker
+artifact, or repository path that grounds it. These values are captured from the same reads used
+to produce the assessment, before the post. The block follows the shared whole-line markers,
+completion sentinel, and latest-complete-wins rules.
 
 The producer makes one post attempt and reads the comment back. If the post result is
 indeterminate, it performs one bounded comment read for its unique token: one matching complete
@@ -27,11 +30,14 @@ the assessment available to the interactive caller but must not claim a durable 
 
 Consumers read the latest complete `WORK:DIVINATION` block, verify that it names the requested
 issue, and revalidate it against the live issue and implicated repository state. The shared
-minimum freshness rule compares the recorded issue `updatedAt` and full repository HEAD with
-current values; either mismatch forces fresh derivation. Exact matches establish freshness only,
-so each consumer still checks the assessment's grounded claims and may impose stricter checks.
-Stale, malformed, incomplete, mismatched, or absent assessments are evidence gaps, not blockers:
-`$quest` derives the fields itself and `$bounty` proceeds without a persisted split.
+minimum freshness rule compares the recorded issue `updatedAt` and producer `HEAD` SHA with the
+consumer's current values before it changes branches; either mismatch forces fresh derivation.
+On an exact match, the consumer verifies that every cited issue fact, linked tracker artifact, and
+repository path still exists and supports its associated field. It adopts all four fields as one
+assessment only when every citation passes; any failure derives the complete assessment again.
+Consumer-specific stricter checks may reject the whole block but never reinterpret or partially
+adopt it. Stale, malformed, incomplete, mismatched, or absent assessments are evidence gaps, not
+blockers: `$quest` derives the fields itself and `$bounty` proceeds without a persisted split.
 
 `WORK:DIVINATION` remains advisory evidence. It never freezes scope, authorizes implementation,
 changes issue status, or assigns `risk:*` execution-policy labels. `$quest` continues to own and

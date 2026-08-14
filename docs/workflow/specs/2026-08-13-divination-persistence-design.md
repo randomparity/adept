@@ -20,21 +20,24 @@ posts this public-safe shape to the issue it assessed:
 <!-- WORK:DIVINATION -->
 ## Divination — issue #N
 - Assessment identity: <issue URL>; token `<opaque token>`.
-- Source revision: issue `updatedAt` `<timestamp>`; repository HEAD `<full SHA>`.
-- Blast radius: <grounded files/modules and local or cross-cutting judgment>.
-- Change hazards: <named hazards or `none`>.
-- Complexity: S | M | L.
-- Decompose verdict: one PR | split — <actionable breakdown>.
+- Source revision: issue `updatedAt` `<timestamp>`; producer HEAD `<full SHA>`.
+- Blast radius: <files/modules and local or cross-cutting judgment; cited grounding>.
+- Change hazards: <named hazards or `none`; cited grounding>.
+- Complexity: S | M | L — <cited grounding>.
+- Decompose verdict: one PR | split — <actionable breakdown; cited grounding>.
 <!-- DIVINATION:COMPLETE -->
 ```
 
-The producer makes one post attempt, captures the returned comment URL, and reads the comment
-back. Success requires the token, both whole-line markers, the assessed issue identity, both
-source-revision values, and all four assessment fields. If the post result is indeterminate, the
-producer performs one bounded comments read for the unique token. Exactly one complete match is
-verified normally; zero or multiple matches is an explicit non-durable result. It never retries
-the write blindly. A denied write or failed readback also must not claim that a durable handoff
-exists. The assessment itself may still be reported to the interactive caller.
+The issue `updatedAt` and full producer-worktree `HEAD` SHA come from the same reads used for the
+assessment and are captured before posting. Every assessment field cites the issue fact, linked
+tracker artifact, or repository path that supports it. The producer makes one post attempt,
+captures the returned comment URL, and reads the comment back. Success requires the token, both
+whole-line markers, the assessed issue identity, both source-revision values, all four assessment
+fields, and their grounding. If the post result is indeterminate, the producer performs one
+bounded comments read for the unique token. Exactly one complete match is verified normally; zero
+or multiple matches is an explicit non-durable result. It never retries the write blindly. A
+denied write or failed readback also must not claim that a durable handoff exists. The assessment
+itself may still be reported to the interactive caller.
 
 The shared annotation convention owns whole-line matching, completion sentinels, and
 latest-complete-wins. `WORK:DIVINATION` is posted on an issue after assessment and before any
@@ -44,15 +47,19 @@ implementation workflow. It is advisory evidence, not a status transition or sco
 
 Consumers query issue comments with explicit JSON fields and select the last block carrying both
 whole-line markers. A block is usable only when it names the requested issue, contains the four
-fields, and provides parseable source evidence. Consumers compare the recorded issue `updatedAt`
-and repository HEAD with current values and re-check every claim against the current issue and
-implicated files. Exact source matches establish freshness, not truth; revalidation still applies.
+fields and their citations, and provides parseable source evidence. Before changing branches,
+consumers compare the recorded issue `updatedAt` and producer `HEAD` SHA with current values. On an
+exact match, they verify every cited issue fact, linked tracker artifact, and repository path still
+exists and supports its associated field. Exact source matches establish freshness, not truth.
 
-`$quest` adopts each supported field after revalidation. It derives any missing, malformed,
-mismatched, stale, or unsupported field itself, then records the resulting values only as tracking
-metadata inside its complete frozen `WORK:SCOPE`. Assessment content never fills any of the eight
-charter authority fields. `$bounty decompose` uses a revalidated `split` verdict as drafting
-evidence; otherwise it performs its existing decomposition reasoning without blocking.
+`$quest` adopts all four fields as one assessment only after every citation passes. Any missing,
+malformed, mismatched, stale, unsupported, or ungrounded field causes it to derive the complete
+assessment itself, then record the resulting values only as tracking metadata inside its complete
+frozen `WORK:SCOPE`. Assessment content never fills any of the eight charter authority fields.
+`$bounty decompose` likewise uses the whole revalidated assessment, including a `split` verdict,
+as drafting evidence; otherwise it performs its existing decomposition reasoning without
+blocking. Consumer-specific stricter checks may reject the whole block, never partially adopt or
+reinterpret it.
 
 No consumer rewrites or deletes a divination comment. Older complete assessments remain
 superseded history.
