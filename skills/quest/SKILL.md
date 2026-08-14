@@ -256,17 +256,26 @@ does not claim to detect arbitrary out-of-band edits.
 
 ## 5. Build With TDD
 
-Run `$forge` to implement the plan and run the guardrail suite, passing the
-plan path if one exists. For a `governed-small-change`, pass the classification
-and the revalidated decision evidence (reference, kind, accepted status,
-governed behavior, acceptance criteria) -- and no plan path.
+Before calling `$forge`, resolve its workspace with `scripts/sdd-workspace` and
+set `FORGE_LEDGER=<workspace>/progress.md` and
+`FORGE_HANDOFF=<workspace>/quest-forge-handoff.md`. This is the one ignored
+build-to-ship record; do not derive `FORGE_*` values from conversation memory.
+If that handoff already exists, parse and validate it before doing any build
+work: `publication-verified` follows its verified-resume route directly to
+step 9, `publication-in-progress` parks, and `build-complete` resumes from the
+parsed handoff without calling `$forge` again. A parsed `required-failed` parks
+under its mode rule below. Never replace an existing handoff.
 
-Resolve the forge ledger's directory and set
-`FORGE_HANDOFF=<ledger-directory>/quest-forge-handoff.md`. This is the one
-ignored build-to-ship record; do not derive `FORGE_*` values from conversation
-memory. On a new build, create it with `mktemp` in that directory, mode 0600,
-then atomically rename it into place only after every write succeeds. Its exact
-line-oriented format is:
+Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the plan and run
+the guardrail suite, passing the plan path if one exists. For a
+`governed-small-change`, pass the classification and revalidated decision
+evidence (reference, kind, accepted status, governed behavior, acceptance
+criteria) -- and no plan path. Require forge's ledger result to equal the
+expected `FORGE_LEDGER`. Create the new handoff with `mktemp` in that directory,
+mode 0600, and byte-for-byte read it back before installing it with an atomic
+no-replace primitive. If the destination appears at any point, do not overwrite
+it: discard the temporary file, parse the existing handoff, and take its phase
+route. Its exact line-oriented format is:
 
 ```text
 format: quest-forge-handoff-v1
@@ -308,12 +317,12 @@ or reconstructed value.
 On a verified-publication resume, require `review-comment-url` to parse as
 `https://github.com/<repo>/pull/<pr>#issuecomment-<id>`, with the record's
 current `repo`, current `pr:`, and numeric `<id>`. Require it to equal the URL
-in the exact `review-publication-verified: <URL>` ledger line for this handoff,
-then re-read its exact disposal record. In `required` mode, that record must be
-paired with the retained range and exact review path; in `not-required` mode,
-it must name the exact `REVIEW_SUMMARY` path. Only then skip directly to step
-9. Do not rerun `$deliver`, recreate the summary, invoke the publication
-helper, or post a second `WORK:REVIEW` comment.
+in the exact `review-publication-verified: <URL>` ledger line after this
+handoff's `forge-result-record`, then re-read its exact disposal record. In
+`required` mode, that record must be paired with the retained range and exact
+review path; in `not-required` mode, it must name the exact `REVIEW_SUMMARY`
+path. Only then skip directly to step 9. Do not rerun `$deliver`, recreate the
+summary, invoke the publication helper, or post a second `WORK:REVIEW` comment.
 `publication-in-progress` remains parked for human reconciliation, and only
 `build-complete` continues through review and shipping.
 
@@ -430,6 +439,13 @@ in it. `REVIEW_SUMMARY` is the exact `review-summary:` path in the parsed
 handoff, not an ad-hoc filename. The verbose per-iteration findings file is
 droppable.
 
+After `$deliver` reports the PR, resolve it once and verify its repository,
+number, head branch, base branch, and `headRefOid`. They must equal `REPO`, the
+returned `PR`, the handoff branch, `BASE_BRANCH`, and `git rev-parse HEAD`
+respectively. A missing, changed, or mismatched value parks before summary
+creation and before the helper; never publish a review for an unverified PR
+head.
+
 After `$deliver` creates the PR, create that summary once with `mktemp` beside
 the ledger and atomically rename it only after writing these exact, non-empty
 single-line fields in order:
@@ -465,7 +481,14 @@ records verification, and recoverably disposes its owned scratch files. On
 nonzero, do not retry, do not post another `WORK:REVIEW`, and park the quest
 with the helper's retained evidence and failure output; leave the handoff in
 `publication-in-progress`. On success, capture its sole verified comment URL,
-require the named ledger to contain its verified and disposed records, then
+require it to parse for this exact `REPO` and `PR`, and require the exact
+`review-publication-verified: <URL>` line to occur after this handoff's
+`forge-result-record`. Then require the subsequent disposal record to own all
+and only its former paths: in `required` mode the exact review,
+`REVIEW_SUMMARY`, and one helper-created `.publish-forge-review.*` body beside
+the ledger; in `not-required` mode the exact `REVIEW_SUMMARY` and that one
+body. The body entry must be in the ledger directory and be the helper's
+single generated body identity, not an inferred or older path. Only then
 atomically rewrite and byte-verify phase `publication-verified` with the PR
 number and `review-comment-url: <verified URL>`. Carry that URL into step 9;
 `$return-to-town` needs no forge-scratch cleanup.
