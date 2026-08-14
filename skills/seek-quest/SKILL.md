@@ -6,9 +6,8 @@ description: "Rank the status:ready GitHub issue queue and recommend the next is
 
 Rank the `status:ready` GitHub issue queue and recommend the top candidate for
 `$quest`. **Read-only** — this skill writes nothing to GitHub, git, or the
-filesystem, exactly like `$divination`. It never invokes `$quest` or
-`$sort-board`; recommending and acting are separate explicit steps, and this
-skill only recommends.
+filesystem. It never invokes `$quest` or `$sort-board`; recommending and acting
+are separate explicit steps, and this skill only recommends.
 
 Input: an optional caller-supplied risk allowlist and/or effort allowlist
 (e.g. "risk:night-safe only", "effort S or M"). No input narrows nothing.
