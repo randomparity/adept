@@ -5,7 +5,9 @@ set -euo pipefail
 
 OUTER_MARKER='<!-- WORK:REVIEW -->'
 OUTER_SENTINEL='<!-- REVIEW:COMPLETE -->'
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SCRIPT_DIR=${BASH_SOURCE[0]%/*}
+[ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR=.
+SCRIPT_DIR=$(cd "$SCRIPT_DIR" && pwd)
 ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 body=''
 disposer=''
@@ -50,8 +52,7 @@ preflight() {
 	[ -x "$ROOT/scripts/check-public-safety.sh" ] || fail 'public-safety check is unavailable'
 }
 
-validate_inputs() {
-	local marker marker_status nul_bytes
+validate_arguments() {
 	[ "$#" -eq 6 ] || fail 'usage: publish-forge-review REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY'
 	repo=$1
 	pr=$2
@@ -67,6 +68,10 @@ validate_inputs() {
 	esac
 	case $pr in '' | *[!0-9]* | 0) fail 'pull request is invalid' ;; esac
 	case $mode in required | not-required) ;; *) fail 'publication mode is invalid' ;; esac
+}
+
+validate_content() {
+	local marker marker_status nul_bytes
 	[ -f "$summary" ] && [ -r "$summary" ] && [ -s "$summary" ] || fail 'summary is invalid'
 	iconv -f UTF-8 -t UTF-8 "$summary" >/dev/null 2>&1 || fail 'summary is not UTF-8 text'
 	nul_bytes=$(LC_ALL=C od -An -v -t x1 "$summary") || fail 'summary cannot be read'
@@ -173,8 +178,9 @@ dispose() {
 	append_ledger "$disposed_line"
 }
 
-validate_inputs "$@"
+validate_arguments "$@"
 preflight
+validate_content
 compose_body
 comment_url=$(post_comment)
 read_comment "$comment_url"

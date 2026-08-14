@@ -11,6 +11,8 @@ SCRIPT="$SCRIPT_DIR/../../../skills/quest/scripts/publish-forge-review"
 ORIGINAL_PATH=$PATH
 SYSTEM_CAT=$(command -v cat)
 SYSTEM_TAIL=$(command -v tail)
+SYSTEM_ICONV=$(command -v iconv)
+SYSTEM_UNAME=$(command -v uname)
 passed=0
 failed=0
 fixture_init publish-forge-review-test
@@ -83,6 +85,13 @@ if [ "${COMPOSE_SOURCE_FAIL:-}" = summary ]; then
 fi
 exec "$REAL_CAT" "$@"
 EOF
+	cat >"$bin/iconv" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'content-iconv\n' >>"$FAKE_STATE/events"
+exec "$REAL_ICONV" "$@"
+EOF
 	cat >"$bin/tail" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -92,13 +101,31 @@ if [ "${TAIL_MODE:-success}" = fail ] && [ "${1:-}" != -c ]; then
 fi
 exec "$REAL_TAIL" "$@"
 EOF
-	cat >"$bin/trash" <<'EOF'
+	cat >"$bin/uname" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-[ "$1" = -- ] && shift
+printf 'preflight-uname\n' >>"$FAKE_STATE/events"
+if [ -n "${FAKE_UNAME:-}" ]; then
+	printf '%s\n' "$FAKE_UNAME"
+	exit 0
+fi
+exec "$REAL_UNAME" "$@"
+EOF
+	cat >"$bin/dispose" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+disposer=$1
+shift
+case $disposer in
+trash) [ "$1" = -- ] && shift ;;
+gio) [ "$1" = trash ] && shift ;;
+*) exit 98 ;;
+esac
 path=$1
 name=$(basename "$path")
+printf 'disposer %s\n' "$disposer" >>"$FAKE_STATE/events"
 if ! grep -q '^review-publication-verified:' "$FAKE_LEDGER"; then
 	printf 'trash-before-verified\n' >>"$FAKE_STATE/events"
 fi
@@ -108,7 +135,20 @@ if [ "${FAIL_TRASH_ON:-}" = "$name" ]; then
 fi
 mv "$path" "$FAKE_STATE/trash/$name"
 EOF
-	chmod +x "$bin/cat" "$bin/gh" "$bin/tail" "$bin/trash"
+	cat >"$bin/trash" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec "$(dirname "$0")/dispose" trash "$@"
+EOF
+	cat >"$bin/gio" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec "$(dirname "$0")/dispose" gio "$@"
+EOF
+	chmod +x "$bin/cat" "$bin/dispose" "$bin/gh" "$bin/gio" "$bin/iconv" \
+		"$bin/tail" "$bin/trash" "$bin/uname"
 }
 
 new_case() {
@@ -138,7 +178,7 @@ run_helper() {
 	STATUS=0
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
 		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
-		REAL_TAIL="$SYSTEM_TAIL" \
+		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
 		"$@" "$SCRIPT" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
 		2>"$REPO/error") || STATUS=$?
 }
@@ -411,6 +451,36 @@ case_review_without_final_newline_keeps_outer_sentinel_parseable() {
 	ok "$name"
 }
 
+case_platform_disposers_are_deterministic() {
+	local name='PFR-10 deterministic Darwin and Linux disposers'
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
+	if [ "$STATUS" -ne 0 ] || [ "$(grep -c '^disposer trash$' "$STATE/events")" != 3 ] ||
+		grep -q '^disposer gio$' "$STATE/events"; then
+		fail "$name" 'Darwin did not use the fake trash disposer'
+		return
+	fi
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Linux
+	if [ "$STATUS" -ne 0 ] || [ "$(grep -c '^disposer gio$' "$STATE/events")" != 3 ] ||
+		grep -q '^disposer trash$' "$STATE/events"; then
+		fail "$name" 'Linux did not use the fake gio disposer'
+		return
+	fi
+	ok "$name"
+}
+
+case_preflight_precedes_content_validation() {
+	local name='PFR-11 preflight precedes content validation'
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
+	if [ "$STATUS" -ne 0 ] || [ "$(sed -n '1p' "$STATE/events")" != preflight-uname ]; then
+		fail "$name" 'content validation ran before preflight'
+		return
+	fi
+	ok "$name"
+}
+
 printf 'publish-forge-review\n\n'
 case_required_safe_review
 case_public_safety_stops_publication
@@ -421,6 +491,8 @@ case_readback_rejects_unverified_comments
 case_ledger_and_disposal_failures_retain_paths
 case_markers_stay_payload_and_summary_markers_fail
 case_review_without_final_newline_keeps_outer_sentinel_parseable
+case_platform_disposers_are_deterministic
+case_preflight_precedes_content_validation
 
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

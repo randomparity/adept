@@ -257,14 +257,17 @@ does not claim to detect arbitrary out-of-band edits.
 ## 5. Build With TDD
 
 Before calling `$forge`, resolve its workspace with `scripts/sdd-workspace` and
-set `FORGE_LEDGER=<workspace>/progress.md` and
-`FORGE_HANDOFF=<workspace>/quest-forge-handoff.md`. This is the one ignored
-build-to-ship record; do not derive `FORGE_*` values from conversation memory.
-If that handoff already exists, parse and validate it before doing any build
-work: `publication-verified` follows its verified-resume route directly to
-step 9, `publication-in-progress` parks, and `build-complete` resumes from the
-parsed handoff without calling `$forge` again. A parsed `required-failed` parks
-under its mode rule below. Never replace an existing handoff.
+set `FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
+the frozen `WORK:SCOPE` annotation token that this quest already validated, then
+set `FORGE_HANDOFF=<workspace>/quest-forge-handoff-<issue>-<scope-token>.md`.
+That pair is the ignored build-to-ship identity; do not derive it or any
+`FORGE_*` value from conversation memory. A new issue or scope token gets a new
+record without a global cleanup protocol. If this exact handoff already exists,
+parse and validate it before doing any build work: `publication-verified`
+follows its verified-resume route directly to step 9,
+`publication-in-progress` parks, and `build-complete` resumes from the parsed
+handoff without calling `$forge` again. A parsed `required-failed` parks under
+its mode rule below. Never replace an existing same-issue, same-scope handoff.
 
 Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the plan and run
 the guardrail suite, passing the plan path if one exists. For a
@@ -280,6 +283,8 @@ route. Its exact line-oriented format is:
 ```text
 format: quest-forge-handoff-v1
 phase: build-complete
+issue: <exact issue number>
+scope-token: <exact frozen WORK:SCOPE token>
 repo: <exact owner/repository>
 forge-mode: <required|not-required|required-failed>
 forge-range: <full-base-sha>..<full-head-sha>|not-required
@@ -303,10 +308,12 @@ non-empty. `build-complete` has no `pr:` or `review-comment-url:` field;
 field; and `publication-verified` adds exactly one `pr:`,
 `delivered-head-sha:`, and `review-comment-url:` field. Both SHA fields are
 full immutable object IDs, never abbreviations. Parse only this record to set
-`REPO`, `FORGE_MODE`, `FORGE_RANGE`, `FORGE_REVIEW_OR_REASON`, `FORGE_LEDGER`,
-`REVIEW_SUMMARY`, branch, `BASE_BRANCH`, and guardrails; require their paths,
-repository, branch, and base to match the live checkout. On every resume, require
-`forge-result-record` to be one whole, exact line in the named ledger. In
+the issue, scope token, `REPO`, `FORGE_MODE`, `FORGE_RANGE`,
+`FORGE_REVIEW_OR_REASON`, `FORGE_LEDGER`, `REVIEW_SUMMARY`, branch,
+`BASE_BRANCH`, and guardrails; require the issue and scope token to equal the
+current frozen charter, and paths, repository, branch, and base to match the
+live checkout. On every resume, require `forge-result-record` to be one whole,
+exact line in the named ledger. In
 `required` mode it must be the retained record for `forge-range` and name the
 exact handoff review and ledger paths. In `not-required` mode it must be
 forge's exact verified not-required record and name the exact reason and ledger
