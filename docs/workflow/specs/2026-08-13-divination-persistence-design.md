@@ -20,7 +20,8 @@ posts this public-safe shape to the issue it assessed:
 <!-- WORK:DIVINATION -->
 ## Divination — issue #N
 - Assessment identity: <issue URL>; token `<opaque token>`.
-- Source revision: issue evidence SHA-256 `<lowercase hex>`; producer HEAD `<full SHA>`.
+- Source revision: issue evidence SHA-256 `<lowercase hex>`; producer HEAD `<full SHA>`;
+  worktree `clean`.
 - Blast radius: <files/modules and local or cross-cutting judgment; cited grounding>.
 - Change hazards: <named hazards or `none`; cited grounding>.
 - Complexity: S | M | L — <cited grounding>.
@@ -28,13 +29,20 @@ posts this public-safe shape to the issue it assessed:
 <!-- DIVINATION:COMPLETE -->
 ```
 
-The issue evidence fingerprint is the SHA-256 of canonical JSON containing the issue title, body,
-sorted label names, and ordered comment identities and bodies. Canonical JSON uses sorted object
-keys, UTF-8, and no insignificant whitespace. The producer computes it before its new annotation
-exists; a consumer recomputes it after removing only the selected annotation's exact comment
-identity and body, never other marker-shaped comments. The fingerprint and full
-producer-worktree `HEAD` SHA come from the same reads used for the assessment and are captured
-before posting. Every assessment field
+The issue evidence fingerprint input is exactly
+`{"body":string,"comments":[{"body":string,"id":string}],"labels":[string],"title":string}`.
+Sort label names bytewise and comments bytewise by `id`; preserve the UTF-8 strings returned by
+`gh` without Unicode normalization. Serialize with `jq -cS` and no trailing newline, then compute
+SHA-256. The vector
+`{"body":"B","comments":[{"body":"C","id":"IC_1"}],"labels":["bug"],"title":"T"}`
+must produce `b67232207bfca8fcd9a4bb5ddcb0b9d69ff3d182acd4bb54d4dc1781355998dd`.
+
+The producer computes the fingerprint before its new annotation exists; a consumer recomputes it
+after removing only the selected annotation's exact comment `id`, never other marker-shaped
+comments. The fingerprint and full producer-worktree `HEAD` SHA come from the same reads used for
+the assessment and are captured before posting. The producer requires `git status --short
+--untracked-files=all` to be empty before it posts; a dirty-worktree assessment remains local and
+explicitly non-durable. Every assessment field
 cites the issue fact, linked tracker artifact, or repository path that supports it. The producer
 makes one post attempt, captures the returned comment URL, and reads the comment back. Success
 requires the token, both whole-line markers, the assessed issue identity, both source-revision
@@ -54,10 +62,11 @@ Consumers query issue comments with explicit JSON fields and select the last blo
 whole-line markers. A block is usable only when it names the requested issue, contains the four
 fields and their citations, and provides parseable source evidence. Before changing branches,
 consumers recompute the issue evidence fingerprint and compare it and the producer `HEAD` SHA with
-current values. Only the selected annotation's exact comment is excluded, so the producer's own
-write does not stale the evidence and every other comment remains fingerprinted. On an exact
-match, consumers verify every cited issue fact, linked tracker artifact, and repository path still
-exists and supports its associated field. Exact source matches establish freshness, not truth.
+current values, and require their own worktree to be clean. Only the selected annotation's exact
+comment is excluded, so the producer's own write does not stale the evidence and every other
+comment remains fingerprinted. Any mismatch or dirty state rejects the block. On an exact match,
+consumers verify every cited issue fact, linked tracker artifact, and repository path still exists
+and supports its associated field. Exact source matches establish freshness, not truth.
 
 `$quest` adopts all four fields as one assessment only after every citation passes. Any missing,
 malformed, mismatched, stale, unsupported, or ungrounded field causes it to derive the complete
@@ -104,11 +113,13 @@ The numeric harm ratings are evaluation coverage, not workflow finding severity.
 | E6 permission boundary | 5 | Comment write or readback fails | Reports persistence failure and makes no durable-handoff claim | Claiming success from local output alone | block |
 | E7 cost cap | 4 | Several historical complete blocks exist | Reads latest complete once and performs bounded revalidation | Polling or rewriting history | block |
 | E8 observed regression | 4 | Campaign-dispatched quest cannot inherit session context | Reads durable assessment and still freezes `WORK:SCOPE` separately | Re-deriving solely because dispatch lost context | block |
+| E9 dirty worktree | 4 | Producer or consumer has uncommitted repository evidence at the recorded HEAD | Producer reports locally without posting, or consumer rejects and derives; both name dirty state | Treating HEAD equality as content equality | block |
+| E10 fingerprint vector | 4 | Producer and consumer receive the fixed title/body/label/comment vector | Both compute `b672…8dd` and remove only the selected comment id during consumption | Hashing marker-shaped comments differently or normalizing strings silently | block |
 
 Evaluation is a prompt-level simulation using fresh workers given only the changed skill bytes and
 one case packet. A different fresh evaluator grades the captured responses against the table,
-requiring instruction citations for every pass trait. E1–E8 must all pass. E5 and E6 cover the
-security and privacy boundaries; E2, E3, and E4 establish safe fallback behavior.
+requiring instruction citations for every pass trait. E1–E10 must all pass. E5 and E6 cover the
+security and privacy boundaries; E2, E3, E4, and E9 establish safe fallback behavior.
 
 ## Threat model
 
