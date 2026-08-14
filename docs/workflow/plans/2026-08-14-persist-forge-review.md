@@ -59,15 +59,15 @@ public-safe, and retains every artifact not already recoverably disposed.
 2. Add seven failing behavior groups:
 
    - `PFR-1`: required safe review posts one complete annotation; fake exact-ID readback matches;
-     verified ledger line precedes trash calls; source/body disappear only afterward.
-   - `PFR-2`: public-safety match or scan fault posts nothing and retains the review/body.
+     verified ledger line precedes trash calls; review/summary/body disappear only afterward.
+   - `PFR-2`: public-safety match or scan fault posts nothing and retains all three files.
    - `PFR-3`: required publishes; verified not-required publishes summary-only; failed posts
      nothing; missing/empty required review fails.
    - `PFR-4`: comment failure, missing identity, and ambiguous nonzero-after-write stop without a
      retry and retain evidence.
    - `PFR-5`: exact comment read failure/mismatch writes no verified/disposed ledger line.
-   - `PFR-6`: ledger append/readback and partial trash failures never claim closed lifecycle and
-     report remaining private paths only to the operator stream.
+   - `PFR-6`: ledger append/readback and partial trash failures never claim closed lifecycle;
+     summary ownership follows the review/body on every success and failure path.
    - `PFR-7`: review lines containing outer markers, sentinel, and summary fields remain indented;
      summary input containing either outer marker is rejected before GitHub access.
 
@@ -94,7 +94,7 @@ run repository scripts/check-public-safety.sh against that exact body
 post exact body with gh pr comment --body-file; capture returned comment URL or stop without retry
 resolve the exact comment API identity from that URL; read its body once and compare exact content
 append and read back review-publication-verified with comment identity
-recoverably dispose review (required mode) and body; append/read back disposed with former paths
+recoverably dispose review (required mode), summary, and body; append/read back all former paths
 print verified comment URL
 ```
 
@@ -159,7 +159,8 @@ git commit -m "feat: publish forge reviews durably"
    - persist forge mode, review path/reason, ledger, branch, `BASE_BRANCH`, and guardrails after
      build;
    - required failure cannot reach delivery; verified not-required mode remains distinct;
-   - after deliver creates PR, write compact summary fields to a temp file and invoke:
+   - after deliver creates PR, write compact summary fields beside the forge ledger and transfer
+     that file's lifecycle to the helper when invoking:
 
      ```sh
      skills/quest/scripts/publish-forge-review \

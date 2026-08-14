@@ -45,9 +45,11 @@ accepts `required`, `not-required`, and `failed` modes. Required mode validates 
 Not-required mode publishes a summary-only `forge review: not required` result with the already
 verified mode reason. Failed mode stops before any GitHub write.
 
-The helper creates one ignored temporary body file beside the forge ledger. It writes one complete
-outer `WORK:REVIEW` block: the existing compact review summary first, followed by a separately
-labelled `Forge whole-branch review` section. Every forge-review line is prefixed by four spaces, so
+Quest creates the compact summary as an ignored file beside the forge ledger and transfers its
+lifecycle to the helper. The helper creates one ignored temporary body file there and writes one
+complete outer `WORK:REVIEW` block: the existing compact review summary first, followed by a
+separately labelled `Forge whole-branch review` section. Every forge-review line is prefixed by four
+spaces, so
 literal marker, sentinel, or summary-shaped lines remain Markdown code payload rather than outer
 annotation structure. The helper validates the summary as UTF-8 text without NUL and rejects
 whole-line outer markers. It runs the repository public-safety guard against the exact completed
@@ -56,9 +58,9 @@ body file and posts that same file through `gh pr comment --body-file`.
 Successful comment creation must return the created comment URL. The helper resolves that exact
 comment identity, reads it back once, and requires its body to equal the body file exactly. It then
 appends `review publication verified` with the comment identity to the forge ledger and reads the
-line back. Only that durable verification authorizes recoverable disposal of the retained review
-and body file. The helper appends and verifies the disposal ledger line, then returns the comment
-URL.
+line back. Only that durable verification authorizes recoverable disposal of the retained review,
+summary, and body files. The helper appends and verifies the disposal ledger line, then returns the
+comment URL.
 
 Comment failure, missing returned identity, failed exact readback, ledger failure, or disposal
 failure stops the quest with remaining evidence retained. An ambiguous write does not retry or scan
@@ -73,8 +75,8 @@ automatic recovery across every process-loss seam or support concurrent controll
   invent review content.
 - Invalid summary encoding, NUL, or outer marker: stop before GitHub write.
 - Public-safety match or scan fault on the exact body: stop before GitHub write.
-- Comment call fails or returns no usable identity: retain the review and body; do not retry.
-- Exact comment readback differs or fails: retain the review and body; do not claim durability.
+- Comment call fails or returns no usable identity: retain review, summary, and body; do not retry.
+- Exact comment readback differs or fails: retain all three files; do not claim durability.
 - Verified-ledger append/readback fails: retain both files and the public comment identity.
 - Disposal failure: retain all files not already moved to trash and report the exact remaining
   ledger-owned paths privately; do not claim a closed scratch lifecycle.
@@ -99,8 +101,8 @@ readback, durable verification, then recoverable disposal.
 
 | Case | Gate | Observable result |
 |---|---|---|
-| `PFR-1` safe required review | block | One exact comment; verified ledger precedes disposal. |
-| `PFR-2` unsafe body | block | Public-safety failure; zero posts; review retained. |
+| `PFR-1` safe required review | block | One exact comment; verified ledger precedes disposal of all three files. |
+| `PFR-2` unsafe body | block | Public-safety failure; zero posts; review/summary/body retained. |
 | `PFR-3` mode arms | block | Required publishes; not-required is summary-only; failed never posts. |
 | `PFR-4` comment failure/ambiguity | block | No retry; review/body retained with actionable failure. |
 | `PFR-5` exact readback mismatch | block | No verified/disposed ledger lines; evidence retained. |
