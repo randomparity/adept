@@ -56,8 +56,10 @@ annotation structure. The helper validates the summary as UTF-8 text without NUL
 whole-line outer markers. It runs the repository public-safety guard against the exact completed
 body file and posts that same file through `gh pr comment --body-file`.
 
-Successful comment creation must return the created comment URL. The helper resolves that exact
-comment identity, reads it back once, and requires its body to equal the body file exactly. It then
+Successful comment creation must return a browser URL with the expected GitHub host, repository,
+pull-request number, and numeric `issuecomment-<id>` fragment. The helper rejects any mismatch and
+converts the validated id to `/repos/<owner>/<repo>/issues/comments/<id>` for one `gh api` read. It
+requires that response body to equal the body file exactly. It then
 appends `review publication verified` with the comment identity to the forge ledger and reads the
 line back. Only that durable verification authorizes recoverable disposal of the retained review,
 summary, and body files. The helper appends and verifies the disposal ledger line, then returns the

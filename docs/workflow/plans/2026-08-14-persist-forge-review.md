@@ -91,7 +91,8 @@ write outer marker, compact summary, forge heading, four-space-indented review o
   and outer sentinel
 run repository scripts/check-public-safety.sh against that exact body
 post exact body with gh pr comment --body-file; capture returned comment URL or stop without retry
-resolve the exact comment API identity from that URL; read its body once and compare exact content
+validate URL host/repo/PR and numeric issuecomment fragment; derive issues/comments/<id> endpoint
+read that REST endpoint once and compare exact body content
 append and read back review-publication-verified with comment identity
 recoverably dispose review (required mode), summary, and body; append/read back all former paths
 print verified comment URL
@@ -101,9 +102,11 @@ Use body files for every dynamic GitHub payload. Never interpolate review/summar
 code. Capture and branch on command status explicitly. A failed delete reports what remains and does
 not append the disposed line.
 
-5. Fake `gh` implements only `pr comment --body-file` and exact `api <comment-url>` readback. It can
-return failure before write, failure after write, missing URL, mismatched body, and exact success.
-Fixtures assert status, post count, body bytes, ledger order, trash calls, and retained files.
+5. Fake `gh` implements `pr comment --body-file` and only the derived
+`api /repos/<owner>/<repo>/issues/comments/<id>` readback. It rejects browser URLs passed to `api`
+and can return failure before write, failure after write, missing/malformed/mismatched URL,
+mismatched body, and exact success. Fixtures assert status, post count, API endpoint, body bytes,
+ledger order, trash calls, and retained files.
 
 6. Run focused checks:
 
