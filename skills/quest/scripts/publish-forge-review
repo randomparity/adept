@@ -95,18 +95,19 @@ compose_body() {
 	local staging_dir
 	staging_dir=$(dirname "$ledger")
 	body=$(mktemp "$staging_dir/.publish-forge-review.XXXXXX") || fail 'cannot create publication body'
-	{
-		printf '%s\n' "$OUTER_MARKER"
-		cat "$summary"
-		printf '\n## Forge whole-branch review\n'
-		case $mode in
-		required) sed 's/^/    /' "$review_or_reason" ;;
-		not-required)
-			printf '%s\n' "forge review: not required ($review_or_reason)" | sed 's/^/    /'
-			;;
-		esac
-		printf '%s\n' "$OUTER_SENTINEL"
-	} >"$body" || fail 'cannot compose publication body'
+	printf '%s\n' "$OUTER_MARKER" >"$body" || fail 'cannot compose publication body'
+	cat "$summary" >>"$body" || fail 'cannot read publication summary'
+	printf '\n## Forge whole-branch review\n' >>"$body" || fail 'cannot compose publication body'
+	case $mode in
+	required)
+		sed 's/^/    /' "$review_or_reason" >>"$body" || fail 'cannot read required review'
+		;;
+	not-required)
+		printf '%s\n' "forge review: not required ($review_or_reason)" |
+			sed 's/^/    /' >>"$body" || fail 'cannot compose publication body'
+		;;
+	esac
+	printf '%s\n' "$OUTER_SENTINEL" >>"$body" || fail 'cannot compose publication body'
 	"$ROOT/scripts/check-public-safety.sh" "$body" >/dev/null 2>&1 ||
 		fail 'publication body did not pass public-safety validation'
 }

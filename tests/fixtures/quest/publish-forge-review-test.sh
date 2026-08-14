@@ -9,6 +9,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 clear_git_env
 SCRIPT="$SCRIPT_DIR/../../../skills/quest/scripts/publish-forge-review"
 ORIGINAL_PATH=$PATH
+SYSTEM_CAT=$(command -v cat)
 SYSTEM_TAIL=$(command -v tail)
 passed=0
 failed=0
@@ -73,6 +74,15 @@ api)
 *) exit 95 ;;
 esac
 EOF
+	cat >"$bin/cat" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "${COMPOSE_SOURCE_FAIL:-}" = summary ]; then
+	exit 1
+fi
+exec "$REAL_CAT" "$@"
+EOF
 	cat >"$bin/tail" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -98,7 +108,7 @@ if [ "${FAIL_TRASH_ON:-}" = "$name" ]; then
 fi
 mv "$path" "$FAKE_STATE/trash/$name"
 EOF
-	chmod +x "$bin/gh" "$bin/tail" "$bin/trash"
+	chmod +x "$bin/cat" "$bin/gh" "$bin/tail" "$bin/trash"
 }
 
 new_case() {
@@ -127,7 +137,8 @@ run_helper() {
 	shift 2
 	STATUS=0
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
-		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_TAIL="$SYSTEM_TAIL" \
+		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
+		REAL_TAIL="$SYSTEM_TAIL" \
 		"$@" "$SCRIPT" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
 		2>"$REPO/error") || STATUS=$?
 }
@@ -208,7 +219,8 @@ case_required_safe_review() {
 		fail "$name" 'checked, posted, and read-back bodies differed'
 		return
 	fi
-	verified_line='review-publication-verified: https://github.com/acme/widgets/pull/42#issuecomment-73'
+	verified_line='review-publication-verified: https://github.com/acme/widgets/pull/42'
+	verified_line="$verified_line#issuecomment-73"
 	if ! grep -qxF "$verified_line" "$LEDGER" ||
 		grep -q '^trash-before-verified$' "$STATE/events"; then
 		fail "$name" 'disposal was not authorized by the verified ledger line'
@@ -240,6 +252,18 @@ case_public_safety_stops_publication() {
 	chmod +x "$REPO/scan-fault/rg"
 	run_helper required "$REVIEW" env GH_MODE=success PATH="$REPO/scan-fault:$FAKES:$ORIGINAL_PATH"
 	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" || ! assert_retained "$name"; then
+		return
+	fi
+	ok "$name"
+}
+
+case_compose_source_failure_stops_publication() {
+	local name='PFR-8 compose-time source failure retains evidence'
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=success COMPOSE_SOURCE_FAIL=summary
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" || ! assert_retained "$name" ||
+		grep -q 'review-publication-verified\|review-publication-disposed' "$LEDGER"; then
+		fail "$name" 'summary copy failure reached publication or disposed evidence'
 		return
 	fi
 	ok "$name"
@@ -365,6 +389,7 @@ case_markers_stay_payload_and_summary_markers_fail() {
 printf 'publish-forge-review\n\n'
 case_required_safe_review
 case_public_safety_stops_publication
+case_compose_source_failure_stops_publication
 case_publication_modes
 case_comment_failures_never_retry
 case_readback_rejects_unverified_comments
