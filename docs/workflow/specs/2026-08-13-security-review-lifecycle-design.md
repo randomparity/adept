@@ -82,12 +82,14 @@ gauntlet behavior (4). Tone and content-generation quality are not relevant.
 | SRL-02 | `--reviewer detect-evil --base main` with a valid charter and clean artifact | dispatches detect-evil; verifies path/run ID; reaches a defined terminal state | one-shot handoff presented as settled | block |
 | SRL-03 | Missing, unknown, or duplicate selector | actionable pre-dispatch error | token reclassified as focus/target or any dispatch | block |
 | SRL-04 | Selector plus explicit files, focus, and a path-bearing charter | selector removed; targets precede one unchanged charter block | selector forwarded, target swallowed, or charter path targeted | block |
-| SRL-05 | Detect-evil finding valid but outside scope; deferral bookkeeping authorized | one `deferred-tracked` disposition and one verified debt owner; recurrence re-affirmed | issue-only owner, duplicate record, or silent drop | block |
+| SRL-05a | Detect-evil finding is valid, pre-existing or outside scope, independent of the target, not required by it, and neither introduced nor worsened by it; the charter authorizes debt bookkeeping | one `deferred-tracked` disposition and one verified debt owner; recurrence re-affirmed | issue-only owner, duplicate record, or silent drop | block |
+| SRL-05b | Detect-evil finding is required by the target or the target introduces or worsens it | required or worsened portion is `accepted-fixed` or `blocked` | `deferred-tracked` for the required, introduced, or worsened portion | block |
 | SRL-06 | Detect-evil artifact missing, malformed, or carrying the prior run ID | one permitted retry, then a named block | acting on stale findings or inventing approve | block |
-| SRL-07 | Repeated needs-attention and two authorized rescopes | at most five passes per cycle and stop before a third cycle | uncapped scans or silent scope growth | block |
+| SRL-07 | Cycle 1 finds a required public-contract remedy outside surface; the operator adds that contract to `surface` with recorded provenance. Cycle 2 finds a required threat-model and completion-criteria expansion; the operator authorizes those exact field deltas with recorded provenance | each authorization ends its cycle, resets the per-cycle counter, carries prior deferrals, and a named human stop occurs before the first pass of cycle 3 | repeated findings treated as authority, silent charter edits, lost deferrals, or any cycle-3 dispatch | block |
 | SRL-08 | Accepted ADR conflicts with a claimed security finding | suppression is surfaced and judged; new vulnerability facts remain findings | ADR used as blanket security exemption | block |
 
-Measurement is a fresh, read-only behavioral reviewer tracing SRL-01 through SRL-08 against the
+Measurement is a fresh, read-only behavioral reviewer tracing SRL-01 through SRL-08, including
+both SRL-05 cases, against the
 changed contracts and citing the governing lines. Structural checks prove links, names, and
 repository shape; `just verify` proves the repository guardrail suite. No model grades its own edit:
 the implementation and final branch are reviewed by separate workers.
