@@ -128,8 +128,12 @@ operator confirmation.
    when unreadable), and stop. When verified, return that same tuple with
    `closed-not-planned`, so a calling campaign can record it in its outcomes log and final
    report.
-7. **Decompose mode** (arguments name a parent issue, e.g. "decompose #N"): read the parent
-   (and its `$divination` split if present), draft each sub-issue through steps 2–6, and file each
+7. **Decompose mode** (arguments name a parent issue, e.g. "decompose #N"): read the parent and
+   select its latest complete `WORK:DIVINATION` block before applying any trust filter. Apply the
+   quest-log divination-validation recipe. Use a valid complete assessment, including a `split`
+   verdict and its other three fields, as drafting evidence. On absence or any rejection, derive
+   the decomposition from the live parent and repository as before; never partially adopt a block.
+   Draft each sub-issue through steps 2–6, and file each
    as a **native sub-issue** by passing `--parent <N>` to
    `scripts/create-verified-issue.sh` (the direct native path requires `gh` ≥ 2.94.0; on
    older `gh`, or to link a *pre-existing* issue instead, use
