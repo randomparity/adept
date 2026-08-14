@@ -71,10 +71,11 @@ four fields from the live issue and repository as before. In either case, re-che
 assessment against the issue body. Never use divination content to fill any of the frozen charter's
 eight authority fields; only the external sources and decisions listed below can do that.
 
-If persisted-comment access fails and the independent live issue/repository derivation read also
-fails, stop before changing `status:*` or posting `WORK:SCOPE`. Report non-adoption, name only the
-failed operation, and give a safe retry action. Never include the external payload, authentication
-data, or private environment detail in that response.
+If any required persisted-evidence read or validation fails and the independent live
+issue/repository derivation read also fails, stop before changing `status:*` or posting
+`WORK:SCOPE`. Report non-adoption, name only the failed operation, and give a safe retry action.
+Never include the external payload, authentication data, or private environment detail in that
+response.
 
 Set the issue to `status:in-progress` (ensure-create the `status:` labels per
 the quest-log recipe; single-active swap). If ensure-create fails, stop

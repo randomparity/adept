@@ -37,8 +37,8 @@ overrides, exact hashes, worker response schema, and E1–E15 table. Produces a 
 baseline result and immutable packet hashes reused by Task 3.
 
 1. Verify `.agent/evals/` is ignored with `git check-ignore -q .agent/evals/probe`.
-2. Materialize the specification's exact 28 E1–E15 variants: E3 twice, E4 five times, E6 six
-   times, E10 twice, E11 twice, E15 twice, and every other case once. Include E4's dedicated
+2. Materialize the specification's exact 30 E1–E15 variants: E3 twice, E4 five times, E6 six
+   times, E10 twice, E11 twice, E15 four times, and every other case once. Include E4's dedicated
    trailing-punctuation rejection variant. Decode the literal E7
    comments and independently recompute every nominally fresh fingerprint against the complete
    specification map: base/E6/E8/E9/E11/E12, E1, E5, E7, and E10. Serialize sorted-key UTF-8 JSON
@@ -60,7 +60,7 @@ baseline result and immutable packet hashes reused by Task 3.
    from that run's evaluated commit, require each id to match the supplied bytes and commit, and
    record the resulting ordered ids in its capture; blob-id equality across different commits is
    neither expected nor allowed as a substitute for that check. Capture the exact reviewed
-   envelope and require 28 captures with distinct run ids.
+   envelope and require 30 captures with distinct run ids.
 5. Apply the same deterministic checks Task 3 uses: the common, E6-producer, E7, E14, or E15 exact
    response schema as applicable; private expected booleans and mutation/read/write counts; E5
    canary absence; E10 full hash/path in both arms; E11 valid/invalid adoption split; and every
@@ -121,7 +121,7 @@ only when evidence exposes an in-scope defect.
 **Interfaces:** reuses Task 1's exact packet bytes and hashes. Produces complete post-change
 captures, evaluator result, and repository guardrail evidence for the shipping review.
 
-1. Repeat Task 1's 28 isolated workers and independent evaluation against the implemented skill
+1. Repeat Task 1's 30 isolated workers and independent evaluation against the implemented skill
    bytes, using the same selectable models/settings, identical packet SHA-256 values, and new run
    ids. Require every required and forbidden trait in E1–E15 to pass.
 2. Run every Task 1 deterministic schema, boolean, count, canary, complete pinned-fingerprint-map,
