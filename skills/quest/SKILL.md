@@ -260,6 +260,11 @@ Before calling `$forge`, resolve its workspace with `scripts/sdd-workspace` and
 set `FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
 the frozen `WORK:SCOPE` annotation token that this quest already validated, then
 set `FORGE_HANDOFF=<workspace>/quest-forge-handoff-<issue>-<scope-token>.md`.
+The workspace must be a regular private mode-0700 directory; the ledger,
+handoff, retained review, summary, and helper body must be regular private
+mode-0600 files while this workflow owns them. Check those modes before each
+retain, parse, or publication transfer; a missing, non-regular, symlinked, or
+non-private path parks rather than being repaired or followed.
 That pair is the ignored build-to-ship identity; do not derive it or any
 `FORGE_*` value from conversation memory. A new issue or scope token gets a new
 record without a global cleanup protocol. If this exact handoff already exists,
@@ -323,11 +328,11 @@ missing, changed, or mismatched handoff is a shipping blocker, never a default
 or reconstructed value.
 
 Artifact checks are phase-qualified. In `build-complete`, `required` needs its
-exact retained review to be regular, non-empty, and readable; `not-required`
-needs its exact verified reason. `publication-in-progress` parks without a
-source-artifact assumption. In `publication-verified`, the review, summary,
-and body are expected to be disposed: require the exact all-and-only disposal
-record, not a readable source artifact.
+exact retained review to be regular, private mode-0600, non-empty, and readable;
+`not-required` needs its exact verified reason. `publication-in-progress` parks
+without a source-artifact assumption. In `publication-verified`, the review,
+summary, and body are expected to be disposed: require the exact all-and-only
+disposal record, not a readable source artifact.
 
 On a verified-publication resume, require `review-comment-url` to parse as
 `https://github.com/<repo>/pull/<pr>#issuecomment-<id>`, with the record's
@@ -452,12 +457,12 @@ In `build-complete`, re-read the build-to-review handoff before delivery. Only `
 artifact parks the quest before `$deliver`.
 
 Run `$deliver <issue-number>` to push the branch, create the PR, and drive it
-to green CI and mergeable state. Keep a compact review summary (verdict,
-findings count, iterations, `$detect-evil` verdict) as an ignored file beside
-the forge ledger; do not put outer annotation markers or forge-review payload
-in it. `REVIEW_SUMMARY` is the exact `review-summary:` path in the parsed
-handoff, not an ad-hoc filename. The verbose per-iteration findings file is
-droppable.
+to green CI and mergeable state. Keep a compact public review summary (verdict,
+findings count, iterations, `$detect-evil` verdict, full delivered HEAD SHA) as
+an ignored private mode-0600 file beside the forge ledger; do not put outer
+annotation markers or forge-review payload in it. `REVIEW_SUMMARY` is the exact
+`review-summary:` path in the parsed handoff, not an ad-hoc filename. The
+verbose per-iteration findings file is droppable.
 
 After `$deliver` reports the PR, resolve it once and verify its repository,
 number, head branch, base branch, and `headRefOid`. They must equal `REPO`, the
@@ -476,19 +481,24 @@ verdict: <trial-loop verdict>
 findings: <count>
 iterations: <count>
 security: <$detect-evil verdict or not triggered>
+delivered-head-sha: <full exact delivered PR head SHA>
 ```
 
 Reject carriage return, NUL, outer markers, or any failed byte-for-byte
-readback before rename. If the summary already exists, or the handoff says a
-publication attempt is in progress, do not overwrite, recreate, or retry it:
-park for human reconciliation with the retained evidence. Before the helper,
-atomically rewrite and byte-verify the handoff with phase
+readback before rename; the temporary and installed summary both stay mode 0600.
+If the summary already exists, or the handoff says a publication attempt is in
+progress, do not overwrite, recreate, or retry it: park for human reconciliation
+with the retained evidence. Before the helper, atomically rewrite and byte-verify
+the private mode-0600 handoff with phase
 `publication-in-progress` plus one `pr: <number>` and one
 `delivered-head-sha: <full SHA>` field. On every resume, that phase is a
 terminal parked state, because a prior comment write may be ambiguous.
 
-Transfer the summary file's lifecycle to the publication helper and invoke it
-exactly once:
+Immediately before the helper, re-resolve that exact PR. Require its repository,
+number, head branch, base branch, and full `headRefOid` to equal `REPO`, `PR`,
+the handoff branch, `BASE_BRANCH`, and `delivered-head-sha:`. A mismatch parks
+before posting. Transfer the summary file's lifecycle to the publication helper
+and invoke it exactly once:
 
 ```sh
 skills/quest/scripts/publish-forge-review \
@@ -510,10 +520,14 @@ and only its former paths: in `required` mode the exact review,
 the ledger; in `not-required` mode the exact `REVIEW_SUMMARY` and that one
 body. The body entry must be in the ledger directory and be the helper's
 single generated body identity, not an inferred or older path. Only then
-atomically rewrite and byte-verify phase `publication-verified` with the PR
-number, the preserved `delivered-head-sha:`, and `review-comment-url: <verified
-URL>`. Carry that URL into step 9; `$return-to-town` needs no forge-scratch
-cleanup.
+re-resolve the PR and require its repository, number, head branch, base branch,
+and full `headRefOid` to still equal the handoff and summary values. If the head
+changed after the one comment, park without a retry or a second comment; record
+the verified URL and the old full SHA, which the public summary visibly scopes.
+Only an unchanged PR permits the private mode-0600 handoff to be atomically
+rewritten and byte-verified as `publication-verified` with the PR number, the
+preserved `delivered-head-sha:`, and `review-comment-url: <verified URL>`. Carry
+that URL into step 9; `$return-to-town` needs no forge-scratch cleanup.
 
 ## 9. Hand Off, or Merge if Authorized
 

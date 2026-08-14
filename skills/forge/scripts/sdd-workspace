@@ -36,6 +36,7 @@ git -C "$top" ls-files --error-unmatch .agent/.gitignore >/dev/null 2>&1 || stat
 
 scratch="$top/.agent/sdd"
 mkdir -p "$scratch"
+chmod 700 "$scratch"
 
 case "$state" in
 0)

@@ -296,8 +296,9 @@ asked report it as a blocker and return. Never default to `main`.
 6. Once the range has its `closed` ledger line and every in-run consumer has
    finished, retain the review for `$quest` rather than disposing it. Append
    `Final review <base-sha>..<head-sha>: retained for PR publication (review
-   <path>, ledger <path>)`, using the exact regular, non-empty review path and the
-   exact forge-ledger path. Read that line back before reporting success. The
+   <path>, ledger <path>)`, using the exact regular, non-empty, mode-0600 review
+   path and exact mode-0600 forge-ledger path. Read that line back before reporting
+   success. The
    retained review stays in ignored scratch storage until `$quest`'s
    `publish-forge-review` helper verifies the PR comment and recoverably
    disposes it. Never move it to trash in forge, and never append retention for
@@ -481,9 +482,13 @@ already closed.
 **Only that script creates the workspace**, and that matters: it writes a
 self-ignoring `.gitignore` (`*`) into `.agent/`, which is the whole mechanism
 keeping the ledger, briefs, reports, and review packages out of `git status` and
-out of a PR diff. Writing `progress.md` at a hardcoded path with an editor tool
-skips it, and in a repo that tracks everything the next `git add -A` sweeps the
-ledger into someone's commit. Run the script — or `task-brief` / `review-package`,
+out of a PR diff. It makes `<workspace>` mode 0700. Every controller-owned
+ledger, review, summary, handoff, and publication body in that directory must
+be a regular mode-0600 file before it is handed to another workflow phase.
+Fail closed if that check fails; do not retain or publish the artifact. Writing
+`progress.md` at a hardcoded path with an editor tool skips these protections,
+and in a repo that tracks everything the next `git add -A` sweeps the ledger
+into someone's commit. Run the script — or `task-brief` / `review-package`,
 which call it — before the first write, then confirm:
 
 ```bash

@@ -103,6 +103,20 @@ case_untracked_repo() {
 	ok "$name"
 }
 
+case_workspace_is_private() {
+	local name='workspace directory is private' repo mode
+	repo=$(new_repo)
+	(cd "$repo" && "$SCRIPT" >/dev/null)
+	if mode=$(stat -f %Lp "$repo/.agent/sdd" 2>/dev/null); then :; else
+		mode=$(stat -c %a "$repo/.agent/sdd")
+	fi
+	if [ "$mode" = 700 ]; then
+		ok "$name"
+	else
+		fail "$name" "workspace mode was $mode, wanted 700"
+	fi
+}
+
 case_sibling_state_covered() {
 	local name='a sibling .agent/campaigns/ is ignored by the same file'
 	local repo
@@ -257,6 +271,7 @@ case_failed_write_leaves_no_residue() {
 
 printf 'sdd-workspace\n\n'
 case_untracked_repo
+case_workspace_is_private
 case_sibling_state_covered
 case_idempotent_no_residue
 case_tracked_and_covering_succeeds

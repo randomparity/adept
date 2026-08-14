@@ -41,8 +41,13 @@ pr)
 	[ "$1" = comment ] || exit 97
 	shift
 	body=''
+	comment_repo=''
 	while [ "$#" -gt 0 ]; do
 		case $1 in
+		--repo)
+			comment_repo=$2
+			shift 2
+			;;
 		--body-file)
 			body=$2
 			shift 2
@@ -51,6 +56,7 @@ pr)
 		esac
 	done
 	[ -n "$body" ] || exit 96
+	printf '%s\n' "$comment_repo" >"$state/comment-repo"
 	printf 'comment-invocation\n' >>"$state/events"
 	case ${GH_MODE:-success} in
 	comment-fail) exit 1 ;;
@@ -65,8 +71,24 @@ pr)
 	esac
 	;;
 api)
-	endpoint=$2
+	shift
+	endpoint=''
+	host=''
+	while [ "$#" -gt 0 ]; do
+		case $1 in
+		--hostname)
+			host=$2
+			shift 2
+			;;
+		*)
+			endpoint=$1
+			shift
+			;;
+		esac
+	done
+	[ -n "$endpoint" ] || exit 94
 	printf '%s\n' "$endpoint" >"$state/api-path"
+	printf '%s\n' "$host" >"$state/api-host"
 	case ${GH_MODE:-success} in
 	read-fail) exit 1 ;;
 	read-mismatch) jq -n --arg body mismatch '{body: $body}' ;;
@@ -159,11 +181,13 @@ new_case() {
 	git -C "$repo" config user.name Test
 	printf '.agent/\n' >"$repo/.gitignore"
 	mkdir -p "$repo/.agent/sdd" "$repo/fakes" "$repo/state/trash"
+	chmod 700 "$repo/.agent/sdd"
 	git -C "$repo" check-ignore -q .agent/sdd/
 	write_fakes "$repo/fakes"
 	printf 'safe whole-branch review\n' >"$repo/.agent/sdd/review.md"
 	printf 'verdict: approve\nfindings: 0\n' >"$repo/.agent/sdd/summary.md"
 	printf 'forge review closed\n' >"$repo/.agent/sdd/ledger"
+	chmod 600 "$repo/.agent/sdd/review.md" "$repo/.agent/sdd/summary.md" "$repo/.agent/sdd/ledger"
 	REPO=$repo
 	REVIEW="$repo/.agent/sdd/review.md"
 	SUMMARY="$repo/.agent/sdd/summary.md"
@@ -298,12 +322,19 @@ case_public_safety_stops_publication() {
 }
 
 case_compose_source_failure_stops_publication() {
-	local name='PFR-8 compose-time source failure retains evidence'
+	local name='PFR-8 compose-time source failure retains private evidence' body_mode
 	new_case
 	run_helper required "$REVIEW" env GH_MODE=success COMPOSE_SOURCE_FAIL=summary
 	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" || ! assert_retained "$name" ||
 		grep -q 'review-publication-verified\|review-publication-disposed' "$LEDGER"; then
 		fail "$name" 'summary copy failure reached publication or disposed evidence'
+		return
+	fi
+	if body_mode=$(stat -f %Lp "$(body_file)" 2>/dev/null); then :; else
+		body_mode=$(stat -c %a "$(body_file)")
+	fi
+	if [ "$body_mode" != 600 ]; then
+		fail "$name" "retained body mode was $body_mode, wanted 600"
 		return
 	fi
 	ok "$name"
@@ -369,14 +400,15 @@ case_readback_rejects_unverified_comments() {
 }
 
 case_ledger_and_disposal_failures_retain_paths() {
-	local name='PFR-6 ledger and partial disposal failures retain exact evidence'
+	local name='PFR-6 invalid ledger and disposal failures retain exact evidence'
 	new_case
 	rm "$LEDGER"
 	mkdir "$LEDGER"
+	chmod 700 "$LEDGER"
 	run_helper required "$REVIEW" env GH_MODE=success
-	if [ "$STATUS" -eq 0 ] || ! assert_retained "$name" ||
-		! grep -qF 'https://github.com/acme/widgets/pull/42#issuecomment-73' "$REPO/error"; then
-		fail "$name" 'ledger failure did not retain the verified comment identity'
+	if [ "$STATUS" -eq 0 ] || [ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] ||
+		! assert_no_post "$name" || ! grep -q 'publication ledger is invalid' "$REPO/error"; then
+		fail "$name" 'invalid ledger reached publication'
 		return
 	fi
 	new_case
@@ -481,6 +513,81 @@ case_preflight_precedes_content_validation() {
 	ok "$name"
 }
 
+case_host_is_pinned_before_publication() {
+	local name='PFR-12 GitHub destination is pinned before publication'
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin GH_HOST=evil.example
+	if [ "$STATUS" -ne 0 ] || [ "$(cat "$STATE/comment-repo")" != github.com/acme/widgets ] ||
+		[ "$(cat "$STATE/api-host")" != github.com ]; then
+		fail "$name" 'publication used an implicit or hostile GitHub host'
+		return
+	fi
+	ok "$name"
+}
+
+case_private_artifacts_and_size_limit() {
+	local name='PFR-13 private artifacts and local size limit' large_reason
+	new_case
+	chmod 644 "$REVIEW"
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
+		! grep -q 'required review is not private' "$REPO/error"; then
+		fail "$name" 'non-private review reached publication'
+		return
+	fi
+	new_case
+	chmod 644 "$SUMMARY"
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
+		! grep -q 'summary is not private' "$REPO/error"; then
+		fail "$name" 'non-private summary reached publication'
+		return
+	fi
+	new_case
+	chmod 644 "$LEDGER"
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
+		! grep -q 'publication ledger is not private' "$REPO/error"; then
+		fail "$name" 'non-private ledger reached publication'
+		return
+	fi
+	new_case
+	awk 'BEGIN { for (i = 0; i < 4096; i += 1) printf "a" }' >"$SUMMARY"
+	chmod 600 "$SUMMARY"
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
+	if [ "$STATUS" -ne 0 ]; then
+		fail "$name" 'maximum-size summary was rejected'
+		return
+	fi
+	new_case
+	awk 'BEGIN { for (i = 0; i < 4097; i += 1) printf "a" }' >"$SUMMARY"
+	chmod 600 "$SUMMARY"
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
+		! grep -q 'summary exceeds local size limit' "$REPO/error"; then
+		fail "$name" 'oversize summary reached publication'
+		return
+	fi
+	new_case
+	awk 'BEGIN { for (i = 0; i < 4097; i += 1) printf "a" }' >"$REVIEW"
+	chmod 600 "$REVIEW"
+	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
+		! grep -q 'required review exceeds local size limit' "$REPO/error"; then
+		fail "$name" 'oversize review reached publication'
+		return
+	fi
+	new_case
+	large_reason=$(awk 'BEGIN { for (i = 0; i < 32768; i += 1) printf "a" }')
+	run_helper not-required "$large_reason" env GH_MODE=success FAKE_UNAME=Darwin
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
+		! grep -q 'not-required reason exceeds local size limit' "$REPO/error"; then
+		fail "$name" 'oversize not-required reason reached GitHub'
+		return
+	fi
+	ok "$name"
+}
+
 printf 'publish-forge-review\n\n'
 case_required_safe_review
 case_public_safety_stops_publication
@@ -493,6 +600,8 @@ case_markers_stay_payload_and_summary_markers_fail
 case_review_without_final_newline_keeps_outer_sentinel_parseable
 case_platform_disposers_are_deterministic
 case_preflight_precedes_content_validation
+case_host_is_pinned_before_publication
+case_private_artifacts_and_size_limit
 
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
