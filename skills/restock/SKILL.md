@@ -740,6 +740,12 @@ For each work unit with a **PASS** evaluation outcome, in order:
    `shared: retain` for the clone, root, manifest, and reports. Restock never invokes `gh pr merge`
    or repeats return-to-town's unit cleanup.
 
+   A batch owns one worktree/ref across all of its PRs. For every non-final PR in a batch, also pass
+   `unit cleanup: retain`; return-to-town performs terminal tracking but leaves the shared batch
+   worktree/ref intact. After every PR in the batch reaches a terminal merge outcome with complete
+   tracking, the final invocation performs one exact batch-unit cleanup and the manifest records one
+   disposition. `MERGED_TRACKING_INCOMPLETE` keeps the batch evidence retained until repaired.
+
 3. Handle its typed result. A merge refusal becomes **MERGE_REFUSED**. On first `BASE_CHANGED`,
    transition back to `status:in-review`, fetch the unchanged PR head and new base, create a fresh
    local integration commit, rerun the discovered build/test guardrails, post replacement review
@@ -783,8 +789,8 @@ For each work unit with a **PASS** evaluation outcome, in order:
    conflicts with: {previously merged PR numbers}." Continue past it to the
    following work unit.
 
-For **batched** work units, merge each PR in the batch
-sequentially using the same approve-then-merge flow.
+For **batched** work units, merge each PR sequentially using the same approve-then-merge flow and
+the batch-level retain/final-cleanup ownership rule above.
 
 ### 4b. Handle WARN and FAIL outcomes
 

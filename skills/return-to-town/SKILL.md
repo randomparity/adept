@@ -39,9 +39,11 @@ gh pr view <N> \
          checks: [.statusCheckRollup[] | {name, status, conclusion}]}'
 ```
 
-In restock PR-only mode, compare `head` with `$EXPECTED_HEAD_SHA` and `base` with
-`$EVALUATED_BASE_SHA` before any tracking, merge, or cleanup mutation. A head mismatch refuses the
-operation; a base mismatch on the open route returns `BASE_CHANGED`.
+In restock PR-only mode, always compare `head` with `$EXPECTED_HEAD_SHA`. Compare `base` with
+`$EVALUATED_BASE_SHA` only while state is `OPEN` and before merge; a mismatch there returns
+`BASE_CHANGED`. On `MERGED` recovery, base movement is expected historical context. Verify the
+repository, PR, run token, authoritative merged state, and expected head, then repair terminal
+tracking before scoped cleanup without requiring the obsolete pre-merge base SHA.
 
 Interpret `state` before `mergeable` or `mergeStateStatus`:
 
