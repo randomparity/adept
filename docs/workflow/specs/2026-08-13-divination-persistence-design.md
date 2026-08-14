@@ -223,12 +223,24 @@ For every packet, materialization renames `expected.adopt` to `expected.adopted`
 key-for-key comparison of `expected` with the response's `adopted`, `fallback`, and `persisted`.
 It also adds `assessment.identity` equal to `issue.url` to every non-null assessment before any
 case-specific identity mutation.
+The harness retains the normalized `expected` object as its private oracle, removes it from the
+worker packet, and rejects any serialized worker packet containing `expected`, `oracle`,
+`required`, or `forbidden` keys. Expected answers and table pass/forbidden traits are never sent to
+the scenario worker.
 E6 is the sole producer packet: after RFC 7396 composition, set its `workflow` to the literal
 `divination`, move the inherited assessment to `candidate_assessment`, and set `assessment` to
 null before canonical serialization and hashing. `assessment` always means an existing confirmed
 annotation; `candidate_assessment` is local producer output. Its `fallback: false` distinguishes a
 locally returned producer assessment from a consumer's fresh-derivation fallback, and
 `persisted:false` proves the candidate was not mistaken for durable state.
+Run E6 as six producer variants. Their exact command-result fields and private expected results
+are: confirmed (`write_result:ok`, `readback_result:ok`, `reconciliation_result:not-run`, token
+matches 0, persisted true, writes 1, reconciliation reads 0); recovered (`indeterminate`,
+`not-run`, `ok`, matches 1, true, 1, 1); absent (same with matches 0 and false); duplicate (same
+with matches 2 and false); denied (`denied`, `not-run`, `not-run`, matches 0, false, 1, 0); and
+unreadable (`ok`, `failed`, `failed`, matches unknown, false, 1, 1). E6 responses add integer
+`write_attempts` and `reconciliation_reads`; exact count comparison is deterministic and a second
+write always fails.
 The fixed response schema
 is `{"actions":[string],"adopted":boolean,"fallback":boolean,"persisted":boolean,"reason":string}`;
 extra or missing keys are malformed. Deterministic assertions compare those booleans with
@@ -249,6 +261,12 @@ replace the assessment issue identity with issue 50; replace one evidence value 
 `unknown:value`; or change only `author` to `mallory`. Every E3/E4 variant must independently reject
 and match the same expected booleans, so one short-circuit cannot mask another missing check.
 
+Materialize E7 with three rendered complete annotations in chronological order and distinct ids:
+`history-E7-1` (token `eval-49-E7-old-1`, complexity `S`), `history-E7-2` (token
+`eval-49-E7-old-2`, complexity `L`), and newest `selected-E7` (token `eval-49-E7`). Pre-dispatch
+assertions require three complete marker pairs, those exact ids/order, and `selected-E7` as latest;
+the selection oracle is not included in the worker packet.
+
 The compact source's nominally fresh `issue_hash` values are replaced during materialization with
 these exact protocol results: base/E6/E8/E9/E11/E12
 `b6b31d9c28f67d230eb9f09564cf644df704dcaa30b2e182aec981e619e2c7f9`; E1
@@ -263,18 +281,26 @@ E14 uses a separate exact packet because it compares two installed contracts rat
 annotation lifecycle:
 
 ```json
-{"expected":{"divination":"one bounded public issue comment","seek_quest":"no writes"},"question":"Compare the external side effects of $seek-quest and $divination.","skills":["skills/seek-quest/SKILL.md","skills/divination/SKILL.md"],"workflow":"reference-comparison"}
+{"question":"Compare the external side effects of $seek-quest and $divination.","skills":["skills/seek-quest/SKILL.md","skills/divination/SKILL.md"],"workflow":"reference-comparison"}
 ```
 
 Supply only the two named skill blobs and the question. Its response schema is
 `{"divination":string,"seek_quest":string}` with no extra keys. Deterministic assertions require
 the divination value to name exactly one bounded public issue-comment write and the seek-quest
-value to state no writes; any `read-only` or `writes nothing` characterization of divination fails.
+value to state no writes; those private oracle strings are not supplied to the worker. Any
+`read-only` or `writes nothing` characterization of divination fails.
 
-E15 has two packets derived from E2, with workflows `quest` and `bounty-decompose`; both set comment
-collection and independent derivation reads to `failed`. Expected values are
-`{adopted:false,fallback:false,persisted:false}` and actions must stop before the workflow-specific
-mutation boundary with a safe retry message.
+E15 uses these two exact worker packets:
+
+```json
+{"commands":{"comment_collection":"failed","issue_derivation_read":"failed","repository_derivation_read":"failed"},"issue":{"url":"https://example.invalid/o/r/issues/49"},"workflow":"quest"}
+{"commands":{"comment_collection":"failed","issue_derivation_read":"failed","repository_derivation_read":"failed"},"issue":{"url":"https://example.invalid/o/r/issues/49"},"workflow":"bounty-decompose"}
+```
+
+Its exact response schema is `{"adopted":false,"fallback":false,
+"mutations":{"drafts":integer,"filings":integer,"scope_freezes":integer},"reason":string}`. The
+private oracle requires all mutation counts zero, a non-empty safe retry reason, and no external
+payload or auth data. Extra keys or any other value fail deterministically.
 
 ## Threat model
 
