@@ -261,6 +261,24 @@ plan path if one exists. For a `governed-small-change`, pass the classification
 and the revalidated decision evidence (reference, kind, accepted status,
 governed behavior, acceptance criteria) -- and no plan path.
 
+Immediately record the forge result in the existing forge ledger as the
+build-to-review handoff: forge mode, exact review path or verified
+not-required reason, exact ledger path, branch, `BASE_BRANCH`, and the exact
+guardrail commands that passed. Read the record and the named ledger back
+before step 6; this ignored, durable record is the resume source through
+shipping.
+
+There are three forge modes:
+
+- `required` requires a regular, non-empty, readable retained review and its
+  exact ledger path. A missing, empty, unreadable, or non-regular review is a
+  shipping failure, not a reason to rerun or downgrade the review.
+- `not-required` requires the verified public-safe reason from forge and never
+  invents review content.
+- `required-failed` is terminal. Park the issue before step 6 or `$deliver`,
+  naming the failed review and retained local evidence in the private report;
+  it must never reach PR creation or publication.
+
 ## 6. Adversarial-Review the Branch
 
 Set the issue to `status:in-review` (single-active swap), then run
@@ -351,12 +369,32 @@ already assert.
 
 ## 8. Ship It
 
+Re-read the build-to-review handoff before delivery. Only `required` and
+`not-required` may proceed; `required-failed` or any unreadable required
+artifact parks the quest before `$deliver`.
+
 Run `$deliver <issue-number>` to push the branch, create the PR, and drive it
 to green CI and mergeable state. Keep a compact review summary (verdict,
-findings count, iterations, `$detect-evil` verdict) as a durable artifact; the
-verbose per-iteration findings file is droppable. Immediately after `$deliver`
-creates the PR, post a `WORK:REVIEW` comment on it from that summary --
-`$deliver` does not post it.
+findings count, iterations, `$detect-evil` verdict) as an ignored file beside
+the forge ledger; do not put outer annotation markers or forge-review payload
+in it. The verbose per-iteration findings file is droppable. After `$deliver`
+creates the PR, transfer that summary file's lifecycle to the publication
+helper and invoke it exactly once:
+
+```sh
+skills/quest/scripts/publish-forge-review \
+  "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
+  "$FORGE_LEDGER" "$REVIEW_SUMMARY"
+```
+
+The helper is the sole `WORK:REVIEW` writer. It validates the required review
+or verified not-required reason, posts one complete annotation, reads it back,
+records verification, and recoverably disposes its owned scratch files. On
+nonzero, do not retry, do not post another `WORK:REVIEW`, and park the quest
+with the helper's retained evidence and failure output. On success, capture
+its sole verified comment URL and append it to the durable ship-to-handoff
+record with the PR number. Carry that URL into step 9; `$return-to-town` needs
+no forge-scratch cleanup.
 
 ## 9. Hand Off, or Merge if Authorized
 

@@ -233,7 +233,7 @@ Markdown except the body.
 |---|---|---|---|
 | `WORK:DIVINATION` | issue | after pre-work assessment | authenticated advisory blast radius, change hazards, complexity, and decompose verdict |
 | `WORK:SCOPE` | issue | after scoping, before building | blast radius, change hazards, complexity (S/M/L), decompose verdict |
-| `WORK:REVIEW` | PR | right after the PR is created | verdict, findings count, iterations, security-review status |
+| `WORK:REVIEW` | PR | after PR creation | compact summary plus labelled forge-review payload |
 | `WORK:TRAJECTORY` | issue | at the terminal hand-off, and before parking an issue at `blocked`/`needs-human` (exit-edges rule above) | outcome or parked phase, branch/PR #, guardrail status, what a human must decide or supply, surprises worth remembering |
 | `GROOM:STALE` | issue | when `$warding` first marks an issue `stale`, one grace period before it closes it | how long the issue has been quiet, the date the sweep will close it, and how to keep it open |
 
@@ -241,6 +241,18 @@ Markdown except the body.
 `WORK:SCOPE` authority field, changes `status:*`, or assigns `risk:*`. Consumers select the latest
 complete block first, before applying trust or content filters. A newer invalid block therefore
 forces local derivation rather than exposing an older block as current.
+
+### `WORK:REVIEW` payload shape
+
+An issue-backed quest writes one PR annotation through `$quest`'s publication
+helper. Its existing compact review summary comes first, followed by
+`## Forge whole-branch review` and the complete forge review with every line
+indented four spaces. In verified `not-required` mode, that indented payload is
+the helper's single `forge review: not required (<reason>)` line instead. The
+outer `<!-- WORK:REVIEW -->` marker and `<!-- REVIEW:COMPLETE -->` sentinel
+remain unindented and occur exactly once; marker-like lines inside the forge
+payload stay indented data. Whole-line-anchored matching therefore selects only
+the outer annotation, never a review line that resembles a marker or summary.
 
 ### Recipe: validate a divination assessment
 

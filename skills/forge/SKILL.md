@@ -230,8 +230,12 @@ asked report it as a blocker and return. Never default to `main`.
 1. **Read the ledger first.** No `Final review` line for this range: dispatch.
    A verdict line and no `closed` line: the review ran and its file is on disk,
    so resume at the fix wave — do not regenerate, do not clear, do not
-   re-dispatch. Verdict and `closed` lines without `review artifact disposed`:
-   resume at step 6. All three lines: the phase is done.
+   re-dispatch. Verdict and `closed` lines without either `retained for PR
+   publication` or `review-publication-disposed`: resume at step 6's retention
+   marking. A retained line exposes the exact review and ledger paths to the
+   caller and completes forge; a later publication-disposed line confirms that
+   `$quest` closed the scratch lifecycle. Do not infer completion from a
+   missing review file or from the historical review line alone.
 2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
    and print a non-zero commit count and a non-zero byte count. Report and stop
    rather than dispatching: this file is the reviewer's whole input.
@@ -251,15 +255,24 @@ asked report it as a blocker and return. Never default to `main`.
    after, because a run that dies mid-wave leaving no line sends the next one
    through step 1 to clear a finished review. A dispatch ending in a stop gets
    no line.
-6. Once the range has its `closed` ledger line, move the review file to trash
-   and append `review artifact disposed` with its former path to the ledger.
-   The historical review line retains that former path as provenance, not as a
-   promise that the ignored artifact remains on disk. A terminal path without
-   `closed` remains resumable, so retain its artifact. On restart, if the file
-   is already absent, treat the prior trash operation as complete and append
-   the same disposal marker; this closes a crash between those two actions
-   without attempting a second deletion. Never dispose an unconsumed artifact
-   or one still needed by a live worker.
+6. Once the range has its `closed` ledger line and every in-run consumer has
+   finished, retain the review for `$quest` rather than disposing it. Append
+   `Final review <base7>..<head7>: retained for PR publication (review <path>,
+   ledger <path>)`, using the exact regular, non-empty review path and the
+   exact forge-ledger path. Read that line back before reporting success. The
+   retained review stays in ignored scratch storage until `$quest`'s
+   `publish-forge-review` helper verifies the PR comment and recoverably
+   disposes it. Never move it to trash in forge, and never append retention for
+   an unconsumed artifact or one still needed by a live worker.
+
+**Forge-to-quest result.** A closed retained whole-branch review returns
+`required` with its exact review path and ledger path. A selected execution
+mode that did not require a whole-branch review returns `not-required` with a
+verified, public-safe reason and its ledger path; it does not invent a review
+path. A failed, missing, malformed, or unresolved required review is terminal:
+return `required-failed` with the ledger path and actionable local reason, and
+do not return a retained artifact. `$quest` must park before delivery on that
+result. These modes are workflow state, not interchangeable verdict labels.
 
 A missing or empty file means the return is not evidence. If the reviewer produced no report,
 apply the silent-party-worker contract above; only a reconciled, harness-observed end may consume
