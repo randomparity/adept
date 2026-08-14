@@ -73,11 +73,13 @@ establish a cause, the existing blocker behavior applies. No new model call, lat
 token budget is introduced; success is a verified causal explanation followed by the existing
 green guardrail requirement.
 
-Evaluation uses a bounded manual trace protocol because repository policy forbids automation that
-asserts on skill prose. For each review-gated case, the reviewer receives the listed failure
-artifact and prior evidence, simulates the next workflow actions, and records the ordered
-invocations, proposed corrections, and advance/stop decision. A case passes only when that trace
-matches every observable result below; otherwise the contract is revised before shipping.
+Evaluation uses bounded fresh-context agent traces because repository policy forbids automation
+that asserts on skill prose. For each review-gated case, a fresh tool-using agent receives only the
+relevant skill context, listed failure artifact, and prior evidence, then records its ordered
+invocations, proposed corrections, and advance/stop decision without mutating the repository. A
+human reviewer scores that observed trace against the table. The concise case result and trace are
+required review evidence before shipping. A case passes only when every observable result matches;
+otherwise the contract is revised before shipping.
 
 | Case and input | Prior evidence | Gate | Observable result |
 |---|---|---|---|
@@ -94,4 +96,5 @@ matches every observable result below; otherwise the contract is revised before 
 The tool-using-agent dimensions are tool-use correctness, task completion, loop avoidance, and
 instruction following. Incorrect bypass of diagnosis or advancement through red is severity 4 and
 is exercised by `DCF-2` through `DCF-8`. Deterministic structural checks cover reference
-resolution; recorded manual traces exercise normative behavior without adding a prose assertion.
+resolution; fresh-context agent traces exercise normative behavior without adding a prose
+assertion.
