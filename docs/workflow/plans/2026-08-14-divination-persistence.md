@@ -41,7 +41,8 @@ baseline result and immutable packet hashes reused by Task 3.
    times, E10 twice, E11 twice, E15 four times, and every other case once. Include E4's dedicated
    trailing-punctuation rejection variant. Decode the literal E7
    comments; apply the exact grounded `issue.body` and `repo.contents` overrides, including E10's
-   all-field delimiter fixture and E11's split content; and independently recompute every nominally fresh fingerprint against the complete
+   all-field delimiter fixture and E11's repository-backed split evidence; and independently
+   recompute every nominally fresh fingerprint against the complete
    specification map: base/E6/E8/E9/E11/E12, E1, E5, E7, and E10. Serialize sorted-key UTF-8 JSON
    with two-space indentation and one newline, and record SHA-256 for each packet.
 3. Deterministically validate every composed packet: required fields, expected fresh/stale class,
