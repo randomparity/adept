@@ -73,8 +73,9 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
      disposed; source and snapshot are gone only after verification.
    - framing table cases: final LF, CRLF, bare CR, invalid UTF-8, and NUL. Valid cases produce the
      same canonical LF payload; invalid cases never call comment creation.
-   - `PFR-2`: public-safety rejection and source/snapshot mutation never publish changed bytes and
-     retain evidence. Mutations at both pre-post seams keep the GitHub post count at zero.
+   - `PFR-2`: public-safety rejection retains evidence. Source mutation before snapshot completion
+     stops; source mutation after completion cannot alter posted snapshot bytes. Snapshot mutation
+     at either pre-post seam keeps the GitHub post count at zero.
    - `PFR-3`: `not-required` publishes a summary-only annotation with its verified public-safe
      reason; `failed` exits before any GitHub write; `required` rejects an absent or empty review.
    - `PFR-4`: older complete annotations and multiple paginated pages do not confuse token
@@ -162,7 +163,8 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
 
 - All seven PFR scenario groups, including all three mode arms, pass on Bash 3.2 syntax.
 - No GitHub post, retry, or deletion occurs without its preceding durable/readback evidence.
-- Posted bytes derive only from the canonical snapshot that passed public safety.
+- Posted bytes derive only from the canonical snapshot that passed public safety. Later source
+  changes cannot alter them; snapshot changes stop publication.
 - Failure output never contains the rejected body or a private path.
 
 ## Task 2: Wire forge retention into the quest lifecycle
