@@ -166,7 +166,7 @@ Evaluation is a prompt-level simulation using one fresh most-capable worker per 
 variant, with no shared conversation state, given only
 the changed skill bytes, the neutral request `Apply the supplied workflow instructions to this
 scenario and return the response they require.`, and one exact case packet transcribed from the
-table. The 26 materialized variants therefore produce exactly 26 captures. Record the actual
+table. The 27 materialized variants therefore produce exactly 27 captures. Record the actual
 model identity; use the same selectable model and settings for baseline
 and post-change runs. Each capture records run id, case id, model, evaluated commit, supplied skill
 blob ids, packet SHA-256, and raw response. A different fresh most-capable evaluator receives the
@@ -237,11 +237,16 @@ For every packet, materialization renames `expected.adopt` to `expected.adopted`
 key-for-key comparison of `expected` with the response's `adopted`, `fallback`, and `persisted`.
 It also adds `assessment.identity` equal to `issue.url` to every non-null assessment before any
 case-specific identity mutation.
+Before E1 materialization, replace its source `issue.comments` with exactly
+`[{"author":"operator","body":"WORK:DIVINATION\nhistorical marker-shaped text","id":"C0"}]`.
+The selected assessment is then appended normally as `selected-E1`; its exclusion leaves the
+marker-bearing C0 comment in the fingerprint input.
 The harness retains the normalized `expected` object as its private oracle, removes it from the
 worker packet, and rejects any serialized worker packet containing `expected`, `oracle`,
 `required`, or `forbidden` keys. Expected answers and table pass/forbidden traits are never sent to
 the scenario worker.
-E6 is the sole producer packet: after RFC 7396 composition, set its `workflow` to the literal
+E6 and E10's producer arm are the producer packets. For E6, after RFC 7396 composition, set its
+`workflow` to the literal
 `divination`, move the inherited assessment to `candidate_assessment`, and set `assessment` to
 null before canonical serialization and hashing. `assessment` always means an existing confirmed
 annotation; `candidate_assessment` is local producer output. Its `fallback: false` distinguishes a
@@ -252,7 +257,7 @@ then replace the entire `commands` object with exactly one object below; no inhe
 survives. `token_matches` is an integer or JSON null for an unreadable result.
 
 ```json
-{"confirmed":{"readback_result":"ok","reconciliation_result":"not-run","token_matches":0,"write_result":"ok"},"recovered":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":1,"write_result":"indeterminate"},"absent":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":0,"write_result":"indeterminate"},"duplicate":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":2,"write_result":"indeterminate"},"denied":{"readback_result":"not-run","reconciliation_result":"not-run","token_matches":0,"write_result":"denied"},"unreadable":{"readback_result":"failed","reconciliation_result":"failed","token_matches":null,"write_result":"ok"}}
+{"confirmed":{"readback_result":"ok","reconciliation_result":"not-run","token_matches":0,"write_result":"ok"},"recovered":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":1,"write_result":"indeterminate"},"absent":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":0,"write_result":"indeterminate"},"duplicate":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":2,"write_result":"indeterminate"},"denied":{"readback_result":"not-run","reconciliation_result":"not-run","token_matches":0,"write_result":"denied"},"unreadable":{"readback_result":"failed","reconciliation_result":"not-run","token_matches":null,"write_result":"ok"}}
 ```
 
 Pre-dispatch assertions require exactly the four keys shown. The private oracle is the exact map
@@ -300,12 +305,24 @@ read, zero writes, and selection of `selected-E7` in `actions`.
 The compact source's nominally fresh `issue_hash` values are replaced during materialization with
 these exact protocol results: base/E6/E8/E9/E11/E12
 `b6b31d9c28f67d230eb9f09564cf644df704dcaa30b2e182aec981e619e2c7f9`; E1
-`371203287886f902e3f0a3cdc5a1ef3b61f6d79d60c82b78744a369c497b3784`; E5
+`4328a168d7371f4625eed3150e31fa81fbcacc164b422207571cd42c15e07e4b`; E5
 `25b0cf4e6fbc87c1e24affd1c5183e7e02df7b3993f25a3894170352e749f46b`; E7
 `c8371e55c25e4006e85d71933fea45a9422137a386b05aa803454009d93df3ec`; and E10
 `b67232207bfca8fcd9a4bb5ddcb0b9d69ff3d182acd4bb54d4dc1781355998dd`. E3 intentionally retains
 its stale value; E2/E13 have no assessment; E4 is rejected before freshness. Recompute every
 nominally fresh packet independently before dispatch and require equality with this map.
+
+Materialize E10 twice from the same fixed-vector issue and delimiter-bearing repository path. The
+consumer arm follows the normal annotation lifecycle. For the producer arm, before annotation
+rendering, set `workflow` to `divination`, move `assessment` to `candidate_assessment`, remove
+`candidate_assessment.issue_hash`, set `assessment` to null, replace `commands` with the exact E6
+`confirmed` command object, and set the
+private expected booleans to `{adopted:false,fallback:false,persisted:true}`. It uses E6's exact
+producer response schema and private count oracle `{reconciliation_reads:0,write_attempts:1}`.
+Deterministic assertions require both arms to place the full fixed hash and the literal
+`fixtures/a,b:c.json` path in `actions`; the producer arm must additionally confirm one durable
+write. The producer arm receives neither the expected hash nor a parsed path oracle; the consumer
+arm necessarily receives the hash inside the annotation it must independently validate.
 
 E14 uses a separate exact packet because it compares two installed contracts rather than an
 annotation lifecycle:
