@@ -5,199 +5,161 @@
 Retain `$forge`'s whole-branch review until `$quest` publishes and verifies it in the pull request's
 `WORK:REVIEW` annotation, then dispose of the ignored artifacts safely.
 
-The implementation adds one deterministic Bash helper for the stateful snapshot/comment operation.
-`$forge` owns production and retention, `$quest` owns publication after PR creation, and the helper
-owns byte framing, ledger transitions, GitHub reconciliation, and exact cleanup ordering. Standalone
-`$deliver` and `$return-to-town` remain unchanged.
+The implementation adds one narrow Bash helper for body composition, exact GitHub readback, and
+cleanup ordering. Forge owns production/retention; quest owns publication after PR creation.
+Standalone deliver and return-to-town remain unchanged.
 
-Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell fixtures.
+Tech stack: Bash 3.2, GitHub CLI, `jq`, existing public-safety and shell fixture infrastructure.
 
 ## Global Constraints
 
-- Bash is 3.2 with `#!/usr/bin/env bash` and `set -euo pipefail`; no associative arrays, `mapfile`,
-  or `readarray`.
-- Shell source lines are at most 100 characters and tab-indented per repository convention.
-- Do not add package dependencies. Preflight `gh`, `jq`, `iconv`, `openssl`, `mktemp`, `cp`, `mv`,
-  `chmod`, `wc`, `sed`, `awk`, and Git before recording intent. Preflight `trash` on macOS or `gio`
-  with its `trash` subcommand on Linux before publication. `openssl dgst -sha256` supplies the
-  raw-file digest; same-directory `mv` is the atomic rename primitive.
-- `.agent/` remains ignored scratch space. No host path, token, rejected review body, or private
-  environment detail enters tracked files or public failure messages.
-- One active quest controller per issue is the supported operating model. Duplicate publication
-  tokens fail closed and require operator repair; the helper never deletes PR comments.
-- Preserve the existing `WORK:REVIEW` summary fields and complete sentinels. The forge review is a
-  separate indented payload section.
-- A required forge-review failure remains terminal. Only a verified mode in which no forge review
-  was required may publish `forge review: not required`.
-- Full guardrail: `just verify`. CI hard-gates the same chain through `just ci`.
-- Architecture context: host `arm64`; target architectures `none declared`; relationship
-  `no-target-declared`.
+- Bash 3.2, `#!/usr/bin/env bash`, `set -euo pipefail`, ≤100-character source lines, repository
+  tab indentation; no associative arrays, `mapfile`, or `readarray`.
+- Add no package dependency. Preflight `gh`, `jq`, `mktemp`, `awk`, Git, and the platform's
+  recoverable-delete command (`trash` on macOS or `gio trash` on Linux) before publication.
+- `.agent/` remains ignored scratch. Never put host paths, rejected content, or auth data in public
+  output.
+- One active quest controller is supported. Do not retry ambiguous writes, enumerate unrelated PR
+  comments, delete comments, or add locking/reconciliation protocols.
+- Existing `WORK:REVIEW` summary fields and sentinels remain intact and precede the forge payload.
+- A required forge-review failure is terminal; only a verified no-review mode is `not required`.
+- Full guardrail is `just verify`; CI runs the same chain through `just ci`.
+- Architecture: host `arm64`; targets `none declared`; relationship `no-target-declared`.
 
 ## File map
 
-- Create `skills/quest/scripts/publish-forge-review`: deterministic publication transaction and
-  resume helper.
-- Create `tests/fixtures/quest/publish-forge-review-test.sh`: behavior fixtures for publication,
-  framing, failure, reconciliation, and cleanup.
-- Modify `skills/forge/SKILL.md`: retain the consumed final review for PR publication and expose its
-  ledger/path contract.
-- Modify `skills/quest/SKILL.md`: carry the retained artifact, invoke the helper after PR creation,
-  and treat helper failures as blockers.
-- Modify `skills/quest-log/SKILL.md`: document the additional labelled forge-review payload and
-  publication-token field within `WORK:REVIEW`; existing summary consumers remain unchanged.
+- Create `skills/quest/scripts/publish-forge-review`: one-shot publication/readback/disposal helper.
+- Create `tests/fixtures/quest/publish-forge-review-test.sh`: deterministic behavior fixtures.
+- Modify `skills/forge/SKILL.md`: retain successful final review and expose handoff paths.
+- Modify `skills/quest/SKILL.md`: carry handoff, call helper after PR creation, stop on failure.
+- Modify `skills/quest-log/SKILL.md`: document the distinct forge payload inside `WORK:REVIEW`.
 
-## Task 1: Add the deterministic publication transaction
+## Task 1: Implement and test one-shot review publication
 
 ### Interfaces
 
-- Command: `skills/quest/scripts/publish-forge-review <repo> <pr> <mode>
-  <review-or-reason> <ledger> <summary-file>` where mode is `required`, `not-required`, or `failed`.
-- Consumes a safe controller-written summary fragment without outer markers; a non-empty forge
-  review; an existing forge progress ledger; repository identity and PR number.
-- Produces one verified complete `WORK:REVIEW` comment for `required`/`not-required`, a retained
-  canonical snapshot until verification when required, and ledger lines for `intent`, `pending`,
-  `verified`, and `disposed`. `failed` exits before any GitHub write.
-- Exit 0 prints only the verified public comment URL. Nonzero prints one actionable public-safe
-  diagnostic and retains evidence.
-- Task 2 relies on this exact positional interface and exit contract.
+Command:
+
+```text
+skills/quest/scripts/publish-forge-review \
+  <repo> <pr> <required|not-required|failed> <review-or-reason> <ledger> <summary-file>
+```
+
+Required mode consumes a regular non-empty review. Not-required consumes a public-safe verified
+mode reason. Failed mode always exits before GitHub access. The summary file contains compact fields
+only, without outer markers. Success prints only the verified comment URL. Failure is nonzero and
+public-safe, and retains every artifact not already recoverably disposed.
 
 ### Steps
 
-1. Create `tests/fixtures/quest/publish-forge-review-test.sh` with a temporary Git repository, an
-   ignored `.agent/sdd/` workspace, a fake `gh` executable ahead of `PATH`, and fixtures that record
-   comment requests as JSON pages. Use the repository fixture cleanup helpers and a trap so every
-   test removes its state.
+1. Create `tests/fixtures/quest/publish-forge-review-test.sh`. Use a temporary Git repository,
+   ignored `.agent/sdd/`, fake `gh` in `PATH`, fake recoverable-delete command, repository fixture
+   cleanup helpers, and an exit trap.
 
-2. Add failing cases before the helper exists:
+2. Add seven failing behavior groups:
 
-   - `PFR-1`: safe review with empty interior lines and no final newline publishes one complete
-     annotation; the fake API readback matches; ledger order is intent → pending → verified →
-     disposed; source, snapshot, and final comment body are gone only after verification.
-   - framing table cases: final LF, CRLF, bare CR, invalid UTF-8, and NUL. Valid cases produce the
-     same canonical LF payload; invalid cases never call comment creation.
-   - `PFR-2`: public-safety rejection retains evidence. Source mutation before snapshot completion
-     stops; source mutation after completion cannot alter posted snapshot bytes. Snapshot mutation
-     at either pre-post seam keeps the GitHub post count at zero.
-   - `PFR-3`: `not-required` publishes a summary-only annotation with its verified public-safe
-     reason; `failed` exits before any GitHub write; `required` rejects an absent or empty review.
-   - `PFR-4`: older complete annotations and multiple paginated pages do not confuse token
-     selection; ambiguous success found by token does not retry; incomplete pagination stops;
-     duplicate-token comments stop and print their public URLs.
-   - `PFR-5`: comment-size/service rejection retains source and snapshot.
-   - `PFR-6`: resume at each ledger seam adopts the same token and paths; incomplete owned snapshot
-     or body temps are trashed and recreated; completed snapshot/body files are validated; verified
-     publication plus absent artifacts appends disposal without a second deletion.
-   - `PFR-7`: review text containing summary-shaped fields and literal outer marker/sentinel lines
-     remains indented payload; exact comment-body comparison succeeds. A summary fragment carrying
-     either whole-line outer marker is rejected before intent and posts zero comments.
+   - `PFR-1`: required safe review posts one complete annotation; fake exact-ID readback matches;
+     verified ledger line precedes trash calls; source/body disappear only afterward.
+   - `PFR-2`: public-safety match or scan fault posts nothing and retains the review/body.
+   - `PFR-3`: required publishes, verified not-required publishes summary-only, failed posts nothing;
+     missing/empty required review fails.
+   - `PFR-4`: comment failure, missing identity, and ambiguous nonzero-after-write all stop without a
+     retry and retain evidence.
+   - `PFR-5`: exact comment read failure/mismatch writes no verified/disposed ledger line.
+   - `PFR-6`: ledger append/readback and partial trash failures never claim closed lifecycle and
+     report remaining private paths only to the operator stream.
+   - `PFR-7`: review lines containing outer markers, sentinel, and summary fields remain indented;
+     summary input containing either outer marker is rejected before GitHub access.
 
-3. Run the fixture bare:
+3. Run the fixture bare. Expected red result: command not found.
 
-   ```sh
-   ./tests/fixtures/quest/publish-forge-review-test.sh
-   ```
+```sh
+./tests/fixtures/quest/publish-forge-review-test.sh
+```
 
-   Expected: nonzero with `publish-forge-review: not found` before implementation. This is the
-   recorded red proof.
+4. Create `skills/quest/scripts/publish-forge-review` with functions `fail`, `preflight`,
+   `validate_inputs`, `compose_body`, `post_comment`, `read_comment`, `append_ledger`, and
+   `dispose`. Keep each under 100 lines and complexity ≤8. Implement this exact order:
 
-4. Create `skills/quest/scripts/publish-forge-review` with these concrete operations in order:
+```text
+validate six arguments and mode
+preflight every command, including recoverable delete, before GitHub mutation
+failed: exit with the supplied public-safe reason before body creation/GitHub
+required: require review regular/non-empty/readable; not-required: validate reason
+validate summary as UTF-8 text without NUL; reject whole-line outer marker/sentinel
+create one body temp beside ledger with mktemp; trap retains it on failure
+write outer marker, compact summary, forge heading, four-space-indented review or not-required line,
+  and outer sentinel
+run repository scripts/check-public-safety.sh against that exact body
+post exact body with gh pr comment --body-file; capture returned comment URL or stop without retry
+resolve the exact comment API identity from that URL; read its body once and compare exact content
+append and read back review-publication-verified with comment identity
+recoverably dispose review (required mode) and body; append/read back disposed with former paths
+print verified comment URL
+```
 
-   ```text
-   preflight every required command, including the platform recoverable-delete command
-   validate six arguments, the mode enum, and mode-specific input
-   canonicalize summary as UTF-8 without NUL and with one final LF; reject either outer marker
-   resolve repository root and require review/ledger beneath its ignored .agent/ tree
-   recover the latest complete intent/pending/verified/disposed state from append-only ledger lines
-   when no intent exists: mint token, derive temp/final paths, append and read back intent
-   canonicalize through iconv into the recorded temp, reject NUL, normalize CRLF/CR to LF,
-     force exactly one final LF, verify regular non-empty output, atomically rename temp to final
-   compute snapshot byte length and SHA-256; run public safety against that final snapshot
-   append and read back pending(token,snapshot-path,body-path,snapshot-length,snapshot-digest)
-   indent each canonical line by four spaces and compose a helper-owned temporary body with one
-     outer
-     WORK:REVIEW block, summary first, publication token field, forge heading, payload, sentinel
-   re-read snapshot length/digest after composition and stop on either mismatch
-   run public safety against the exact completed body; compute and record body length/digest
-   atomically rename the body temporary to its ledger-owned final path; revalidate its digest
-   exhaustively collect repos/<repo>/issues/<pr>/comments through `gh api --paginate --slurp`
-   reject incomplete/malformed pages; select by exact token plus exact body equality
-   if absent, post once with `gh pr comment --body-file`; on failure reconcile before one retry
-   collect again; require exactly one exact match and capture comment id/url
-   append and read back verified(token,comment-id,snapshot-digest,body-digest)
-   re-read the exact comment and require exact body equality
-   move source, snapshot, and final body to trash with the platform recoverable-delete command
-   reconcile and trash only ledger-owned body/snapshot temps on resume
-   append and read back disposed(token,all-former-paths); print comment URL
-   ```
+Use body files for every dynamic GitHub payload. Never interpolate review/summary text into shell
+code. Capture and branch on command status explicitly. A failed delete reports what remains and does
+not append the disposed line.
 
-   Use functions under 100 lines with one purpose: `fail`, `append_ledger`, `read_state`,
-   `canonicalize`, `compose_body`, `collect_comments`, `match_publication`, `post_once`, and
-   `dispose_artifacts`. Use explicit `case` handling for every command status. Never interpolate
-   body content into a shell command.
-
-5. The fake `gh` supports `api --paginate --slurp` and `pr comment --body-file`. Fake every
-   preflighted external command where a fixture changes its result. Missing-command cases fail
-   before intent and GitHub writes. Make ambiguous writes selectable by fixture environment
-   variables. Assert files, ledger order, request count, exit status, and exact comment JSON—not
-   implementation function names.
+5. Fake `gh` implements only `pr comment --body-file` and exact `api <comment-url>` readback. It can
+return failure before write, failure after write, missing URL, mismatched body, and exact success.
+Fixtures assert status, post count, body bytes, ledger order, trash calls, and retained files.
 
 6. Run focused checks:
 
-   ```sh
-   ./tests/fixtures/quest/publish-forge-review-test.sh
-   shellcheck -x skills/quest/scripts/publish-forge-review \
-     tests/fixtures/quest/publish-forge-review-test.sh
-   shfmt -d skills/quest/scripts/publish-forge-review \
-     tests/fixtures/quest/publish-forge-review-test.sh
-   ```
+```sh
+./tests/fixtures/quest/publish-forge-review-test.sh
+shellcheck -x skills/quest/scripts/publish-forge-review \
+  tests/fixtures/quest/publish-forge-review-test.sh
+shfmt -d skills/quest/scripts/publish-forge-review \
+  tests/fixtures/quest/publish-forge-review-test.sh
+```
 
-   Expected: all fixture cases pass; ShellCheck and shfmt emit nothing and exit 0.
+Expected: fixture cases pass; ShellCheck/shfmt emit nothing.
 
-7. Verify the tests bite by changing the implementation locally so disposal runs before verified
-   ledger readback. Run the fixture and observe `PFR-1` fail. Restore the implementation only after
-   the passing version has been staged or committed safely.
+7. Mutation proof: temporarily move disposal before verified ledger readback, run the fixture, and
+   observe PFR-1 fail. Restore the passing implementation without touching unrelated files.
 
 8. Commit explicit paths:
 
-   ```sh
-   git add skills/quest/scripts/publish-forge-review \
-     tests/fixtures/quest/publish-forge-review-test.sh
-   git commit -m "feat: publish forge reviews durably"
-   ```
+```sh
+git add skills/quest/scripts/publish-forge-review \
+  tests/fixtures/quest/publish-forge-review-test.sh
+git commit -m "feat: publish forge reviews durably"
+```
 
 ### Acceptance criteria
 
-- All seven PFR scenario groups, including all three mode arms, pass on Bash 3.2 syntax.
-- No GitHub post, retry, or deletion occurs without its preceding durable/readback evidence.
-- Posted bytes derive only from the canonical snapshot that passed public safety. Later source
-  changes cannot alter them; snapshot changes stop publication.
-- Failure output never contains the rejected body or a private path.
+- All seven behavior groups pass with Bash 3.2-compatible syntax.
+- Exact checked body is the exact posted/read-back body.
+- No disposal happens before durable verification.
+- Every failure retains usable evidence and never retries a GitHub write.
 
-## Task 2: Wire forge retention into the quest lifecycle
+## Task 2: Wire retention and publication into the workflow
 
 ### Interfaces
 
-- Consumes Task 1's exact six-argument command and comment-URL output.
-- `$forge` produces `Final review <range>: retained for PR publication (review <path>)` only after
-  the review is closed and all in-run consumers have finished.
-- `$quest` carries `<path>` and the forge ledger as durable phase-seam state. It writes the compact
-  review summary fragment and invokes Task 1 after `$deliver` creates the PR.
+- Consumes Task 1's six-argument command and verified comment-URL result.
+- Forge produces `retained for PR publication` only after review closure and all in-run consumers.
+- Quest carries exact review/ledger paths and invokes the helper after deliver creates the PR.
 
 ### Steps
 
-1. Update `skills/forge/SKILL.md` final-review resume table and steps 6 onward:
+1. Update `skills/forge/SKILL.md` final-review resume table and cleanup:
 
-   - closed without retained/disposed resumes at retention marking, not deletion;
-   - append the retained-for-publication ledger line and keep the file;
-   - a retained line makes forge complete and exposes the review/ledger paths to its caller;
-   - retain failed/malformed review behavior as terminal; do not create an unavailable artifact;
-   - remove the old build-phase trash instruction and explain that quest publication owns disposal.
+   - closed without retained/disposed resumes at retention marking;
+   - append retained-for-publication with review and ledger paths; keep the review;
+   - retained marks forge complete and exposes both paths to caller;
+   - required review failures remain terminal;
+   - remove build-phase trash; quest publication now owns disposal.
 
-2. Update `skills/quest/SKILL.md` phase seams and Ship It step:
+2. Update `skills/quest/SKILL.md` seams and Ship It:
 
-   - record forge review path, forge ledger, branch, `BASE_BRANCH`, and guardrails after build;
-   - distinguish verified `not required` mode from a required-review failure;
-   - after `$deliver` creates the PR, write the compact summary fragment to a temp file and invoke:
+   - persist forge mode, review path/reason, ledger, branch, `BASE_BRANCH`, and guardrails after
+     build;
+   - required failure cannot reach delivery; verified not-required mode remains distinct;
+   - after deliver creates PR, write compact summary fields to a temp file and invoke:
 
      ```sh
      skills/quest/scripts/publish-forge-review \
@@ -205,57 +167,49 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
        "$FORGE_LEDGER" "$REVIEW_SUMMARY"
      ```
 
-   - treat nonzero as a quest blocker with artifacts retained; never post a second `WORK:REVIEW`
-     independently;
-   - record the helper's verified comment URL in the ship-to-handoff seam;
-   - keep the security-review summary fields and existing `WORK:REVIEW` timing.
+   - nonzero parks the quest with evidence retained; never independently post another WORK:REVIEW;
+   - carry the verified comment URL into the ship-to-handoff seam.
 
-3. Update `skills/quest-log/SKILL.md`'s annotation table and `WORK:REVIEW` description to state that
-   issue-backed quest comments contain the compact summary followed by an indented forge-review
-   payload and publication token. Existing latest-complete readers continue selecting the outer
-   block; embedded markers are indented and are not structure.
+3. Update `skills/quest-log/SKILL.md`: issue-backed quest `WORK:REVIEW` contains the compact summary
+   followed by a labelled, indented forge payload. Whole-line marker matching continues to select
+   only the outer annotation.
 
-4. Run focused and structural checks. The helper fixture already covers all mode arms; Anatomy rule
-   4 leaves the skill prose itself to adversarial review rather than sentence-pinning tests.
+4. Run focused and structural gates. Anatomy rule 4 leaves skill prose to adversarial review rather
+   than sentence-pinning tests.
 
-   ```sh
-   ./tests/fixtures/quest/publish-forge-review-test.sh
-   just shape-check
-   just public-safety
-   just records
-   ```
+```sh
+./tests/fixtures/quest/publish-forge-review-test.sh
+just shape-check
+just public-safety
+just records
+```
 
-   Expected: all exit 0; the public-safety and shape gates emit no findings; records regression
-   cases pass.
+Expected: all exit 0.
 
 5. Commit explicit paths:
 
-   ```sh
-   git add skills/forge/SKILL.md skills/quest/SKILL.md skills/quest-log/SKILL.md \
-     tests/fixtures/quest/publish-forge-review-test.sh
-   git commit -m "feat: carry forge reviews through quest shipping"
-   ```
+```sh
+git add skills/forge/SKILL.md skills/quest/SKILL.md skills/quest-log/SKILL.md
+git commit -m "feat: carry forge reviews through quest shipping"
+```
 
 ### Acceptance criteria
 
-- Forge retains a successful required review and reports its durable handoff paths.
-- Quest cannot ship after a failed required review.
-- The PR receives one verified `WORK:REVIEW` whose summary remains distinct from the full forge
-  review.
-- Return-to-town sees a closed scratch lifecycle and requires no change.
+- Forge retains and reports a successful required review.
+- Quest cannot ship after failed required review.
+- PR receives one verified WORK:REVIEW with distinct summary and forge payload.
+- Return-to-town sees a closed scratch lifecycle without modification.
 
 ## Final verification
 
-1. Run the focused fixture and its mutation proof again.
-2. Run `just verify` bare. Expected: every gate and fixture suite passes with no warnings other than
-   the repository-documented Claude manifest version warning.
-3. Read `git diff main...HEAD` for naming, function length, complexity, private paths, and
-   unnecessary surface. Enforce the ≤100-line and complexity ≤8 limits.
-4. Confirm `git status --short --untracked-files=all` is clean before branch review.
+1. Run focused fixture/mutation proof.
+2. Run `just verify` bare; accept only the documented manifest-version warning.
+3. Review `git diff main...HEAD` for naming, function length, complexity, private paths, and excess
+   surface.
+4. Confirm clean status before branch review.
 
 ## Rollback
 
-Before publication, reverting the implementation commits restores the old ephemeral behavior and
-leaves any ignored retained artifacts for operator inspection. After a verified PR comment exists,
-reverting does not delete public history; the comment remains the durable review, and no migration
-or external cleanup is required.
+Reverting implementation commits restores ephemeral forge-review behavior and leaves any ignored
+retained artifacts for operator inspection. A verified PR comment is public history and remains;
+there is no schema, migration, or external cleanup.
