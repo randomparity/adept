@@ -181,12 +181,16 @@ fails its case. Emit only the required JSON.` A capture is exactly
 "raw_response":string,"run_id":string,"skill_blobs":[{"blob":string,"path":string}],
 "variant_id":string}`. The result is exactly
 `{"evaluated_commit":string,"model":string,"run_id":string,"variants":[{
-"case_id":string,"forbidden_absent":boolean,"instruction_citations":[string],
-"required_pass":boolean,"variant_id":string,"verdict":"pass|fail"}],
+"case_id":string,"traits":[{"evidence":string,"id":string,
+"instruction_citations":[string],"kind":"required|forbidden","verdict":"pass|fail"}],
+"variant_id":string,"verdict":"pass|fail"}],
 "verdict":"pass|fail"}` with every materialized variant exactly once and no extra keys. One fresh
-worker produces one capture per variant. A case passes only when all its variants pass; the suite
-passes only when every case, required trait, forbidden-absence check, and deterministic assertion
-passes. Malformed evaluator output fails.
+worker produces one capture per variant. The harness privately enumerates stable trait ids from
+each table row before dispatch. Evaluator output must cover that exact id/kind set once per variant;
+each trait cites governing skill lines and observed response evidence. Variant verdict is derived
+from its trait records plus deterministic assertions, never trusted from an inconsistent aggregate;
+a case passes only when all variants pass, and the suite only when every case passes. Malformed or
+inconsistent evaluator output fails.
 
 A valid baseline has every case and schema field present and at least one failing blocking trait;
 malformed evidence is rerun, not accepted as red. The post-change result requires every trait in
@@ -236,12 +240,17 @@ null before canonical serialization and hashing. `assessment` always means an ex
 annotation; `candidate_assessment` is local producer output. Its `fallback: false` distinguishes a
 locally returned producer assessment from a consumer's fresh-derivation fallback, and
 `persisted:false` proves the candidate was not mistaken for durable state.
-Run E6 as six producer variants. Their exact command-result fields and private expected results
-are: confirmed (`write_result:ok`, `readback_result:ok`, `reconciliation_result:not-run`, token
-matches 0, persisted true, writes 1, reconciliation reads 0); recovered (`indeterminate`,
-`not-run`, `ok`, matches 1, true, 1, 1); absent (same with matches 0 and false); duplicate (same
-with matches 2 and false); denied (`denied`, `not-run`, `not-run`, matches 0, false, 1, 0); and
-unreadable (`ok`, `failed`, `failed`, matches unknown, false, 1, 1). E6 uses the producer-specific
+Run E6 as six producer variants. Start from the E6 packet after moving its candidate assessment,
+then replace the entire `commands` object with exactly one object below; no inherited command key
+survives. `token_matches` is an integer or JSON null for an unreadable result.
+
+```json
+{"confirmed":{"readback_result":"ok","reconciliation_result":"not-run","token_matches":0,"write_result":"ok"},"recovered":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":1,"write_result":"indeterminate"},"absent":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":0,"write_result":"indeterminate"},"duplicate":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":2,"write_result":"indeterminate"},"denied":{"readback_result":"not-run","reconciliation_result":"not-run","token_matches":0,"write_result":"denied"},"unreadable":{"readback_result":"failed","reconciliation_result":"failed","token_matches":null,"write_result":"ok"}}
+```
+
+Pre-dispatch assertions require exactly the four keys shown. Private expected persisted/count tuples
+in the same variant order are `(true,1,0)`, `(true,1,1)`, `(false,1,1)`, `(false,1,1)`,
+`(false,1,0)`, and `(false,1,1)`. E6 uses the producer-specific
 response schema `{"actions":[string],"adopted":boolean,"fallback":boolean,
 "persisted":boolean,"reason":string,"reconciliation_reads":integer,
 "write_attempts":integer}`. Exact count comparison is deterministic and a second write always
