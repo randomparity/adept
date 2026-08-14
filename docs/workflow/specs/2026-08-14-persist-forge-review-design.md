@@ -49,12 +49,19 @@ structure. The annotation identifies this section as the forge review, not the l
 review summary, and contains no local artifact path.
 
 Before posting, `$quest` runs the repository's public-safety guard against the review file. A
-finding or scan fault stops publication with the artifact retained. The post uses the quest-log
-body-file recipe. Readback must select the outer complete annotation, verify its run-specific
-marker, extract only the indented payload after the forge-review heading, remove exactly one
-four-space prefix per payload line, and compare the result byte-for-byte with the source. Embedded
-`WORK:REVIEW` markers, completion sentinels, or summary-shaped lines never count as outer structure.
-Only that readback authorizes disposal.
+finding or scan fault stops publication with the artifact retained. It mints one unique publication
+token before the first post and records that token in a named outer `publication token` field. The
+same token survives reconciliation and the one permitted retry. The post uses the quest-log
+body-file recipe.
+
+Readback exhaustively enumerates PR issue comments through GitHub's paginated API; every page must
+be readable and pagination must reach its declared end. A bounded projection without completeness
+evidence cannot authorize either retry or disposal. From that complete observation, readback
+selects the exact comment carrying the publication token and outer complete sentinels, rejects zero
+or multiple matches, extracts only the indented payload after the forge-review heading, removes
+exactly one four-space prefix per payload line, and compares the result byte-for-byte with the
+source. Embedded `WORK:REVIEW` markers, completion sentinels, publication fields, or summary-shaped
+lines never count as outer structure. Only that exact readback authorizes disposal.
 
 If no forge artifact exists because `$forge` legitimately ran without party mode or stopped after
 a named review failure, `WORK:REVIEW` records `forge review: unavailable` with the existing reason.
@@ -79,8 +86,9 @@ copy and the scratch lifecycle is closed.
   evidence.
 - Public-safety match or scan fault: stop before posting; never publish the rejected content.
 - Comment creation failure: retain the review and report the failed publication.
-- Ambiguous write result: read back before retrying; retry only when the intended complete block is
-  absent.
+- Ambiguous write result: exhaustively read back before retrying; retry once only when the exact
+  publication token is absent, and reuse that token on the retry. A partial or unreadable comment
+  collection stops without retry or disposal.
 - Comment readback mismatch: retain the review and stop; do not claim durability.
 - Crash after verified publication but before trash: resume from the verified PR block, dispose,
   and append the ledger marker.
@@ -111,13 +119,15 @@ cost do not change; success is a verified complete PR annotation followed by ver
 | Unsafe or host-private text published | 5 | Fixture proves the public-safety guard runs bare and a failure stops posting. |
 | Fabricated review on missing input | 4 | Fixture proves missing review is disclosed as unavailable. |
 | Forge review conflated with trial-loop summary | 4 | Fixture proves separate labelled sections and payload escaping inside `WORK:REVIEW`. |
-| Duplicate write after ambiguous response | 4 | Fixture proves readback precedes the single bounded retry. |
+| Duplicate write after ambiguous response | 4 | Fixture proves exhaustive token readback precedes the single bounded retry. |
 | Oversized or rejected comment silently loses review | 4 | Fixture proves publication failure retains the source and stops shipping. |
 
 Stable cases: `PFR-1` publishes a safe non-empty review and then disposes it; `PFR-2` rejects a
 review containing a denied host path; `PFR-3` discloses a named unavailable review; `PFR-4`
-reconciles an ambiguous write by readback without duplication; `PFR-5` retains the artifact when
-GitHub rejects publication; `PFR-6` resumes after publication before disposal; `PFR-7` publishes a
+starts with older complete annotations and reconciles an ambiguous write by finding its unique
+token across multiple complete pages without duplication; it also proves an incomplete page set
+stops without retry. `PFR-5` retains the artifact when GitHub rejects publication; `PFR-6` resumes
+after publication before disposal; `PFR-7` publishes a
 review containing duplicate summary fields and both outer sentinel lines, then reconstructs the
 original content exactly without confusing those payload lines for structure. Each is a blocking
 contract fixture whose observable traits are the required ordering and annotation fields. The
@@ -134,8 +144,9 @@ boundaries widened are GitHub comment creation and the quest's scratch cleanup.
 The quest trusts only a non-empty file at the controller-chosen path after the forge checks. Before
 publication it applies the repository public-safety scan; GitHub receives the body as data through
 `--body-file`, never shell interpolation. Every review line is indented before composition, so
-model-written markers and Markdown stay inside the payload boundary. Outer-marker selection plus a
-lossless content readback controls ambiguous writes. Disposal requires that verified readback.
+model-written markers and Markdown stay inside the payload boundary. Exhaustive comment collection,
+unique token selection, outer-marker validation, and a lossless content comparison control
+ambiguous writes. Disposal requires that verified readback.
 Failures may disclose only a public-safe reason, not rejected content or local paths.
 
 Credential compromise, malicious content already committed to the public repository, GitHub's own
