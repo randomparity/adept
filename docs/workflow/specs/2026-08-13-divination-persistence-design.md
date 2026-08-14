@@ -194,8 +194,11 @@ E11 is run twice: the composed packet above and a second packet produced by repl
 composed packet and verify it matches the table setup, every field has evidence, every repository
 reference resolves exactly when expected, and E10/E11 carry their fixed vector and split verdict.
 E6 is the sole producer packet: after RFC 7396 composition, set its `workflow` to the literal
-`divination` before canonical serialization and hashing. Its `fallback: false` distinguishes a
-locally returned producer assessment from a consumer's fresh-derivation fallback.
+`divination`, move the inherited assessment to `candidate_assessment`, and set `assessment` to
+null before canonical serialization and hashing. `assessment` always means an existing confirmed
+annotation; `candidate_assessment` is local producer output. Its `fallback: false` distinguishes a
+locally returned producer assessment from a consumer's fresh-derivation fallback, and
+`persisted:false` proves the candidate was not mistaken for durable state.
 The fixed response schema
 is `{"actions":[string],"adopted":boolean,"fallback":boolean,"persisted":boolean,"reason":string}`;
 extra or missing keys are malformed. Deterministic assertions compare those booleans with
@@ -218,6 +221,18 @@ these exact protocol results: base/E6/E8/E9/E11/E12
 `b67232207bfca8fcd9a4bb5ddcb0b9d69ff3d182acd4bb54d4dc1781355998dd`. E3 intentionally retains
 its stale value; E2/E13 have no assessment; E4 is rejected before freshness. Recompute every
 nominally fresh packet independently before dispatch and require equality with this map.
+
+E14 uses a separate exact packet because it compares two installed contracts rather than an
+annotation lifecycle:
+
+```json
+{"expected":{"divination":"one bounded public issue comment","seek_quest":"no writes"},"question":"Compare the external side effects of $seek-quest and $divination.","skills":["skills/seek-quest/SKILL.md","skills/divination/SKILL.md"],"workflow":"reference-comparison"}
+```
+
+Supply only the two named skill blobs and the question. Its response schema is
+`{"divination":string,"seek_quest":string}` with no extra keys. Deterministic assertions require
+the divination value to name exactly one bounded public issue-comment write and the seek-quest
+value to state no writes; any `read-only` or `writes nothing` characterization of divination fails.
 
 ## Threat model
 
