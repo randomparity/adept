@@ -151,8 +151,10 @@ re-review the changed diff:
   recheck; dispatched quest may adopt it but still creates its own later `WORK:SCOPE` boundary.
 - E9–E10: reject adoption from a dirty consumer worktree; preserve the annotation; verify the
   fixed fingerprint vector, selected comment identity, and first-two-colons evidence parsing.
-- E11–E12: bounty adopts a fully supported `split` assessment or falls back as a whole; a
-  structurally valid block from any login other than the authenticated producer is rejected.
+- E11–E12: bounty adopts a fully supported `split` assessment or falls back as a whole; the
+  recorded Producer, selected comment author's login, and current authenticated login must be
+  exactly equal, and any mismatch or failed identity read rejects the whole assessment before
+  adoption.
 - E13–E14: a dirty producer reports locally without posting; direct installed references describe
   their own mutation behavior, while divination performs at most its one bounded comment write.
 - E15: if persisted evidence cannot be read or validated and independent derivation also cannot
