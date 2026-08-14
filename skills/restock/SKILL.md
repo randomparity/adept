@@ -727,6 +727,13 @@ paths from every selected field, and read back the final body before posting. If
 cannot be established, abort the public write and retain the full detail only in the owned local
 report with an actionable `PUBLIC_SUMMARY_UNSAFE` result.
 
+`PUBLIC_SUMMARY_UNSAFE` is a non-merge terminal outcome and never enters Phase 4. Post and read back
+a minimal fixed-schema trajectory containing only repository, PR number, run token, observed head,
+transition, and `outcome: PUBLIC_SUMMARY_UNSAFE`; then clear the active status through the normal
+pending/applied transition. Keep the detailed local report path private and show it only to the
+operator. If even the fixed trajectory cannot be posted, retain the ownership manifest and local
+report, stop finalization for that unit, and report the exact comment/status repair required.
+
 ## Phase 4: Sequential Merge
 
 Collect all worker evaluation reports. Process work units in the
