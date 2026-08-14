@@ -238,9 +238,11 @@ key-for-key comparison of `expected` with the response's `adopted`, `fallback`, 
 It also adds `assessment.identity` equal to `issue.url` to every non-null assessment before any
 case-specific identity mutation.
 Before E1 materialization, replace its source `issue.comments` with exactly
-`[{"author":"operator","body":"WORK:DIVINATION\nhistorical marker-shaped text","id":"C0"}]`.
+`[{"author":"operator","body":"<!-- WORK:DIVINATION -->\nhistorical marker-shaped text","id":"C0"}]`.
 The selected assessment is then appended normally as `selected-E1`; its exclusion leaves the
-marker-bearing C0 comment in the fingerprint input.
+marker-bearing C0 comment in the fingerprint input. Pre-dispatch validation requires C0's first
+decoded line to equal `<!-- WORK:DIVINATION -->` and requires C0 to remain after selected-id
+exclusion.
 The harness retains the normalized `expected` object as its private oracle, removes it from the
 worker packet, and rejects any serialized worker packet containing `expected`, `oracle`,
 `required`, or `forbidden` keys. Expected answers and table pass/forbidden traits are never sent to
@@ -293,11 +295,18 @@ replace the assessment issue identity with issue 50; replace one evidence value 
 `unknown:value`; or change only `author` to `mallory`. Every E3/E4 variant must independently reject
 and match the same expected booleans, so one short-circuit cannot mask another missing check.
 
-Materialize E7 with three rendered complete annotations in chronological order and distinct ids:
-`history-E7-1` (token `eval-49-E7-old-1`, complexity `S`), `history-E7-2` (token
-`eval-49-E7-old-2`, complexity `L`), and newest `selected-E7` (token `eval-49-E7`). Pre-dispatch
-assertions require three complete marker pairs, those exact ids/order, and `selected-E7` as latest;
-the selection oracle is not included in the worker packet. E7's response adds integer
+Materialize E7 by replacing its source comments with the first two entries of the exact JSON array
+below and appending the third entry as the selected annotation. The decoded `body` strings are the
+exact UTF-8 comment bytes; no renderer, wrapping, added newline, or inherited field changes them.
+
+```json
+[{"author":"operator","body":"<!-- WORK:DIVINATION -->\n## Divination — issue #49\n- Assessment identity: https://example.invalid/o/r/issues/49; token `eval-49-E7-old-1`.\n- Producer: `operator`.\n- Source revision: issue evidence SHA-256 `1111111111111111111111111111111111111111111111111111111111111111`; producer HEAD `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`; worktree `clean`.\n- Blast radius: skills/divination/SKILL.md; local.\n  - Evidence: repo:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:skills/divination/SKILL.md.\n- Change hazards: public contract.\n  - Evidence: issue:body.\n- Complexity: S.\n  - Evidence: issue:body.\n- Decompose verdict: one PR.\n  - Evidence: issue:body.\n<!-- DIVINATION:COMPLETE -->","id":"history-E7-1"},{"author":"operator","body":"<!-- WORK:DIVINATION -->\n## Divination — issue #49\n- Assessment identity: https://example.invalid/o/r/issues/49; token `eval-49-E7-old-2`.\n- Producer: `operator`.\n- Source revision: issue evidence SHA-256 `2222222222222222222222222222222222222222222222222222222222222222`; producer HEAD `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`; worktree `clean`.\n- Blast radius: skills/divination/SKILL.md; cross-cutting.\n  - Evidence: repo:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:skills/divination/SKILL.md.\n- Change hazards: public contract.\n  - Evidence: issue:body.\n- Complexity: L.\n  - Evidence: issue:body.\n- Decompose verdict: one PR.\n  - Evidence: issue:body.\n<!-- DIVINATION:COMPLETE -->","id":"history-E7-2"},{"author":"operator","body":"<!-- WORK:DIVINATION -->\n## Divination — issue #49\n- Assessment identity: https://example.invalid/o/r/issues/49; token `eval-49-E7`.\n- Producer: `operator`.\n- Source revision: issue evidence SHA-256 `aa4e51e7cd9b851262acef72d055645b9f2bb66d09d96501dbf1e194009593a6`; producer HEAD `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`; worktree `clean`.\n- Blast radius: skills/divination/SKILL.md; local.\n  - Evidence: repo:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:skills/divination/SKILL.md.\n- Change hazards: public contract.\n  - Evidence: issue:body.\n- Complexity: M.\n  - Evidence: issue:body.\n- Decompose verdict: one PR.\n  - Evidence: issue:body.\n<!-- DIVINATION:COMPLETE -->","id":"selected-E7"}]
+```
+
+Pre-dispatch assertions decode that literal array, require three complete marker pairs, those exact
+ids and order, and `selected-E7` as latest. They recompute the E7 fingerprint after excluding only
+`selected-E7` and require the pinned value below; the selection oracle is not included in the
+worker packet. E7's response adds integer
 `comment_collection_reads` and integer `write_attempts` to the common schema; this is E7's exact
 schema and other extra keys remain malformed. The private oracle requires exactly one collection
 read, zero writes, and selection of `selected-E7` in `actions`.
@@ -305,9 +314,9 @@ read, zero writes, and selection of `selected-E7` in `actions`.
 The compact source's nominally fresh `issue_hash` values are replaced during materialization with
 these exact protocol results: base/E6/E8/E9/E11/E12
 `b6b31d9c28f67d230eb9f09564cf644df704dcaa30b2e182aec981e619e2c7f9`; E1
-`4328a168d7371f4625eed3150e31fa81fbcacc164b422207571cd42c15e07e4b`; E5
+`cae1dfdc4e8af37d6e45bebaccfa06141e6ef893575871702c6c9f6dfde6f0cf`; E5
 `25b0cf4e6fbc87c1e24affd1c5183e7e02df7b3993f25a3894170352e749f46b`; E7
-`c8371e55c25e4006e85d71933fea45a9422137a386b05aa803454009d93df3ec`; and E10
+`aa4e51e7cd9b851262acef72d055645b9f2bb66d09d96501dbf1e194009593a6`; and E10
 `b67232207bfca8fcd9a4bb5ddcb0b9d69ff3d182acd4bb54d4dc1781355998dd`. E3 intentionally retains
 its stale value; E2/E13 have no assessment; E4 is rejected before freshness. Recompute every
 nominally fresh packet independently before dispatch and require equality with this map.
