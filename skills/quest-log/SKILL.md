@@ -276,6 +276,11 @@ unit:
    `tracker:pr:<owner>/<repo>#<number>`, and `repo:<full-sha>:<path>`. Parse the repository form at
    its first two colons, so commas and later colons remain path bytes. Verify every source exists,
    repository paths resolve at the recorded commit, and the cited sources support their field.
+5. Immediately before adoption, repeat the complete-or-reject issue/comment collection and the
+   repository HEAD/status reads once. Require title, body, sorted labels, the complete ordered
+   comment id/body sequence, latest complete selected id/body/author, HEAD, and clean status to be
+   byte-for-byte unchanged from the validated observation. Any change or incomplete second read
+   rejects the block; do not loop to seek a stable snapshot.
 
 Any failed, missing, malformed, stale, or uncertain check rejects the whole block. A consumer may
 apply stricter checks only by rejecting the whole block; it never partially adopts or reinterprets
