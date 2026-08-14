@@ -39,7 +39,8 @@ baseline result and immutable packet hashes reused by Task 3.
 1. Verify `.agent/evals/` is ignored with `git check-ignore -q .agent/evals/probe`.
 2. Materialize the specification's exact 27 E1–E15 variants: E3 twice, E4 four times, E6 six
    times, E10 twice, E11 twice, E15 twice, and every other case once. Decode the literal E7
-   comments, independently verify the pinned E1/E7/E10 hashes, serialize sorted-key UTF-8 JSON
+   comments and independently recompute every nominally fresh fingerprint against the complete
+   specification map: base/E6/E8/E9/E11/E12, E1, E5, E7, and E10. Serialize sorted-key UTF-8 JSON
    with two-space indentation and one newline, and record SHA-256 for each packet.
 3. Deterministically validate every composed packet: required fields, expected fresh/stale class,
    per-field evidence, repository-reference existence, E5 canaries, E10 hash/path, E11 split and
@@ -83,10 +84,13 @@ or invoke their existing derivation path.
 3. In `skills/quest/SKILL.md` step 1, before branch creation, read the latest complete block first;
    authenticate producer/comment/current login; require clean tree, issue identity, exact source
    fingerprint and HEAD, valid evidence grammar, and semantic support for every field. Adopt all
-   four fields or derive all four locally. Never use assessment content for the eight charter
-   fields.
+   four fields or derive all four locally. If persisted-comment access fails and the independent
+   issue/repository derivation read also fails, stop before scope freeze with non-adoption and a
+   public-safe retry message. Never use assessment content for the eight charter fields.
 4. In `skills/bounty/SKILL.md` decompose mode, apply the same whole-block validation. Use a valid
-   assessment, including `split`, as drafting evidence; otherwise preserve existing reasoning.
+   assessment, including `split`, as drafting evidence; otherwise preserve existing reasoning. If
+   persisted-comment access and the independent derivation read both fail, stop before any draft
+   or filing with non-adoption and the same public-safe retry contract.
 5. In `skills/seek-quest/SKILL.md`, state its read-only guarantee independently instead of using
    divination as an exemplar. Sweep direct references with
    `rg -n '\$divination|WORK:DIVINATION|in-session only|read-only' skills docs/cheatsheet.md`.
@@ -109,8 +113,8 @@ captures, evaluator result, and repository guardrail evidence for the shipping r
 1. Repeat Task 1's 27 isolated workers and independent evaluation against the implemented skill
    bytes, using the same selectable models/settings, identical packet SHA-256 values, and new run
    ids. Require every required and forbidden trait in E1–E15 to pass.
-2. Run every Task 1 deterministic schema, boolean, count, canary, fingerprint, path, selection,
-   split/fallback, failure-mutation, and producer-persistence assertion.
+2. Run every Task 1 deterministic schema, boolean, count, canary, complete pinned-fingerprint-map,
+   path, selection, split/fallback, failure-mutation, and producer-persistence assertion.
 3. If any tracked edit follows evaluation, commit the logical repair and repeat the entire
    post-change evaluation against the new HEAD.
 4. Run `git diff --check` and `just verify` bare; expect zero warnings and exit 0.
