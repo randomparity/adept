@@ -25,6 +25,9 @@ Tech stack: Markdown skill contracts, existing structural shell guardrails.
 - Modify `skills/forge/SKILL.md`: route unexplained baseline and resistant task failures.
 - Modify `skills/deliver/SKILL.md`: route unexplained required-check failures.
 - Modify `skills/quest/SKILL.md`: state the pipeline-wide red-guardrail routing invariant.
+- Create ignored scratch `.agent/evals/issue-41-detect-curse-routing.md`: retain DCF trace inputs,
+  ordered outputs, scores, and a concise pass/fail summary through branch review and PR creation;
+  never commit it.
 
 ## Task 1: Add the diagnostic routes
 
@@ -75,7 +78,9 @@ interface is created.
    context, failure artifact, and prior evidence for `DCF-1` through `DCF-8` from the design spec.
    Keep the agents read-only. Record and score their ordered action traces. Confirm direct repair
    requires current causal evidence, unexplained failures diagnose before repair, an unresolved or
-   unchanged failure stops, and no site weakens its original stop condition.
+   unchanged failure stops, and no site weakens its original stop condition. Write the inputs,
+   traces, scores, and concise case summary to the ignored run artifact
+   `.agent/evals/issue-41-detect-curse-routing.md`.
 
 8. Run the full guardrail:
 
@@ -94,6 +99,11 @@ interface is created.
    git commit -m "feat: route unexplained failures to detect-curse"
    ```
 
+10. Pass the readable eval artifact and its concise DCF-1 through DCF-8 summary into branch review.
+    Carry the concise summary into the pull-request verification section. After the PR body is
+    created and read back with that summary, move the scratch artifact to the platform trash. If
+    review or publication fails, retain it for diagnosis.
+
 ### Acceptance criteria
 
 - All three issue-named pipeline entry points route unexplained causes to `$detect-curse`.
@@ -105,9 +115,10 @@ interface is created.
 
 1. Run `just verify` bare.
 2. Review `git diff main...HEAD` for consistent trigger language and accidental scope growth.
-3. Confirm `git status --short --untracked-files=all` is empty before branch review.
+3. Confirm tracked status is clean before branch review; the ignored eval artifact remains until
+   its PR summary is published and verified.
 
 ## Rollback
 
-Revert the single implementation commit. The change creates no state, migration, dependency, or
-external cleanup obligation.
+Revert the implementation commit. Before PR publication, move any retained ignored eval artifact
+to the platform trash. The change creates no migration, dependency, or external cleanup obligation.
