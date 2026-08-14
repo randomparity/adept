@@ -55,9 +55,11 @@ baseline result and immutable packet hashes reused by Task 3.
    - E11 bounty arms: `[skills/quest-log/SKILL.md, skills/bounty/SKILL.md]`;
    - E14 only: `[skills/seek-quest/SKILL.md, skills/divination/SKILL.md]` in packet order;
    - E15 quest and bounty arms use their respective quest and bounty arrays above.
-   Validate exact paths and ordered blob ids before dispatch and reuse them unchanged for each
-   corresponding baseline/post variant. Capture the exact reviewed envelope and require 27
-   captures with distinct run ids.
+   Keep the exact path order identical across baseline and post runs. For each run, resolve blob ids
+   from that run's evaluated commit, require each id to match the supplied bytes and commit, and
+   record the resulting ordered ids in its capture; blob-id equality across different commits is
+   neither expected nor allowed as a substitute for that check. Capture the exact reviewed
+   envelope and require 27 captures with distinct run ids.
 5. Apply the same deterministic checks Task 3 uses: the common, E6-producer, E7, E14, or E15 exact
    response schema as applicable; private expected booleans and mutation/read/write counts; E5
    canary absence; E10 full hash/path in both arms; E11 valid/invalid adoption split; and every
