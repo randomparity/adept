@@ -23,7 +23,7 @@ evaluation under ignored `.agent/evals/`, and repository shell guardrails throug
   `status:*` label, or assigns/reinterprets `risk:*`.
 - The producer, selected comment author, and consumer authenticated login must match exactly.
 - Producer and consumer repository worktrees must be clean; assessment adoption is all-or-nothing.
-- Use the exact annotation shape, fingerprint protocol, evidence grammar, failure contract, E1–E14
+- Use the exact annotation shape, fingerprint protocol, evidence grammar, failure contract, E1–E15
   packets, and response schema from the reviewed specification.
 - Evaluation artifacts remain ignored and are never committed.
 
@@ -33,11 +33,11 @@ evaluation under ignored `.agent/evals/`, and repository shell guardrails throug
 one evaluator result. Modify no tracked file.
 
 **Interfaces:** consumes the specification's base object, RFC 7396 case patches, materialization
-overrides, exact hashes, worker response schema, and E1–E14 table. Produces a structurally valid
+overrides, exact hashes, worker response schema, and E1–E15 table. Produces a structurally valid
 baseline result and immutable packet hashes reused by Task 3.
 
 1. Verify `.agent/evals/` is ignored with `git check-ignore -q .agent/evals/probe`.
-2. Materialize E1–E14 exactly, including both E11 packets. Serialize sorted-key UTF-8 JSON with
+2. Materialize E1–E15 exactly, including both E11 and E15 packet pairs. Serialize sorted-key UTF-8 JSON with
    two-space indentation and one newline; record SHA-256 for each.
 3. Deterministically validate every composed packet: required fields, expected fresh/stale class,
    per-field evidence, repository-reference existence, E5 canaries, E10 hash/path, E11 split and
@@ -99,7 +99,7 @@ only when evidence exposes an in-scope defect.
 captures, evaluator result, and repository guardrail evidence for the shipping review.
 
 1. Repeat Task 1's workers and independent evaluation against the implemented skill bytes, using
-   the same selectable models/settings and new run ids. Require all E1–E14 traits to pass.
+   the same selectable models/settings and new run ids. Require all E1–E15 traits to pass.
 2. Run deterministic response checks: schema/expected booleans, E5 canary absence, E10 full hash
    and delimiter path, E11 valid/invalid adoption split, and E6/E13 producer persistence failures.
 3. If any tracked edit follows evaluation, commit the logical repair and repeat the entire
@@ -109,7 +109,7 @@ captures, evaluator result, and repository guardrail evidence for the shipping r
    guardrail result, and open findings in the quest review summary. Keep ignored artifacts until
    all branch/security/simplification reviews finish, then move only issue-49 artifacts to trash.
 
-**Acceptance:** E1–E14 pass, all deterministic assertions pass, `just verify` passes, and tracked
+**Acceptance:** E1–E15 pass, all deterministic assertions pass, `just verify` passes, and tracked
 changes are limited exactly to the five Task 2 skill files plus this issue's ADR, specification,
 and plan.
 
