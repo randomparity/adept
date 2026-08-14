@@ -28,11 +28,13 @@ posts this public-safe shape to the issue it assessed:
 <!-- DIVINATION:COMPLETE -->
 ```
 
-The producer captures the returned comment URL and reads the comment back. Success requires the
-token, both whole-line markers, the assessed issue identity, both source-revision values, and all
-four assessment fields. A failed write or readback is an explicit failed persistence result; it
-must not claim that a durable handoff exists. The assessment itself may still be reported to the
-interactive caller.
+The producer makes one post attempt, captures the returned comment URL, and reads the comment
+back. Success requires the token, both whole-line markers, the assessed issue identity, both
+source-revision values, and all four assessment fields. If the post result is indeterminate, the
+producer performs one bounded comments read for the unique token. Exactly one complete match is
+verified normally; zero or multiple matches is an explicit non-durable result. It never retries
+the write blindly. A denied write or failed readback also must not claim that a durable handoff
+exists. The assessment itself may still be reported to the interactive caller.
 
 The shared annotation convention owns whole-line matching, completion sentinels, and
 latest-complete-wins. `WORK:DIVINATION` is posted on an issue after assessment and before any

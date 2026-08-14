@@ -19,9 +19,18 @@ annotation. The annotation contains the assessed issue URL, a token, source revi
 blast radius, change hazards, complexity, and decompose verdict. It follows the shared
 whole-line markers, completion sentinel, and latest-complete-wins rules.
 
+The producer makes one post attempt and reads the comment back. If the post result is
+indeterminate, it performs one bounded comment read for its unique token: one matching complete
+block is verified as the result, while no match or multiple matches produces an explicit
+non-durable result. It does not retry the write blindly. A denied or failed write likewise keeps
+the assessment available to the interactive caller but must not claim a durable handoff.
+
 Consumers read the latest complete `WORK:DIVINATION` block, verify that it names the requested
-issue, and revalidate it against the live issue and implicated repository state. Stale,
-malformed, incomplete, mismatched, or absent assessments are evidence gaps, not blockers:
+issue, and revalidate it against the live issue and implicated repository state. The shared
+minimum freshness rule compares the recorded issue `updatedAt` and full repository HEAD with
+current values; either mismatch forces fresh derivation. Exact matches establish freshness only,
+so each consumer still checks the assessment's grounded claims and may impose stricter checks.
+Stale, malformed, incomplete, mismatched, or absent assessments are evidence gaps, not blockers:
 `$quest` derives the fields itself and `$bounty` proceeds without a persisted split.
 
 `WORK:DIVINATION` remains advisory evidence. It never freezes scope, authorizes implementation,
@@ -30,11 +39,13 @@ post `WORK:SCOPE` after it freezes the complete charter.
 
 ## Consequences
 
-Pre-work assessment now writes one public issue comment, so `$divination` is no longer read-only.
-The distinct marker preserves ownership and lets dispatched workflows recover the assessment
-without treating it as authority. Revalidation deliberately permits repeated analysis when the
-issue or repository moved after the annotation; durability removes accidental duplication, not
-the need to check current evidence.
+Pre-work assessment now writes one public issue comment, so `$divination` is no longer an offline
+or read-only command. When GitHub is unavailable or the write cannot be confirmed, it can still
+return a clearly non-durable assessment to an interactive caller, but later sessions receive no
+handoff. The distinct marker preserves ownership and lets dispatched workflows recover the
+assessment without treating it as authority. Revalidation deliberately permits repeated analysis
+when the issue or repository moved after the annotation; durability removes accidental
+duplication, not the need to check current evidence.
 
 The annotation registry and direct consumers change together. Existing issues need no migration;
 absence retains the former derive-or-proceed behavior.
