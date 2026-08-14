@@ -40,9 +40,12 @@ is read-only; the sole mutation is one bounded public `WORK:DIVINATION` issue co
    from the assessment read. Sort labels bytewise and comments bytewise by `id`, preserve returned
    UTF-8 without normalization, serialize with `jq -cS` and no trailing newline, and SHA-256 those
    bytes. Verify the fixed vector in the quest-log recipe before relying on the calculation.
-7. **Recheck the repository.** Immediately before constructing the body file, re-read full `HEAD`
-   and `git status --short --untracked-files=all`. Require the SHA to equal step 2's captured value
-   and status to remain empty. A mismatch makes the completed assessment non-durable; do not post.
+7. **Recheck every source.** Immediately before constructing the body file, repeat step 3's
+   complete-or-reject issue read and recompute the canonical fingerprint. Require it to equal step
+   6's value. Also re-read full `HEAD` and `git status --short --untracked-files=all`; require the
+   SHA to equal step 2's captured value and status to remain empty. Any mismatch, incomplete read,
+   or malformed result makes the completed assessment non-durable; do not post or claim a durable
+   handoff.
 8. **Post once.** Mint one opaque token and write the complete block to a temporary body file:
 
    ```markdown
