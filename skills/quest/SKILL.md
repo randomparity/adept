@@ -295,6 +295,13 @@ their paths, branch, and base to match the live checkout. Re-read the record
 and named ledger before step 6. A malformed, missing, changed, or mismatched
 handoff is a shipping blocker, never a default or reconstructed value.
 
+On a verified-publication resume, re-read the verified and disposed ledger
+records and the stored comment URL, then skip directly to step 9. Do not rerun
+`$deliver`, recreate the summary, invoke the publication helper, or post a
+second `WORK:REVIEW` comment. `publication-in-progress` remains parked for
+human reconciliation, and only `build-complete` continues through review and
+shipping.
+
 There are three forge modes:
 
 - `required` requires a regular, non-empty, readable retained review and its

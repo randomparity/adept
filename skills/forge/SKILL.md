@@ -227,15 +227,23 @@ belong to the branch this review judges. `BASE_BRANCH` is the value
 `$attunement` recorded; if you do not have it, ask, and where nobody can be
 asked report it as a blocker and return. Never default to `main`.
 
-1. **Read the ledger first.** No `Final review` line for this range: dispatch.
-   A verdict line and no `closed` line: the review ran and its file is on disk,
-   so resume at the fix wave — do not regenerate, do not clear, do not
-   re-dispatch. Verdict and `closed` lines without either `retained for PR
-   publication` or `review-publication-disposed`: resume at step 6's retention
-   marking. A retained line exposes the exact review and ledger paths to the
-   caller and completes forge; a later publication-disposed line confirms that
-   `$quest` closed the scratch lifecycle. Do not infer completion from a
-   missing review file or from the historical review line alone.
+1. **Read the ledger first, scoped to this `<base7>..<head7>` range.** A
+   matching `required-failed` line returns `required-failed` unchanged with its
+   ledger path and reason; do not regenerate the package, redispatch the
+   reviewer, or continue the pipeline. `$quest` must park that result. No
+   `Final review` line for this range: dispatch. A verdict line and no `closed`
+   line: the review ran and its file is on disk, so resume at the fix wave — do
+   not regenerate, do not clear, do not re-dispatch. Verdict and `closed` lines
+   without a matching retained record: resume at step 6's retention marking.
+   A retained line exposes the exact review and ledger paths to the caller and
+   completes forge.
+
+   A `review-publication-disposed` line suppresses retention only when it is
+   paired with this range's retained record: that record names the current
+   forge-ledger identity and exact review path, and the later disposal record
+   names that same review path. Do not match a generic marker, prefix,
+   substring, or an older range's disposal record. Do not infer completion from
+   a missing review file or from the historical review line alone.
 2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
    and print a non-zero commit count and a non-zero byte count. Report and stop
    rather than dispatching: this file is the reviewer's whole input.
