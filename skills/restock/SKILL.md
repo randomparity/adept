@@ -717,7 +717,15 @@ guardrails, and the residual base-advance race.
 
 `WARN`, `FAIL`, ordinary refusal, and a second `BASE_CHANGED` receive terminal review/trajectory
 evidence and no active `status:` label. A clean `PASS` moves to `status:awaiting-merge` immediately
-before `$return-to-town`. Public annotations contain no credentials or host-private paths.
+before `$return-to-town`.
+
+Public annotations are built only from allowlisted structured fields: PR number/title, run token,
+commit identifiers, domain outcome, canonical verdict/counts, named test/check status, coverage
+exposure, transition, and bounded operator action. Never copy raw command output, environment values,
+worker prose, or local paths into GitHub. Redact known credential values and absolute scratch/home
+paths from every selected field, and read back the final body before posting. If a safe projection
+cannot be established, abort the public write and retain the full detail only in the owned local
+report with an actionable `PUBLIC_SUMMARY_UNSAFE` result.
 
 ## Phase 4: Sequential Merge
 
