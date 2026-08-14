@@ -11,7 +11,9 @@ is read-only; the sole mutation is one bounded public `WORK:DIVINATION` issue co
 ## Steps
 
 1. **Resolve repo.** `gh repo view --json nameWithOwner --jq .nameWithOwner` → `owner/name`;
-   pass `--repo <owner/name>` on every `gh` call.
+   pass `--repo <owner/name>` on commands that support repository selection. Invoke
+   `gh api user --jq .login` without `--repo`; pass the resolved owner and repository name as
+   GraphQL variables for comment-connection reads rather than interpolating them into query text.
 2. **Check durable eligibility.** Require `git status --short --untracked-files=all` to be empty
    and capture the full `git rev-parse HEAD`. A dirty-worktree assessment may be reported locally,
    but do not post it: the commit cannot identify the bytes assessed. Resolve the producer login
