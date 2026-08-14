@@ -7,10 +7,10 @@ and let `$quest` and `$bounty decompose` adopt a fresh, fully revalidated assess
 `WORK:SCOPE` authority. The producer publishes one authenticated, source-bound annotation;
 consumers select latest-complete first, then authenticate and validate the whole assessment or
 fall back to their existing local reasoning. The reviewed specification owns the exact annotation,
-fingerprint, citation, failure, threat, and evaluation contracts.
+fingerprint, citation, failure, threat, and adversarial-review contracts.
 
-**Tech stack.** Markdown skill contracts, `gh`, `git`, `jq`, SHA-256, prompt-level behavioral
-evaluation under ignored `.agent/evals/`, and repository shell guardrails through `just`.
+**Tech stack.** Markdown skill contracts, `gh`, `git`, `jq`, SHA-256, and repository shell
+guardrails through `just`.
 
 ## Global constraints
 
@@ -23,64 +23,23 @@ evaluation under ignored `.agent/evals/`, and repository shell guardrails throug
   `status:*` label, or assigns/reinterprets `risk:*`.
 - The producer, selected comment author, and consumer authenticated login must match exactly.
 - Producer and consumer repository worktrees must be clean; assessment adoption is all-or-nothing.
-- Use the exact annotation shape, fingerprint protocol, evidence grammar, failure contract,
-  E1–E15 packets, natural-response capture, and evaluator schema from the reviewed specification.
-- Evaluation artifacts remain ignored and are never committed.
+- Use the exact annotation shape, fingerprint protocol, evidence grammar, and failure contract
+  from the reviewed specification.
+- Treat E1–E15 as an adversarial review checklist, not a prompt-level model gate.
 
-## Task 1 — Establish failing behavioral evidence
+## Task 1 — Review the contract scenarios
 
-**Files:** create ignored `.agent/evals/issue-49-packets/*.json`, baseline capture envelopes, and
-one evaluator result. Modify no tracked file.
+**Files:** review ADR 0015, the specification, and this plan; change tracked files only to resolve
+a defensible finding.
 
-**Interfaces:** consumes the specification's base object, RFC 7396 case patches, materialization
-overrides, exact hashes, natural scenario responses, and E1–E15 table. Produces a structurally valid
-baseline result and immutable packet hashes reused by Task 3.
+1. Map every E1–E15 checklist scenario to explicit producer, registry, or consumer clauses.
+2. Adversarially review the specification and plan against the frozen `WORK:SCOPE`, same-login
+   authentication decision, failure boundaries, and repository policy.
+3. Fix defensible findings, commit each review round separately, and re-review until approved or
+   the bounded review stop condition fires.
 
-1. Verify `.agent/evals/` is ignored with `git check-ignore -q .agent/evals/probe`.
-2. Materialize the specification's exact 30 E1–E15 variants: E3 twice, E4 five times, E6 six
-   times, E10 twice, E11 twice, E15 four times, and every other case once. Include E4's dedicated
-   trailing-punctuation rejection variant. Decode the literal E7
-   comments; apply the exact grounded `issue.body` and `repo.contents` overrides, including E10's
-   all-field delimiter fixture and E11's repository-backed split evidence; and independently
-   recompute every nominally fresh fingerprint against the complete
-   specification map: base/E6/E8/E9/E11/E12, E1, E5, E7, and E10. Serialize sorted-key UTF-8 JSON
-   with two-space indentation and one newline, and record SHA-256 for each packet.
-3. Deterministically validate every composed packet: required fields, expected fresh/stale class,
-   per-field evidence, repository-reference existence, semantic support from each cited issue or
-   repository source for every fresh field, E5 canaries, E10 hash/path, E11 split and
-   broken-reference pair, exact E3/E4 rejection causes, the six named E6 command/oracle maps,
-   and explicit E6/E10/E13 producer workflows.
-4. Dispatch one fresh most-capable scenario worker per variant, with no shared conversation state,
-   using the exact oracle-free natural request that scopes read/write accounting to packet commands
-   used for the divination decision, excludes unrelated later workflow actions, requests relevant
-   selected ids/full fingerprints/exact evidence references, and asks whether the workflow may
-   continue without treating an unmocked later action as a blocker. Supply the exact packet and
-   this exact ordered skill-path matrix:
-   - quest arms E1–E5, E7–E9, E10-consumer, and E12:
-     `[skills/quest-log/SKILL.md, skills/quest/SKILL.md]`;
-   - divination arms E6, E10-producer, and E13:
-     `[skills/quest-log/SKILL.md, skills/divination/SKILL.md]`;
-   - E11 bounty arms: `[skills/quest-log/SKILL.md, skills/bounty/SKILL.md]`;
-   - E14 only: `[skills/seek-quest/SKILL.md, skills/divination/SKILL.md]` in packet order;
-   - E15 quest and bounty arms use their respective quest and bounty arrays above.
-   Keep the exact path order identical across baseline and post runs. For each run, resolve blob ids
-   from that run's evaluated commit, require each id to match the supplied bytes and commit, and
-   record the resulting ordered ids in its capture; blob-id equality across different commits is
-   neither expected nor allowed as a substitute for that check. Capture the exact reviewed
-   envelope and require 30 captures with distinct run ids.
-5. Apply deterministic checks only to packet/materialization validity, frozen packet SHA reuse,
-   E5 canary absence in raw output, and E10's literal full hash and delimiter-bearing path in raw
-   output. Scenario responses are natural workflow prose; adoption, fallback, durability,
-   mutation boundaries, and read/write counts are not synthetic response fields.
-6. Build the reviewed table traits plus variant-specific observation manifest and dispatch it only
-   to one different most-capable evaluator with the captures and exact rubric. Validate exact trait
-   id/kind coverage, citations, and observed evidence, then mechanically derive
-   variant/case/suite verdicts. Require at least one semantic blocking-trait failure against
-   otherwise valid baseline evidence. Missing action accounting alone cannot satisfy the baseline
-   red requirement.
-
-**Acceptance:** valid baseline aggregate `fail`; packets and captures are ignored; tracked tree is
-unchanged.
+**Acceptance:** every checklist case has an explicit contract owner; the reviewed artifacts are
+approved with no undispositioned finding and introduce no model-response completion gate.
 
 ## Task 2 — Implement the durable producer and consumers
 
@@ -122,44 +81,25 @@ or invoke their existing derivation path.
 **Acceptance:** producer and both consumers implement the same exact contract; no helper,
 dependency, label behavior, historical migration, or scope-authority change is introduced.
 
-## Task 3 — Prove behavior and repository integrity
+## Task 3 — Prove branch and repository integrity
 
-**Files:** create a fresh ignored post-change evaluation directory; change tracked skill files
-only when evidence exposes an in-scope defect.
+1. Sweep direct references with the specification's `rg` command and inspect every match.
+2. Run the focused formatting, shape, public-safety, and commit checks without suppressing output.
+3. Run a diff-scoped adversarial review and security review; fix defensible findings and re-review.
+4. Apply a behavior-preserving simplification pass over the final diff.
+5. Run `just verify` bare at final HEAD and record the completed guardrail result.
 
-**Interfaces:** reuses Task 1's exact packet bytes and hashes. Produces complete post-change
-captures, evaluator result, and repository guardrail evidence for the shipping review.
-
-1. Repeat Task 1's 30 isolated workers and independent evaluation against the implemented skill
-   bytes, using the same selectable models/settings, identical packet SHA-256 values, and new run
-   ids. Require every required and forbidden trait in E1–E15 to pass.
-2. Run every Task 1 grounded-support, packet, SHA, canary, complete pinned-fingerprint-map, and raw
-   fixed-vector assertion; require the evaluator to pass every semantic selection, outcome,
-   mutation-boundary, and bounded-operation trait.
-3. If any tracked edit follows evaluation, commit the logical repair and repeat the entire
-   post-change evaluation against the new HEAD.
-4. Run `git diff --check` and `just verify` bare; expect zero warnings and exit 0.
-5. Record branch, base, evaluated commit, model identities, packet hashes, evaluator verdict,
-   guardrail result, and open findings in the quest review summary. Keep ignored artifacts until
-   all branch/security/simplification reviews finish, then move only issue-49 artifacts to trash.
-
-**Acceptance:** E1–E15 pass, all deterministic assertions pass, `just verify` passes, and tracked
-changes are limited exactly to the five Task 2 skill files plus this issue's ADR, specification,
-and plan.
-
-**Rollback:** before push, ordinary commits may be reverted newest-first. After push, use new
-`git revert` commits; never rewrite history. ADR 0015 and its reviewed specification remain the
-durable decision record unless superseded by a new ADR. On abandonment, rollback, or a terminal
-failed review, first retain any evidence needed in the parked trajectory, then move only the
-run-scoped issue-49 packet, capture, and evaluator directories to trash and report every path.
+**Acceptance:** the final five skill contracts satisfy the frozen scope and E1–E15 checklist;
+adversarial and security reviews approve; repository guardrails pass; tracked changes remain
+limited to the five skills, ADR, specification, and plan.
 
 ## Progress
 
-- Current step: implementation plan awaiting adversarial review.
+- Current step: model gate removed by operator decision; amended design awaiting review.
 - Branch: `feat/divination-persistence-49`.
 - Base: `main` at quest start.
 - Guardrail: `just verify` (`just ci` in CI).
 - Architecture: host `arm64`; no target declared; `no-target-declared`.
 - ADR review: approved in cycle 2 iteration 1; no open findings.
-- Specification review: approved in expanded cycle 3 iteration 1; no open findings.
+- Specification review: prior revision approved; amended review pending.
 - Open findings: none.
