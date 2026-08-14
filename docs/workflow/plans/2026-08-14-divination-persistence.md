@@ -40,11 +40,13 @@ baseline result and immutable packet hashes reused by Task 3.
 2. Materialize the specification's exact 30 E1–E15 variants: E3 twice, E4 five times, E6 six
    times, E10 twice, E11 twice, E15 four times, and every other case once. Include E4's dedicated
    trailing-punctuation rejection variant. Decode the literal E7
-   comments and independently recompute every nominally fresh fingerprint against the complete
+   comments; apply the exact grounded `issue.body` and `repo.contents` overrides, including E10's
+   all-field delimiter fixture and E11's split content; and independently recompute every nominally fresh fingerprint against the complete
    specification map: base/E6/E8/E9/E11/E12, E1, E5, E7, and E10. Serialize sorted-key UTF-8 JSON
    with two-space indentation and one newline, and record SHA-256 for each packet.
 3. Deterministically validate every composed packet: required fields, expected fresh/stale class,
-   per-field evidence, repository-reference existence, E5 canaries, E10 hash/path, E11 split and
+   per-field evidence, repository-reference existence, semantic support from each cited issue or
+   repository source for every fresh field, E5 canaries, E10 hash/path, E11 split and
    broken-reference pair, exact E3/E4 rejection causes, the six named E6 command/oracle maps,
    and explicit E6/E10/E13 producer workflows.
 4. Dispatch one fresh most-capable scenario worker per variant, with no shared conversation state,
@@ -127,7 +129,7 @@ captures, evaluator result, and repository guardrail evidence for the shipping r
 1. Repeat Task 1's 30 isolated workers and independent evaluation against the implemented skill
    bytes, using the same selectable models/settings, identical packet SHA-256 values, and new run
    ids. Require every required and forbidden trait in E1–E15 to pass.
-2. Run every Task 1 deterministic packet, SHA, canary, complete pinned-fingerprint-map, and raw
+2. Run every Task 1 grounded-support, packet, SHA, canary, complete pinned-fingerprint-map, and raw
    fixed-vector assertion; require the evaluator to pass every semantic selection, outcome,
    mutation-boundary, and bounded-operation trait.
 3. If any tracked edit follows evaluation, commit the logical repair and repeat the entire
