@@ -16,12 +16,12 @@ scope.
 
 ## Design
 
-`$trial-loop` accepts an optional leading `--reviewer <name>` selector. Omission selects
-`gauntlet`; `detect-evil` is the only accepted alternate. A missing value or any other name stops
-before dispatch with an actionable input error. The selector belongs to the loop, so it is removed
-before target classification, target-and-flag hashing, default-target resolution, and forwarding.
-This keeps an explicitly selected gauntlet run artifact-compatible with the same invocation that
-omits the selector.
+`$trial-loop` accepts `--reviewer gauntlet|detect-evil` once anywhere before the line-anchored
+`CHARTER` block. Omission selects `gauntlet`; `detect-evil` is the only accepted alternate. A
+missing value, unknown name, or duplicate selector stops before dispatch with an actionable input
+error. The selector belongs to the loop, so it is removed before target classification,
+target-and-flag hashing, default-target resolution, and forwarding. This keeps an explicitly
+selected gauntlet run artifact-compatible with the same invocation that omits the selector.
 
 After selection, one local term, `reviewer`, names `$gauntlet` or `$detect-evil`. Every pass invokes
 that reviewer with the existing `--json --out <findings-path>` contract and the unchanged trailing
@@ -47,7 +47,8 @@ This decision is recorded by
 
 ## Errors and compatibility
 
-- `$trial-loop --reviewer` with no value stops before target defaulting or worker dispatch.
+- `$trial-loop --reviewer` with no value, a duplicate selector, or an unknown value stops before
+  target defaulting or worker dispatch.
 - `$trial-loop --reviewer gauntlet ...` is behaviorally equivalent to the existing invocation.
 - `$trial-loop --reviewer detect-evil ...` preserves all target modes, focus, charter, artifact,
   retry, disposition, deferral, and stop contracts.
@@ -79,7 +80,7 @@ gauntlet behavior (4). Tone and content-generation quality are not relevant.
 |---|---|---|---|---|
 | SRL-01 | Existing invocation with no selector | dispatches gauntlet; unchanged target and charter; bounded report | detect-evil dispatch or changed default | block |
 | SRL-02 | `--reviewer detect-evil --base main` with a valid charter and clean artifact | dispatches detect-evil; verifies path/run ID; reaches a defined terminal state | one-shot handoff presented as settled | block |
-| SRL-03 | Missing or unknown selector value | actionable pre-dispatch error | token reclassified as focus/target or any dispatch | block |
+| SRL-03 | Missing, unknown, or duplicate selector | actionable pre-dispatch error | token reclassified as focus/target or any dispatch | block |
 | SRL-04 | Selector plus explicit files, focus, and a path-bearing charter | selector removed; targets precede one unchanged charter block | selector forwarded, target swallowed, or charter path targeted | block |
 | SRL-05 | Detect-evil finding valid but outside scope; deferral bookkeeping authorized | one `deferred-tracked` disposition and one verified debt owner; recurrence re-affirmed | issue-only owner, duplicate record, or silent drop | block |
 | SRL-06 | Detect-evil artifact missing, malformed, or carrying the prior run ID | one permitted retry, then a named block | acting on stale findings or inventing approve | block |

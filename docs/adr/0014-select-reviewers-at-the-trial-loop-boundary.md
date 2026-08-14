@@ -14,9 +14,11 @@ stop and deferral behavior.
 
 ## Decision
 
-Make reviewer selection an explicit `$trial-loop` input. The loop defaults to `$gauntlet` for
-backward compatibility and accepts `$detect-evil` as the sole alternate reviewer. It strips and
-validates its own reviewer selector before hashing or forwarding challenge arguments, then uses the
+Make reviewer selection an explicit `$trial-loop` input. The grammar is
+`--reviewer gauntlet|detect-evil`: the flag may appear once anywhere before the line-anchored
+`CHARTER` block, consumes the next token, and defaults to `gauntlet` when absent. A missing value,
+unknown name, or duplicate selector stops before dispatch. The loop strips and validates the
+selector before hashing, target classification, or forwarding challenge arguments, then uses the
 selected reviewer's name consistently in dispatch, audit, stop, and report language.
 
 The reviewer boundary requires the shared structured artifact contract already implemented by both
