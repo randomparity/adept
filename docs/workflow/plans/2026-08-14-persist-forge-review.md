@@ -19,8 +19,8 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
 - Shell source lines are at most 100 characters and tab-indented per repository convention.
 - Do not add package dependencies. Preflight `gh`, `jq`, `iconv`, `openssl`, `mktemp`, `cp`, `mv`,
   `chmod`, `wc`, `sed`, `awk`, and Git before recording intent. Preflight `trash` on macOS or `gio`
-  with its `trash` subcommand on Linux before any publication. `openssl dgst -sha256` is the raw-file
-  digest; same-directory `mv` is the atomic rename primitive.
+  with its `trash` subcommand on Linux before publication. `openssl dgst -sha256` supplies the
+  raw-file digest; same-directory `mv` is the atomic rename primitive.
 - `.agent/` remains ignored scratch space. No host path, token, rejected review body, or private
   environment detail enters tracked files or public failure messages.
 - One active quest controller per issue is the supported operating model. Duplicate publication
