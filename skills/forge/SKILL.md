@@ -281,13 +281,20 @@ existing malformed-return behavior: discard it, re-dispatch once, then stop and 
 that returned `WRITE_FAILED` or `PACKAGE_MISSING` has named
 the problem — stop on the first one. Do not retry at a second path; the
 template's read-only rule rests on the reviewer having exactly one writable
-path. A stop means the branch goes on to the rest of the pipeline with no
-whole-branch review, and you say so rather than closing the phase quietly.
+path. Every such terminal stop, including an exhausted malformed return or
+silent-worker recovery, is `required-failed`: append and read back
+`Final review <base7>..<head7>: required-failed (reason <reason>, ledger
+<path>)`, return that mode with the ledger path and local reason, and stop.
+Do not let the branch continue to `$trial-loop`, `$dispel`, `$deliver`, or any
+other shipping phase with no whole-branch review. `$quest` parks this result
+before delivery rather than reclassifying it as `not-required`.
 
 A `CLEANUP_FAILED` return is also a stop. Accept only the exact three-line shape
 defined by the reviewer template, with an absolute worktree path and one-line
 reason. Reject a return that mixes `CLEANUP_FAILED` with a verdict or counts;
 the review cannot be consumed while reviewer-created state remains unresolved.
+Return `required-failed` by the same ledgered terminal path; it cannot resume
+as a shipping-without-review path.
 
 ### Handling what an implementer reports
 

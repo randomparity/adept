@@ -261,12 +261,39 @@ plan path if one exists. For a `governed-small-change`, pass the classification
 and the revalidated decision evidence (reference, kind, accepted status,
 governed behavior, acceptance criteria) -- and no plan path.
 
-Immediately record the forge result in the existing forge ledger as the
-build-to-review handoff: forge mode, exact review path or verified
-not-required reason, exact ledger path, branch, `BASE_BRANCH`, and the exact
-guardrail commands that passed. Read the record and the named ledger back
-before step 6; this ignored, durable record is the resume source through
-shipping.
+Resolve the forge ledger's directory and set
+`FORGE_HANDOFF=<ledger-directory>/quest-forge-handoff.md`. This is the one
+ignored build-to-ship record; do not derive `FORGE_*` values from conversation
+memory. On a new build, create it with `mktemp` in that directory, mode 0600,
+then atomically rename it into place only after every write succeeds. Its exact
+line-oriented format is:
+
+```text
+format: quest-forge-handoff-v1
+phase: build-complete
+forge-mode: <required|not-required|required-failed>
+forge-review-or-reason: <exact path or verified reason>
+forge-ledger: <exact path>
+branch: <exact branch>
+base-branch: <exact BASE_BRANCH>
+guardrail: <one exact passed command>
+review-summary: <ledger-directory>/quest-review-summary.md
+```
+
+Write one `guardrail:` line per command, with the preserved command text. All
+values are single-line UTF-8 text without carriage return or NUL; refuse an
+unrepresentable value instead of escaping or normalizing it. Before the rename,
+read the temporary file back byte-for-byte. On resume, require this exact
+format: each displayed scalar field occurs once, `guardrail:` occurs at least
+once, no unknown or duplicate scalar field occurs, and every value is
+non-empty. `build-complete` has no `pr:` or `review-comment-url:` field;
+`publication-in-progress` adds exactly one `pr:` field; and
+`publication-verified` adds exactly one `pr:` and one `review-comment-url:`
+field. Parse only this record to set `FORGE_MODE`, `FORGE_REVIEW_OR_REASON`,
+`FORGE_LEDGER`, `REVIEW_SUMMARY`, branch, `BASE_BRANCH`, and guardrails; require
+their paths, branch, and base to match the live checkout. Re-read the record
+and named ledger before step 6. A malformed, missing, changed, or mismatched
+handoff is a shipping blocker, never a default or reconstructed value.
 
 There are three forge modes:
 
@@ -377,9 +404,32 @@ Run `$deliver <issue-number>` to push the branch, create the PR, and drive it
 to green CI and mergeable state. Keep a compact review summary (verdict,
 findings count, iterations, `$detect-evil` verdict) as an ignored file beside
 the forge ledger; do not put outer annotation markers or forge-review payload
-in it. The verbose per-iteration findings file is droppable. After `$deliver`
-creates the PR, transfer that summary file's lifecycle to the publication
-helper and invoke it exactly once:
+in it. `REVIEW_SUMMARY` is the exact `review-summary:` path in the parsed
+handoff, not an ad-hoc filename. The verbose per-iteration findings file is
+droppable.
+
+After `$deliver` creates the PR, create that summary once with `mktemp` beside
+the ledger and atomically rename it only after writing these exact, non-empty
+single-line fields in order:
+
+```text
+verdict: <trial-loop verdict>
+findings: <count>
+iterations: <count>
+security: <$detect-evil verdict or not triggered>
+```
+
+Reject carriage return, NUL, outer markers, or any failed byte-for-byte
+readback before rename. If the summary already exists, or the handoff says a
+publication attempt is in progress, do not overwrite, recreate, or retry it:
+park for human reconciliation with the retained evidence. Before the helper,
+atomically rewrite and byte-verify the handoff with phase
+`publication-in-progress` plus one `pr: <number>` field. On every resume, that
+phase is a terminal parked state, because a prior comment write may be
+ambiguous.
+
+Transfer the summary file's lifecycle to the publication helper and invoke it
+exactly once:
 
 ```sh
 skills/quest/scripts/publish-forge-review \
@@ -391,10 +441,12 @@ The helper is the sole `WORK:REVIEW` writer. It validates the required review
 or verified not-required reason, posts one complete annotation, reads it back,
 records verification, and recoverably disposes its owned scratch files. On
 nonzero, do not retry, do not post another `WORK:REVIEW`, and park the quest
-with the helper's retained evidence and failure output. On success, capture
-its sole verified comment URL and append it to the durable ship-to-handoff
-record with the PR number. Carry that URL into step 9; `$return-to-town` needs
-no forge-scratch cleanup.
+with the helper's retained evidence and failure output; leave the handoff in
+`publication-in-progress`. On success, capture its sole verified comment URL,
+require the named ledger to contain its verified and disposed records, then
+atomically rewrite and byte-verify phase `publication-verified` with the PR
+number and `review-comment-url: <verified URL>`. Carry that URL into step 9;
+`$return-to-town` needs no forge-scratch cleanup.
 
 ## 9. Hand Off, or Merge if Authorized
 
