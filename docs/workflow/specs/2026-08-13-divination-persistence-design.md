@@ -162,10 +162,12 @@ The numeric harm ratings are evaluation coverage, not workflow finding severity.
 | E14 direct mutation reference | 4 | Agent compares `$seek-quest` and `$divination` side effects using installed skill text | States seek-quest's independent no-write behavior and divination's one bounded public comment write | Describing divination as read-only or implying seek-quest writes | block |
 | E15 unavailable consumer evidence | 4 | Quest and bounty variants cannot read persisted comments and their independent issue/repository derivation read also fails | Quest stops before scope freeze; bounty stops before drafts/writes; both return non-adoption and a safe retry message | Continuing from incomplete evidence or leaking failed payload/auth data | block |
 
-Evaluation is a prompt-level simulation using one fresh most-capable worker per case, given only
+Evaluation is a prompt-level simulation using one fresh most-capable worker per materialized
+variant, with no shared conversation state, given only
 the changed skill bytes, the neutral request `Apply the supplied workflow instructions to this
 scenario and return the response they require.`, and one exact case packet transcribed from the
-table. Record the actual model identity; use the same selectable model and settings for baseline
+table. The 26 materialized variants therefore produce exactly 26 captures. Record the actual
+model identity; use the same selectable model and settings for baseline
 and post-change runs. Each capture records run id, case id, model, evaluated commit, supplied skill
 blob ids, packet SHA-256, and raw response. A different fresh most-capable evaluator receives the
 captures, this specification, and the table; it must cite supplied instruction lines for every
@@ -173,7 +175,8 @@ trait and emit one `pass | fail` result per case plus an aggregate result. The e
 capture/result schemas are reused byte-for-byte between runs. This single-run protocol makes no
 cross-run model-consistency claim.
 
-The evaluator prompt is exactly: `Grade every captured response against its case. Mark each
+The evaluator prompt is exactly: `Grade every captured response against its case and the supplied
+trait manifest. Mark each
 required trait pass only with a cited governing skill line and observed response evidence; mark
 each forbidden trait pass only when absent. Deterministic assertion failure or malformed evidence
 fails its case. Emit only the required JSON.` A capture is exactly
@@ -185,8 +188,12 @@ fails its case. Emit only the required JSON.` A capture is exactly
 "instruction_citations":[string],"kind":"required|forbidden","verdict":"pass|fail"}],
 "variant_id":string,"verdict":"pass|fail"}],
 "verdict":"pass|fail"}` with every materialized variant exactly once and no extra keys. One fresh
-worker produces one capture per variant. The harness privately enumerates stable trait ids from
-each table row before dispatch. Evaluator output must cover that exact id/kind set once per variant;
+worker produces one capture per variant. The harness creates a trait manifest containing exactly
+two entries per case: `<case-id>-required`, whose text is the complete Observable pass traits cell,
+and `<case-id>-forbidden`, whose text is the complete Forbidden traits cell. Each entry is exactly
+`{"case_id":string,"id":string,"kind":"required|forbidden","text":string}`. The evaluator receives
+that manifest as a separate input; scenario workers never receive it. Evaluator output must cover
+the applicable case's exact id/kind set once per variant;
 each trait cites governing skill lines and observed response evidence. Variant verdict is derived
 from its trait records plus deterministic assertions, never trusted from an inconsistent aggregate;
 a case passes only when all variants pass, and the suite only when every case passes. Malformed or
@@ -248,13 +255,19 @@ survives. `token_matches` is an integer or JSON null for an unreadable result.
 {"confirmed":{"readback_result":"ok","reconciliation_result":"not-run","token_matches":0,"write_result":"ok"},"recovered":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":1,"write_result":"indeterminate"},"absent":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":0,"write_result":"indeterminate"},"duplicate":{"readback_result":"not-run","reconciliation_result":"ok","token_matches":2,"write_result":"indeterminate"},"denied":{"readback_result":"not-run","reconciliation_result":"not-run","token_matches":0,"write_result":"denied"},"unreadable":{"readback_result":"failed","reconciliation_result":"failed","token_matches":null,"write_result":"ok"}}
 ```
 
-Pre-dispatch assertions require exactly the four keys shown. Private expected persisted/count tuples
-in the same variant order are `(true,1,0)`, `(true,1,1)`, `(false,1,1)`, `(false,1,1)`,
-`(false,1,0)`, and `(false,1,1)`. E6 uses the producer-specific
+Pre-dispatch assertions require exactly the four keys shown. The private oracle is the exact map
+below; each object names the response fields it checks.
+
+```json
+{"confirmed":{"persisted":true,"reconciliation_reads":0,"write_attempts":1},"recovered":{"persisted":true,"reconciliation_reads":1,"write_attempts":1},"absent":{"persisted":false,"reconciliation_reads":1,"write_attempts":1},"duplicate":{"persisted":false,"reconciliation_reads":1,"write_attempts":1},"denied":{"persisted":false,"reconciliation_reads":0,"write_attempts":1},"unreadable":{"persisted":false,"reconciliation_reads":0,"write_attempts":1}}
+```
+
+The unreadable variant performs no reconciliation read because its successful write result does
+not meet the contract's indeterminate-post trigger. E6 uses the producer-specific
 response schema `{"actions":[string],"adopted":boolean,"fallback":boolean,
 "persisted":boolean,"reason":string,"reconciliation_reads":integer,
 "write_attempts":integer}`. Exact count comparison is deterministic and a second write always
-fails. Every other lifecycle variant uses the fixed common schema below.
+fails. Every other lifecycle variant except E7 uses the fixed common schema below.
 The fixed response schema
 is `{"actions":[string],"adopted":boolean,"fallback":boolean,"persisted":boolean,"reason":string}`;
 extra or missing keys are malformed. Deterministic assertions compare those booleans with
@@ -280,8 +293,9 @@ Materialize E7 with three rendered complete annotations in chronological order a
 `eval-49-E7-old-2`, complexity `L`), and newest `selected-E7` (token `eval-49-E7`). Pre-dispatch
 assertions require three complete marker pairs, those exact ids/order, and `selected-E7` as latest;
 the selection oracle is not included in the worker packet. E7's response adds integer
-`comment_collection_reads`; the private oracle requires exactly one, zero writes, and selection of
-`selected-E7` in `actions`.
+`comment_collection_reads` and integer `write_attempts` to the common schema; this is E7's exact
+schema and other extra keys remain malformed. The private oracle requires exactly one collection
+read, zero writes, and selection of `selected-E7` in `actions`.
 
 The compact source's nominally fresh `issue_hash` values are replaced during materialization with
 these exact protocol results: base/E6/E8/E9/E11/E12
