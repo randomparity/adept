@@ -3,6 +3,13 @@
 Issue: [#49](https://github.com/randomparity/adept/issues/49)
 Decision: [ADR 0015](../../adr/0015-persist-divination-assessments.md)
 
+## Provenance
+
+Issue #49 supplies the durability and dispatch-loss requirement. The operator explicitly chose a
+distinct durable `WORK:DIVINATION` annotation with consumer revalidation rather than reusing
+`WORK:SCOPE`. Accepted ADR 0011 supplies the `change hazards` versus `risk:*` execution-policy
+terminology, and ADR 0015 records the resulting persistence decision.
+
 ## Scope and outcome
 
 `$divination` will persist its four assessment fields in a distinct issue annotation so later
@@ -115,10 +122,11 @@ The numeric harm ratings are evaluation coverage, not workflow finding severity.
 | E8 observed regression | 4 | Campaign-dispatched quest cannot inherit session context | Reads durable assessment and still freezes `WORK:SCOPE` separately | Re-deriving solely because dispatch lost context | block |
 | E9 dirty worktree | 4 | Producer or consumer has uncommitted repository evidence at the recorded HEAD | Producer reports locally without posting, or consumer rejects and derives; both name dirty state | Treating HEAD equality as content equality | block |
 | E10 fingerprint vector | 4 | Producer and consumer receive the fixed title/body/label/comment vector | Both compute `b672…8dd` and remove only the selected comment id during consumption | Hashing marker-shaped comments differently or normalizing strings silently | block |
+| E11 bounty adoption and fallback | 4 | Two `$bounty decompose` packets: one fresh complete split assessment; one with a broken citation | Fresh packet revalidates and uses all four fields, including split, as drafting evidence; broken packet rejects the whole block and follows existing decomposition reasoning | Partial adoption, trusting the broken packet, or ignoring valid persisted evidence | block |
 
 Evaluation is a prompt-level simulation using fresh workers given only the changed skill bytes and
 one case packet. A different fresh evaluator grades the captured responses against the table,
-requiring instruction citations for every pass trait. E1–E10 must all pass. E5 and E6 cover the
+requiring instruction citations for every pass trait. E1–E11 must all pass. E5 and E6 cover the
 security and privacy boundaries; E2, E3, E4, and E9 establish safe fallback behavior.
 
 ## Threat model
@@ -140,7 +148,7 @@ repair them. GitHub availability is also outside scope and follows the explicit 
 
 ## Verification
 
-Run the E1–E8 prompt-level evaluation before and after the skill edits, requiring a valid failing
+Run the E1–E11 prompt-level evaluation before and after the skill edits, requiring a valid failing
 baseline and a fully passing post-change result. Run `just verify` bare after every tracked repair.
 Review the final diff for exact marker names, public-safe handling, bounded reads/writes, and any
 consumer that still assumes divination is in-session only.
