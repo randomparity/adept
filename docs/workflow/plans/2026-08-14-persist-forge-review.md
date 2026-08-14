@@ -17,8 +17,10 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
 - Bash is 3.2 with `#!/usr/bin/env bash` and `set -euo pipefail`; no associative arrays, `mapfile`,
   or `readarray`.
 - Shell source lines are at most 100 characters and tab-indented per repository convention.
-- Do not add dependencies. `gh`, `jq`, `iconv`, Git, and the repository public-safety script are the
-  only external commands used by the helper.
+- Do not add package dependencies. Preflight `gh`, `jq`, `iconv`, `openssl`, `mktemp`, `cp`, `mv`,
+  `chmod`, `wc`, `sed`, `awk`, and Git before recording intent. Preflight `trash` on macOS or `gio`
+  with its `trash` subcommand on Linux before any publication. `openssl dgst -sha256` is the raw-file
+  digest; same-directory `mv` is the atomic rename primitive.
 - `.agent/` remains ignored scratch space. No host path, token, rejected review body, or private
   environment detail enters tracked files or public failure messages.
 - One active quest controller per issue is the supported operating model. Duplicate publication
@@ -86,8 +88,8 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
      or body temps are trashed and recreated; completed snapshot/body files are validated; verified
      publication plus absent artifacts appends disposal without a second deletion.
    - `PFR-7`: review text containing summary-shaped fields and literal outer marker/sentinel lines
-     remains indented payload; exact comment-body comparison succeeds without treating those lines
-     as structure.
+     remains indented payload; exact comment-body comparison succeeds. A summary fragment carrying
+     either whole-line outer marker is rejected before intent and posts zero comments.
 
 3. Run the fixture bare:
 
@@ -101,7 +103,9 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
 4. Create `skills/quest/scripts/publish-forge-review` with these concrete operations in order:
 
    ```text
+   preflight every required command, including the platform recoverable-delete command
    validate six arguments, the mode enum, and mode-specific input
+   canonicalize summary as UTF-8 without NUL and with one final LF; reject either outer marker
    resolve repository root and require review/ledger beneath its ignored .agent/ tree
    recover the latest complete intent/pending/verified/disposed state from append-only ledger lines
    when no intent exists: mint token, derive temp/final paths, append and read back intent
@@ -131,10 +135,11 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
    `dispose_artifacts`. Use explicit `case` handling for every command status. Never interpolate
    body content into a shell command.
 
-5. The fake `gh` supports `api --paginate --slurp` and `pr comment --body-file`. Make failures and
-   ambiguous writes selectable by fixture environment variables. The tests assert observable
-   files, ledger ordering, request count, exit status, and exact comment JSON—not implementation
-   function names.
+5. The fake `gh` supports `api --paginate --slurp` and `pr comment --body-file`. Fake every
+   preflighted external command where a fixture changes its result. Missing-command cases fail
+   before intent and GitHub writes. Make ambiguous writes selectable by fixture environment
+   variables. Assert files, ledger order, request count, exit status, and exact comment JSON—not
+   implementation function names.
 
 6. Run focused checks:
 
