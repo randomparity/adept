@@ -80,12 +80,27 @@ failed-read cases for every affected population.
 
 ## Measurement
 
-A fresh read-only behavioral reviewer receives each changed skill plus the fixed E1–E10 packets
-and traces the applicable instructions. It reports the selected path, whether equality was
-checked, the affected population, warning semantics, and whether any additional GitHub call was
-required. E1–E8 are blocking. Repository policy forbids automated gates that assert on prose, so
-these evaluations are review evidence rather than a prose-matching test. `just verify` remains
-the structural and formatting gate.
+A fresh read-only behavioral reviewer receives exactly one changed skill and one synthetic packet
+per evaluation. A packet has these fields: `case_id`, `entry_point`, `reads`, and
+`expected`. Each `reads` item names the population, configured limit, returned row count, and
+command exit status; row bodies are represented by inert identifiers except where a case supplies
+an untrusted title. `expected` fixes the selected workflow branch, warning count, warning
+population names, whether complete-coverage language is forbidden, whether normal filtering or
+categorization continues, and the number of additional GitHub calls allowed. The reviewer treats
+the packet as the complete hypothetical command result and must not call GitHub or tools.
+
+For each case the reviewer returns one JSON object with `case_id`, `selected_branch`,
+`equality_checks`, `warnings`, `claims_complete_coverage`, `preserves_existing_processing`,
+`additional_calls`, `failed_read_outcome`, `instruction_lines`, and `pass`. `warnings` is an array
+of `{population, semantics}` records; `semantics` passes only when it says coverage may be partial
+without asserting that another row exists. `instruction_lines` cites the skill text controlling
+the result. `pass` is true only when every value matches the packet's `expected` object. The
+evaluation passes only when every blocking case E1–E8 passes; E9–E10 are reported as warnings but
+still retain their structured evidence.
+
+Repository policy forbids automated gates that assert on prose, so these evaluations are
+repeatable review evidence rather than a prose-matching test. `just verify` remains the structural
+and formatting gate.
 
 ## Non-goals
 
