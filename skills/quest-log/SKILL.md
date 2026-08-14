@@ -244,18 +244,20 @@ forces local derivation rather than exposing an older block as current.
 
 ### Recipe: validate a divination assessment
 
-Select the latest complete annotation and its metadata in one bounded comments read; do not first
-project comments to bodies and then perform a second metadata read that can observe different
-concurrent state:
+Collect comments with an explicit GraphQL connection, requesting `first: 100`, `pageInfo {
+hasNextPage endCursor }`, and each node's `id`, `author { login }`, and `body`. Pass the cursor as a
+GraphQL variable, never interpolated query text. Read at most five pages. Continue only when a page
+reports `hasNextPage: false`; if page five still reports true, or any page/cursor is malformed or
+unreadable, reject persistence because completeness is unproven. Do not replace this with
+`gh issue view --json comments`, whose projection supplies no completeness signal.
 
-```bash
-gh issue view "$N" --json comments \
-  --jq '[.comments[] | select(.body | test("(?m)^<!-- WORK:DIVINATION -->$") and test("(?m)^<!-- DIVINATION:COMPLETE -->$"))] | last | {id, author: .author.login, body}'
-```
-
-Marker tests apply to `.body`, while the same selected object's `id` supplies the fingerprint
-exclusion and `author` supplies the producer comparison. Before changing branches, a consumer may
-adopt the four assessment fields only as one unit:
+From that one complete captured sequence, select the last comment whose `.body` carries both
+whole-line markers. Do not project comments to bodies before selection or perform a second metadata
+read that can observe different concurrent state. The same selected object's `id` supplies the
+fingerprint exclusion and `author.login` supplies the producer comparison. The complete sequence
+minus that exact id supplies the fingerprint comments, so every other observed comment remains
+evidence. Before changing branches, a consumer may adopt the four assessment fields only as one
+unit:
 
 1. Require an empty `git status --short --untracked-files=all` and exact issue identity.
 2. Resolve the current login with `gh api user --jq .login`; require it to equal both the selected
