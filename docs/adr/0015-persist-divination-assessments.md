@@ -53,6 +53,11 @@ Consumer-specific stricter checks may reject the whole block but never reinterpr
 adopt it. Stale, malformed, incomplete, mismatched, or absent assessments are evidence gaps, not
 blockers: `$quest` derives the fields itself and `$bounty` proceeds without a persisted split.
 
+After successful revalidation, `$quest` adopts the complete four-field assessment before it
+independently freezes `WORK:SCOPE`. `$bounty decompose` uses that same complete assessment,
+including a `split` verdict, as drafting evidence. Neither consumer treats individual fields as
+authority, and each retains its existing fallback when the block is unusable.
+
 `WORK:DIVINATION` remains advisory evidence. It never freezes scope, authorizes implementation,
 changes issue status, or assigns `risk:*` execution-policy labels. `$quest` continues to own and
 post `WORK:SCOPE` after it freezes the complete charter.
@@ -70,6 +75,14 @@ removes accidental duplication, not the need to check current evidence.
 
 The annotation registry and direct consumers change together. Existing issues need no migration;
 absence retains the former derive-or-proceed behavior.
+
+## Provenance
+
+Issue #49 establishes the duplication and dispatch-loss problem and requires a deliberate
+persistence decision. The operator explicitly selected a distinct durable `WORK:DIVINATION`
+annotation with consumer revalidation; that decision authorizes the public write, marker
+separation, and adoption behavior recorded here. Accepted ADR 0011 governs the existing
+`change hazards` versus `risk:*` execution-policy terminology.
 
 ## Considered & rejected
 
