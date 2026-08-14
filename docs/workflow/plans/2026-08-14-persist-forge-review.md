@@ -61,9 +61,9 @@ public-safe, and retains every artifact not already recoverably disposed.
    - `PFR-1`: required safe review posts one complete annotation; fake exact-ID readback matches;
      verified ledger line precedes trash calls; source/body disappear only afterward.
    - `PFR-2`: public-safety match or scan fault posts nothing and retains the review/body.
-   - `PFR-3`: required publishes, verified not-required publishes summary-only, failed posts nothing;
-     missing/empty required review fails.
-   - `PFR-4`: comment failure, missing identity, and ambiguous nonzero-after-write all stop without a
+   - `PFR-3`: required publishes; verified not-required publishes summary-only; failed posts
+     nothing; missing/empty required review fails.
+   - `PFR-4`: comment failure, missing identity, and ambiguous nonzero-after-write stop without a
      retry and retain evidence.
    - `PFR-5`: exact comment read failure/mismatch writes no verified/disposed ledger line.
    - `PFR-6`: ledger append/readback and partial trash failures never claim closed lifecycle and
