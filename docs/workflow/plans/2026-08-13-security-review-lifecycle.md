@@ -45,7 +45,8 @@ guardrails through `just`.
 **Files:** modify `skills/trial-loop/SKILL.md` and `skills/detect-evil/SKILL.md`.
 
 **Interfaces:** consumes both reviewers' existing `--json --out` compact object and full artifact:
-`{verdict, findings_count, suppressed_count, path, run_id}` plus `findings` and `suppressions` arrays.
+`{verdict, findings_count, suppressed_count, path, run_id}` plus `findings` and `suppressions`
+arrays.
 Produces `$trial-loop [--reviewer gauntlet|detect-evil] <challenge-args>`; later quest, spellcraft,
 forge, and direct callers continue to consume the default gauntlet behavior unchanged.
 

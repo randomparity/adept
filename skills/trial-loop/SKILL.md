@@ -572,8 +572,8 @@ Report the **run**, not the last cycle: the number of cycles, each cycle's itera
 count, and for every charter change what changed and who authorized it — otherwise two
 rescopes read as three short clean cycles rather than the up-to-fifteen adversarial
 passes they were. Name the selected reviewer. Then report the final verdict, the fixes made, the
-verification performed, every unresolved finding, and every `deferred-tracked` concern from any cycle with
-its owning record path. References, not payloads: cite `<findings-path>` rather
+verification performed, every unresolved finding, and every `deferred-tracked` concern from any
+cycle with its owning record path. References, not payloads: cite `<findings-path>` rather
 than pasting findings into the caller's context. The deferral list is the part a
 caller cannot reconstruct: it is the difference between "this branch is clean" and
 "this branch is clean and three known defects now have owners."

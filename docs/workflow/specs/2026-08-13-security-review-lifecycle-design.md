@@ -66,8 +66,8 @@ This decision is recorded by
 The user is an operator requesting a settled review loop. The trigger is `$trial-loop`, optionally
 with `--reviewer detect-evil`; inputs are the selector, target arguments, frozen charter, repository
 evidence, and reviewer artifacts. Output is a bounded run report with dispositions, fixes,
-deferrals, or a named block. Allowed sources are the frozen charter, target, repository instructions,
-accepted ADRs, reviewer artifact, and verified tracker or debt records. The loop must not invent
+deferrals, or a named block. Allowed sources are the frozen charter, target, repository
+instructions, accepted ADRs, reviewer artifact, and verified tracker or debt records. The loop must not invent
 scope, treat a scanner as a fixer, accept an unsupported reviewer, act on a stale artifact, hide a
 suppression, or exceed its retry, iteration, or rescope caps. Missing or malformed evidence fails
 closed. Existing review dispatch dominates latency and cost; selection adds no pass, and success is
@@ -104,5 +104,6 @@ the implementation and final branch are reviewed by separate workers.
 
 - A focused pre-change behavioral review demonstrates that SRL-02 and SRL-05 lack a defined path.
 - A focused post-change behavioral review traces SRL-01 through SRL-08 with no forbidden trait.
-- `just shape-check`, `just public-safety`, and `git diff --check` pass for design and focused edits.
+- `just shape-check`, `just public-safety`, and `git diff --check` pass for design and focused
+  edits.
 - `just verify` passes before shipping.
