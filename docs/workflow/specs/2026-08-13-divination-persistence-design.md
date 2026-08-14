@@ -193,6 +193,11 @@ E11 is run twice: the composed packet above and a second packet produced by repl
 `repo:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:missing`. Before dispatch, materialize every
 composed packet and verify it matches the table setup, every field has evidence, every repository
 reference resolves exactly when expected, and E10/E11 carry their fixed vector and split verdict.
+For every packet, materialization renames `expected.adopt` to `expected.adopted` and
+`expected.persist` to `expected.persisted`, removes the two old keys, and then requires an exact
+key-for-key comparison of `expected` with the response's `adopted`, `fallback`, and `persisted`.
+It also adds `assessment.identity` equal to `issue.url` to every non-null assessment before any
+case-specific identity mutation.
 E6 is the sole producer packet: after RFC 7396 composition, set its `workflow` to the literal
 `divination`, move the inherited assessment to `candidate_assessment`, and set `assessment` to
 null before canonical serialization and hashing. `assessment` always means an existing confirmed
@@ -208,9 +213,16 @@ is limited to whether `actions` demonstrate the table's field-support and author
 
 `persisted` has one workflow-neutral meaning: after the invocation, exactly one confirmed complete
 annotation represented by the packet exists. Consumer rejection does not remove that comment, so
-E3 and E9 remain persisted. During materialization set E9's expected `persist` to true. Create E13
+E3 and E9 remain persisted. During materialization set E9's expected `persisted` to true. Create E13
 from E9 by setting `workflow` to `divination`, `assessment` to null, and expected values to
-`{adopt:false,fallback:false,persist:false}`.
+`{adopted:false,fallback:false,persisted:false}`.
+
+Materialize E3 twice: its source form changes only `issue_hash`; a second variant restores the
+fresh hash and changes assessment `head` to forty `b` characters. Materialize E4 four times from a
+fresh otherwise-valid base, changing exactly one cause per variant: remove the completion flag;
+replace the assessment issue identity with issue 50; replace one evidence value with
+`unknown:value`; or change only `author` to `mallory`. Every E3/E4 variant must independently reject
+and match the same expected booleans, so one short-circuit cannot mask another missing check.
 
 The compact source's nominally fresh `issue_hash` values are replaced during materialization with
 these exact protocol results: base/E6/E8/E9/E11/E12
