@@ -290,7 +290,9 @@ asked report it as a blocker and return. Never default to `main`.
    not an edit, as everywhere else in that ledger. Before the wave and not
    after, because a run that dies mid-wave leaving no line sends the next one
    through step 1 to clear a finished review. A dispatch ending in a stop gets
-   no line.
+   neither a verdict line nor a `closed` line. Every terminal final-review stop
+   instead appends and reads back its `required-failed` line before returning;
+   it is never an unrecorded no-review path.
 6. Once the range has its `closed` ledger line and every in-run consumer has
    finished, retain the review for `$quest` rather than disposing it. Append
    `Final review <base-sha>..<head-sha>: retained for PR publication (review

@@ -87,7 +87,7 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "${TAIL_MODE:-success}" = fail ]; then
+if [ "${TAIL_MODE:-success}" = fail ] && [ "${1:-}" != -c ]; then
 	exit 1
 fi
 exec "$REAL_TAIL" "$@"
@@ -396,6 +396,21 @@ case_markers_stay_payload_and_summary_markers_fail() {
 	ok "$name"
 }
 
+case_review_without_final_newline_keeps_outer_sentinel_parseable() {
+	local name='PFR-9 review without final newline keeps sentinel outer'
+	new_case
+	printf '%s' 'safe review without final newline' >"$REVIEW"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -ne 0 ] ||
+		[ "$(grep -c '^<!-- WORK:REVIEW -->$' "$STATE/comment-body")" != 1 ] ||
+		[ "$(grep -c '^<!-- REVIEW:COMPLETE -->$' "$STATE/comment-body")" != 1 ] ||
+		! grep -qxF '    safe review without final newline' "$STATE/comment-body"; then
+		fail "$name" 'review payload joined the outer completion sentinel'
+		return
+	fi
+	ok "$name"
+}
+
 printf 'publish-forge-review\n\n'
 case_required_safe_review
 case_public_safety_stops_publication
@@ -405,6 +420,7 @@ case_comment_failures_never_retry
 case_readback_rejects_unverified_comments
 case_ledger_and_disposal_failures_retain_paths
 case_markers_stay_payload_and_summary_markers_fail
+case_review_without_final_newline_keeps_outer_sentinel_parseable
 
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

@@ -327,10 +327,11 @@ On a verified-publication resume, require `review-comment-url` to parse as
 current `repo`, current `pr:`, and numeric `<id>`. Require it to equal the URL
 in the exact `review-publication-verified: <URL>` ledger line after this
 handoff's `forge-result-record`, then re-read its exact disposal record. In
-`required` mode, that record must be paired with the retained range and exact
-review path; in `not-required` mode, it must name the exact `REVIEW_SUMMARY`
-path. Only then skip directly to step 9. Do not rerun `$deliver`, recreate the
-summary, invoke the publication helper, or post a second `WORK:REVIEW` comment.
+`required` mode, it must own only the exact retained review, `REVIEW_SUMMARY`,
+and one helper-created body in the ledger directory. In `not-required` mode,
+it must own only the exact `REVIEW_SUMMARY` and that one body. Only then skip
+directly to step 9. Do not rerun `$deliver`, recreate the summary, invoke the
+publication helper, or post a second `WORK:REVIEW` comment.
 Before step 9, re-resolve that PR and require its repository, number, head
 branch, base branch, and full `headRefOid` to equal the record's `repo`, `pr:`,
 branch, `BASE_BRANCH`, and `delivered-head-sha:`. A changed or missing PR parks.
