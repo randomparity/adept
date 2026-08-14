@@ -49,13 +49,18 @@ prevents whole-line marker or field readers from treating model-written content 
 structure. The annotation identifies this section as the forge review, not the later trial-loop
 review summary, and contains no local artifact path.
 
-Before posting, `$quest` runs the repository's public-safety guard against the review file. A
-finding or scan fault stops publication with the artifact retained. It mints one unique publication
-token before the first post, appends `review publication pending: <token>` to forge's ignored
-progress ledger, verifies that append, and records the token in a named outer `publication token`
-field. Resume reads the ledger rather than minting a replacement. The same token therefore survives
-process loss, reconciliation, and the one permitted retry. The post uses the quest-log body-file
-recipe.
+Before posting, `$quest` copies the consumed review once to a controller-chosen publication snapshot
+in the same ignored workspace. It rejects an existing destination, verifies a regular non-empty
+file, computes its SHA-256, and never refreshes it from the source. The public-safety guard scans
+that exact snapshot, and comment composition reads only that snapshot. A finding, scan fault, source
+change, or snapshot mismatch stops publication with both artifacts retained.
+
+The quest then mints one unique publication token before the first post, appends `review publication
+pending` with the token, snapshot path, and pre-publication digest to forge's ignored progress
+ledger, verifies that append, and records the token in a named outer `publication token` field.
+Resume reads the ledger rather than minting or copying a replacement. The same token, snapshot, and
+digest therefore survive process loss, reconciliation, and the one permitted retry. The post uses
+the quest-log body-file recipe.
 
 Readback exhaustively enumerates PR issue comments through GitHub's paginated API; every page must
 be readable and pagination must reach its declared end. A bounded projection without completeness
@@ -63,13 +68,14 @@ evidence cannot authorize either retry or disposal. From that complete observati
 selects the exact comment carrying the publication token and outer complete sentinels, rejects zero
 or multiple matches, extracts only the indented payload after the forge-review heading, removes
 exactly one four-space prefix per payload line, and compares the result byte-for-byte with the
-source. Embedded `WORK:REVIEW` markers, completion sentinels, publication fields, or summary-shaped
+recorded snapshot and its pre-publication digest. Embedded `WORK:REVIEW` markers, completion
+sentinels, publication fields, or summary-shaped
 lines never count as outer structure. Only that exact readback authorizes disposal.
 
-Before disposal, `$quest` computes the source SHA-256 and appends `review publication verified`
-with the publication token, exact GitHub comment identity, and digest to the forge ledger, then
-reads that record back. This is the durable proof that content comparison succeeded while the
-source still existed; an in-memory success observation cannot authorize trash.
+Before disposal, `$quest` appends `review publication verified` with the publication token, exact
+GitHub comment identity, and the already-recorded snapshot digest to the forge ledger, then reads
+that record back. This is the durable proof that content comparison succeeded while the snapshot
+still existed; an in-memory success observation cannot authorize trash.
 
 The publication contract assumes one active quest controller for the issue. GitHub comment creation
 has no token-keyed create-if-absent operation, so two concurrent controllers can race after the same
@@ -86,9 +92,10 @@ review.
 
 ### Cleanup and resume
 
-After the verified-publication ledger record exists, `$quest` moves the retained file to trash and
-appends `review artifact disposed after PR publication` with its former path to the forge ledger. If
-the file is already absent on resume, the trash step is treated as complete only when the ledger's
+After the verified-publication ledger record exists, `$quest` moves the retained review and
+publication snapshot to trash and appends `review artifacts disposed after PR publication` with
+their former paths to the forge ledger. If either file is already absent on resume, its trash step
+is treated as complete only when the ledger's
 verified record carries the same token, comment identity, and source digest; the quest re-reads that
 exact comment and validates its outer structure and recorded digest before closing the disposal
 marker. Without that durable verified record, absence is a blocker rather than inferred success.
@@ -104,6 +111,8 @@ copy and the scratch lifecycle is closed.
   annotation. Only a verified mode where no whole-branch review was required may publish `forge
   review: not required`.
 - Public-safety match or scan fault: stop before posting; never publish the rejected content.
+- Retained source changes after snapshot: never refresh or replace the snapshot; publication uses
+  only the scanned, hashed snapshot. A snapshot digest mismatch stops without posting or disposal.
 - Comment creation failure: retain the review and report the failed publication.
 - Ambiguous write result: exhaustively read back before retrying; retry once only when the exact
   publication token is absent, and reuse that token on the retry. A partial or unreadable comment
@@ -142,14 +151,16 @@ cost do not change; success is a verified complete PR annotation followed by ver
 | Failure mode | Severity | Evaluation |
 |---|---:|---|
 | Artifact discarded before durable publication | 4 | Contract fixture proves publication readback and a durable digest record precede disposal. |
-| Unsafe or host-private text published | 5 | Fixture proves the public-safety guard runs bare and a failure stops posting. |
+| Unsafe, changed, or host-private text published | 5 | Fixture proves the exact immutable snapshot is scanned, hashed, and posted, while mutation stops. |
 | Failed review treated as optional or fabricated on missing input | 4 | Fixture proves legitimate no-review mode is disclosed while failed required review cannot ship. |
 | Forge review conflated with trial-loop summary | 4 | Fixture proves separate labelled sections and payload escaping inside `WORK:REVIEW`. |
 | Duplicate write after ambiguous response or crash | 4 | Fixture proves ledger-backed token readback precedes the single bounded retry. |
 | Oversized or rejected comment silently loses review | 4 | Fixture proves publication failure retains the source and stops shipping. |
 
-Stable cases: `PFR-1` publishes a safe non-empty review and then disposes it; `PFR-2` rejects a
-review containing a denied host path; `PFR-3` proves both state arms: a verified no-review mode may
+Stable cases: `PFR-1` snapshots and publishes a safe non-empty review, verifies its digest, and then
+disposes both artifacts; `PFR-2` rejects a review containing a denied host path and proves a source
+or snapshot mutation after scanning cannot change the bytes posted; `PFR-3` proves both state arms:
+a verified no-review mode may
 publish `forge review: not required`, while a failed required review cannot reach delivery. `PFR-4`
 starts with older complete annotations and reconciles an ambiguous write by finding its unique
 token across multiple complete pages without duplication; it also proves an incomplete page set
@@ -170,8 +181,9 @@ The new boundary is model-written scratch content moving to a public GitHub PR. 
 is the review worker, whose output may contain malformed Markdown or host-private text. Existing
 boundaries widened are GitHub comment creation and the quest's scratch cleanup.
 
-The quest trusts only a non-empty file at the controller-chosen path after the forge checks. Before
-publication it applies the repository public-safety scan; GitHub receives the body as data through
+The quest trusts only a non-empty review at the controller-chosen forge path, then creates one
+controller-owned snapshot whose digest is recorded before publication. It applies the repository
+public-safety scan to that snapshot and GitHub receives a body derived only from those bytes through
 `--body-file`, never shell interpolation. Every review line is indented before composition, so
 model-written markers and Markdown stay inside the payload boundary. A ledger-persisted publication
 token, exhaustive comment collection, outer-marker validation, and a lossless content comparison
