@@ -37,19 +37,27 @@ overrides, exact hashes, worker response schema, and E1–E15 table. Produces a 
 baseline result and immutable packet hashes reused by Task 3.
 
 1. Verify `.agent/evals/` is ignored with `git check-ignore -q .agent/evals/probe`.
-2. Materialize E1–E15 exactly, including both E11 and E15 packet pairs. Serialize sorted-key UTF-8 JSON with
-   two-space indentation and one newline; record SHA-256 for each.
+2. Materialize the specification's exact 27 E1–E15 variants: E3 twice, E4 four times, E6 six
+   times, E10 twice, E11 twice, E15 twice, and every other case once. Decode the literal E7
+   comments, independently verify the pinned E1/E7/E10 hashes, serialize sorted-key UTF-8 JSON
+   with two-space indentation and one newline, and record SHA-256 for each packet.
 3. Deterministically validate every composed packet: required fields, expected fresh/stale class,
    per-field evidence, repository-reference existence, E5 canaries, E10 hash/path, E11 split and
-   broken-reference pair, and explicit E6/E13 producer workflows.
-4. Dispatch one fresh most-capable scenario worker per packet with the neutral request and current
-   bytes of `skills/divination/SKILL.md`, `skills/quest/SKILL.md`,
-   `skills/quest-log/SKILL.md`, and `skills/bounty/SKILL.md`. Capture the exact response envelope.
-5. Apply the same deterministic checks Task 3 uses: exact response schema and expected booleans,
-   E5 canary absence, E10 full hash/path, E11 valid/invalid adoption split, and E6/E13 producer
-   persistence behavior. A schema or packet failure is malformed evidence and is rerun, not red.
-6. Dispatch one different most-capable evaluator with the reviewed rubric. Require every result
-   field and at least one semantic blocking-trait failure against otherwise valid evidence.
+   broken-reference pair, exact E3/E4 rejection causes, the six named E6 command/oracle maps,
+   and explicit E6/E10/E13 producer workflows.
+4. Dispatch one fresh most-capable scenario worker per variant, with no shared conversation state,
+   using the neutral request, exact packet, and only the skill blobs named for that case. Include
+   `skills/seek-quest/SKILL.md` only for E14's two-contract comparison. Capture the exact reviewed
+   envelope and require 27 captures with distinct run ids.
+5. Apply the same deterministic checks Task 3 uses: the common, E6-producer, E7, E14, or E15 exact
+   response schema as applicable; private expected booleans and mutation/read/write counts; E5
+   canary absence; E10 full hash/path in both arms; E11 valid/invalid adoption split; and every
+   producer persistence outcome. A schema or packet failure is malformed evidence and is rerun,
+   not red.
+6. Build the reviewed two-trait-per-case manifest and dispatch it only to one different
+   most-capable evaluator with the captures and exact rubric. Validate exact trait id/kind coverage,
+   citations, and evidence, then mechanically derive variant/case/suite verdicts. Require at least
+   one semantic blocking-trait failure against otherwise valid baseline evidence.
 
 **Acceptance:** valid baseline aggregate `fail`; packets and captures are ignored; tracked tree is
 unchanged.
@@ -98,10 +106,11 @@ only when evidence exposes an in-scope defect.
 **Interfaces:** reuses Task 1's exact packet bytes and hashes. Produces complete post-change
 captures, evaluator result, and repository guardrail evidence for the shipping review.
 
-1. Repeat Task 1's workers and independent evaluation against the implemented skill bytes, using
-   the same selectable models/settings and new run ids. Require all E1–E15 traits to pass.
-2. Run deterministic response checks: schema/expected booleans, E5 canary absence, E10 full hash
-   and delimiter path, E11 valid/invalid adoption split, and E6/E13 producer persistence failures.
+1. Repeat Task 1's 27 isolated workers and independent evaluation against the implemented skill
+   bytes, using the same selectable models/settings, identical packet SHA-256 values, and new run
+   ids. Require every required and forbidden trait in E1–E15 to pass.
+2. Run every Task 1 deterministic schema, boolean, count, canary, fingerprint, path, selection,
+   split/fallback, failure-mutation, and producer-persistence assertion.
 3. If any tracked edit follows evaluation, commit the logical repair and repeat the entire
    post-change evaluation against the new HEAD.
 4. Run `git diff --check` and `just verify` bare; expect zero warnings and exit 0.
@@ -127,5 +136,5 @@ run-scoped issue-49 packet, capture, and evaluator directories to trash and repo
 - Guardrail: `just verify` (`just ci` in CI).
 - Architecture: host `arm64`; no target declared; `no-target-declared`.
 - ADR review: approved in cycle 2 iteration 1; no open findings.
-- Specification review: approved in resumed cycle iteration 2; no open findings.
+- Specification review: approved in expanded cycle 3 iteration 1; no open findings.
 - Open findings: none.
