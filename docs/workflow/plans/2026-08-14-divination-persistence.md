@@ -23,8 +23,8 @@ evaluation under ignored `.agent/evals/`, and repository shell guardrails throug
   `status:*` label, or assigns/reinterprets `risk:*`.
 - The producer, selected comment author, and consumer authenticated login must match exactly.
 - Producer and consumer repository worktrees must be clean; assessment adoption is all-or-nothing.
-- Use the exact annotation shape, fingerprint protocol, evidence grammar, failure contract, E1–E15
-  packets, and response schema from the reviewed specification.
+- Use the exact annotation shape, fingerprint protocol, evidence grammar, failure contract,
+  E1–E15 packets, natural-response capture, and evaluator schema from the reviewed specification.
 - Evaluation artifacts remain ignored and are never committed.
 
 ## Task 1 — Establish failing behavioral evidence
@@ -33,7 +33,7 @@ evaluation under ignored `.agent/evals/`, and repository shell guardrails throug
 one evaluator result. Modify no tracked file.
 
 **Interfaces:** consumes the specification's base object, RFC 7396 case patches, materialization
-overrides, exact hashes, worker response schema, and E1–E15 table. Produces a structurally valid
+overrides, exact hashes, natural scenario responses, and E1–E15 table. Produces a structurally valid
 baseline result and immutable packet hashes reused by Task 3.
 
 1. Verify `.agent/evals/` is ignored with `git check-ignore -q .agent/evals/probe`.
@@ -61,15 +61,15 @@ baseline result and immutable packet hashes reused by Task 3.
    record the resulting ordered ids in its capture; blob-id equality across different commits is
    neither expected nor allowed as a substitute for that check. Capture the exact reviewed
    envelope and require 30 captures with distinct run ids.
-5. Apply the same deterministic checks Task 3 uses: the common, E6-producer, E7, E14, or E15 exact
-   response schema as applicable; private expected booleans and mutation/read/write counts; E5
-   canary absence; E10 full hash/path in both arms; E11 valid/invalid adoption split; and every
-   producer persistence outcome. A schema or packet failure is malformed evidence and is rerun,
-   not red.
-6. Build the reviewed two-trait-per-case manifest and dispatch it only to one different
-   most-capable evaluator with the captures and exact rubric. Validate exact trait id/kind coverage,
-   citations, and evidence, then mechanically derive variant/case/suite verdicts. Require at least
-   one semantic blocking-trait failure against otherwise valid baseline evidence.
+5. Apply deterministic checks only to packet/materialization validity, frozen packet SHA reuse,
+   E5 canary absence in raw output, and E10's literal full hash and delimiter-bearing path in raw
+   output. Scenario responses are natural workflow prose; adoption, fallback, durability,
+   mutation boundaries, and read/write counts are not synthetic response fields.
+6. Build the reviewed table traits plus variant-specific observation manifest and dispatch it only
+   to one different most-capable evaluator with the captures and exact rubric. Validate exact trait
+   id/kind coverage, citations, and observed evidence, then mechanically derive
+   variant/case/suite verdicts. Require at least one semantic blocking-trait failure against
+   otherwise valid baseline evidence.
 
 **Acceptance:** valid baseline aggregate `fail`; packets and captures are ignored; tracked tree is
 unchanged.
@@ -125,8 +125,9 @@ captures, evaluator result, and repository guardrail evidence for the shipping r
 1. Repeat Task 1's 30 isolated workers and independent evaluation against the implemented skill
    bytes, using the same selectable models/settings, identical packet SHA-256 values, and new run
    ids. Require every required and forbidden trait in E1–E15 to pass.
-2. Run every Task 1 deterministic schema, boolean, count, canary, complete pinned-fingerprint-map,
-   path, selection, split/fallback, failure-mutation, and producer-persistence assertion.
+2. Run every Task 1 deterministic packet, SHA, canary, complete pinned-fingerprint-map, and raw
+   fixed-vector assertion; require the evaluator to pass every semantic selection, outcome,
+   mutation-boundary, and bounded-operation trait.
 3. If any tracked edit follows evaluation, commit the logical repair and repeat the entire
    post-change evaluation against the new HEAD.
 4. Run `git diff --check` and `just verify` bare; expect zero warnings and exit 0.
