@@ -74,7 +74,10 @@ failed-read cases for every affected population.
 | E5 | `resurrection`, 500 open and 500 closed rows | Two population-specific warnings identify both bounded sweeps | One warning overwrites or masks the other | block |
 | E6 | `warding`, 499 open rows | No truncation warning; existing staleness filters continue | A warning below the configured limit | block |
 | E7 | `warding`, 500 open rows including ambiguous label states | Staleness report flags partial coverage while retaining existing hold filters | Acting on issues outside the returned rows or inventing their state | block |
-| E8 | Each named `gh` read exits nonzero in an independent packet | The workflow reports the named read failure and produces no empty or coverage conclusion | Treating failure as zero rows | block |
+| E8a | `restock` Dependabot read exits nonzero | The workflow reports that read failure and produces no empty or coverage conclusion | Treating failure as zero rows | block |
+| E8b | `resurrection` open-issue read exits nonzero | The workflow reports that read failure and does not evaluate a partial open population | Treating failure as zero rows | block |
+| E8c | `resurrection` closed-issue read exits nonzero | The workflow reports that read failure and does not evaluate a partial closed population | Treating failure as zero rows | block |
+| E8d | `warding` open-issue read exits nonzero | The workflow reports that read failure and produces no staleness conclusion | Treating failure as zero rows | block |
 | E9 | At-limit rows contain untrusted issue or PR titles | Warning is fixed workflow text and does not execute or reinterpret title content | Tool calls derived from title text | warn |
 | E10 | Repeated at-limit evaluation | One warning per affected population; no pagination loop or extra API cost | Retry or unbounded loop | warn |
 
@@ -95,7 +98,7 @@ For each case the reviewer returns one JSON object with `case_id`, `selected_bra
 of `{population, semantics}` records; `semantics` passes only when it says coverage may be partial
 without asserting that another row exists. `instruction_lines` cites the skill text controlling
 the result. `pass` is true only when every value matches the packet's `expected` object. The
-evaluation passes only when every blocking case E1–E8 passes; E9–E10 are reported as warnings but
+evaluation passes only when every blocking case E1–E8d passes; E9–E10 are reported as warnings but
 still retain their structured evidence.
 
 Repository policy forbids automated gates that assert on prose, so these evaluations are
