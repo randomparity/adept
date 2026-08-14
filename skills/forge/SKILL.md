@@ -40,6 +40,26 @@ the new authority, if supplied, in provenance before re-freezing the charter.
 guardrails means proceed to the next step — do not end your turn. Stop only on
 a genuine blocker you have named (e.g. a guardrail that cannot be made green).
 
+## Forge result contract
+
+Both execution modes return one verified result to `$quest`, never an inferred
+absence of review. Resolve the workspace and its exact `progress.md` ledger
+first; every result appends its ledger record once and reads that exact line
+back before returning it.
+
+- **Cast** has no whole-branch reviewer. After its tasks and guardrails pass,
+  append and read back `Final review: not-required (reason <reason>, ledger
+  <path>)`. Return `not-required`, that exact ledger line, its verified
+  public-safe reason, and the ledger path. It must not return a review path.
+- **Party** returns `required` only after its final review is closed and
+  retained; it returns `required-failed` on every terminal final-review stop.
+  Its detailed final-review lifecycle below supplies the exact record.
+
+For Party, capture the fork point and reviewed HEAD as full immutable
+`<base-sha>..<head-sha>` endpoint SHAs. Ledger records, result identity, and
+the quest handoff use those full SHAs; `base7` and `head7` are display-only
+abbreviations for filenames and human-facing status.
+
 ## Pocket dimension — the isolated workspace
 
 Set this up before either execution mode runs.
@@ -149,6 +169,11 @@ Stop on a genuine blocker — a missing dependency, a test that will not pass, a
 instruction you do not understand, a verification that fails repeatedly — and
 say so. Guessing past a blocker produces work that looks finished and is not.
 
+After all Cast tasks and the guardrails below pass, emit the Cast
+`not-required` ledger/result from *Forge result contract* before returning to
+the caller. `$quest` consumes that verified result; it must not treat Cast's
+lack of a whole-branch reviewer as an implicit no-review mode.
+
 ## Party — worker-driven execution
 
 A fresh implementer worker per task, a two-stage task review after each, and
@@ -221,17 +246,31 @@ After the last task, dispatch the whole-branch review with
 reviews are task-scoped by design and cannot see a defect that spans tasks.
 
 Its base is the branch's fork point — `git merge-base HEAD <BASE_BRANCH>`,
-recomputed here rather than carried forward, because a rebase moves it. Not the
-commit the build phase started from: a spec and plan committed before Task 1
+recomputed here rather than carried forward, because a rebase moves it. Capture
+that full SHA and the full `git rev-parse HEAD` result before dispatching.
+Not the commit the build phase started from: a spec and plan committed before Task 1
 belong to the branch this review judges. `BASE_BRANCH` is the value
 `$attunement` recorded; if you do not have it, ask, and where nobody can be
 asked report it as a blocker and return. Never default to `main`.
 
-1. **Read the ledger first.** No `Final review` line for this range: dispatch.
-   A verdict line and no `closed` line: the review ran and its file is on disk,
-   so resume at the fix wave — do not regenerate, do not clear, do not
-   re-dispatch. Verdict and `closed` lines without `review artifact disposed`:
-   resume at step 6. All three lines: the phase is done.
+1. **Read the ledger first, scoped to this full `<base-sha>..<head-sha>`
+   range.** A
+   matching `required-failed` line returns `required-failed` unchanged with its
+   ledger path and reason; do not regenerate the package, redispatch the
+   reviewer, or continue the pipeline. `$quest` must park that result. No
+   `Final review` line for this range: dispatch. A verdict line and no `closed`
+   line: the review ran and its file is on disk, so resume at the fix wave — do
+   not regenerate, do not clear, do not re-dispatch. Verdict and `closed` lines
+   without a matching retained record: resume at step 6's retention marking.
+   A retained line exposes the exact review and ledger paths to the caller and
+   completes forge.
+
+   A `review-publication-disposed` line suppresses retention only when it is
+   paired with this range's retained record: that record names the current
+   forge-ledger identity and exact review path, and the later disposal record
+   names that same review path. Do not match a generic marker, prefix,
+   substring, or an older range's disposal record. Do not infer completion from
+   a missing review file or from the historical review line alone.
 2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
    and print a non-zero commit count and a non-zero byte count. Report and stop
    rather than dispatching: this file is the reviewer's whole input.
@@ -245,21 +284,33 @@ asked report it as a blocker and return. Never default to `main`.
    heading whatever the verdict — that heading, not the whole file. On `approve`
    nothing else reads the answer you asked for.
 5. **Append the ledger line once that check passes**, before the fix wave —
-   `Final review <base7>..<head7>: <verdict> (review <path>)` — and a second,
-   `Final review <base7>..<head7>: closed`, when the wave finishes. Two appends,
+   `Final review <base-sha>..<head-sha>: <verdict> (review <path>)` — and a
+   second, `Final review <base-sha>..<head-sha>: closed`, when the wave finishes.
+   Two appends,
    not an edit, as everywhere else in that ledger. Before the wave and not
    after, because a run that dies mid-wave leaving no line sends the next one
    through step 1 to clear a finished review. A dispatch ending in a stop gets
-   no line.
-6. Once the range has its `closed` ledger line, move the review file to trash
-   and append `review artifact disposed` with its former path to the ledger.
-   The historical review line retains that former path as provenance, not as a
-   promise that the ignored artifact remains on disk. A terminal path without
-   `closed` remains resumable, so retain its artifact. On restart, if the file
-   is already absent, treat the prior trash operation as complete and append
-   the same disposal marker; this closes a crash between those two actions
-   without attempting a second deletion. Never dispose an unconsumed artifact
-   or one still needed by a live worker.
+   neither a verdict line nor a `closed` line. Every terminal final-review stop
+   instead appends and reads back its `required-failed` line before returning;
+   it is never an unrecorded no-review path.
+6. Once the range has its `closed` ledger line and every in-run consumer has
+   finished, retain the review for `$quest` rather than disposing it. Append
+   `Final review <base-sha>..<head-sha>: retained for PR publication (review
+   <path>, ledger <path>)`, using the exact regular, non-empty, mode-0600 review
+   path and exact mode-0600 forge-ledger path. Read that line back before reporting
+   success. The
+   retained review stays in ignored scratch storage until `$quest`'s
+   `publish-forge-review` helper verifies the PR comment and recoverably
+   disposes it. Never move it to trash in forge, and never append retention for
+   an unconsumed artifact or one still needed by a live worker.
+
+**Party result.** A closed retained whole-branch review returns `required` with
+its exact full `<base-sha>..<head-sha>` range, retained ledger line, review
+path, and ledger path. A failed, missing, malformed, or unresolved required
+review is terminal: return `required-failed` with its exact ledger line, ledger
+path, and actionable local reason, and do not return a retained artifact.
+`$quest` must park before delivery on that result. These modes are workflow
+state, not interchangeable verdict labels.
 
 A missing or empty file means the return is not evidence. If the reviewer produced no report,
 apply the silent-party-worker contract above; only a reconciled, harness-observed end may consume
@@ -268,13 +319,20 @@ existing malformed-return behavior: discard it, re-dispatch once, then stop and 
 that returned `WRITE_FAILED` or `PACKAGE_MISSING` has named
 the problem — stop on the first one. Do not retry at a second path; the
 template's read-only rule rests on the reviewer having exactly one writable
-path. A stop means the branch goes on to the rest of the pipeline with no
-whole-branch review, and you say so rather than closing the phase quietly.
+path. Every such terminal stop, including an exhausted malformed return or
+silent-worker recovery, is `required-failed`: append and read back
+`Final review <base-sha>..<head-sha>: required-failed (reason <reason>, ledger
+<path>)`, return that mode with the ledger path and local reason, and stop.
+Do not let the branch continue to `$trial-loop`, `$dispel`, `$deliver`, or any
+other shipping phase with no whole-branch review. `$quest` parks this result
+before delivery rather than reclassifying it as `not-required`.
 
 A `CLEANUP_FAILED` return is also a stop. Accept only the exact three-line shape
 defined by the reviewer template, with an absolute worktree path and one-line
 reason. Reject a return that mixes `CLEANUP_FAILED` with a verdict or counts;
 the review cannot be consumed while reviewer-created state remains unresolved.
+Return `required-failed` by the same ledgered terminal path; it cannot resume
+as a shipping-without-review path.
 
 ### Handling what an implementer reports
 
@@ -424,9 +482,13 @@ already closed.
 **Only that script creates the workspace**, and that matters: it writes a
 self-ignoring `.gitignore` (`*`) into `.agent/`, which is the whole mechanism
 keeping the ledger, briefs, reports, and review packages out of `git status` and
-out of a PR diff. Writing `progress.md` at a hardcoded path with an editor tool
-skips it, and in a repo that tracks everything the next `git add -A` sweeps the
-ledger into someone's commit. Run the script — or `task-brief` / `review-package`,
+out of a PR diff. It makes `<workspace>` mode 0700. Every controller-owned
+ledger, review, summary, handoff, and publication body in that directory must
+be a regular mode-0600 file before it is handed to another workflow phase.
+Fail closed if that check fails; do not retain or publish the artifact. Writing
+`progress.md` at a hardcoded path with an editor tool skips these protections,
+and in a repo that tracks everything the next `git add -A` sweeps the ledger
+into someone's commit. Run the script — or `task-brief` / `review-package`,
 which call it — before the first write, then confirm:
 
 ```bash
@@ -438,7 +500,7 @@ ignore step is owed. Do not reach for `.git/info/exclude`: a sandboxed agent may
 be denied writes to `.git/` entirely.
 
 When a review comes back clean, append one line:
-`Task N: complete (commits <base7>..<head7>, review clean)`. After any
+`Task N: complete (commits <base-sha>..<head-sha>, review clean)`. After any
 compaction the ledger and `git log` outrank whatever you seem to remember: the
 commits they name are on disk whether or not you recall making them.
 
