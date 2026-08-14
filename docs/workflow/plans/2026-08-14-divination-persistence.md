@@ -47,9 +47,17 @@ baseline result and immutable packet hashes reused by Task 3.
    broken-reference pair, exact E3/E4 rejection causes, the six named E6 command/oracle maps,
    and explicit E6/E10/E13 producer workflows.
 4. Dispatch one fresh most-capable scenario worker per variant, with no shared conversation state,
-   using the neutral request, exact packet, and only the skill blobs named for that case. Include
-   `skills/seek-quest/SKILL.md` only for E14's two-contract comparison. Capture the exact reviewed
-   envelope and require 27 captures with distinct run ids.
+   using the neutral request, exact packet, and this exact ordered skill-path matrix:
+   - quest arms E1–E5, E7–E9, E10-consumer, and E12:
+     `[skills/quest-log/SKILL.md, skills/quest/SKILL.md]`;
+   - divination arms E6, E10-producer, and E13:
+     `[skills/quest-log/SKILL.md, skills/divination/SKILL.md]`;
+   - E11 bounty arms: `[skills/quest-log/SKILL.md, skills/bounty/SKILL.md]`;
+   - E14 only: `[skills/seek-quest/SKILL.md, skills/divination/SKILL.md]` in packet order;
+   - E15 quest and bounty arms use their respective quest and bounty arrays above.
+   Validate exact paths and ordered blob ids before dispatch and reuse them unchanged for each
+   corresponding baseline/post variant. Capture the exact reviewed envelope and require 27
+   captures with distinct run ids.
 5. Apply the same deterministic checks Task 3 uses: the common, E6-producer, E7, E14, or E15 exact
    response schema as applicable; private expected booleans and mutation/read/write counts; E5
    canary absence; E10 full hash/path in both arms; E11 valid/invalid adoption split; and every
