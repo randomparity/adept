@@ -74,9 +74,9 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
    - framing table cases: final LF, CRLF, bare CR, invalid UTF-8, and NUL. Valid cases produce the
      same canonical LF payload; invalid cases never call comment creation.
    - `PFR-2`: public-safety rejection and source/snapshot mutation never publish changed bytes and
-     retain evidence.
-   - `PFR-3`: the skill-level no-review/failed-review split is covered in Task 2; the helper rejects
-     an absent or empty required review.
+     retain evidence. Mutations at both pre-post seams keep the GitHub post count at zero.
+   - `PFR-3`: `not-required` publishes a summary-only annotation with its verified public-safe
+     reason; `failed` exits before any GitHub write; `required` rejects an absent or empty review.
    - `PFR-4`: older complete annotations and multiple paginated pages do not confuse token
      selection; ambiguous success found by token does not retry; incomplete pagination stops;
      duplicate-token comments stop and print their public URLs.
@@ -106,15 +106,19 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
    when no intent exists: mint token, derive temp/final paths, append and read back intent
    canonicalize through iconv into the recorded temp, reject NUL, normalize CRLF/CR to LF,
      force exactly one final LF, verify regular non-empty output, atomically rename temp to final
-   compute byte length and SHA-256; run scripts/check-public-safety.sh against that final snapshot
-   append and read back pending(token,path,length,digest)
-   indent each canonical line by four spaces and compose a temporary body with one outer
+   compute snapshot byte length and SHA-256; run public safety against that final snapshot
+   append and read back pending(token,path,snapshot-length,snapshot-digest)
+   indent each canonical line by four spaces and compose a helper-owned temporary body with one
+     outer
      WORK:REVIEW block, summary first, publication token field, forge heading, payload, sentinel
+   re-read snapshot length/digest after composition and stop on either mismatch
+   run public safety against the exact completed body; compute and record body length/digest
+   atomically rename the body temporary to its ledger-owned final path; revalidate its digest
    exhaustively collect repos/<repo>/issues/<pr>/comments through `gh api --paginate --slurp`
    reject incomplete/malformed pages; select by exact token plus exact body equality
    if absent, post once with `gh pr comment --body-file`; on failure reconcile before one retry
    collect again; require exactly one exact match and capture comment id/url
-   append and read back verified(token,comment-id,length,digest)
+   append and read back verified(token,comment-id,snapshot-digest,body-digest)
    re-read the exact comment and require exact body equality
    move source and snapshot to trash with the platform recoverable-delete command
    append and read back disposed(token,former-paths); print comment URL
@@ -156,7 +160,7 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
 
 ### Acceptance criteria
 
-- All seven PFR scenario groups pass on Bash 3.2-compatible syntax.
+- All seven PFR scenario groups, including all three mode arms, pass on Bash 3.2 syntax.
 - No GitHub post, retry, or deletion occurs without its preceding durable/readback evidence.
 - Posted bytes derive only from the canonical snapshot that passed public safety.
 - Failure output never contains the rejected body or a private path.
@@ -203,17 +207,8 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
    payload and publication token. Existing latest-complete readers continue selecting the outer
    block; embedded markers are indented and are not structure.
 
-4. Complete the Task 1 fixture's mode-state cases against the helper interface:
-
-   - party-mode required review produces a retained artifact that the helper accepts;
-   - verified no-review mode produces summary-only `forge review: not required` and does not invoke
-     the helper with a missing file;
-   - named required-review failure stops before the fake GitHub post.
-
-   Keep these behavior-driven: the fixture invokes the helper and checks GitHub calls and ledger
-   state, not Markdown wording. Anatomy rule 4 leaves the skill prose itself to adversarial review.
-
-5. Run focused and structural checks:
+4. Run focused and structural checks. The helper fixture already covers all mode arms; Anatomy rule
+   4 leaves the skill prose itself to adversarial review rather than sentence-pinning tests.
 
    ```sh
    ./tests/fixtures/quest/publish-forge-review-test.sh
@@ -225,7 +220,7 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
    Expected: all exit 0; the public-safety and shape gates emit no findings; records regression
    cases pass.
 
-6. Commit explicit paths:
+5. Commit explicit paths:
 
    ```sh
    git add skills/forge/SKILL.md skills/quest/SKILL.md skills/quest-log/SKILL.md \
