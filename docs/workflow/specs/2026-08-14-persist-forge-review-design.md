@@ -41,13 +41,20 @@ a named shipping failure; the quest does not post a placeholder claiming a revie
 
 Once `$deliver` creates the PR, `$quest` composes its existing complete `WORK:REVIEW` annotation.
 The summary fields remain concise and first. A separate `Forge whole-branch review` section then
-contains the review file verbatim. The annotation identifies this section as the forge review, not
-the later trial-loop review summary, and contains no local artifact path.
+contains a lossless rendering of the review: the publisher prefixes every source line with four
+spaces, including lines that resemble annotation markers or summary fields. Removing that prefix
+reconstructs the source byte-for-byte. The indentation makes the payload a Markdown code block and
+prevents whole-line marker or field readers from treating model-written content as annotation
+structure. The annotation identifies this section as the forge review, not the later trial-loop
+review summary, and contains no local artifact path.
 
 Before posting, `$quest` runs the repository's public-safety guard against the review file. A
 finding or scan fault stops publication with the artifact retained. The post uses the quest-log
-body-file recipe. Readback must select the complete annotation and verify both the run-specific
-marker and the complete forge-review content. Only that readback authorizes disposal.
+body-file recipe. Readback must select the outer complete annotation, verify its run-specific
+marker, extract only the indented payload after the forge-review heading, remove exactly one
+four-space prefix per payload line, and compare the result byte-for-byte with the source. Embedded
+`WORK:REVIEW` markers, completion sentinels, or summary-shaped lines never count as outer structure.
+Only that readback authorizes disposal.
 
 If no forge artifact exists because `$forge` legitimately ran without party mode or stopped after
 a named review failure, `WORK:REVIEW` records `forge review: unavailable` with the existing reason.
@@ -80,7 +87,8 @@ copy and the scratch lifecycle is closed.
 - Crash after trash but before ledger append: verified publication plus the absent source closes
   the disposal marker without a second deletion.
 - Existing `WORK:REVIEW` summary: fixtures prove its fields and complete sentinels remain present,
-  with the forge review in a distinct section.
+  with the forge review in a distinct indented section. A hostile fixture includes duplicate
+  summary fields plus both annotation marker lines in the review and proves they remain payload.
 
 Focused contract tests must first fail against current behavior, then prove the retained-artifact
 handoff, publication/readback ordering, public-safety stop, absent-artifact disclosure, and
@@ -102,18 +110,20 @@ cost do not change; success is a verified complete PR annotation followed by ver
 | Artifact discarded before durable publication | 4 | Contract fixture proves publication readback precedes disposal. |
 | Unsafe or host-private text published | 5 | Fixture proves the public-safety guard runs bare and a failure stops posting. |
 | Fabricated review on missing input | 4 | Fixture proves missing review is disclosed as unavailable. |
-| Forge review conflated with trial-loop summary | 4 | Fixture proves separate labelled sections inside `WORK:REVIEW`. |
+| Forge review conflated with trial-loop summary | 4 | Fixture proves separate labelled sections and payload escaping inside `WORK:REVIEW`. |
 | Duplicate write after ambiguous response | 4 | Fixture proves readback precedes the single bounded retry. |
 | Oversized or rejected comment silently loses review | 4 | Fixture proves publication failure retains the source and stops shipping. |
 
 Stable cases: `PFR-1` publishes a safe non-empty review and then disposes it; `PFR-2` rejects a
 review containing a denied host path; `PFR-3` discloses a named unavailable review; `PFR-4`
 reconciles an ambiguous write by readback without duplication; `PFR-5` retains the artifact when
-GitHub rejects publication; `PFR-6` resumes after publication before disposal. Each is a blocking
+GitHub rejects publication; `PFR-6` resumes after publication before disposal; `PFR-7` publishes a
+review containing duplicate summary fields and both outer sentinel lines, then reconstructs the
+original content exactly without confusing those payload lines for structure. Each is a blocking
 contract fixture whose observable traits are the required ordering and annotation fields. The
-forbidden traits are early deletion, fabricated content, local paths, duplicate comments, and a
-success claim without readback. Existing deterministic shell fixtures are the judge; no model
-grades its own output.
+forbidden traits are early deletion, fabricated content, local paths, duplicate comments,
+payload-shaped annotation structure, and a success claim without readback. Existing deterministic
+shell fixtures are the judge; no model grades its own output.
 
 ## Threat model
 
@@ -123,10 +133,10 @@ boundaries widened are GitHub comment creation and the quest's scratch cleanup.
 
 The quest trusts only a non-empty file at the controller-chosen path after the forge checks. Before
 publication it applies the repository public-safety scan; GitHub receives the body as data through
-`--body-file`, never shell interpolation. Markdown is intentionally rendered by GitHub, but it
-does not grant repository execution. A complete-marker and content readback controls ambiguous
-writes. Disposal requires that verified readback. Failures may disclose only a public-safe reason,
-not rejected content or local paths.
+`--body-file`, never shell interpolation. Every review line is indented before composition, so
+model-written markers and Markdown stay inside the payload boundary. Outer-marker selection plus a
+lossless content readback controls ambiguous writes. Disposal requires that verified readback.
+Failures may disclose only a public-safe reason, not rejected content or local paths.
 
 Credential compromise, malicious content already committed to the public repository, GitHub's own
 Markdown renderer, and expansion of the public-safety pattern set are out of scope: this change
