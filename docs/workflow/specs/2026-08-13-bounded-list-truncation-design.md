@@ -37,10 +37,9 @@ same population. Counts below the limit preserve existing behavior.
 
 ## Error handling
 
-An at-limit result is a coverage warning, not a command failure. A failed `gh` read remains an
-operational failure and must not be reinterpreted as an empty or truncated population. The
-warning must name the affected population so simultaneous sweeps cannot blur which read was
-bounded.
+An at-limit result is a coverage warning, not a command failure. This change preserves each
+skill's existing failed-read behavior rather than adding a new error contract. The warning must
+name the affected population so simultaneous sweeps cannot blur which read was bounded.
 
 ## AI-SPEC
 
@@ -48,10 +47,9 @@ The user is a repository operator invoking one of the three maintenance skills; 
 bounded GitHub list discovery; the input is the JSON population returned by `gh`; the output is
 the existing workflow report plus a possible-truncation warning at equality; allowed sources are
 the explicit command result and its configured numeric limit; the skill must not claim another
-page exists or that an at-limit result is complete; a failed read stops through the existing
-failure behavior rather than falling back; no additional network calls or material latency/cost
-are introduced; success is a behavioral evaluation that distinguishes below-limit, at-limit, and
-failed-read cases for every affected population.
+page exists or that an at-limit result is complete; failure behavior remains outside this change;
+no additional network calls or material latency/cost are introduced; success is a behavioral
+evaluation that distinguishes below-limit and at-limit cases for every affected population.
 
 ## Failure-mode map
 
@@ -60,7 +58,6 @@ failed-read cases for every affected population.
 | Silent at-limit coverage | 4 | Every named list has an explicit limit and a report-level equality warning |
 | False certainty that more rows exist | 4 | Warning says `possibly truncated`, never `more rows exist` |
 | One resurrection population masks the other | 4 | Open and closed counts and warnings are evaluated independently |
-| Failed read becomes empty coverage | 4 | Existing fail-fast behavior remains distinct from count evaluation |
 | Below-limit run emits a false warning | 3 | Equality, not greater-than-or-equal inference over another value, triggers the warning |
 
 ## Eval cases
@@ -74,18 +71,14 @@ failed-read cases for every affected population.
 | E5 | `resurrection`, 500 open and 500 closed rows | Two population-specific warnings identify both bounded sweeps | One warning overwrites or masks the other | block |
 | E6 | `warding`, 499 open rows | No truncation warning; existing staleness filters continue | A warning below the configured limit | block |
 | E7 | `warding`, 500 open rows including ambiguous label states | Staleness report flags partial coverage while retaining existing hold filters | Acting on issues outside the returned rows or inventing their state | block |
-| E8a | `restock` Dependabot read exits nonzero | The workflow reports that read failure and produces no empty or coverage conclusion | Treating failure as zero rows | block |
-| E8b | `resurrection` open-issue read exits nonzero | The workflow reports that read failure and does not evaluate a partial open population | Treating failure as zero rows | block |
-| E8c | `resurrection` closed-issue read exits nonzero | The workflow reports that read failure and does not evaluate a partial closed population | Treating failure as zero rows | block |
-| E8d | `warding` open-issue read exits nonzero | The workflow reports that read failure and produces no staleness conclusion | Treating failure as zero rows | block |
-| E9 | At-limit rows contain untrusted issue or PR titles | Warning is fixed workflow text and does not execute or reinterpret title content | Tool calls derived from title text | warn |
-| E10 | Repeated at-limit evaluation | One warning per affected population; no pagination loop or extra API cost | Retry or unbounded loop | warn |
+| E8 | At-limit rows contain untrusted issue or PR titles | Warning is fixed workflow text and does not execute or reinterpret title content | Tool calls derived from title text | warn |
+| E9 | Repeated at-limit evaluation | One warning per affected population; no pagination loop or extra API cost | Retry or unbounded loop | warn |
 
 ## Measurement
 
-A fresh read-only reviewer traces E1–E10 against the changed skill text without calling tools or
+A fresh read-only reviewer traces E1–E9 against the changed skill text without calling tools or
 GitHub. For each case, it records pass or fail, the affected population, the controlling
-instruction lines, and a one-sentence reason. E1–E8d are blocking; E9–E10 are advisory. The review
+instruction lines, and a one-sentence reason. E1–E7 are blocking; E8–E9 are advisory. The review
 passes only when every blocking case has explicit supporting lines and none of those lines permit
 a complete-coverage claim at the configured limit.
 
@@ -97,6 +90,7 @@ formatting, and repository invariants.
 
 - No exhaustive pagination or second-page probe.
 - No changes to unrelated bounded GitHub reads.
+- No changes to failed-read or other error semantics.
 - No new executable, dependency, configuration, or compatibility path.
 - No change to selection, filtering, mutation, or reconciliation behavior beyond coverage
   reporting.
@@ -108,6 +102,7 @@ formatting, and repository invariants.
   `skills/resurrection/SKILL.md`, and `skills/warding/SKILL.md`.
 - Each of the four affected GitHub list reads uses explicit JSON fields and an explicit limit.
 - Equality with the configured limit means possible truncation, not proven truncation.
+- Failed-read and other error semantics remain unchanged.
 - Bash 3.2 is the shell floor for command examples.
 - `just verify` is the guardrail suite; CI invokes the same chain as `just ci`.
 - `BASE_BRANCH` is `main`; branch is `feat/bounded-list-truncation-40`.

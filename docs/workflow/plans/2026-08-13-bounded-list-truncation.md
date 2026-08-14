@@ -19,6 +19,7 @@ warning is carried into that workflow's report.
   `skills/resurrection/SKILL.md`, and `skills/warding/SKILL.md`.
 - Each of the four affected GitHub list reads uses explicit JSON fields and an explicit limit.
 - Equality with the configured limit means possible truncation, not proven truncation.
+- Failed-read and other error semantics remain unchanged.
 - Bash 3.2 is the shell floor for command examples.
 - `just verify` is the guardrail suite; CI invokes the same chain as `just ci`.
 - `BASE_BRANCH` is `main`; branch is `feat/bounded-list-truncation-40`.
@@ -32,6 +33,7 @@ warning is carried into that workflow's report.
 | `skills/restock/SKILL.md` | Bound Dependabot discovery and report its possible truncation |
 | `skills/resurrection/SKILL.md` | Report open and closed issue-sweep truncation separately |
 | `skills/warding/SKILL.md` | Report possible partial coverage of the open-issue staleness sweep |
+| `.agent/sdd/final-fix-report.md` | Remove the accidentally tracked transient review artifact |
 
 ## Pre-implementation scope check
 
@@ -79,7 +81,7 @@ Keep the zero-result stop and categorization behavior unchanged.
 
 ### Step 2.2 — Verify the restock behavior
 
-Trace E1, E2, E8a, E9, and E10 with a fresh read-only reviewer. Expected: every blocking case
+Trace E1, E2, E8, and E9 with a fresh read-only reviewer. Expected: every blocking case
 passes with controlling instruction lines; advisory cases introduce no tool call or pagination
 loop.
 
@@ -117,9 +119,8 @@ plan; do not describe the closed sweep as complete.
 
 ### Step 3.2 — Verify independent warnings
 
-Trace E3–E5, E8b, and E8c with a fresh read-only reviewer. Expected: open-only, closed-only, and
-simultaneous at-limit cases retain distinct warning identities; failed reads do not become partial
-populations.
+Trace E3–E5 with a fresh read-only reviewer. Expected: open-only, closed-only, and simultaneous
+at-limit cases retain distinct warning identities.
 
 Run `just shape-check`, `just public-safety`, and `git diff --check` bare.
 
@@ -148,9 +149,8 @@ Keep the existing status, epic, and open-PR filters unchanged.
 
 ### Step 4.2 — Verify warding behavior
 
-Trace E6, E7, E8d, E9, and E10 with a fresh read-only reviewer. Expected: below-limit behavior is
-unchanged, at-limit coverage is reported without inventing unseen issues, and failed reads do not
-produce a staleness conclusion.
+Trace E6–E9 with a fresh read-only reviewer. Expected: below-limit behavior is unchanged and
+at-limit coverage is reported without inventing unseen issues or adding retries.
 
 Run `just shape-check`, `just public-safety`, and `git diff --check` bare.
 
@@ -160,7 +160,8 @@ Commit `skills/warding/SKILL.md` with `fix: report truncated warding sweep`.
 
 ## Task 5 — Whole-change verification
 
-**Files:** no planned edits; accepted review fixes remain within the frozen surface.
+**Files:** remove the accidentally tracked `.agent/sdd/final-fix-report.md`; accepted review fixes
+remain within the frozen surface.
 
 **Interfaces:** consumes all three completed contracts and produces branch-review and guardrail
 evidence.
@@ -168,11 +169,12 @@ evidence.
 ### Step 5.1 — Recheck scope and behavior
 
 Read issue #40's latest complete `WORK:SCOPE` and require token
-`58D4B37E-9BCE-4C30-A45A-4BA5E261B3CE`. Map all completion criteria to controlling skill lines.
-Run the complete E1–E10 bounded human review and record pass/fail, affected population,
-controlling lines, and a one-sentence reason per case.
+`A78B94C5-D5CB-42FF-A9DA-98E93FC6DA65`. Map all completion criteria to controlling skill lines.
+Remove the accidentally tracked `.agent/sdd/final-fix-report.md`; the ignored workspace remains
+the transient evidence location. Run the complete E1–E9 bounded human review and record pass/fail,
+affected population, controlling lines, and a one-sentence reason per case.
 
-Expected: E1–E8d pass; E9–E10 have no blocking behavior.
+Expected: E1–E7 pass; E8–E9 have no blocking behavior.
 
 ### Step 5.2 — Run repository guardrails
 
