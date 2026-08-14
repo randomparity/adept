@@ -72,9 +72,10 @@ absence observation. The required uniqueness readback detects but cannot prevent
 finds multiple comments carrying the token, the quest retains the artifact, reports the token and
 public comment URLs for operator repair, and does not dispose or claim successful publication.
 
-If no forge artifact exists because `$forge` legitimately ran without party mode or stopped after
-a named review failure, `WORK:REVIEW` records `forge review: unavailable` with the existing reason.
-It never manufactures review content. A publication rejected for comment size or service failure
+If `$forge` legitimately ran in a mode that does not require a whole-branch review, `WORK:REVIEW`
+records `forge review: not required` with that verified mode. It never manufactures review content.
+A named failure of a required forge review remains terminal: the quest cannot reach delivery or
+`WORK:REVIEW` publication on that path. A publication rejected for comment size or service failure
 stops shipping and retains the source file so a human can resolve the failure without rerunning the
 review.
 
@@ -93,6 +94,9 @@ copy and the scratch lifecycle is closed.
 
 - Missing, empty, or unreadable retained review: stop before posting and retain all remaining
   evidence.
+- Failed required forge review: stop before delivery; do not downgrade it to an unavailable review
+  annotation. Only a verified mode where no whole-branch review was required may publish `forge
+  review: not required`.
 - Public-safety match or scan fault: stop before posting; never publish the rejected content.
 - Comment creation failure: retain the review and report the failed publication.
 - Ambiguous write result: exhaustively read back before retrying; retry once only when the exact
@@ -131,13 +135,14 @@ cost do not change; success is a verified complete PR annotation followed by ver
 |---|---:|---|
 | Artifact discarded before durable publication | 4 | Contract fixture proves publication readback precedes disposal. |
 | Unsafe or host-private text published | 5 | Fixture proves the public-safety guard runs bare and a failure stops posting. |
-| Fabricated review on missing input | 4 | Fixture proves missing review is disclosed as unavailable. |
+| Failed review treated as optional or fabricated on missing input | 4 | Fixture proves legitimate no-review mode is disclosed while failed required review cannot ship. |
 | Forge review conflated with trial-loop summary | 4 | Fixture proves separate labelled sections and payload escaping inside `WORK:REVIEW`. |
 | Duplicate write after ambiguous response or crash | 4 | Fixture proves ledger-backed token readback precedes the single bounded retry. |
 | Oversized or rejected comment silently loses review | 4 | Fixture proves publication failure retains the source and stops shipping. |
 
 Stable cases: `PFR-1` publishes a safe non-empty review and then disposes it; `PFR-2` rejects a
-review containing a denied host path; `PFR-3` discloses a named unavailable review; `PFR-4`
+review containing a denied host path; `PFR-3` proves both state arms: a verified no-review mode may
+publish `forge review: not required`, while a failed required review cannot reach delivery. `PFR-4`
 starts with older complete annotations and reconciles an ambiguous write by finding its unique
 token across multiple complete pages without duplication; it also proves an incomplete page set
 stops without retry. `PFR-5` retains the artifact when GitHub rejects publication; `PFR-6` resumes
