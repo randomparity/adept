@@ -95,13 +95,14 @@ or invoke their existing derivation path.
 3. In `skills/quest/SKILL.md` step 1, before branch creation, read the latest complete block first;
    authenticate producer/comment/current login; require clean tree, issue identity, exact source
    fingerprint and HEAD, valid evidence grammar, and semantic support for every field. Adopt all
-   four fields or derive all four locally. If persisted-comment access fails and the independent
-   issue/repository derivation read also fails, stop before scope freeze with non-adoption and a
-   public-safe retry message. Never use assessment content for the eight charter fields.
+   four fields or derive all four locally. If any required persisted-evidence read or validation
+   fails and the independent issue/repository derivation read also fails, stop before scope freeze
+   with non-adoption and a public-safe retry message. Never use assessment content for the eight
+   charter fields.
 4. In `skills/bounty/SKILL.md` decompose mode, apply the same whole-block validation. Use a valid
    assessment, including `split`, as drafting evidence; otherwise preserve existing reasoning. If
-   persisted-comment access and the independent derivation read both fail, stop before any draft
-   or filing with non-adoption and the same public-safe retry contract.
+   any required persisted-evidence read or validation and the independent derivation read both
+   fail, stop before any draft or filing with non-adoption and the same public-safe retry contract.
 5. In `skills/seek-quest/SKILL.md`, state its read-only guarantee independently instead of using
    divination as an exemplar. Sweep direct references with
    `rg -n '\$divination|WORK:DIVINATION|in-session only|read-only' skills docs/cheatsheet.md`.
