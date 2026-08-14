@@ -271,9 +271,12 @@ line-oriented format is:
 ```text
 format: quest-forge-handoff-v1
 phase: build-complete
+repo: <exact owner/repository>
 forge-mode: <required|not-required|required-failed>
+forge-range: <base7>..<head7>|not-required
 forge-review-or-reason: <exact path or verified reason>
 forge-ledger: <exact path>
+forge-result-record: <exact forge ledger line>
 branch: <exact branch>
 base-branch: <exact BASE_BRANCH>
 guardrail: <one exact passed command>
@@ -289,18 +292,30 @@ once, no unknown or duplicate scalar field occurs, and every value is
 non-empty. `build-complete` has no `pr:` or `review-comment-url:` field;
 `publication-in-progress` adds exactly one `pr:` field; and
 `publication-verified` adds exactly one `pr:` and one `review-comment-url:`
-field. Parse only this record to set `FORGE_MODE`, `FORGE_REVIEW_OR_REASON`,
-`FORGE_LEDGER`, `REVIEW_SUMMARY`, branch, `BASE_BRANCH`, and guardrails; require
-their paths, branch, and base to match the live checkout. Re-read the record
-and named ledger before step 6. A malformed, missing, changed, or mismatched
-handoff is a shipping blocker, never a default or reconstructed value.
+field. Parse only this record to set `REPO`, `FORGE_MODE`, `FORGE_RANGE`,
+`FORGE_REVIEW_OR_REASON`, `FORGE_LEDGER`, `REVIEW_SUMMARY`, branch,
+`BASE_BRANCH`, and guardrails; require their paths, repository, branch, and
+base to match the live checkout. On every resume, require
+`forge-result-record` to be one whole, exact line in the named ledger. In
+`required` mode it must be the retained record for `forge-range` and name the
+exact handoff review and ledger paths. In `not-required` mode it must be
+forge's exact verified not-required record and name the exact reason and ledger
+path. `required-failed` must likewise match its exact failed record. Re-read
+the record and named ledger before step 6. A malformed, stale, unrelated,
+missing, changed, or mismatched handoff is a shipping blocker, never a default
+or reconstructed value.
 
-On a verified-publication resume, re-read the verified and disposed ledger
-records and the stored comment URL, then skip directly to step 9. Do not rerun
-`$deliver`, recreate the summary, invoke the publication helper, or post a
-second `WORK:REVIEW` comment. `publication-in-progress` remains parked for
-human reconciliation, and only `build-complete` continues through review and
-shipping.
+On a verified-publication resume, require `review-comment-url` to parse as
+`https://github.com/<repo>/pull/<pr>#issuecomment-<id>`, with the record's
+current `repo`, current `pr:`, and numeric `<id>`. Require it to equal the URL
+in the exact `review-publication-verified: <URL>` ledger line for this handoff,
+then re-read its exact disposal record. In `required` mode, that record must be
+paired with the retained range and exact review path; in `not-required` mode,
+it must name the exact `REVIEW_SUMMARY` path. Only then skip directly to step
+9. Do not rerun `$deliver`, recreate the summary, invoke the publication
+helper, or post a second `WORK:REVIEW` comment.
+`publication-in-progress` remains parked for human reconciliation, and only
+`build-complete` continues through review and shipping.
 
 There are three forge modes:
 

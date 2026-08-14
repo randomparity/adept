@@ -274,13 +274,15 @@ asked report it as a blocker and return. Never default to `main`.
    an unconsumed artifact or one still needed by a live worker.
 
 **Forge-to-quest result.** A closed retained whole-branch review returns
-`required` with its exact review path and ledger path. A selected execution
-mode that did not require a whole-branch review returns `not-required` with a
-verified, public-safe reason and its ledger path; it does not invent a review
-path. A failed, missing, malformed, or unresolved required review is terminal:
-return `required-failed` with the ledger path and actionable local reason, and
-do not return a retained artifact. `$quest` must park before delivery on that
-result. These modes are workflow state, not interchangeable verdict labels.
+`required` with its exact `<base7>..<head7>` range, retained ledger line,
+review path, and ledger path. Before returning `not-required`, append and read
+back `Final review: not-required (reason <reason>, ledger <path>)`; return that
+exact ledger line with its verified, public-safe reason and ledger path, and do
+not invent a review path. A failed, missing, malformed, or unresolved required
+review is terminal: return `required-failed` with its exact ledger line, ledger
+path, and actionable local reason, and do not return a retained artifact.
+`$quest` must park before delivery on that result. These modes are workflow
+state, not interchangeable verdict labels.
 
 A missing or empty file means the return is not evidence. If the reviewer produced no report,
 apply the silent-party-worker contract above; only a reconciled, harness-observed end may consume
