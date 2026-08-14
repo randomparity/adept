@@ -383,6 +383,16 @@ case_markers_stay_payload_and_summary_markers_fail() {
 			return
 		fi
 	done
+	for marker in '<!-- WORK:REVIEW -->' '<!-- REVIEW:COMPLETE -->'; do
+		new_case
+		printf '%s\r\n' "$marker" >"$SUMMARY"
+		run_helper required "$REVIEW" env GH_MODE=success
+		if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" || [ -e "$(body_file 2>/dev/null || :)" ] ||
+			[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ]; then
+			fail "$name" 'CRLF summary marker reached GitHub or disposed evidence'
+			return
+		fi
+	done
 	ok "$name"
 }
 

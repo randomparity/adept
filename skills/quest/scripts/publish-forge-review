@@ -70,7 +70,10 @@ validate_inputs() {
 	[ -f "$summary" ] && [ -r "$summary" ] && [ -s "$summary" ] || fail 'summary is invalid'
 	iconv -f UTF-8 -t UTF-8 "$summary" >/dev/null 2>&1 || fail 'summary is not UTF-8 text'
 	nul_bytes=$(LC_ALL=C od -An -v -t x1 "$summary") || fail 'summary cannot be read'
-	case " $nul_bytes " in *' 00 '*) fail 'summary contains NUL' ;; esac
+	case " $nul_bytes " in
+	*' 00 '*) fail 'summary contains NUL' ;;
+	*' 0d '*) fail 'summary contains carriage return' ;;
+	esac
 	for marker in "$OUTER_MARKER" "$OUTER_SENTINEL"; do
 		marker_status=0
 		grep -qxF "$marker" "$summary" >/dev/null 2>&1 || marker_status=$?
