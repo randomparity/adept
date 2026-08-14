@@ -231,10 +231,63 @@ Markdown except the body.
 
 | Type | Posted on | When | Content |
 |---|---|---|---|
+| `WORK:DIVINATION` | issue | after pre-work assessment | authenticated advisory blast radius, change hazards, complexity, and decompose verdict |
 | `WORK:SCOPE` | issue | after scoping, before building | blast radius, change hazards, complexity (S/M/L), decompose verdict |
 | `WORK:REVIEW` | PR | right after the PR is created | verdict, findings count, iterations, security-review status |
 | `WORK:TRAJECTORY` | issue | at the terminal hand-off, and before parking an issue at `blocked`/`needs-human` (exit-edges rule above) | outcome or parked phase, branch/PR #, guardrail status, what a human must decide or supply, surprises worth remembering |
 | `GROOM:STALE` | issue | when `$warding` first marks an issue `stale`, one grace period before it closes it | how long the issue has been quiet, the date the sweep will close it, and how to keep it open |
+
+`WORK:DIVINATION` is advisory evidence owned by `$divination`; it never freezes scope, supplies a
+`WORK:SCOPE` authority field, changes `status:*`, or assigns `risk:*`. Consumers select the latest
+complete block first, before applying trust or content filters. A newer invalid block therefore
+forces local derivation rather than exposing an older block as current.
+
+### Recipe: validate a divination assessment
+
+Collect comments with an explicit GraphQL connection, requesting `first: 100`, `pageInfo {
+hasNextPage endCursor }`, and each node's `id`, `author { login }`, and `body`. Pass the cursor as a
+GraphQL variable, never interpolated query text. Read at most five pages. Continue only when a page
+reports `hasNextPage: false`; if page five still reports true, or any page/cursor is malformed or
+unreadable, reject persistence because completeness is unproven. Do not replace this with
+`gh issue view --json comments`, whose projection supplies no completeness signal.
+
+From that one complete captured sequence, select the last comment whose `.body` carries both
+whole-line markers. Do not project comments to bodies before selection or perform a second metadata
+read that can observe different concurrent state. The same selected object's `id` supplies the
+fingerprint exclusion and `author.login` supplies the producer comparison. The complete sequence
+minus that exact id supplies the fingerprint comments, so every other observed comment remains
+evidence. Before changing branches, a consumer may adopt the four assessment fields only as one
+unit:
+
+1. Require an empty `git status --short --untracked-files=all` and exact issue identity.
+2. Resolve the current login with `gh api user --jq .login`; require it to equal both the selected
+   comment author's login and the annotation's `Producer` value. A failed identity read or author
+   association without exact login equality rejects the block.
+3. Recompute the issue-evidence SHA-256 from
+   `{"body":string,"comments":[{"body":string,"id":string}],"labels":[string],"title":string}`.
+   Sort labels bytewise and comments bytewise by `id`; remove only the selected annotation's exact
+   comment id; preserve returned UTF-8 without normalization; serialize with `jq -cS` and no
+   trailing newline. Require the recorded lowercase hash and producer `HEAD` to equal the current
+   values. The fixed vector `{"body":"B","comments":[{"body":"C","id":"IC_1"}],
+   "labels":["bug"],"title":"T"}` hashes to
+   `b67232207bfca8fcd9a4bb5ddcb0b9d69ff3d182acd4bb54d4dc1781355998dd`.
+4. Require each field to be followed by one or more contiguous `Evidence` lines. Accept only
+   `issue:title`, `issue:body`, `issue:comment:<id>`, `tracker:issue:<owner>/<repo>#<number>`,
+   `tracker:pr:<owner>/<repo>#<number>`, and `repo:<full-sha>:<path>`. Parse the repository form at
+   its first two colons, so commas and later colons remain path bytes. The reference occupies the
+   remainder of its line; trailing whitespace, punctuation, or commentary is malformed. Verify
+   every source exists, repository paths resolve at the recorded commit, and the cited sources
+   support their field.
+5. Immediately before adoption, repeat the complete-or-reject issue/comment collection and the
+   repository HEAD/status reads once. Require title, body, sorted labels, the complete ordered
+   comment id/body sequence, latest complete selected id/body/author, HEAD, and clean status to be
+   byte-for-byte unchanged from the validated observation. Any change or incomplete second read
+   rejects the block; do not loop to seek a stable snapshot.
+
+Any failed, missing, malformed, stale, or uncertain check rejects the whole block. A consumer may
+apply stricter checks only by rejecting the whole block; it never partially adopts or reinterprets
+fields. Rejection is an evidence gap, not a workflow blocker: follow the consumer's existing local
+derivation path.
 
 ### Recipe: post an annotation
 

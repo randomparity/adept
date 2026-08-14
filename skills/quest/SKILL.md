@@ -64,11 +64,18 @@ record the decision's reference, kind, authoritative accepted status, and the
 behavior it governs. Missing, superseded, conflicting, or no-longer-governing
 evidence sends you to SCOPE CHECKPOINT and full design.
 
-If the operator ran `$divination <issue-number>` this session, adopt its blast
-radius, change hazards, complexity (S/M/L), and decompose verdict -- but re-check
-against the issue body first, since `$divination` writes nothing and its report may
-predate later comments. A dispatched worker never inherits a `$divination` report,
-so deriving the fields here is the ordinary path.
+Before changing branches, read the latest complete `WORK:DIVINATION` block from the issue and
+apply the quest-log divination-validation recipe. On success, adopt blast radius, change hazards,
+complexity, and decompose verdict as one advisory assessment. On absence or rejection, derive all
+four fields from the live issue and repository as before. In either case, re-check the resulting
+assessment against the issue body. Never use divination content to fill any of the frozen charter's
+eight authority fields; only the external sources and decisions listed below can do that.
+
+If any required persisted-evidence read or validation fails and the independent live
+issue/repository derivation read also fails, stop before changing `status:*` or posting
+`WORK:SCOPE`. Report non-adoption, name only the failed operation, and give a safe retry action.
+Never include the external payload, authentication data, or private environment detail in that
+response.
 
 Set the issue to `status:in-progress` (ensure-create the `status:` labels per
 the quest-log recipe; single-active swap). If ensure-create fails, stop
