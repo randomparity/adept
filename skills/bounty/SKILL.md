@@ -133,6 +133,9 @@ operator confirmation.
    quest-log divination-validation recipe. Use a valid complete assessment, including a `split`
    verdict and its other three fields, as drafting evidence. On absence or any rejection, derive
    the decomposition from the live parent and repository as before; never partially adopt a block.
+   If persisted-comment access fails and that independent derivation read also fails, stop before
+   drafting or filing. Report non-adoption, name only the failed operation, and give a safe retry
+   action; never include the external payload, authentication data, or private environment detail.
    Draft each sub-issue through steps 2–6, and file each
    as a **native sub-issue** by passing `--parent <N>` to
    `scripts/create-verified-issue.sh` (the direct native path requires `gh` ≥ 2.94.0; on
