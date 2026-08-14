@@ -50,9 +50,11 @@ review summary, and contains no local artifact path.
 
 Before posting, `$quest` runs the repository's public-safety guard against the review file. A
 finding or scan fault stops publication with the artifact retained. It mints one unique publication
-token before the first post and records that token in a named outer `publication token` field. The
-same token survives reconciliation and the one permitted retry. The post uses the quest-log
-body-file recipe.
+token before the first post, appends `review publication pending: <token>` to forge's ignored
+progress ledger, verifies that append, and records the token in a named outer `publication token`
+field. Resume reads the ledger rather than minting a replacement. The same token therefore survives
+process loss, reconciliation, and the one permitted retry. The post uses the quest-log body-file
+recipe.
 
 Readback exhaustively enumerates PR issue comments through GitHub's paginated API; every page must
 be readable and pagination must reach its declared end. A bounded projection without completeness
@@ -89,6 +91,8 @@ copy and the scratch lifecycle is closed.
 - Ambiguous write result: exhaustively read back before retrying; retry once only when the exact
   publication token is absent, and reuse that token on the retry. A partial or unreadable comment
   collection stops without retry or disposal.
+- Crash after GitHub accepts the comment but before the response is observed: resume obtains the
+  token from the forge ledger, finds and validates the existing comment, and does not post again.
 - Comment readback mismatch: retain the review and stop; do not claim durability.
 - Crash after verified publication but before trash: resume from the verified PR block, dispose,
   and append the ledger marker.
@@ -119,7 +123,7 @@ cost do not change; success is a verified complete PR annotation followed by ver
 | Unsafe or host-private text published | 5 | Fixture proves the public-safety guard runs bare and a failure stops posting. |
 | Fabricated review on missing input | 4 | Fixture proves missing review is disclosed as unavailable. |
 | Forge review conflated with trial-loop summary | 4 | Fixture proves separate labelled sections and payload escaping inside `WORK:REVIEW`. |
-| Duplicate write after ambiguous response | 4 | Fixture proves exhaustive token readback precedes the single bounded retry. |
+| Duplicate write after ambiguous response or crash | 4 | Fixture proves ledger-backed token readback precedes the single bounded retry. |
 | Oversized or rejected comment silently loses review | 4 | Fixture proves publication failure retains the source and stops shipping. |
 
 Stable cases: `PFR-1` publishes a safe non-empty review and then disposes it; `PFR-2` rejects a
@@ -127,7 +131,8 @@ review containing a denied host path; `PFR-3` discloses a named unavailable revi
 starts with older complete annotations and reconciles an ambiguous write by finding its unique
 token across multiple complete pages without duplication; it also proves an incomplete page set
 stops without retry. `PFR-5` retains the artifact when GitHub rejects publication; `PFR-6` resumes
-after publication before disposal; `PFR-7` publishes a
+after comment acceptance but before response observation by recovering the ledger token, then
+disposes the artifact without another post; `PFR-7` publishes a
 review containing duplicate summary fields and both outer sentinel lines, then reconstructs the
 original content exactly without confusing those payload lines for structure. Each is a blocking
 contract fixture whose observable traits are the required ordering and annotation fields. The
@@ -144,9 +149,9 @@ boundaries widened are GitHub comment creation and the quest's scratch cleanup.
 The quest trusts only a non-empty file at the controller-chosen path after the forge checks. Before
 publication it applies the repository public-safety scan; GitHub receives the body as data through
 `--body-file`, never shell interpolation. Every review line is indented before composition, so
-model-written markers and Markdown stay inside the payload boundary. Exhaustive comment collection,
-unique token selection, outer-marker validation, and a lossless content comparison control
-ambiguous writes. Disposal requires that verified readback.
+model-written markers and Markdown stay inside the payload boundary. A ledger-persisted publication
+token, exhaustive comment collection, outer-marker validation, and a lossless content comparison
+control ambiguous writes and process loss. Disposal requires that verified readback.
 Failures may disclose only a public-safe reason, not rejected content or local paths.
 
 Credential compromise, malicious content already committed to the public repository, GitHub's own
