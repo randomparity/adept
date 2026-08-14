@@ -41,24 +41,26 @@ a named shipping failure; the quest does not post a placeholder claiming a revie
 ### Durable PR publication
 
 Once `$deliver` creates the PR, `$quest` composes its existing complete `WORK:REVIEW` annotation.
-The summary fields remain concise and first. A separate `Forge whole-branch review` section then
-contains a lossless rendering of the review: the publisher prefixes every source line with four
-spaces, including lines that resemble annotation markers or summary fields. Removing that prefix
-reconstructs the source byte-for-byte. The indentation makes the payload a Markdown code block and
-prevents whole-line marker or field readers from treating model-written content as annotation
-structure. The annotation identifies this section as the forge review, not the later trial-loop
-review summary, and contains no local artifact path.
+The summary fields remain concise and first. A separate `Forge whole-branch review` section contains
+a lossless rendering of a canonical text snapshot. Canonicalization accepts valid UTF-8 without NUL,
+normalizes CRLF and bare CR line endings to LF, and produces exactly one final LF. Invalid UTF-8 or
+NUL is a publication failure. The publisher prefixes every canonical line with four spaces,
+including empty lines and lines that resemble annotation markers or summary fields. Removing that
+prefix and restoring the specified final LF reconstructs the canonical snapshot. The indentation
+makes the payload a Markdown code block and prevents whole-line marker or field readers from
+treating model-written content as annotation structure. The annotation identifies this section as
+the forge review, not the later trial-loop review summary, and contains no local artifact path.
 
 Before copying, `$quest` mints one unique publication token and derives controller-owned temporary
 and final snapshot paths in the same ignored workspace. It appends `review publication intent` with
 the token and both paths to forge's progress ledger and verifies that append. Only then does it copy
-the consumed review to the temporary path, verify a regular non-empty file, and atomically rename it
-to the final path. It rejects a pre-existing unrecorded destination and never refreshes a completed
-snapshot from the source.
+and canonicalizes the consumed review to the temporary path, verifies a regular non-empty UTF-8
+file with exactly one final LF, and atomically renames it to the final path. It rejects a
+pre-existing unrecorded destination and never refreshes a completed snapshot from the source.
 
 Resume reads the intent rather than minting new paths. A recorded final snapshot is adopted only
-after its type, non-emptiness, digest, and public-safety scan pass. A recorded temporary file with no
-final snapshot is an incomplete owned copy: resume moves that exact temporary path to trash and
+after its type, non-emptiness, digest, and public-safety scan pass. If a recorded temporary exists
+without the final snapshot, it is an incomplete owned copy: resume moves that exact path to trash and
 restarts the copy. Any path/type mismatch stops with both artifacts retained. Once the final
 snapshot passes, `$quest` computes its SHA-256, appends `review publication pending` with the token,
 final path, and digest, and verifies that append. Comment composition reads only that recorded
@@ -71,8 +73,9 @@ be readable and pagination must reach its declared end. A bounded projection wit
 evidence cannot authorize either retry or disposal. From that complete observation, readback
 selects the exact comment carrying the publication token and outer complete sentinels, rejects zero
 or multiple matches, extracts only the indented payload after the forge-review heading, removes
-exactly one four-space prefix per payload line, and compares the result byte-for-byte with the
-recorded snapshot and its pre-publication digest. Embedded `WORK:REVIEW` markers, completion
+exactly one four-space prefix per payload line, restores the canonical final LF, and compares the
+result with the recorded byte length and pre-publication SHA-256. Embedded `WORK:REVIEW` markers,
+completion
 sentinels, publication fields, or summary-shaped
 lines never count as outer structure. Only that exact readback authorizes disposal.
 
@@ -117,6 +120,8 @@ copy and the scratch lifecycle is closed.
 - Public-safety match or scan fault: stop before posting; never publish the rejected content.
 - Retained source changes after snapshot: never refresh or replace the snapshot; publication uses
   only the scanned, hashed snapshot. A snapshot digest mismatch stops without posting or disposal.
+- Invalid UTF-8 or NUL in the source: canonicalization stops before publication. Fixtures cover
+  empty interior lines, no final newline, one final newline, CRLF, bare CR, and invalid input.
 - Crash during snapshot creation: resume uses the verified intent record, removes only its exact
   incomplete temporary copy through trash, and retries the atomic copy. A completed final snapshot
   is validated and adopted rather than overwritten.
@@ -158,15 +163,17 @@ cost do not change; success is a verified complete PR annotation followed by ver
 | Failure mode | Severity | Evaluation |
 |---|---:|---|
 | Artifact discarded before durable publication | 4 | Contract fixture proves publication readback and a durable digest record precede disposal. |
-| Unsafe, changed, or host-private text published | 5 | Fixture proves the exact fixed snapshot is scanned, hashed, and posted, while mutation stops. |
+| Unsafe, changed, malformed, or host-private text published | 5 | Fixture proves canonical UTF-8 framing is scanned, hashed, and posted, while mutation or invalid input stops. |
 | Failed review treated as optional or fabricated on missing input | 4 | Fixture proves legitimate no-review mode is disclosed while failed required review cannot ship. |
 | Forge review conflated with trial-loop summary | 4 | Fixture proves separate labelled sections and payload escaping inside `WORK:REVIEW`. |
 | Duplicate write after ambiguous response or crash | 4 | Fixture proves ledger-backed token readback precedes the single bounded retry. |
 | Oversized or rejected comment silently loses review | 4 | Fixture proves publication failure retains the source and stops shipping. |
 
 Stable cases: `PFR-1` snapshots and publishes a safe non-empty review, verifies its digest, and then
-disposes both artifacts; `PFR-2` rejects a review containing a denied host path and proves a source
-or snapshot mutation after scanning cannot change the bytes posted; it also crashes before and
+disposes both artifacts; its framing cases cover empty lines, absent/present final LF, CRLF, bare
+CR, and invalid UTF-8/NUL. `PFR-2` rejects a review containing a denied host path and proves a source
+or snapshot mutation after scanning cannot change the canonical bytes posted; it also crashes
+before and
 during the atomic snapshot copy, then proves resume reclaims only the ledger-owned temporary path
 and adopts a completed final snapshot. `PFR-3` proves both state arms:
 a verified no-review mode may
