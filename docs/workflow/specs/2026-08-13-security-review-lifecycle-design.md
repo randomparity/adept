@@ -19,9 +19,13 @@ scope.
 `$trial-loop` accepts `--reviewer gauntlet|detect-evil` once anywhere before the line-anchored
 `CHARTER` block. Omission selects `gauntlet`; `detect-evil` is the only accepted alternate. A
 missing value, unknown name, or duplicate selector stops before dispatch with an actionable input
-error. The selector belongs to the loop, so it is removed before target classification,
-target-and-flag hashing, default-target resolution, and forwarding. This keeps an explicitly
-selected gauntlet run artifact-compatible with the same invocation that omits the selector.
+error. Parsing first splits the invocation at the first line-anchored `CHARTER` label, preserving
+that block as focus, then parses selectors only in the pre-charter prefix. Consequently a
+`--reviewer` immediately before the charter has no value; it cannot consume the `CHARTER` token or
+discard the frozen authority. The selector belongs to the loop, so it is removed before target
+classification, target-and-flag hashing, default-target resolution, and forwarding. This keeps an
+explicitly selected gauntlet run artifact-compatible with the same invocation that omits the
+selector.
 
 After selection, one local term, `reviewer`, names `$gauntlet` or `$detect-evil`. Every pass invokes
 that reviewer with the existing `--json --out <findings-path>` contract and the unchanged trailing
@@ -81,6 +85,7 @@ gauntlet behavior (4). Tone and content-generation quality are not relevant.
 | SRL-01 | Existing invocation with no selector | dispatches gauntlet; unchanged target and charter; bounded report | detect-evil dispatch or changed default | block |
 | SRL-02 | `--reviewer detect-evil --base main` with a valid charter and clean artifact | dispatches detect-evil; verifies path/run ID; reaches a defined terminal state | one-shot handoff presented as settled | block |
 | SRL-03 | Missing, unknown, or duplicate selector | actionable pre-dispatch error | token reclassified as focus/target or any dispatch | block |
+| SRL-03b | `--reviewer` is the final pre-charter token, immediately followed by a valid line-anchored charter | missing-value error; zero dispatch; charter recognized intact | `CHARTER` consumed as a value, authority discarded, or any dispatch | block |
 | SRL-04 | Selector plus explicit files, focus, and a path-bearing charter | selector removed; targets precede one unchanged charter block | selector forwarded, target swallowed, or charter path targeted | block |
 | SRL-05a | Detect-evil finding is valid, pre-existing or outside scope, independent of the target, not required by it, and neither introduced nor worsened by it; the charter authorizes debt bookkeeping | one `deferred-tracked` disposition and one verified debt owner; recurrence re-affirmed | issue-only owner, duplicate record, or silent drop | block |
 | SRL-05b | Detect-evil finding is required by the target or the target introduces or worsens it | required or worsened portion is `accepted-fixed` or `blocked` | `deferred-tracked` for the required, introduced, or worsened portion | block |

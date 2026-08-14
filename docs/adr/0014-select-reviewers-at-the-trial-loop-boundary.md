@@ -18,8 +18,10 @@ Make reviewer selection an explicit `$trial-loop` input. The grammar is
 `--reviewer gauntlet|detect-evil`: the flag may appear once anywhere before the line-anchored
 `CHARTER` block, consumes the next token, and defaults to `gauntlet` when absent. A missing value,
 unknown name, or duplicate selector stops before dispatch. The loop strips and validates the
-selector before hashing, target classification, or forwarding challenge arguments, then uses the
-selected reviewer's name consistently in dispatch, audit, stop, and report language.
+selector before hashing, target classification, or forwarding challenge arguments. It first splits
+the invocation at the charter boundary, so a selector at the end of the pre-charter prefix is
+missing its value and cannot consume or discard the charter. The loop then uses the selected
+reviewer's name consistently in dispatch, audit, stop, and report language.
 
 The reviewer boundary requires the shared structured artifact contract already implemented by both
 reviewers: `approve | needs-attention`, findings and suppressions counts, a path, and a run ID.
