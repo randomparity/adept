@@ -45,8 +45,11 @@ baseline result and immutable packet hashes reused by Task 3.
 4. Dispatch one fresh most-capable scenario worker per packet with the neutral request and current
    bytes of `skills/divination/SKILL.md`, `skills/quest/SKILL.md`,
    `skills/quest-log/SKILL.md`, and `skills/bounty/SKILL.md`. Capture the exact response envelope.
-5. Dispatch one different most-capable evaluator with the reviewed rubric. Require a complete
-   schema and at least one blocking trait failure. Malformed evidence is rerun, not accepted as red.
+5. Apply the same deterministic checks Task 3 uses: exact response schema and expected booleans,
+   E5 canary absence, E10 full hash/path, E11 valid/invalid adoption split, and E6/E13 producer
+   persistence behavior. A schema or packet failure is malformed evidence and is rerun, not red.
+6. Dispatch one different most-capable evaluator with the reviewed rubric. Require every result
+   field and at least one semantic blocking-trait failure against otherwise valid evidence.
 
 **Acceptance:** valid baseline aggregate `fail`; packets and captures are ignored; tracked tree is
 unchanged.
