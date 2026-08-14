@@ -70,7 +70,7 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
 
    - `PFR-1`: safe review with empty interior lines and no final newline publishes one complete
      annotation; the fake API readback matches; ledger order is intent → pending → verified →
-     disposed; source and snapshot are gone only after verification.
+     disposed; source, snapshot, and final comment body are gone only after verification.
    - framing table cases: final LF, CRLF, bare CR, invalid UTF-8, and NUL. Valid cases produce the
      same canonical LF payload; invalid cases never call comment creation.
    - `PFR-2`: public-safety rejection retains evidence. Source mutation before snapshot completion
@@ -82,9 +82,9 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
      selection; ambiguous success found by token does not retry; incomplete pagination stops;
      duplicate-token comments stop and print their public URLs.
    - `PFR-5`: comment-size/service rejection retains source and snapshot.
-   - `PFR-6`: resume at each ledger seam adopts the same token and paths; incomplete owned temp is
-     trashed and recopied; completed snapshot is validated; verified publication plus absent
-     artifacts appends disposal without a second deletion.
+   - `PFR-6`: resume at each ledger seam adopts the same token and paths; incomplete owned snapshot
+     or body temps are trashed and recreated; completed snapshot/body files are validated; verified
+     publication plus absent artifacts appends disposal without a second deletion.
    - `PFR-7`: review text containing summary-shaped fields and literal outer marker/sentinel lines
      remains indented payload; exact comment-body comparison succeeds without treating those lines
      as structure.
@@ -108,7 +108,7 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
    canonicalize through iconv into the recorded temp, reject NUL, normalize CRLF/CR to LF,
      force exactly one final LF, verify regular non-empty output, atomically rename temp to final
    compute snapshot byte length and SHA-256; run public safety against that final snapshot
-   append and read back pending(token,path,snapshot-length,snapshot-digest)
+   append and read back pending(token,snapshot-path,body-path,snapshot-length,snapshot-digest)
    indent each canonical line by four spaces and compose a helper-owned temporary body with one
      outer
      WORK:REVIEW block, summary first, publication token field, forge heading, payload, sentinel
@@ -121,8 +121,9 @@ Tech stack: Bash 3.2, Git, GitHub CLI, `jq`, `iconv`, existing repository shell 
    collect again; require exactly one exact match and capture comment id/url
    append and read back verified(token,comment-id,snapshot-digest,body-digest)
    re-read the exact comment and require exact body equality
-   move source and snapshot to trash with the platform recoverable-delete command
-   append and read back disposed(token,former-paths); print comment URL
+   move source, snapshot, and final body to trash with the platform recoverable-delete command
+   reconcile and trash only ledger-owned body/snapshot temps on resume
+   append and read back disposed(token,all-former-paths); print comment URL
    ```
 
    Use functions under 100 lines with one purpose: `fail`, `append_ledger`, `read_state`,
