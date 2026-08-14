@@ -66,8 +66,8 @@ already recoverably disposed.
    - `PFR-4`: comment failure, missing identity, and ambiguous nonzero-after-write stop without a
      retry and retain evidence.
    - `PFR-5`: exact comment read failure/mismatch writes no verified/disposed ledger line.
-   - `PFR-6`: ledger append/readback and partial trash failures never claim closed lifecycle;
-     summary ownership follows the review/body on every success and failure path.
+   - `PFR-6`: ledger append/readback failure retains review, summary, body, and comment identity;
+     partial trash failure never claims a closed lifecycle and reports exact remaining paths.
    - `PFR-7`: review lines containing outer markers, sentinel, and summary fields remain indented;
      summary input containing either outer marker is rejected before GitHub access.
 

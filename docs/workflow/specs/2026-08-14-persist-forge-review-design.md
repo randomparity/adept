@@ -78,7 +78,7 @@ automatic recovery across every process-loss seam or support concurrent controll
 - Public-safety match or scan fault on the exact body: stop before GitHub write.
 - Comment call fails or returns no usable identity: retain review, summary, and body; do not retry.
 - Exact comment readback differs or fails: retain all three files; do not claim durability.
-- Verified-ledger append/readback fails: retain both files and the public comment identity.
+- Verified-ledger append/readback fails: retain review, summary, body, and public comment identity.
 - Disposal failure: retain all files not already moved to trash and report the exact remaining
   ledger-owned paths privately; do not claim a closed scratch lifecycle.
 - Existing `WORK:REVIEW` summary fields and outer sentinels remain first and intact. Review payload
