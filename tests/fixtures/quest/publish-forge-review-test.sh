@@ -141,8 +141,15 @@ set -euo pipefail
 disposer=$1
 shift
 case $disposer in
-trash) [ "$1" = -- ] && shift ;;
-gio) [ "$1" = trash ] && shift ;;
+trash)
+	[ "$#" -eq 1 ] || exit 96
+	[ "$1" != -- ] || exit 95
+	printf 'trash-argv: %s\n' "$1" >>"$FAKE_STATE/events"
+	;;
+gio)
+	[ "$#" -eq 2 ] && [ "$1" = trash ] || exit 94
+	shift
+	;;
 *) exit 98 ;;
 esac
 path=$1
@@ -488,7 +495,10 @@ case_platform_disposers_are_deterministic() {
 	new_case
 	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
 	if [ "$STATUS" -ne 0 ] || [ "$(grep -c '^disposer trash$' "$STATE/events")" != 3 ] ||
-		grep -q '^disposer gio$' "$STATE/events"; then
+		grep -q '^disposer gio$' "$STATE/events" ||
+		! grep -qxF "trash-argv: $REVIEW" "$STATE/events" ||
+		! grep -qxF "trash-argv: $SUMMARY" "$STATE/events" ||
+		[ "$(grep -c '^trash-argv: ' "$STATE/events")" != 3 ]; then
 		fail "$name" 'Darwin did not use the fake trash disposer'
 		return
 	fi

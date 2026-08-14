@@ -250,7 +250,7 @@ dispose() {
 	local candidate remaining_candidate remaining=() disposed_line
 	for candidate in "$@"; do
 		case $disposer in
-		trash) trash -- "$candidate" ;;
+		trash) trash "$candidate" ;;
 		gio) gio trash "$candidate" ;;
 		esac || {
 			for remaining_candidate in "$@"; do
