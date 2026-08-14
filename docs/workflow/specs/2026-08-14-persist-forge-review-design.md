@@ -18,7 +18,8 @@ quest. There are no unresolved ambiguities.
 Permitted surface is the `$forge` final-review lifecycle, `$quest` shipping and `WORK:REVIEW`
 contract, their direct fixtures and gates, and these design records. Standalone `$deliver` and
 `$return-to-town` behavior, reviewer findings semantics, alternate external storage, and new
-automated consumers are excluded.
+automated consumers are excluded. Concurrent controllers for the same issue are not serialized by
+this change; the existing status label is observability, not a lock.
 
 This design is governed by [ADR 0016](../../adr/0016-publish-forge-review-with-work-review.md).
 
@@ -65,6 +66,12 @@ exactly one four-space prefix per payload line, and compares the result byte-for
 source. Embedded `WORK:REVIEW` markers, completion sentinels, publication fields, or summary-shaped
 lines never count as outer structure. Only that exact readback authorizes disposal.
 
+The publication contract assumes one active quest controller for the issue. GitHub comment creation
+has no token-keyed create-if-absent operation, so two concurrent controllers can race after the same
+absence observation. The required uniqueness readback detects but cannot prevent that race. When it
+finds multiple comments carrying the token, the quest retains the artifact, reports the token and
+public comment URLs for operator repair, and does not dispose or claim successful publication.
+
 If no forge artifact exists because `$forge` legitimately ran without party mode or stopped after
 a named review failure, `WORK:REVIEW` records `forge review: unavailable` with the existing reason.
 It never manufactures review content. A publication rejected for comment size or service failure
@@ -93,6 +100,9 @@ copy and the scratch lifecycle is closed.
   collection stops without retry or disposal.
 - Crash after GitHub accepts the comment but before the response is observed: resume obtains the
   token from the forge ledger, finds and validates the existing comment, and does not post again.
+- Concurrent resume creates duplicate token comments: uniqueness readback stops shipping, retains
+  the artifact, and names the duplicate public comments for operator repair; this change does not
+  add a distributed lock or delete public comments.
 - Comment readback mismatch: retain the review and stop; do not claim durability.
 - Crash after verified publication but before trash: resume from the verified PR block, dispose,
   and append the ledger marker.
@@ -157,4 +167,6 @@ Failures may disclose only a public-safe reason, not rejected content or local p
 Credential compromise, malicious content already committed to the public repository, GitHub's own
 Markdown renderer, and expansion of the public-safety pattern set are out of scope: this change
 does not create or widen those mechanisms. The residual comment-size limit is accepted as a
-fail-closed publication error with the original scratch artifact retained.
+fail-closed publication error with the original scratch artifact retained. Concurrent controllers
+for one issue are also outside the supported operating model; duplicate-token detection bounds that
+race to visible operator repair rather than pretending GitHub comment creation is atomic.
