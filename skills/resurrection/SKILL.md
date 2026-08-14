@@ -15,6 +15,9 @@ actively working the same repo. Read → plan → one confirmation → apply.
    `gh` mis-encodes the colon and multiple `--label` flags AND (see the skill's colon-label
    gotcha), so either returns nothing. List by state once and filter **client-side**:
    `gh issue list --repo <owner/name> --state open --json number,labels,title --limit 500`,
+   Record the returned row count. If it is 500, mark the open-issue population as possibly truncated
+   at the limit and carry that named warning into the reconciliation plan; do not describe the open
+   sweep as complete.
    then keep issues carrying any in-flight `status:` value (`in-progress`, `in-review`,
    `awaiting-merge`). For each, check reality:
    - **merged PR with `Closes #N`** (`gh pr list --repo <owner/name> --state merged --search
@@ -42,8 +45,12 @@ actively working the same repo. Read → plan → one confirmation → apply.
    other exit edge. Only clean up if a merged PR already closed the underlying work.
 5. **Strip stale labels from closed issues.** Same colon-label caveat — list and filter
    client-side: `gh issue list --repo <owner/name> --state closed --json number,labels
-   --limit 500`, keep those still carrying any `status:` value → plan: remove the residual
-   `status:` label (closed-state is authoritative).
+   --limit 500`,
+   Evaluate this count independently from the open sweep. If it is 500, mark the closed-issue
+   population as possibly truncated at the limit and carry that named warning into the
+   reconciliation plan; do not describe the closed sweep as complete.
+   keep those still carrying any `status:` value → plan: remove the residual `status:` label
+   (closed-state is authoritative).
 6. **Plan → confirm → apply.** Present the full reconciliation table (`#issue → action`).
    List any branch before touching it. After one explicit confirmation, apply per issue;
    pass all and only the confirmed cleared-dependency issue numbers to

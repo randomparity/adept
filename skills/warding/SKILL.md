@@ -34,6 +34,10 @@ require one explicit user confirmation before any GitHub write, branch push, or 
    `--label status:...` filter and silently returns nothing (the `quest-log` skill's
    colon-label gotcha).
 
+   If the returned array contains 500 issues, report that Sweep A is possibly truncated at the
+   limit and that staleness coverage may be partial. Do not infer or act on issues outside the
+   returned population.
+
    **Never touch** an issue carrying an in-flight `status:` value (`in-progress`, `in-review`,
    `awaiting-merge`), `status:blocked`, or `status:needs-human` — a human owns those exit edges
    (`$resurrection` step 4) — nor an `epic` parent, whose quiet means its children are

@@ -222,8 +222,14 @@ Continue to Phase 1 regardless — this PR is non-blocking.
 
 ```bash
 gh pr list --repo $REPO --author "app/dependabot" --state open \
+  --limit 500 \
   --json number,title,headRefName,labels,files,mergeable
 ```
+
+If the returned array contains 500 PRs, report that Dependabot discovery is possibly truncated
+at the limit and that evaluation covers only the returned population. Carry that warning into the
+final summary. Equality is conservative evidence of possible truncation; do not claim that another
+PR exists.
 
 If zero PRs are returned, print "No open dependabot PRs for $REPO"
 and stop.
