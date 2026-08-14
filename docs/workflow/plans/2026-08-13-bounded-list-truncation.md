@@ -17,7 +17,7 @@ warning is carried into that workflow's report.
 - Skills remain instruction-only Markdown; no supporting executable is added.
 - Implementation is limited to `skills/restock/SKILL.md`,
   `skills/resurrection/SKILL.md`, and `skills/warding/SKILL.md`.
-- Every GitHub list command uses explicit JSON fields and an explicit limit.
+- Each of the four affected GitHub list reads uses explicit JSON fields and an explicit limit.
 - Equality with the configured limit means possible truncation, not proven truncation.
 - Bash 3.2 is the shell floor for command examples.
 - `just verify` is the guardrail suite; CI invokes the same chain as `just ci`.
