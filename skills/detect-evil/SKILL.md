@@ -25,6 +25,12 @@ boundary** — hand it back and let the caller continue; stop only if a human as
 one-shot scan with nothing queued after. **Read-only** except for the optional `--out` file.
 `approve` only when no defensible finding exists.
 
+A direct `$detect-evil` invocation remains a one-pass, read-only checkpoint. When a standalone
+caller wants findings iterated and dispositioned to a settled state, invoke
+`$trial-loop --reviewer detect-evil <target and focus>`; `$trial-loop` owns fixes, deferral records,
+bounded retries and iterations, and the terminal report. `$detect-evil` never invokes the loop or
+mutates the target itself.
+
 ## Argument parsing and target resolution
 
 **Read the installed `$gauntlet` skill before parsing** and apply its *Argument
@@ -192,6 +198,7 @@ $detect-evil --json --out "$TMPDIR/detect-evil-43-feat-authz.json" --base main
                                               # name the artifact per run — a fixed
                                               # filename collides when several runs
                                               # scan in parallel
+$trial-loop --reviewer detect-evil --base main # settled standalone security-review lifecycle
 ```
 
 > Reminder: the verdict is a checkpoint, not a finish line. Hand it back to your workflow.

@@ -7,9 +7,10 @@ description: "Iteratively run an adversarial challenge review, fix or dispositio
 The coordinating role is the `orchestrator`; dispatched reviewers and fixers
 are `worker` subtypes. `subagent` refers only to the literal dispatch capability.
 
-Run `$gauntlet` against a target iteratively, fixing findings between passes,
-until it returns `approve` or 5 iterations are exhausted. This is both a
-standalone skill and a subroutine of `$quest` and `$spellcraft`.
+Run the selected reviewer against a target iteratively, fixing or dispositioning findings between
+passes, until it returns `approve` or a bounded stop fires. The reviewer defaults to `$gauntlet`;
+`--reviewer detect-evil` selects `$detect-evil`. This is both a standalone skill and a subroutine
+of `$quest` and `$spellcraft`.
 
 Callers own most of the timing: `$forge` reviews after every task and once
 across the whole branch, `$deliver` before a merge. Beyond those, petition the
@@ -19,11 +20,21 @@ fixing a bug that was hard to find. Never skip a review because the change looks
 simple — a simple-looking change is where an unexamined assumption survives all
 the way to merge.
 
-Input: pass through the user-supplied challenge target and focus text.
+Input: accept an optional `--reviewer gauntlet|detect-evil`, then pass through the user-supplied
+review target and focus text.
 
-The arguments are passed through to `$gauntlet` verbatim as the challenge
-target and optional focus text. This skill adds `--json --out <findings-path>`
-automatically: `$gauntlet` writes the full findings to `<findings-path>` and
+Before classifying review arguments, split at the first line-anchored `CHARTER` label and preserve
+that block unchanged. In the pre-charter prefix, accept at most one
+`--reviewer gauntlet|detect-evil`; omission means `gauntlet`. The flag consumes its next
+pre-charter token. A missing value, unknown reviewer, or duplicate selector is an input error:
+stop before target defaulting, hashing, artifact allocation, or worker dispatch. Remove a valid
+selector before every one of those operations and before forwarding review arguments. In
+particular, a selector immediately before `CHARTER` has no value; it never consumes the label or
+discards the frozen authority block.
+
+The remaining arguments are passed through to the selected reviewer verbatim as the review target
+and optional focus text. This skill adds `--json --out <findings-path>` automatically: the selected
+reviewer writes the full findings to `<findings-path>` and
 returns only `{verdict, findings_count, suppressed_count, path, run_id}`, so the
 loop's context carries verdicts, not payloads. Derive `<findings-path>`
 deterministically from a hash of the **target and flag tokens** in the supplied challenge arguments plus a
@@ -47,8 +58,11 @@ honors the caller's path, the loop reads a file that is never written and dead-e
 
 ## Inputs
 
-- `challenge_args`: exact `$gauntlet` arguments, including paths, `--base`,
-  `--working-tree`, or globs. This is the supplied challenge arguments.
+- `reviewer`: `gauntlet` by default, or `detect-evil` when explicitly selected.
+- `challenge_args`: exact selected-reviewer arguments, including paths, `--base`,
+  `--working-tree`, or globs, after removing the loop-owned selector. This is the supplied review
+  argument prefix; neither the selector nor the charter block participates in its target-and-flag
+  hash.
 - `focus`: optional focus text appended after the target arguments. This is
   also part of the supplied challenge arguments — challenge extracts it.
 - `charter`: the scope boundary you freeze before iteration 1 (below). Not an
@@ -104,8 +118,8 @@ For standalone code or branch review, derive the charter from the user's request
 when the boundary is genuinely unclear. Inside `$quest`, use the frozen `WORK:SCOPE`
 annotation and its external provenance; the plan is evidence, not authority. Inside
 `$spellcraft`, accept only the complete design-artifact input above. Carry every field unchanged
-to `$gauntlet` and append the supplied focus. Also hold the charter in orchestrator state for
-cycle validation and reporting. For a design document, still record dependencies and
+to the selected reviewer and append the supplied focus. Also hold the charter in orchestrator
+state for cycle validation and reporting. For a design document, still record dependencies and
 exclusions in the document so a post-compaction resume or downstream build can read them;
 doing so does not make the document its own authority.
 
@@ -123,7 +137,7 @@ A new deferral may change exclusions or surface only when the frozen charter aut
 When docs/debt is outside surface, return SCOPE CHECKPOINT or park; never write a record.
 
 **Transmitted exclusions are advisory, and cannot be your convergence mechanism.**
-Nothing in `$gauntlet` lets focus text retire a defensible finding: its contract is
+Nothing in either supported reviewer lets focus text retire a defensible finding: each contract is
 to weight focus heavily and *still* report any material issue it can defend, and to
 approve only when no defensible finding exists. So expect an owned deferral to recur
 on every pass. What protects the cap is cheap re-disposition, not reviewer silence:
@@ -169,7 +183,7 @@ focus: <review focus, unchanged>
 
 Repeat up to 5 iterations:
 
-Each gauntlet dispatch below is a report wait governed by
+Each selected-reviewer dispatch below is a report wait governed by
 [dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md). Retain the
 worker, iteration wait site, observations, recovery-chain identifier, `unused` or `consumed`
 replacement budget, and findings-path/run-ID dispositions for the current run; include the result
@@ -177,30 +191,31 @@ in the run report. A missing report follows that contract. A returned target-res
 malformed compact object follows step 2 instead, because a report that arrived is not a silent
 worker. Do not use step 2's malformed-return retry to replace a worker whose end was not observed.
 
-1. **Petition the council** — run `$gauntlet` in a **subagent** with
+1. **Petition the council** — read the installed selected reviewer in full, then run it in a
+   **subagent** with
    `--json --out <findings-path> <challenge-args>`, then the exact
    `CHARTER` block above as the labeled trailing block.
 
    Restating the focus inside the block is deliberate — it keeps the charter
-   self-contained for the reviewer, and `$gauntlet` reads the duplicate as one
+   self-contained for the reviewer, and both supported reviewers read the duplicate as one
    priority, not two.
 
    **The block has exactly the eight charter fields plus focus.** The target and base are
    carried by the argument tokens that precede it and must never be restated as a field
    inside it. There is no `target:` line: restating the target duplicates state that can
    drift out of agreement with the tokens actually sent, and a reviewer running an older
-   vendored `$gauntlet` would target-classify it.
+   vendored reviewer would target-classify it.
 
    **Three invariants hold the block's position, and they are not optional.**
 
-   (a) *Never let the block precede the real target arguments.* `$gauntlet`'s stop
+   (a) *Never let the block precede the real target arguments.* The shared stop
    rule discards everything from the label onward, so a label ahead of the targets
    swallows them, and a label falling **mid-list** swallows only the tail — a silent
    strict subset, which is the one narrowing outcome the stop rule cannot prevent and
    no parser can detect. Emit the block last, always.
 
    (b) *The label must arrive as the first content token of its own line.*
-   `$gauntlet`'s stop rule is line-anchored: a `CHARTER` that lands mid-line is not
+   The shared stop rule is line-anchored: a `CHARTER` that lands mid-line is not
    the label and does not fire the rule, which leaves
    nothing to catch the resulting misparse — the pre-send token test and the post-pass
    finding-file check are both gone. Composing the invocation must preserve the
@@ -214,7 +229,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    **after** the strip in the paragraph below, never before. When the post-strip
    the supplied challenge arguments carries a target or a mode flag, forward it unchanged. When it carries
    neither *and no block was stripped*, insert `--working-tree` yourself: a focus-only
-   run (`$trial-loop fix the flaky retry handling`) would otherwise reach `$gauntlet`
+   run (`$trial-loop fix the flaky retry handling`) would otherwise reach the selected reviewer
    with nothing before the label, and its degenerate-case rule would error rather than
    review the working tree — breaking a supported entry point instead of diagnosing a
    swallowed target. When it carries neither *because stripping removed a pasted block*,
@@ -234,7 +249,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    `$trial-loop --working-tree <focus>` is a first-class invocation, and keying on
    insertion would leave it committing every pass, which is the same false approve by a
    different route. In working-tree mode
-   `$gauntlet` resolves its target from `git status` plus staged, unstaged and
+   the selected reviewer resolves its target from `git status` plus staged, unstaged and
    untracked content, all of which a commit empties — so committing between passes
    would make iteration 2 review nothing, return `approve` on an empty target, and exit
    the loop having reviewed none of the fixes. Hold the fixes in the tree across the
@@ -248,8 +263,8 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
 
    **Prefer naming the surface by component, not by path** ("the auth middleware",
    "this skill file and its ADR"). This is a preference now, not a guard:
-   `$gauntlet`'s stop rule makes a charter path safe, so precision no longer costs
-   correctness. It stays recommended because `$gauntlet` is vendored into other
+   the shared stop rule makes a charter path safe, so precision no longer costs
+   correctness. It stays recommended because these reviewers are vendored into other
    repos, and a run whose reviewer is an older copy without the stop rule still
    misparses a path.
 
@@ -275,14 +290,15 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
 
    The reviewer worker is read-only with respect to the target and git state
    but **its tool allowlist must include `Write`** — `--out` writes the findings
-   file (`$gauntlet`'s sole write exception); without `Write`, `--out` silently
+   file (the selected reviewer's sole write exception); without `Write`, `--out` silently
    no-ops and the loop dead-ends. The worker's context (not this one) holds the
    full findings; it returns only `{verdict, findings_count, suppressed_count,
    path, run_id}` — `run_id` included, because steps 4 and 5 assert it against the
    artifact and a four-field contract degrades that check to a no-op. That isolation
    keeps a 5-iteration loop from stacking five full payloads in the caller's window.
 
-   **One exception, and it is the whole point of the error path.** When `$gauntlet`
+   **One exception, and it is the whole point of the error path.** Both supported reviewers use
+   `$gauntlet`'s target-resolution taxonomy; when the selected reviewer
    stops with a target-resolution error it produces no verdict, no artifact and no
    `run_id`, so the compact object cannot be built.
    The worker then **returns that error text verbatim** instead of the compact
@@ -294,7 +310,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    return is not the expected compact object (or `<findings-path>` was not written),
    rerun once; if still malformed, stop as blocked — and **quote whatever the worker
    returned** in that report rather than discarding it. One return is *specified* rather
-   than malformed and must not pay for the rerun: `$gauntlet`'s target-resolution error
+   than malformed and must not pay for the rerun: the selected reviewer's target-resolution error
    text. Recognise it and stop as blocked immediately, quoting it — the input is
    deterministic, so a rerun reproduces the error rather than clearing it, and labelling
    a precisely diagnosed condition "malformed" buries the diagnosis. That text is where a
@@ -307,7 +323,8 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    stale `approve` exit the loop. A mismatch means a stale or failed write: rerun once,
    then stop as blocked rather than act on a stale file.
 3. Paste an audit line into the transcript:
-   `challenge iteration <n>: verdict=<verdict>, findings=<count>, suppressed=<suppressed_count>`.
+   `review iteration <n>: reviewer=<gauntlet|detect-evil>, verdict=<verdict>, findings=<count>,
+   suppressed=<suppressed_count>`.
 4. If `verdict` is `approve`: when `suppressed_count > 0`, surface each `suppressions`
    entry (concern + ADR) in the transcript — an `approve` that suppressed a
    governing-ADR finding is exactly the over-suppression case the verdict alone hides,
@@ -340,10 +357,10 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    text — the proportionate resolution is to record the consequence rather than redesign
    around it: state it in the target's Consequences or equivalent and dispose as
    `accepted-fixed`, or — where the concern is independent in the sense above — give it a
-   record and dispose as `deferred-tracked`. `$gauntlet`
+   record and dispose as `deferred-tracked`. The selected reviewer
    will often recommend that remedy itself (its finding bar scales recommendations the
    same way), and its recommendation is input, not instruction — you own the disposition.
-   This does not lower the bar `$gauntlet` applies or let a finding go unresolved; it
+   This does not lower the selected reviewer's bar or let a finding go unresolved; it
    bounds what resolving one adds, which is the term the cap actually spends.
 7. **Resolve every finding; fix only the findings the charter owns.** A valid
    finding does not by itself establish ownership — that distinction is what lets
@@ -460,7 +477,7 @@ exits below. Cap exhaustion and rescoping are the exits a human is most likely t
 pick up cold later, so they are the ones where a silently dropped deferral does the
 most damage.
 
-- `$gauntlet` returns `approve` → exit the loop and continue the workflow.
+- The selected reviewer returns `approve` → exit the loop and continue the workflow.
 - A pass returns **no finding that is both new and not self-collision**, and you changed
   nothing since the previous pass → exit as *converged with deferrals*. A finding is
   **new** when it is not a concern already disposed of this run — an already-recorded
@@ -487,7 +504,7 @@ most damage.
   against a target you did not touch is stable, not growing.
 
   It is a real terminal state because it is where a target with owned adjacent defects
-  lands — `$gauntlet` cannot return `approve` while a defensible finding stands, so a
+  lands — the selected reviewer cannot return `approve` while a defensible finding stands, so a
   loop that only exits on `approve` grinds to the cap and reports blocked on a target that
   is finished. Report it distinctly — it is not `approve` — and list the records.
 - 5th iteration of a cycle still returns `needs-attention` → stop as blocked and
@@ -544,15 +561,18 @@ runs a dedicated ADR-review step (as a `$gauntlet` file-list target) before the
 spec review, so the companion ADR is hardened on its merits first and the later
 spec/plan reviews reinforce an already-reviewed decision, not an unreviewed shield.
 You may add focus to emphasise a specific ADR, but the default behavior already holds
-without it.
+without it. `$detect-evil` delegates the same schema and suppression contract to `$gauntlet`:
+accepted ADRs can settle re-litigation, never a vulnerability fact outside the record, and every
+suppression remains visible even on `approve`. Every detect-evil pass still inventories touched
+trust boundaries and applies its own finding bar; selecting it changes coordination, not the scan.
 
 ## What to report back
 
 Report the **run**, not the last cycle: the number of cycles, each cycle's iteration
 count, and for every charter change what changed and who authorized it — otherwise two
 rescopes read as three short clean cycles rather than the up-to-fifteen adversarial
-passes they were. Then the final verdict, the fixes made, the verification performed,
-every unresolved finding, and every `deferred-tracked` concern from any cycle with
+passes they were. Name the selected reviewer. Then report the final verdict, the fixes made, the
+verification performed, every unresolved finding, and every `deferred-tracked` concern from any cycle with
 its owning record path. References, not payloads: cite `<findings-path>` rather
 than pasting findings into the caller's context. The deferral list is the part a
 caller cannot reconstruct: it is the difference between "this branch is clean" and
