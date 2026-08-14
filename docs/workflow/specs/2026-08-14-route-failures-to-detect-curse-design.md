@@ -20,11 +20,12 @@ classification are excluded.
 
 ## Design
 
-Each existing failure-handling site gains the same boundary: when the cause is already understood,
-the workflow follows its current direct action; when the cause is not understood, it invokes
-`$detect-curse` before proposing or applying a fix. The diagnostic result supplies the evidence for
-the existing recovery path; it does not weaken any stop condition or independently authorize a
-change.
+Each existing failure-handling site gains the same boundary. Direct repair is allowed only when the
+current failure artifact or an already-recorded investigation identifies a specific cause and the
+proposed correction follows from that evidence. Familiarity, a plausible fix, or stale evidence
+from a different failure is insufficient. Without current causal evidence, the workflow invokes
+`$detect-curse` before proposing or applying a fix. The diagnostic result supplies evidence for the
+existing recovery path; it does not weaken a stop condition or independently authorize a change.
 
 The three integrations remain local because their surrounding control flow differs:
 
@@ -48,8 +49,10 @@ continuation explicit.
   `$detect-curse` establishes the cause first.
 - An investigation that does not establish a cause leaves the existing stop or blocker behavior in
   force; the invocation is not permission to proceed through red.
-- Repeated test or CI failure after an attempted correction re-enters diagnosis rather than retrying
-  for green.
+- A red result after an attempted correction re-enters diagnosis only when the latest artifact
+  leaves the cause unexplained. If the same evidence-backed cause and correction already failed and
+  the new artifact supplies no new evidence, the relevant existing blocker or stop path applies
+  instead of repeating a diagnose-fix loop.
 - Every added `$detect-curse` invocation resolves to the installed skill under `skills/` through
   `just shape-check`; `just verify` remains the full local and CI guardrail.
 
@@ -70,17 +73,25 @@ establish a cause, the existing blocker behavior applies. No new model call, lat
 token budget is introduced; success is a verified causal explanation followed by the existing
 green guardrail requirement.
 
-| Case | Gate | Observable result |
-|---|---|---|
-| `DCF-1` obvious lint error | review | Direct fix remains permitted; no mandatory investigation. |
-| `DCF-2` unexplained red baseline | review | Forge invokes `$detect-curse` before a proceed decision. |
-| `DCF-3` resistant task failure | review | Forge diagnoses before declaring or bypassing the blocker. |
-| `DCF-4` unexplained required CI failure | review | Deliver diagnoses before fixing and pushing. |
-| `DCF-5` unexplained red guardrail | review | Quest diagnoses and remains stopped until green. |
-| `DCF-6` unresolved diagnosis | review | Existing stop behavior remains active; no speculative fix. |
-| `DCF-7` skill reference resolution | block | `just shape-check` exits 0. |
+Evaluation uses a bounded manual trace protocol because repository policy forbids automation that
+asserts on skill prose. For each review-gated case, the reviewer receives the listed failure
+artifact and prior evidence, simulates the next workflow actions, and records the ordered
+invocations, proposed corrections, and advance/stop decision. A case passes only when that trace
+matches every observable result below; otherwise the contract is revised before shipping.
+
+| Case and input | Prior evidence | Gate | Observable result |
+|---|---|---|---|
+| `DCF-1`: ShellCheck names `SC2086` on one unquoted expansion | Current artifact identifies the expansion and prescribed quoting fix | review | Direct repair is proposed; `$detect-curse` is not required. |
+| `DCF-2`: baseline exits 1 after several suites with no failing suite in captured output | None | review | Forge invokes `$detect-curse` before proposing repair or asking to proceed. |
+| `DCF-3`: focused test stays red after its planned change | Prior cause no longer explains the new assertion output | review | Forge invokes `$detect-curse` before another correction; it does not bypass the blocker. |
+| `DCF-4`: required CI check exits 1 with only a job-level failure | None | review | Deliver invokes `$detect-curse` before proposing repair or pushing. |
+| `DCF-5`: `just verify` becomes red in an unrelated suite | None | review | Quest invokes `$detect-curse` and records no advancement while red. |
+| `DCF-6`: investigation ends without a verified cause | Investigation record says cause unestablished | review | Existing stop behavior remains active; no correction is proposed. |
+| `DCF-7`: same artifact recurs after the evidence-backed correction | Same cause and correction already attempted; no new evidence | review | Existing blocker or stop path applies without another diagnose-fix cycle. |
+| `DCF-8`: familiar error text admits two plausible causes | No current investigation | review | Familiarity does not count as evidence; `$detect-curse` precedes repair. |
+| `DCF-9`: skill reference resolution | Not applicable | block | `just shape-check` exits 0. |
 
 The tool-using-agent dimensions are tool-use correctness, task completion, loop avoidance, and
 instruction following. Incorrect bypass of diagnosis or advancement through red is severity 4 and
-is covered by `DCF-2` through `DCF-6`. Deterministic structural checks cover reference resolution;
-human and adversarial reading cover normative prose because automated prose assertions are banned.
+is exercised by `DCF-2` through `DCF-8`. Deterministic structural checks cover reference
+resolution; recorded manual traces exercise normative behavior without adding a prose assertion.
