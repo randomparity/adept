@@ -40,10 +40,11 @@ retained review is a named shipping failure.
 
 ### Durable PR publication
 
-After `$deliver` creates the PR, `$quest` invokes one deterministic publication helper. The helper
-accepts `required`, `not-required`, and `failed` modes. Required mode validates the retained review.
+Before `$deliver`, `$quest` resolves forge state. A failed required review terminates there. Only
+`required` and `not-required` may proceed through delivery. After `$deliver` creates the PR, quest
+invokes one deterministic publication helper. Required mode validates the retained review.
 Not-required mode publishes a summary-only `forge review: not required` result with the already
-verified mode reason. Failed mode stops before any GitHub write.
+verified mode reason.
 
 Quest creates the compact summary as an ignored file beside the forge ledger and transfers its
 lifecycle to the helper. The helper creates one ignored temporary body file there and writes one
@@ -83,9 +84,11 @@ automatic recovery across every process-loss seam or support concurrent controll
 - Existing `WORK:REVIEW` summary fields and outer sentinels remain first and intact. Review payload
   containing those literal lines stays indented and cannot become structure.
 
-Focused fixtures first fail against current behavior, then prove all three modes, marker-like
-payload, summary rejection, public-safety failure, exact comment readback, ledger-before-disposal
-ordering, and retained evidence on every failure. `just verify` remains the full local/CI guardrail.
+Focused fixtures first fail against current behavior, then prove both publication modes,
+marker-like payload, summary rejection, public-safety failure, exact comment readback,
+ledger-before-disposal ordering, and retained evidence on every helper failure. The pre-delivery
+failed-review branch remains normative skill behavior rather than prose-pinning automation.
+`just verify` remains the full local/CI guardrail.
 
 ## AI-SPEC and evaluation plan
 
@@ -103,7 +106,7 @@ readback, durable verification, then recoverable disposal.
 |---|---|---|
 | `PFR-1` safe required review | block | One exact comment; verified ledger precedes disposal of all three files. |
 | `PFR-2` unsafe body | block | Public-safety failure; zero posts; review/summary/body retained. |
-| `PFR-3` mode arms | block | Required publishes; not-required is summary-only; failed never posts. |
+| `PFR-3` publication modes | block | Required publishes; not-required is summary-only. |
 | `PFR-4` comment failure/ambiguity | block | No retry; review/body retained with actionable failure. |
 | `PFR-5` exact readback mismatch | block | No verified/disposed ledger lines; evidence retained. |
 | `PFR-6` ledger/disposal failure | block | No false closed-lifecycle claim; remaining paths retained. |

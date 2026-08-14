@@ -42,13 +42,13 @@ Command:
 
 ```text
 skills/quest/scripts/publish-forge-review \
-  <repo> <pr> <required|not-required|failed> <review-or-reason> <ledger> <summary-file>
+  <repo> <pr> <required|not-required> <review-or-reason> <ledger> <summary-file>
 ```
 
 Required mode consumes a regular non-empty review. Not-required consumes a public-safe verified
-mode reason. Failed mode always exits before GitHub access. The summary file contains compact fields
-only, without outer markers. Success prints only the verified comment URL. Failure is nonzero and
-public-safe, and retains every artifact not already recoverably disposed.
+mode reason. The summary file contains compact fields only, without outer markers. Success prints
+only the verified comment URL. Failure is nonzero and public-safe, and retains every artifact not
+already recoverably disposed.
 
 ### Steps
 
@@ -61,8 +61,8 @@ public-safe, and retains every artifact not already recoverably disposed.
    - `PFR-1`: required safe review posts one complete annotation; fake exact-ID readback matches;
      verified ledger line precedes trash calls; review/summary/body disappear only afterward.
    - `PFR-2`: public-safety match or scan fault posts nothing and retains all three files.
-   - `PFR-3`: required publishes; verified not-required publishes summary-only; failed posts
-     nothing; missing/empty required review fails.
+   - `PFR-3`: required publishes; verified not-required publishes summary-only; missing/empty
+     required review fails.
    - `PFR-4`: comment failure, missing identity, and ambiguous nonzero-after-write stop without a
      retry and retain evidence.
    - `PFR-5`: exact comment read failure/mismatch writes no verified/disposed ledger line.
@@ -82,9 +82,8 @@ public-safe, and retains every artifact not already recoverably disposed.
    `dispose`. Keep each under 100 lines and complexity ≤8. Implement this exact order:
 
 ```text
-validate six arguments and mode
+validate six arguments and the two publication modes
 preflight every command, including recoverable delete, before GitHub mutation
-failed: exit with the supplied public-safe reason before body creation/GitHub
 required: require review regular/non-empty/readable; not-required: validate reason
 validate summary as UTF-8 text without NUL; reject whole-line outer marker/sentinel
 create one body temp beside ledger with mktemp; trap retains it on failure
