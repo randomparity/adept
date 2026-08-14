@@ -6,9 +6,14 @@ Implement the supplied GitHub issue end-to-end on a feature branch, following
 the repo's `AGENTS.md` conventions, and drive it to a CI-green, mergeable PR
 ready for the user to merge.
 
-Work the steps in order and keep the guardrails green at every commit. Don't
-advance past a red guardrail, an unresolved `$gauntlet` finding, a dirty-tree
-surprise, or an ambiguous user-facing design decision.
+Work the steps in order and keep the guardrails green at every commit. A red guardrail may be fixed
+directly only when the current failure artifact or an already-recorded investigation identifies a
+specific cause and the correction follows from that evidence. Familiarity, a plausible fix, or
+stale evidence from another failure is not enough; without current causal evidence, run
+`$detect-curse` before proposing a correction. If the same artifact recurs after the same
+evidence-backed correction with no new evidence, stop instead of repeating the diagnose-fix cycle.
+Don't advance past a red guardrail, an unresolved `$gauntlet` finding, a dirty-tree surprise, or an
+ambiguous user-facing design decision.
 
 > **One continuous task.** Preflight through hand-off -- or through cleanup on
 > the authorized merge path -- is a single turn, and the checkpoints inside

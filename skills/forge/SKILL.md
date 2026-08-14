@@ -132,6 +132,13 @@ did not check is a baseline that gets blamed on your change.
 
 On a failing baseline the response depends on who is reachable:
 
+First establish whether the cause is understood. Direct correction is allowed only when the
+current failure artifact or an already-recorded investigation identifies a specific cause and the
+correction follows from that evidence. Familiarity, a plausible fix, or stale evidence from a
+different failure is not enough. Without current causal evidence, run `$detect-curse` before
+proposing a correction or asking whether to proceed. If the investigation cannot establish a
+cause, apply the response below without guessing past the red baseline.
+
 - **Interactive:** report the failures, ask whether to proceed or investigate, wait.
 - **Dispatched, with an instruction or repo rule that explicitly addresses the
   failed baseline:** report, then follow it.
@@ -167,7 +174,11 @@ prevent.
 
 Stop on a genuine blocker — a missing dependency, a test that will not pass, an
 instruction you do not understand, a verification that fails repeatedly — and
-say so. Guessing past a blocker produces work that looks finished and is not.
+say so. When a test or verification remains red and its cause is not established by the current
+artifact or an already-recorded investigation, run `$detect-curse` before proposing another
+correction or declaring the blocker unresolved. If the same artifact recurs after the same
+evidence-backed correction with no new evidence, stop instead of repeating the diagnose-fix cycle.
+Guessing past a blocker produces work that looks finished and is not.
 
 After all Cast tasks and the guardrails below pass, emit the Cast
 `not-required` ledger/result from *Forge result contract* before returning to
