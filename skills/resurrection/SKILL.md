@@ -47,8 +47,8 @@ actively working the same repo. Read → plan → one confirmation → apply.
    client-side: `gh issue list --repo <owner/name> --state closed --json number,labels
    --limit 500`,
    Evaluate this count independently from the open sweep. If it is 500, mark the closed-issue
-   population as possibly truncated at the limit and carry that named warning into the reconciliation
-   plan; do not describe the closed sweep as complete.
+   population as possibly truncated at the limit and carry that named warning into the
+   reconciliation plan; do not describe the closed sweep as complete.
    keep those still carrying any `status:` value → plan: remove the residual `status:` label
    (closed-state is authoritative).
 6. **Plan → confirm → apply.** Present the full reconciliation table (`#issue → action`).
