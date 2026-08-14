@@ -83,62 +83,15 @@ failed-read cases for every affected population.
 
 ## Measurement
 
-A fresh read-only behavioral reviewer receives exactly one changed skill and one synthetic packet
-per evaluation. A packet has these fields: `case_id`, `entry_point`, `reads`, and
-`expected`. Each `reads` item names the population, configured limit, returned row count, and
-command exit status; row bodies are represented by inert identifiers except where a case supplies
-an untrusted title. `expected` fixes the selected workflow branch, warning count, warning
-population names, whether complete-coverage language is forbidden, whether normal filtering or
-categorization continues, and the number of additional GitHub calls allowed. The reviewer treats
-the packet as the complete hypothetical command result and must not call GitHub or tools.
+A fresh read-only reviewer traces E1–E10 against the changed skill text without calling tools or
+GitHub. For each case, it records pass or fail, the affected population, the controlling
+instruction lines, and a one-sentence reason. E1–E8d are blocking; E9–E10 are advisory. The review
+passes only when every blocking case has explicit supporting lines and none of those lines permit
+a complete-coverage claim at the configured limit.
 
-The implementation plan transcribes one packet object for every E1–E10 table row. For E3–E5,
-`reads` contains both resurrection populations; every other packet contains its one named read.
-`selected_branch` is the named phase and step reached after discovery. `equality_checks` is the
-set of populations whose returned count is compared with its own configured limit.
-`failed_read_outcome` is `not-applicable`, `stopped-with-named-error`, or an observed divergent
-outcome. These enums and the table above supply the expected values; the implementer does not
-invent case-specific expectations.
-
-For each case the reviewer returns one JSON object with `case_id`, `selected_branch`,
-`equality_checks`, `warnings`, `claims_complete_coverage`, `preserves_existing_processing`,
-`additional_calls`, `failed_read_outcome`, `instruction_lines`, and `pass`. `warnings` is an array
-of `{population, semantics}` records; `semantics` passes only when it says coverage may be partial
-without asserting that another row exists. `instruction_lines` cites the skill text controlling
-the result. `pass` is true only when every value matches the packet's `expected` object. The
-evaluation passes only when every blocking case E1–E8d passes; E9–E10 are reported as warnings but
-still retain their structured evidence.
-
-Use this fixed reviewer instruction for every packet, changing only `<SKILL>` and `<PACKET>`:
-
-```text
-You are a read-only behavioral evaluator. Use only the supplied skill text and packet; do not
-call tools or GitHub. Trace the instructions from entry_point through the bounded read. Return
-one JSON object with exactly: case_id, selected_branch, equality_checks, warnings,
-claims_complete_coverage, preserves_existing_processing, additional_calls,
-failed_read_outcome, instruction_lines, pass. Treat reads as completed hypothetical command
-results. Derive observations from SKILL, but copy expected only for comparison. Set pass true
-only when every observation equals expected and every instruction_lines entry cites controlling
-text. A warning semantics value passes only if it says coverage may be partial without claiming
-another row exists.
-
-SKILL:
-<SKILL>
-
-PACKET:
-<PACKET>
-```
-
-The quest orchestrator, not the reviewer, compares every returned observation with the frozen
-packet's `expected` values and rejects a reviewer `pass` that disagrees. Before accepting the
-after-change evidence, run the applicable at-limit packet once against a temporary in-memory
-mutation with the equality-warning instruction removed. The reviewer and orchestrator comparison
-must report `pass: false`; discard the mutation and its result. This calibration proves the
-review can detect the behavior the change adds without modifying the worktree.
-
-Repository policy forbids automated gates that assert on prose, so these evaluations are
-repeatable review evidence rather than a prose-matching test. `just verify` remains the structural
-and formatting gate.
+This is bounded human review evidence, not a serialized fixture system or executable prose gate.
+Repository policy assigns prose correctness to reading, while `just verify` covers structure,
+formatting, and repository invariants.
 
 ## Non-goals
 
