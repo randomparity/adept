@@ -95,11 +95,12 @@ limited to the five skills, ADR, specification, and plan.
 
 ## Progress
 
-- Current step: model gate removed by operator decision; amended design awaiting review.
+- Current step: amended design approved; final branch verification pending.
 - Branch: `feat/divination-persistence-49`.
 - Base: `main` at quest start.
 - Guardrail: `just verify` (`just ci` in CI).
 - Architecture: host `arm64`; no target declared; `no-target-declared`.
 - ADR review: approved in cycle 2 iteration 1; no open findings.
-- Specification review: prior revision approved; amended review pending.
+- Specification review: amended checklist approved after one repair; no open findings.
+- Plan review: amended verification plan approved; no open findings.
 - Open findings: none.
