@@ -48,7 +48,8 @@ baseline result and immutable packet hashes reused by Task 3.
    broken-reference pair, exact E3/E4 rejection causes, the six named E6 command/oracle maps,
    and explicit E6/E10/E13 producer workflows.
 4. Dispatch one fresh most-capable scenario worker per variant, with no shared conversation state,
-   using the neutral request, exact packet, and this exact ordered skill-path matrix:
+   using the exact oracle-free natural request that asks for workflow outcome plus brief mocked
+   read/write accounting, the exact packet, and this exact ordered skill-path matrix:
    - quest arms E1–E5, E7–E9, E10-consumer, and E12:
      `[skills/quest-log/SKILL.md, skills/quest/SKILL.md]`;
    - divination arms E6, E10-producer, and E13:
@@ -69,7 +70,8 @@ baseline result and immutable packet hashes reused by Task 3.
    to one different most-capable evaluator with the captures and exact rubric. Validate exact trait
    id/kind coverage, citations, and observed evidence, then mechanically derive
    variant/case/suite verdicts. Require at least one semantic blocking-trait failure against
-   otherwise valid baseline evidence.
+   otherwise valid baseline evidence. Missing action accounting alone cannot satisfy the baseline
+   red requirement.
 
 **Acceptance:** valid baseline aggregate `fail`; packets and captures are ignored; tracked tree is
 unchanged.

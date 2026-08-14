@@ -166,7 +166,8 @@ The numeric harm ratings are evaluation coverage, not workflow finding severity.
 Evaluation is a prompt-level simulation using one fresh most-capable worker per materialized
 variant, with no shared conversation state, given only
 the changed skill bytes, the neutral request `Apply the supplied workflow instructions to this
-scenario and return the response they require.`, and one exact case packet transcribed from the
+scenario. Briefly state which mocked reads and writes were used and their counts, then give the
+workflow outcome.`, and one exact case packet transcribed from the
 table. The 30 materialized variants therefore produce exactly 30 captures. Record the actual
 model identity; use the same selectable model and settings for baseline
 and post-change runs. Each capture records run id, case id, model, evaluated commit, supplied skill
@@ -203,7 +204,9 @@ from its trait records plus deterministic assertions, never trusted from an inco
 a case passes only when all variants pass, and the suite only when every case passes. Malformed or
 inconsistent evaluator output fails.
 
-A valid baseline has every capture and evaluator schema field present and at least one failing blocking trait;
+A valid baseline has every capture and evaluator schema field present and at least one failing
+blocking workflow-behavior trait about selection, validation, adoption, durability, mutation
+boundaries, or safety; missing action accounting alone is not a valid red baseline.
 malformed evidence is rerun, not accepted as red. The post-change result requires every trait in
 E1–E15 to pass. Deterministic checks operate only on facts mechanically observable without
 interpreting workflow prose: packet/materialization validity, packet SHA reuse, E5 canary absence
