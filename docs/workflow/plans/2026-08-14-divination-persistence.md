@@ -79,7 +79,8 @@ or invoke their existing derivation path.
 4. In `skills/bounty/SKILL.md` decompose mode, apply the same whole-block validation. Use a valid
    assessment, including `split`, as drafting evidence; otherwise preserve existing reasoning.
 5. Sweep direct references with `rg -n '\$divination|WORK:DIVINATION|in-session only|read-only' skills
-   docs/cheatsheet.md` and fix only stale claims within the chartered surface.
+   docs/cheatsheet.md`. Fix stale claims only in the four declared skill files; report every other
+   match as diagnostic evidence without editing it.
 6. Run `git diff --check`, `just shape-check`, `just public-safety`, and `just commit-check`; expect
    exit 0. Commit as `docs(skills): persist divination assessments`.
 
@@ -105,12 +106,15 @@ captures, evaluator result, and repository guardrail evidence for the shipping r
    guardrail result, and open findings in the quest review summary. Keep ignored artifacts until
    all branch/security/simplification reviews finish, then move only issue-49 artifacts to trash.
 
-**Acceptance:** E1–E13 pass, all deterministic assertions pass, `just verify` passes, and the diff
-contains only chartered skill and durable design files.
+**Acceptance:** E1–E13 pass, all deterministic assertions pass, `just verify` passes, and tracked
+changes are limited exactly to the four Task 2 skill files plus this issue's ADR, specification,
+and plan.
 
 **Rollback:** before push, ordinary commits may be reverted newest-first. After push, use new
 `git revert` commits; never rewrite history. ADR 0015 and its reviewed specification remain the
-durable decision record unless superseded by a new ADR.
+durable decision record unless superseded by a new ADR. On abandonment, rollback, or a terminal
+failed review, first retain any evidence needed in the parked trajectory, then move only the
+run-scoped issue-49 packet, capture, and evaluator directories to trash and report every path.
 
 ## Progress
 
