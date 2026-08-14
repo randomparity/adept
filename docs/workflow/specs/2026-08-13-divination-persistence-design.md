@@ -16,7 +16,8 @@ terminology, and ADR 0015 records the resulting persistence decision.
 sessions and dispatched workers can recover them. `$quest` will adopt usable evidence and
 revalidate it before freezing its independently owned `WORK:SCOPE` charter. `$bounty decompose`
 will use a usable persisted split when present. No historical migration, risk-label assignment,
-or reinterpretation of `WORK:SCOPE` is included.
+or reinterpretation of `WORK:SCOPE` is included. Direct installed-skill references that characterize
+divination's mutation behavior will be made consistent with its one-comment write contract.
 
 ## Annotation contract
 
@@ -113,6 +114,9 @@ reinterpret it.
 
 No consumer rewrites or deletes a divination comment. Older complete assessments remain
 superseded history.
+
+Direct references may describe their own workflow as read-only, but must not use divination as a
+read-only exemplar. This wording repair changes no behavior outside divination and its consumers.
 
 ## Failure handling
 

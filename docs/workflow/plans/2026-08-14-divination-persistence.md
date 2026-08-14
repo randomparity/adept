@@ -57,7 +57,8 @@ unchanged.
 ## Task 2 — Implement the durable producer and consumers
 
 **Files:** modify `skills/divination/SKILL.md`, `skills/quest-log/SKILL.md`,
-`skills/quest/SKILL.md`, and `skills/bounty/SKILL.md`.
+`skills/quest/SKILL.md`, `skills/bounty/SKILL.md`, and direct mutation-behavior reference
+`skills/seek-quest/SKILL.md`.
 
 **Interfaces:** divination produces the exact annotation defined by the specification. Quest and
 bounty consume the quest-log marker contract and either adopt the complete four-field assessment
@@ -78,9 +79,11 @@ or invoke their existing derivation path.
    fields.
 4. In `skills/bounty/SKILL.md` decompose mode, apply the same whole-block validation. Use a valid
    assessment, including `split`, as drafting evidence; otherwise preserve existing reasoning.
-5. Sweep direct references with `rg -n '\$divination|WORK:DIVINATION|in-session only|read-only' skills
-   docs/cheatsheet.md`. Fix stale claims only in the four declared skill files; report every other
-   match as diagnostic evidence without editing it.
+5. In `skills/seek-quest/SKILL.md`, state its read-only guarantee independently instead of using
+   divination as an exemplar. Sweep direct references with
+   `rg -n '\$divination|WORK:DIVINATION|in-session only|read-only' skills docs/cheatsheet.md`.
+   Fix only references that characterize divination's mutation behavior; report other matches as
+   diagnostic evidence.
 6. Run `git diff --check`, `just shape-check`, `just public-safety`, and `just commit-check`; expect
    exit 0. Commit as `docs(skills): persist divination assessments`.
 
@@ -107,7 +110,7 @@ captures, evaluator result, and repository guardrail evidence for the shipping r
    all branch/security/simplification reviews finish, then move only issue-49 artifacts to trash.
 
 **Acceptance:** E1–E13 pass, all deterministic assertions pass, `just verify` passes, and tracked
-changes are limited exactly to the four Task 2 skill files plus this issue's ADR, specification,
+changes are limited exactly to the five Task 2 skill files plus this issue's ADR, specification,
 and plan.
 
 **Rollback:** before push, ordinary commits may be reverted newest-first. After push, use new
