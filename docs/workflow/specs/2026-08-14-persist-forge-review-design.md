@@ -66,6 +66,11 @@ exactly one four-space prefix per payload line, and compares the result byte-for
 source. Embedded `WORK:REVIEW` markers, completion sentinels, publication fields, or summary-shaped
 lines never count as outer structure. Only that exact readback authorizes disposal.
 
+Before disposal, `$quest` computes the source SHA-256 and appends `review publication verified`
+with the publication token, exact GitHub comment identity, and digest to the forge ledger, then
+reads that record back. This is the durable proof that content comparison succeeded while the
+source still existed; an in-memory success observation cannot authorize trash.
+
 The publication contract assumes one active quest controller for the issue. GitHub comment creation
 has no token-keyed create-if-absent operation, so two concurrent controllers can race after the same
 absence observation. The required uniqueness readback detects but cannot prevent that race. When it
@@ -81,11 +86,12 @@ review.
 
 ### Cleanup and resume
 
-After verified publication, `$quest` moves the retained file to trash and appends `review artifact
-disposed after PR publication` with its former path to the forge ledger. If the file is already
-absent on resume but verified PR publication exists, the trash step is treated as complete and the
-ledger is closed. If publication cannot be verified, absence is a blocker rather than inferred
-success.
+After the verified-publication ledger record exists, `$quest` moves the retained file to trash and
+appends `review artifact disposed after PR publication` with its former path to the forge ledger. If
+the file is already absent on resume, the trash step is treated as complete only when the ledger's
+verified record carries the same token, comment identity, and source digest; the quest re-reads that
+exact comment and validates its outer structure and recorded digest before closing the disposal
+marker. Without that durable verified record, absence is a blocker rather than inferred success.
 
 `$return-to-town` remains unchanged: by the time it reclaims the worktree, the PR is the durable
 copy and the scratch lifecycle is closed.
@@ -108,10 +114,12 @@ copy and the scratch lifecycle is closed.
   the artifact, and names the duplicate public comments for operator repair; this change does not
   add a distributed lock or delete public comments.
 - Comment readback mismatch: retain the review and stop; do not claim durability.
-- Crash after verified publication but before trash: resume from the verified PR block, dispose,
-  and append the ledger marker.
-- Crash after trash but before ledger append: verified publication plus the absent source closes
-  the disposal marker without a second deletion.
+- Crash after comment readback but before the verified ledger append: the source still exists, so
+  resume repeats content verification and persists the proof before disposal.
+- Crash after the verified ledger append but before trash: resume verifies the recorded token,
+  comment identity, and digest, then disposes and appends the disposal marker.
+- Crash after trash but before disposal append: the durable verified-publication record plus the
+  matching live comment closes the disposal marker without a second deletion.
 - Existing `WORK:REVIEW` summary: fixtures prove its fields and complete sentinels remain present,
   with the forge review in a distinct indented section. A hostile fixture includes duplicate
   summary fields plus both annotation marker lines in the review and proves they remain payload.
@@ -133,7 +141,7 @@ cost do not change; success is a verified complete PR annotation followed by ver
 
 | Failure mode | Severity | Evaluation |
 |---|---:|---|
-| Artifact discarded before durable publication | 4 | Contract fixture proves publication readback precedes disposal. |
+| Artifact discarded before durable publication | 4 | Contract fixture proves publication readback and a durable digest record precede disposal. |
 | Unsafe or host-private text published | 5 | Fixture proves the public-safety guard runs bare and a failure stops posting. |
 | Failed review treated as optional or fabricated on missing input | 4 | Fixture proves legitimate no-review mode is disclosed while failed required review cannot ship. |
 | Forge review conflated with trial-loop summary | 4 | Fixture proves separate labelled sections and payload escaping inside `WORK:REVIEW`. |
@@ -146,8 +154,9 @@ publish `forge review: not required`, while a failed required review cannot reac
 starts with older complete annotations and reconciles an ambiguous write by finding its unique
 token across multiple complete pages without duplication; it also proves an incomplete page set
 stops without retry. `PFR-5` retains the artifact when GitHub rejects publication; `PFR-6` resumes
-after comment acceptance but before response observation by recovering the ledger token, then
-disposes the artifact without another post; `PFR-7` publishes a
+after comment acceptance but before response observation by recovering the ledger token, persists
+verified comment identity and source digest before disposal, and resumes after trash but before the
+disposal append without inferring success from absence alone. `PFR-7` publishes a
 review containing duplicate summary fields and both outer sentinel lines, then reconstructs the
 original content exactly without confusing those payload lines for structure. Each is a blocking
 contract fixture whose observable traits are the required ordering and annotation fields. The
