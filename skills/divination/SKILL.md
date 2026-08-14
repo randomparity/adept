@@ -57,15 +57,18 @@ is read-only; the sole mutation is one bounded public `WORK:DIVINATION` issue co
    - Producer: `<authenticated GitHub login>`.
    - Source revision: issue evidence SHA-256 `<hash>`; producer HEAD `<full SHA>`; worktree `clean`.
    - Blast radius: <assessment>.
-     - Evidence: <one reference; repeat as needed>.
+     - Evidence: <one reference; repeat as needed>
    - Change hazards: <assessment or `none`>.
-     - Evidence: <one reference; repeat as needed>.
+     - Evidence: <one reference; repeat as needed>
    - Complexity: S | M | L.
-     - Evidence: <one reference; repeat as needed>.
+     - Evidence: <one reference; repeat as needed>
    - Decompose verdict: one PR | split — <actionable breakdown>.
-     - Evidence: <one reference; repeat as needed>.
+     - Evidence: <one reference; repeat as needed>
    <!-- DIVINATION:COMPLETE -->
    ```
+
+   Each reference occupies the remainder of its `Evidence` line. Add no trailing whitespace,
+   punctuation, or commentary after the reference bytes.
 
    Use the quest-log body-file recipe and make exactly one comment-write attempt. Capture its URL
    and read that comment back. Success requires the token, exact author/producer login, issue URL,

@@ -274,8 +274,10 @@ unit:
 4. Require each field to be followed by one or more contiguous `Evidence` lines. Accept only
    `issue:title`, `issue:body`, `issue:comment:<id>`, `tracker:issue:<owner>/<repo>#<number>`,
    `tracker:pr:<owner>/<repo>#<number>`, and `repo:<full-sha>:<path>`. Parse the repository form at
-   its first two colons, so commas and later colons remain path bytes. Verify every source exists,
-   repository paths resolve at the recorded commit, and the cited sources support their field.
+   its first two colons, so commas and later colons remain path bytes. The reference occupies the
+   remainder of its line; trailing whitespace, punctuation, or commentary is malformed. Verify
+   every source exists, repository paths resolve at the recorded commit, and the cited sources
+   support their field.
 5. Immediately before adoption, repeat the complete-or-reject issue/comment collection and the
    repository HEAD/status reads once. Require title, body, sorted labels, the complete ordered
    comment id/body sequence, latest complete selected id/body/author, HEAD, and clean status to be
