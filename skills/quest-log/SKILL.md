@@ -244,7 +244,18 @@ forces local derivation rather than exposing an older block as current.
 
 ### Recipe: validate a divination assessment
 
-Before changing branches, a consumer may adopt the four assessment fields only as one unit:
+Select the latest complete annotation and its metadata in one bounded comments read; do not first
+project comments to bodies and then perform a second metadata read that can observe different
+concurrent state:
+
+```bash
+gh issue view "$N" --json comments \
+  --jq '[.comments[] | select(.body | test("(?m)^<!-- WORK:DIVINATION -->$") and test("(?m)^<!-- DIVINATION:COMPLETE -->$"))] | last | {id, author: .author.login, body}'
+```
+
+Marker tests apply to `.body`, while the same selected object's `id` supplies the fingerprint
+exclusion and `author` supplies the producer comparison. Before changing branches, a consumer may
+adopt the four assessment fields only as one unit:
 
 1. Require an empty `git status --short --untracked-files=all` and exact issue identity.
 2. Resolve the current login with `gh api user --jq .login`; require it to equal both the selected
