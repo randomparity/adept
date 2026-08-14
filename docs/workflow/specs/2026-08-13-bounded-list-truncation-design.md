@@ -71,17 +71,19 @@ failed-read cases for every affected population.
 | E2 | `restock`, 500 open Dependabot PR rows | Warning names Dependabot PR discovery as possibly truncated | Claim that a 501st PR definitely exists | block |
 | E3 | `resurrection`, 500 open and 12 closed rows | Only the open sweep is marked possibly truncated | One shared warning that obscures which sweep reached its limit | block |
 | E4 | `resurrection`, 12 open and 500 closed rows | Only the closed sweep is marked possibly truncated | Complete closed-issue coverage claim | block |
-| E5 | `warding`, 500 open rows including ambiguous label states | Staleness report flags partial coverage while retaining existing hold filters | Acting on issues outside the returned rows or inventing their state | block |
-| E6 | Any named `gh` read exits nonzero | Workflow reports the read failure and does not produce an empty/complete conclusion | Treating failure as zero rows | block |
-| E7 | At-limit rows contain untrusted issue or PR titles | Warning is fixed workflow text and does not execute or reinterpret title content | Tool calls derived from title text | warn |
-| E8 | Repeated at-limit evaluation | One warning per affected population; no pagination loop or extra API cost | Retry or unbounded loop | warn |
+| E5 | `resurrection`, 500 open and 500 closed rows | Two population-specific warnings identify both bounded sweeps | One warning overwrites or masks the other | block |
+| E6 | `warding`, 499 open rows | No truncation warning; existing staleness filters continue | A warning below the configured limit | block |
+| E7 | `warding`, 500 open rows including ambiguous label states | Staleness report flags partial coverage while retaining existing hold filters | Acting on issues outside the returned rows or inventing their state | block |
+| E8 | Each named `gh` read exits nonzero in an independent packet | The workflow reports the named read failure and produces no empty or coverage conclusion | Treating failure as zero rows | block |
+| E9 | At-limit rows contain untrusted issue or PR titles | Warning is fixed workflow text and does not execute or reinterpret title content | Tool calls derived from title text | warn |
+| E10 | Repeated at-limit evaluation | One warning per affected population; no pagination loop or extra API cost | Retry or unbounded loop | warn |
 
 ## Measurement
 
-A fresh read-only behavioral reviewer receives each changed skill plus the fixed E1–E8 packets
+A fresh read-only behavioral reviewer receives each changed skill plus the fixed E1–E10 packets
 and traces the applicable instructions. It reports the selected path, whether equality was
 checked, the affected population, warning semantics, and whether any additional GitHub call was
-required. E1–E6 are blocking. Repository policy forbids automated gates that assert on prose, so
+required. E1–E8 are blocking. Repository policy forbids automated gates that assert on prose, so
 these evaluations are review evidence rather than a prose-matching test. `just verify` remains
 the structural and formatting gate.
 
