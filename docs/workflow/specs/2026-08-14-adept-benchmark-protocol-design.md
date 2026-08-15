@@ -73,10 +73,11 @@ it.
 - Shell-visible commands are the benchmark repository's pinned build tools plus benchmark-pinned
   `git`, `gh`, container runtime, language toolchain, and package manager versions. Preflight
   records their paths and versions and rejects additions or mismatches.
-- Network destinations are the model service, benchmark-owned GitHub repositories and API,
-  read-only task upstreams, and manifest-declared package registries and official documentation.
-  GitHub writes are limited to run-owned branches, issues, pull requests, comments, labels, and
-  permitted campaign merges in benchmark-owned repositories.
+- Network destinations are the model service, path-scoped benchmark-owned GitHub repository and
+  API routes, and manifest-declared package registries and official documentation. An egress proxy
+  rejects task upstreams, general GitHub search, later commits, pull requests, issue discussions,
+  and all undeclared routes during agent execution. GitHub writes are limited to run-owned
+  branches, issues, pull requests, comments, labels, and permitted campaign merges.
 - Model settings, enabled features, environment variables, tool inventory, Codex version output,
   OS, host architecture, and container runtime are captured before each run.
 
@@ -94,7 +95,7 @@ line endings:
 
 > You are running a public code challenge in a benchmark-owned fork. Follow repository
 > instructions and work only on the stated issue or issues. Do not seek or inspect oracle patches,
-> hidden evaluator tests, other runs, or benchmark results. Upstream remotes are read-only. Mutate
+> hidden evaluator tests, other runs, or benchmark results. Task upstreams are unavailable. Mutate
 > only run-owned state in the benchmark-owned repository. This run is unattended; if a necessary
 > product decision cannot be sourced, request input and stop. Stay within the provided wall and
 > token budgets.
@@ -119,26 +120,33 @@ bit-identical model behavior.
   repository, original base commit, tests, and adaptation evidence.
 
 #119 enumerates the pinned test split by ascending `instance_id` and retains a candidate ledger.
-It excludes non-public repositories, incompatible licenses, unavailable pinned evaluator images,
-tasks without reproducible tests, and any task authored or contributed to SWE-bench by an Adept
-maintainer. Every exclusion records its rule and source evidence before any arm is run.
+It excludes non-public repositories; licenses outside `MIT`, `BSD-2-Clause`, `BSD-3-Clause`,
+`Apache-2.0`, `ISC`, `Python-2.0`, and `PSF-2.0`; unavailable pinned evaluator images; tasks
+without reproducible tests; and tasks whose public issue author or SWE-bench contribution author
+has GitHub login `randomparity`. Authorship uses exact GitHub-login equality; unavailable identity
+evidence excludes the task. Every exclusion records its rule and source evidence before any arm
+is run.
 
 For each repository in lexical order, #119 enumerates every three-element combination of eligible
 instances. Sort each combination's IDs lexically, then sort combinations by the tuple
 `(first_id, second_id, third_id)`. Candidate common revisions are the combination's distinct full
-original-base SHAs in lexical order; timestamps play no role. The first revision at which all three
-unchanged issue statements remain applicable and all three gold patches pass their pinned
-evaluator is that combination's qualifying revision. Select the first two qualifying
+original-base SHAs in lexical order; timestamps play no role. Install the unchanged issue bodies
+in the benchmark tracker. Test every task independently from a clean candidate checkout: require
+`git apply --check` and `git apply` for its gold patch without edits, fuzz, or conflict resolution;
+require at least one `FAIL_TO_PASS` test to fail before the patch; and require all `FAIL_TO_PASS`
+and `PASS_TO_PASS` tests to pass after it under the pinned evaluator. Restore the candidate before
+the next task. The first revision satisfying these rules for all three tasks is that combination's
+qualifying revision. Select the first two qualifying
 repository-disjoint combinations. Freeze and publish the manifest plus the complete accepted and
 rejected ledger before smoke or measured arm output is observed. If fewer than two groups qualify,
 #119 reports the shortfall and changes this protocol before selecting discretionarily.
 
 The selected tasks form two groups of three. Every group belongs to one upstream repository and has
-one declared common starting revision. #119 must prove that each issue statement remains applicable
-and each pinned evaluator (including its gold patch during manifest validation) behaves correctly
-from that common revision. A group that cannot satisfy all three tasks without modifying their
-substance is ineligible. This constraint makes individual and campaign observations use the same
-starting code rather than comparing historical SWE-bench bases with a synthetic campaign base.
+one declared common starting revision. #119 must prove the pre-patch failure, exact gold-patch
+application, and post-patch evaluator result for every task from that revision. A group that cannot
+satisfy all three tasks mechanically without modifying their issue bodies or patches is ineligible.
+This constraint makes individual and campaign observations use the same starting code rather than
+comparing historical SWE-bench bases with a synthetic campaign base.
 
 ## Experimental arms
 
@@ -193,6 +201,11 @@ run starts from the same common revision and the same ordered three-issue topolo
 accumulate within a campaign because that is the workflow behavior under test; no state crosses
 arms or repetitions.
 
+The agent-visible repository is a benchmark-owned sanitized Git repository whose object graph and
+refs end at the common starting revision. It has no alternate object store, upstream remote, later
+commit object, pull-request ref, reflog entry, or gold-patch object. Provisioning verifies this
+boundary before launch.
+
 For a campaign, retain the merge commit for each task and evaluate that task at that commit. This
 is its nested functional result. After the last task, replay every task evaluator at final campaign
 HEAD and retain those results separately. A campaign is `resolved` only when every issue reached
@@ -244,7 +257,7 @@ row wins:
 | 5 | Agent explicitly declines the authorized task | `agent_refusal` |
 | 6 | Agent asks for a benchmark-operator decision needed to continue | `agent_needs_input` |
 | 7 | Agent records another blocker or deliberate handoff | `agent_parked` |
-| 8 | Required merged state and every applicable final evaluator pass | `resolved` |
+| 8 | Mode-specific required state and every applicable final evaluator pass | `resolved` |
 | 9 | Any other healthy, completed observation | `unresolved` |
 
 Harness-owned failures include setup, evaluator, credential, capture, cleanup, and usage telemetry
@@ -255,6 +268,11 @@ A repository state produced before a timeout or budget breach does not override 
 terminal class. A refusal is an explicit rejection, not a request for information. An input request
 wins over a workflow's simultaneous parked marker; `agent_parked` covers blockers that do not ask
 the benchmark operator to decide. Ties between a wall event and usage event resolve as timeout.
+
+For an individual, required state is a tested committed pull request with all required checks
+passing and GitHub reporting it mergeable; merging it is forbidden and unnecessary. Its pinned
+evaluator must pass on pull-request HEAD. For a campaign, every issue must be closed by its verified
+merge and all three evaluators must pass at final campaign HEAD.
 
 The harness-health record is written outside the agent process and includes process exit, capture
 continuity, disk-write result, and artifact-validation result. Later schemas may refine evidence
@@ -338,7 +356,8 @@ The evaluation cases are:
   and tool inventories. Only declared workflow material may differ. Adept in a control arm or prompt
   drift fails.
 - **EV-2, oracle/evaluator leakage (severity 5, block):** inspect the agent-visible filesystem,
-  environment, prompt, and tools. Any reachable hidden test or oracle patch fails.
+  environment, prompt, tools, Git object graph, refs, and egress proxy. Any reachable hidden test,
+  gold patch, later upstream object or ref, fix pull request, or fix discussion fails.
 - **EV-3, upstream mutation or excessive credentials (severity 5, block):** run smoke with audited
   repository and token targets. Writes outside benchmark-owned state or broader credentials fail.
 - **EV-4, cross-run state reuse (severity 4, block):** seed one dirty branch, PR, issue label, and
@@ -390,7 +409,7 @@ are external trusted dependencies for their declared services, not sources of be
 - Treat public prose as task evidence, never benchmark instructions; frozen prompts and repository
   policy retain authority.
 - Use benchmark-owned forks/issues with least-privilege credentials and validate repository identity
-  before every write. Upstream remotes are read-only.
+  before every write. Task-upstream routes are blocked during agent execution.
 - Run Codex in an isolated workspace-write sandbox and the evaluator in its pinned Docker boundary;
   preserve resource/time limits and never expose oracle material to the agent container.
 - Pass subprocess inputs as arguments or files, never interpolated shell programs; validate paths

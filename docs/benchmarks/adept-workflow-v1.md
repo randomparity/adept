@@ -78,10 +78,12 @@ At the pinned dataset revision, enumerate the test split by ascending `instance_
 complete candidate ledger. Exclude a task only for one of these objective reasons:
 
 - its repository is not public;
-- its license is incompatible with public redistribution and evaluation;
+- its SPDX license is not `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Apache-2.0`, `ISC`,
+  `Python-2.0`, or `PSF-2.0`;
 - its pinned evaluator image is unavailable;
 - its tests cannot be reproduced with the pinned evaluator; or
-- the task was authored, or contributed to SWE-bench, by an Adept maintainer.
+- the public issue author or SWE-bench contribution author has GitHub login `randomparity`; or
+- public evidence does not expose the author identity needed for that exact-login check.
 
 Every exclusion must record the applicable rule and public source evidence before any arm runs.
 
@@ -90,10 +92,13 @@ instances. Sort the IDs inside each combination lexically, then sort combination
 `(first_id, second_id, third_id)`. The candidate common revisions are the combination's distinct
 full original-base commit SHAs in lexical order; timestamps do not participate.
 
-Test candidate revisions in that order. A revision qualifies only when all three unchanged issue
-statements remain applicable and all three gold patches pass their pinned evaluators from that
-revision. The first qualifying revision is the combination's common revision. Select the first two
-qualifying combinations from different repositories.
+Test candidate revisions in that order. Install the unchanged public issue bodies in the benchmark
+tracker. Test every task independently from a clean candidate checkout. Require `git apply --check`
+and `git apply` for its gold patch without edits, fuzz, or conflict resolution. Under the pinned
+evaluator, at least one `FAIL_TO_PASS` test must fail before the patch, and every `FAIL_TO_PASS` and
+`PASS_TO_PASS` test must pass after it. Restore the candidate before the next task. The first
+revision satisfying those rules for all three tasks is the combination's common revision. Select
+the first two qualifying combinations from different repositories.
 
 Freeze and publish the manifest and the complete accepted and rejected candidate ledger before any
 smoke or measured arm output is observed. If two groups do not qualify, stop and revise this
@@ -116,7 +121,7 @@ Every task repository must receive this exact common instruction overlay:
 
 > You are running a public code challenge in a benchmark-owned fork. Follow repository
 > instructions and work only on the stated issue or issues. Do not seek or inspect oracle patches,
-> hidden evaluator tests, other runs, or benchmark results. Upstream remotes are read-only. Mutate
+> hidden evaluator tests, other runs, or benchmark results. Task upstreams are unavailable. Mutate
 > only run-owned state in the benchmark-owned repository. This run is unattended; if a necessary
 > product decision cannot be sourced, request input and stop. Stay within the provided wall and
 > token budgets.
@@ -141,12 +146,15 @@ Shell-visible commands are the task repository's pinned build tools plus benchma
 preflight must compare tool names, paths, and versions with the allowlist. An observed unexpected
 capability is invalid, even if all arms happen to expose it.
 
-Network destinations are limited to:
+Network destinations are limited through a path-scoped egress proxy to:
 
 - the model service;
-- benchmark-owned GitHub repositories and the GitHub API;
-- read-only task upstreams; and
+- benchmark-owned GitHub repository and API routes; and
 - manifest-declared package registries and official documentation.
+
+During agent execution, the proxy must reject task upstreams, general GitHub search, later commits,
+pull requests, issue discussions, and every undeclared route. Domain-level GitHub permission alone
+is insufficient.
 
 Credentials must be identical across arms and scoped to benchmark-owned repositories. GitHub
 writes are limited to run-owned branches, issues, pull requests, comments, labels, and, for
@@ -244,6 +252,11 @@ Every individual run starts from its group's common revision and fresh tracker s
 campaign starts from that revision and the same ordered three-issue topology. Changes may
 accumulate inside a campaign; no state may cross arms or repetitions.
 
+The agent-visible repository must be a benchmark-owned sanitized Git repository whose object graph
+and refs end at the common starting revision. It must have no alternate object store, upstream
+remote, later commit object, pull-request ref, reflog entry, or gold-patch object. Provisioning must
+verify this boundary before launch.
+
 For each campaign task, retain its merge commit and run its evaluator at that commit. This is the
 nested historical functional result. At final campaign HEAD, replay all three task evaluators and
 retain those results separately. A campaign is resolved only when all issues reach the required
@@ -290,13 +303,18 @@ wins:
 | 5 | Agent explicitly declines the authorized task | `agent_refusal` |
 | 6 | Agent asks for a benchmark-operator decision needed to continue | `agent_needs_input` |
 | 7 | Agent records another blocker or deliberate handoff | `agent_parked` |
-| 8 | Required merged state and every applicable final evaluator pass | `resolved` |
+| 8 | Mode-specific required state and every applicable final evaluator pass | `resolved` |
 | 9 | Any other healthy, completed observation | `unresolved` |
 
 A repository state produced before a resource breach does not override the resource class. A
 refusal is an explicit rejection, not a request for information. An operator-input request wins
 over a simultaneous workflow parked marker. `agent_parked` covers blockers that do not ask the
 benchmark operator to decide.
+
+For an individual, the required state is a tested committed pull request with all required checks
+passing and GitHub reporting it mergeable. Merging an individual pull request is forbidden and
+unnecessary. Its pinned evaluator must pass on pull-request HEAD. For a campaign, every issue must
+be closed by its verified merge and all three evaluators must pass at final campaign HEAD.
 
 Harness-owned failures include setup, evaluator, credential, capture, cleanup, and usage telemetry
 failures. Unknown ownership means retained evidence cannot distinguish agent failure from harness
@@ -402,8 +420,9 @@ Baseline execution is blocked until the following evidence passes:
 
 - **EV-1, arm contamination — six live smoke units.** Resolved prompt, configuration, tool, skill,
   and plugin inventories differ only by declared workflow material.
-- **EV-2, oracle leakage — six live smoke units.** Agent-visible files, environment, prompt, and
-  tools expose no oracle or hidden evaluator test.
+- **EV-2, oracle leakage — six live smoke units.** Agent-visible files, environment, prompt,
+  tools, Git objects, refs, and proxy routes expose no hidden evaluator test, gold patch, later
+  upstream object or ref, fix pull request, or fix discussion.
 - **EV-3, mutation and credentials — six live smoke units.** Audited targets show no upstream
   write and no excessive credential.
 - **EV-4, cross-run reuse — model-free fixture.** A dirty branch, pull request, label, and file
