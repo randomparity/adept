@@ -383,9 +383,9 @@ matrix ID is `<mode>/<cell-id>/<arm>/<repetition>`; neither package digest parti
 arm-blinded human independently applies the same four-item ordinal 0-3 rubric: correctness risk,
 maintainability, test quality, and security/reliability. Pool all 72 primary/human item pairs and
 compute one linearly weighted Cohen's kappa with weight `1 - abs(primary - human) / 3`. Acceptance
-is `kappa >= 0.60`. Publish matrix IDs, selection digests, both score sets, statistic, and threshold.
-Fewer than 18 reviewable packages or a failed threshold permits raw findings and disagreements
-only, not numeric qualitative aggregates.
+is `kappa >= 0.60`. Publish matrix IDs, selection digests, both score sets, statistic, and
+threshold. Fewer than 18 reviewable packages or a failed threshold permits raw findings and
+disagreements only, not numeric qualitative aggregates.
 
 ## AI-SPEC and evaluation plan
 
