@@ -82,6 +82,10 @@ it.
   external documentation, general GitHub search, later commits, pull requests, issue discussions,
   and all undeclared routes during agent execution. GitHub writes are limited to run-owned
   branches, issues, pull requests, comments, labels, and permitted campaign merges.
+- Every agent-spawned process runs in an externally enforced default-deny network namespace whose
+  only network path is the benchmark proxy. Direct model transport, DNS, Internet, host-network,
+  and alternate-proxy routes are absent; the harness owns model transport outside the namespace.
+  Freeze and digest the namespace, firewall, proxy, and DNS configuration before smoke.
 - Model settings, enabled features, environment variables, tool inventory, Codex version output,
   OS, host architecture, and container runtime are captured before each run.
 
@@ -214,6 +218,13 @@ arms or repetitions.
 The campaign issue order is the selected combination's ascending lexical `instance_id` order.
 The manifest, materialized tracker, prompt ordered list, and topology digest must preserve that
 order before smoke starts.
+
+Each campaign repository starts with exactly three open issues, numbered `#1`, `#2`, and `#3` in
+that lexical order, each labelled exactly `type:bug`, `priority:P2`, `status:ready`,
+`risk:night-watch`, and `effort:M`. They have no dependency, parent, sub-issue, milestone, project,
+assignee, linked branch, linked pull request, comment, or reaction; no other issue is visible. The
+prompt list is `1,2,3`. The topology digest and preflight cover the complete presence and absence
+contract.
 
 The agent-visible repository is a benchmark-owned sanitized Git repository whose object graph and
 refs end at the common starting revision. It has no alternate object store, upstream remote, later
@@ -362,6 +373,16 @@ quality or security score is treated as an aggregate. Until calibrated, the base
 findings, reviewer disagreements, and qualitative distributions only. The generating model never
 grades its own visible output in the same context.
 
+Before smoke output, #122 freezes and publishes the rubric bytes/digest, Codex and model versions,
+reviewer prompt/config/tools/network, package builder, normalization rules, and human instructions.
+The primary reviewer is Codex CLI `0.147.0`, `gpt-5.6-sol`, reasoning `medium`, one fresh read-only
+context per package, and no network. Calibration selects 18 packages: within every arm, mode, and
+repetition stratum, choose the lexically smallest SHA-256 package digest. One arm-blinded human
+independently applies the same four-item ordinal 0-3 rubric: correctness risk, maintainability,
+test quality, and security/reliability. Acceptance is linearly weighted Cohen's kappa `>= 0.60`.
+Publish sample IDs, both score sets, statistic, and threshold. Fewer than 18 reviewable packages or
+a failed threshold permits raw findings and disagreements only, not numeric qualitative aggregates.
+
 ## AI-SPEC and evaluation plan
 
 The users are Adept maintainers and prospective adopters. The trigger is a baseline-v1 task or
@@ -385,7 +406,9 @@ The evaluation cases are:
 - **EV-2, oracle/evaluator leakage (severity 5, block):** inspect the agent-visible filesystem,
   environment, prompt, tools, task-material digest, Git object graph, refs, dependency mirror, and
   egress proxy. Any oracle-derived acceptance hint, hidden test, gold patch, later upstream object
-  or ref, later task package, fix pull request, fix discussion, or discovery route fails.
+  or ref, later task package, fix pull request, fix discussion, or discovery route fails. Live
+  direct-IP, DNS, host-network, alternate-proxy, upstream, registry, and general-GitHub probes must
+  fail while declared proxy routes succeed.
 - **EV-3, upstream mutation or excessive credentials (severity 5, block):** run smoke with audited
   repository and token targets. Writes outside benchmark-owned state or broader credentials fail.
 - **EV-4, cross-run state reuse (severity 4, block):** seed one dirty branch, PR, issue label, and

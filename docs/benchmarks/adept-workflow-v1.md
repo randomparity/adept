@@ -170,6 +170,12 @@ execution, the proxy must reject task upstreams, public registries, external doc
 GitHub search, later commits, pull requests, issue discussions, and every undeclared route.
 Domain-level GitHub permission alone is insufficient.
 
+Every agent-spawned process must run inside an externally enforced default-deny network namespace.
+Its only network path is the benchmark proxy endpoint; it has no direct route to the model
+transport, DNS resolver, Internet address, host network, or alternate proxy. The harness owns model
+transport outside that namespace. Freeze and digest the effective namespace, firewall, proxy, and
+DNS configuration before smoke.
+
 Credentials must be identical across arms and scoped to benchmark-owned repositories. GitHub
 writes are limited to run-owned branches, issues, pull requests, comments, labels, and, for
 campaigns, permitted merges in benchmark-owned repositories. Upstream repositories are read-only.
@@ -269,6 +275,14 @@ accumulate inside a campaign; no state may cross arms or repetitions.
 The campaign issue order is the selected combination's ascending lexical `instance_id` order. The
 manifest, materialized tracker, prompt ordered list, and topology digest must preserve that order
 before smoke starts.
+
+Each campaign repository starts with exactly three open issues, numbered `#1`, `#2`, and `#3` in
+that lexical task order. Each issue has exactly these labels: `type:bug`, `priority:P2`,
+`status:ready`, `risk:night-watch`, and `effort:M`. The issues are independent: no dependency,
+parent, sub-issue, milestone, project, assignee, linked branch, linked pull request, comment, or
+reaction exists. No other issue is visible. The prompt ordered list is `1,2,3`. Preflight and the
+topology digest must cover bodies, state, numbers, order, labels, and the required absence of every
+other relationship and metadata field.
 
 The agent-visible repository must be a benchmark-owned sanitized Git repository whose object graph
 and refs end at the common starting revision. It must have no alternate object store, upstream
@@ -421,6 +435,20 @@ before any numeric quality or security score becomes an aggregate. Until then, p
 findings, disagreements, and qualitative distributions only. The generating model must not grade
 its own visible output in the same context.
 
+Before smoke output is observed, #122 must freeze and publish the rubric bytes and digest; Codex CLI
+and model versions; reviewer prompt, configuration, tool, and network settings; package builder;
+normalization rules; and human-review instructions. The primary reviewer is Codex CLI `0.147.0`
+with `gpt-5.6-sol`, reasoning `medium`, a fresh read-only context per package, and no network.
+
+The calibration sample contains 18 measured packages: for every arm, mode, and repetition stratum,
+select the package with the lexically smallest SHA-256 package digest. A human reviewer, blinded to
+arm and primary result, independently applies the same rubric. The rubric produces ordinal scores
+from 0 through 3 for correctness risk, maintainability, test quality, and security/reliability.
+Agreement is linearly weighted Cohen's kappa over those item scores and is acceptable only at
+`kappa >= 0.60`. Publish the sample IDs, both score sets, statistic, and threshold. If fewer than 18
+reviewable packages exist or the threshold fails, publish raw findings and disagreements only; do
+not publish numeric qualitative aggregates.
+
 ## Safety and leakage controls
 
 Public issues, repositories, dependency content, model output, and evaluator code are untrusted.
@@ -454,7 +482,9 @@ Baseline execution is blocked until the following evidence passes:
 - **EV-2, oracle leakage — six live smoke units.** Agent-visible files, environment, prompt,
   tools, task-material digest, Git objects, refs, dependency mirror, and proxy routes expose no
   oracle-derived acceptance hint, hidden evaluator test, gold patch, later upstream object or ref,
-  later task package, fix pull request, fix discussion, or discovery route.
+  later task package, fix pull request, fix discussion, or discovery route. Live negative probes
+  for direct IP, DNS, host-network, alternate-proxy, upstream, registry, and general-GitHub access
+  must fail while declared proxy routes succeed.
 - **EV-3, mutation and credentials — six live smoke units.** Audited targets show no upstream
   write and no excessive credential.
 - **EV-4, cross-run reuse — model-free fixture.** A dirty branch, pull request, label, and file
