@@ -74,8 +74,11 @@ it.
   `git`, `gh`, container runtime, language toolchain, and package manager versions. Preflight
   records their paths and versions and rejects additions or mismatches.
 - Network destinations are the model service, path-scoped benchmark-owned GitHub repository and
-  API routes, and manifest-declared package registries and official documentation. An egress proxy
-  rejects task upstreams, general GitHub search, later commits, pull requests, issue discussions,
+  API routes, and a benchmark-owned mirror of dependency artifacts frozen from the common
+  revision's manifests before oracle-backed validation. The mirror records immutable paths and
+  digests and exposes no index, search, latest-version, task-package, source-distribution, or
+  documentation discovery route. An egress proxy rejects task upstreams, public registries,
+  external documentation, general GitHub search, later commits, pull requests, issue discussions,
   and all undeclared routes during agent execution. GitHub writes are limited to run-owned
   branches, issues, pull requests, comments, labels, and permitted campaign merges.
 - Model settings, enabled features, environment variables, tool inventory, Codex version output,
@@ -148,6 +151,12 @@ satisfy all three tasks mechanically without modifying their issue bodies or pat
 This constraint makes individual and campaign observations use the same starting code rather than
 comparing historical SWE-bench bases with a synthetic campaign base.
 
+Agent-visible task material is limited to the unchanged public issue body and repository files,
+tests, and instructions reachable at the common revision. Freeze and digest that set before any
+oracle-backed validation. It must not include or derive names, bodies, criteria, or hints from a
+gold patch, SWE-bench test patch, `FAIL_TO_PASS` or `PASS_TO_PASS` metadata, hidden evaluator test,
+or validation result.
+
 ## Experimental arms
 
 All arms receive the same benchmark-owned repository instructions, issue bodies, acceptance tests,
@@ -200,6 +209,10 @@ Each individual run starts from its group's common revision and fresh issue/PR s
 run starts from the same common revision and the same ordered three-issue topology. Changes may
 accumulate within a campaign because that is the workflow behavior under test; no state crosses
 arms or repetitions.
+
+The campaign issue order is the selected combination's ascending lexical `instance_id` order.
+The manifest, materialized tracker, prompt ordered list, and topology digest must preserve that
+order before smoke starts.
 
 The agent-visible repository is a benchmark-owned sanitized Git repository whose object graph and
 refs end at the common starting revision. It has no alternate object store, upstream remote, later
@@ -356,8 +369,9 @@ The evaluation cases are:
   and tool inventories. Only declared workflow material may differ. Adept in a control arm or prompt
   drift fails.
 - **EV-2, oracle/evaluator leakage (severity 5, block):** inspect the agent-visible filesystem,
-  environment, prompt, tools, Git object graph, refs, and egress proxy. Any reachable hidden test,
-  gold patch, later upstream object or ref, fix pull request, or fix discussion fails.
+  environment, prompt, tools, task-material digest, Git object graph, refs, dependency mirror, and
+  egress proxy. Any oracle-derived acceptance hint, hidden test, gold patch, later upstream object
+  or ref, later task package, fix pull request, fix discussion, or discovery route fails.
 - **EV-3, upstream mutation or excessive credentials (severity 5, block):** run smoke with audited
   repository and token targets. Writes outside benchmark-owned state or broader credentials fail.
 - **EV-4, cross-run state reuse (severity 4, block):** seed one dirty branch, PR, issue label, and

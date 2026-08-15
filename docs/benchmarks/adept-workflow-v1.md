@@ -104,14 +104,21 @@ Freeze and publish the manifest and the complete accepted and rejected candidate
 smoke or measured arm output is observed. If two groups do not qualify, stop and revise this
 protocol; discretionary replacement is forbidden.
 
-Gold patches are available only during manifest validation. They, hidden evaluator tests, and
-validation workspaces must not be reachable from an agent run.
+Gold patches are available only during manifest validation. They, SWE-bench test patches,
+`FAIL_TO_PASS` and `PASS_TO_PASS` metadata, hidden evaluator tests, and validation workspaces must
+not be reachable from an agent run.
+
+Agent-visible task material is limited to the unchanged public issue body and repository files,
+tests, and instructions reachable at the common revision. Freeze and digest that set before any
+oracle-backed validation. It must not include or derive test names, bodies, acceptance criteria,
+or hints from a gold patch, SWE-bench test patch, `FAIL_TO_PASS` or `PASS_TO_PASS` metadata, hidden
+evaluator test, or validation result.
 
 ## Common execution environment
 
-All arms must receive the same task repository, repository-native instructions, issue bodies,
-acceptance tests, common starting revision, credentials, tool inventory, budgets, and authorization.
-Repository-native instructions must remain unchanged across arms.
+All arms must receive the same task repository, repository-native instructions, unchanged issue
+bodies, common-revision public tests, common starting revision, credentials, tool inventory,
+budgets, and authorization. Repository-native instructions must remain unchanged across arms.
 
 For every quoted prompt or instruction below, remove the Markdown `> ` prefixes, join consecutive
 quoted lines with one ASCII space, decode Markdown character references, and append one LF byte.
@@ -150,11 +157,14 @@ Network destinations are limited through a path-scoped egress proxy to:
 
 - the model service;
 - benchmark-owned GitHub repository and API routes; and
-- manifest-declared package registries and official documentation.
+- a benchmark-owned dependency-artifact mirror frozen from the common revision's manifests before
+  oracle-backed validation.
 
-During agent execution, the proxy must reject task upstreams, general GitHub search, later commits,
-pull requests, issue discussions, and every undeclared route. Domain-level GitHub permission alone
-is insufficient.
+The dependency mirror must record immutable paths and digests and expose no index, search,
+latest-version, task-package, source-distribution, or documentation discovery route. During agent
+execution, the proxy must reject task upstreams, public registries, external documentation, general
+GitHub search, later commits, pull requests, issue discussions, and every undeclared route.
+Domain-level GitHub permission alone is insufficient.
 
 Credentials must be identical across arms and scoped to benchmark-owned repositories. GitHub
 writes are limited to run-owned branches, issues, pull requests, comments, labels, and, for
@@ -251,6 +261,10 @@ excluded from aggregates, and must not expose its transcripts or outcomes to lat
 Every individual run starts from its group's common revision and fresh tracker state. Every
 campaign starts from that revision and the same ordered three-issue topology. Changes may
 accumulate inside a campaign; no state may cross arms or repetitions.
+
+The campaign issue order is the selected combination's ascending lexical `instance_id` order. The
+manifest, materialized tracker, prompt ordered list, and topology digest must preserve that order
+before smoke starts.
 
 The agent-visible repository must be a benchmark-owned sanitized Git repository whose object graph
 and refs end at the common starting revision. It must have no alternate object store, upstream
@@ -421,8 +435,9 @@ Baseline execution is blocked until the following evidence passes:
 - **EV-1, arm contamination — six live smoke units.** Resolved prompt, configuration, tool, skill,
   and plugin inventories differ only by declared workflow material.
 - **EV-2, oracle leakage — six live smoke units.** Agent-visible files, environment, prompt,
-  tools, Git objects, refs, and proxy routes expose no hidden evaluator test, gold patch, later
-  upstream object or ref, fix pull request, or fix discussion.
+  tools, task-material digest, Git objects, refs, dependency mirror, and proxy routes expose no
+  oracle-derived acceptance hint, hidden evaluator test, gold patch, later upstream object or ref,
+  later task package, fix pull request, fix discussion, or discovery route.
 - **EV-3, mutation and credentials — six live smoke units.** Audited targets show no upstream
   write and no excessive credential.
 - **EV-4, cross-run reuse — model-free fixture.** A dirty branch, pull request, label, and file
