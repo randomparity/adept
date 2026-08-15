@@ -72,9 +72,15 @@ it.
 - Built-in capabilities in every arm: local shell execution and stdin, patch editing, local image
   inspection, and Codex agent collaboration. No MCP server, app connector, interactive browser,
   external memory, or undeclared plugin is available.
-- Shell-visible commands are the benchmark repository's pinned build tools plus benchmark-pinned
-  `git`, `gh`, container runtime, language toolchain, and package manager versions. Preflight
-  records their paths and versions and rejects additions or mismatches.
+- Before smoke, #120 publishes `benchmark-environment-v1.lock.json`; its SHA-256 digest over RFC
+  8785 canonical JSON bytes is normative. A baseline execution descriptor binds that digest to the
+  already-frozen task-manifest digest before smoke. The lock records controller and workspace OCI
+  image references/digests, OS, architecture, container runtime, and every
+  shell-visible executable's name, absolute in-image path, version, and binary SHA-256 digest. This
+  includes `git`, `gh`, language toolchains, package managers, build tools, and test commands.
+  Repository-specific values must derive from an exact common-revision version file, lockfile, or
+  evaluator image; record the source and value. An unresolved version makes the task ineligible.
+  Preflight rejects every path, version, binary/image digest, architecture, or derivation mismatch.
 - Agent-spawned process destinations are path-scoped benchmark-owned GitHub repository and API
   routes and a benchmark-owned mirror of dependency artifacts frozen from the common revision's
   manifests before oracle-backed validation. The mirror records immutable paths and
@@ -351,10 +357,11 @@ does not drop failed cells or pool individual and campaign observations.
 
 ## Blinded quality and security/reliability review
 
-Functional evaluation is objective and separate. Every measured attempt with a readable patch and
-candidate tree produces exactly one qualitative-review package and gets one fresh reviewer context
-with no earlier package or review. An individual package contains its frozen issue body. A campaign
-package contains all three frozen issue bodies in campaign order plus nested and final test results.
+Functional evaluation is objective and separate. Every measured attempt not classified
+`infrastructure_invalid` and having a readable patch and candidate tree produces exactly one
+qualitative-review package and gets one fresh context with no earlier package or review. An
+individual package contains its frozen issue body. A campaign package contains all three frozen
+issue bodies in campaign order plus nested and final test results.
 
 The label-blinded package contains the patch; a read-only snapshot made by applying that patch to
 the pre-validation frozen common-revision tree; the applicable frozen issue body or bodies and
@@ -363,11 +370,12 @@ metadata or material outside the frozen agent-visible set and candidate patch. N
 acceptance-criteria artifact is allowed. It does not receive the arm, prompt, transcript, oracle
 patch, repetition, aggregate results, or another review. Packages are shuffled under opaque IDs.
 
-A measured agent attempt without a readable patch or candidate tree remains in the qualitative
-denominator as `not_reviewable`, with its terminal class and missing-artifact reason. It receives no
-score and is never imputed as clean or zero-quality. An `infrastructure_invalid` attempt remains in
-the invalid-attempt denominator and is not a qualitative observation; its replacement is classified
-independently. Smoke is excluded from qualitative baseline aggregates.
+A measured attempt not classified `infrastructure_invalid` and lacking a readable patch or
+candidate tree remains in the qualitative denominator as `not_reviewable`, with its terminal class
+and missing-artifact reason. It receives no score and is never imputed as clean or zero-quality. An
+`infrastructure_invalid` attempt remains only in the invalid-attempt denominator and is never a
+qualitative observation, even with readable artifacts; its replacement is classified independently.
+Smoke is excluded from qualitative baseline aggregates.
 
 Normalization changes metadata only: it replaces run, arm, branch, commit-author, and pull-request
 identifiers with opaque values and normalizes timestamps. It never removes or rewrites substantive

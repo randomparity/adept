@@ -160,10 +160,20 @@ No arm may access an MCP server, app connector, interactive browser, external me
 plugin. The Adept arm's only capability delta is the pinned Adept plugin and its skill instructions.
 The bare and generic arms load no plugin.
 
-Shell-visible commands are the task repository's pinned build tools plus benchmark-pinned `git`,
-`gh`, container runtime, language toolchain, and package manager versions. Before every run,
-preflight must compare tool names, paths, and versions with the allowlist. An observed unexpected
-capability is invalid, even if all arms happen to expose it.
+Before smoke, #120 must publish `benchmark-environment-v1.lock.json`. Its SHA-256 digest over RFC
+8785 canonical JSON bytes is normative for the baseline. A baseline execution descriptor must bind
+that digest to the already-frozen task-manifest digest before smoke. The lock records the controller
+and workspace OCI image references and digests; OS and architecture; container runtime; and every
+shell-visible executable's name, absolute in-image path, version, and binary SHA-256 digest. This
+includes `git`, `gh`, language toolchains, package managers, build tools, and test commands. The
+same lock and common command values apply to every arm.
+
+Repository-specific language and build values may differ by task only when derived from an exact
+version file, lockfile, or evaluator image already present at the common revision. Record that
+source and resolved value in the environment lock. A task with an unresolved tool version is
+ineligible; choosing a current or compatible version is forbidden. Preflight must reject any path,
+version, binary digest, image digest, architecture, or derivation mismatch. An observed unexpected
+capability is invalid, even if every arm happens to expose it.
 
 Network destinations for agent-spawned processes are limited through a path-scoped egress proxy to:
 
@@ -411,10 +421,11 @@ nested campaign tasks to independent campaign samples.
 ## Label-blinded review
 
 Functional evaluation is objective and separate from qualitative review. Every measured attempt
-with a readable patch and candidate tree produces exactly one qualitative-review package and gets
-one fresh reviewer context that contains no earlier package or review. An individual package is one
-attempt and contains its frozen issue body. A campaign package is one complete campaign attempt
-and contains all three frozen issue bodies in campaign order plus its nested and final test results.
+not classified `infrastructure_invalid` and having a readable patch and candidate tree produces
+exactly one qualitative-review package and gets one fresh reviewer context containing no earlier
+package or review. An individual package is one attempt and contains its frozen issue body. A
+campaign package is one complete campaign attempt and contains all three frozen issue bodies in
+campaign order plus its nested and final test results.
 
 Each shuffled, opaque package contains the patch; a read-only snapshot made by applying that patch
 to the pre-validation frozen common-revision tree; the applicable frozen public issue body or
@@ -423,10 +434,11 @@ no Git metadata or material outside the frozen agent-visible set and candidate p
 acceptance-criteria artifact is allowed. The package must not identify the arm, prompt, transcript,
 oracle patch, repetition, aggregates, another review, branch, commit author, or pull request.
 
-A measured agent attempt without a readable patch or candidate tree remains in the qualitative
-denominator as `not_reviewable`, with its terminal class and missing-artifact reason. It receives no
-score and is never imputed as clean or zero-quality. An `infrastructure_invalid` attempt remains in
-the invalid-attempt denominator and is not a qualitative observation; its permitted replacement is
+A measured attempt not classified `infrastructure_invalid` and lacking a readable patch or
+candidate tree remains in the qualitative denominator as `not_reviewable`, with its terminal class
+and missing-artifact reason. It receives no score and is never imputed as clean or zero-quality. An
+`infrastructure_invalid` attempt remains only in the invalid-attempt denominator and is never a
+qualitative observation, even if it left readable artifacts; its permitted replacement is
 classified independently. Smoke units are excluded from qualitative baseline aggregates.
 
 Normalization may replace only run, arm, branch, commit-author, pull-request, and timestamp
