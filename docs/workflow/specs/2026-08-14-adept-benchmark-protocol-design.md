@@ -331,10 +331,12 @@ does not drop failed cells or pool individual and campaign observations.
 ## Blinded quality and security/reliability review
 
 Functional evaluation is objective and separate. A fresh reviewer context receives a label-blinded
-patch package, the pre-validation frozen public issue body and common-revision repository
-instructions, and relevant agent-visible test results. No separate acceptance-criteria artifact is
-allowed. It does not receive the arm, prompt, transcript, oracle patch, repetition, aggregate
-results, or another review. Packages are shuffled under opaque identifiers.
+patch package; a read-only snapshot made by applying that patch to the pre-validation frozen
+common-revision tree; the frozen public issue body and repository instructions; and relevant
+agent-visible test results. The snapshot contains no Git metadata or material outside the frozen
+agent-visible set and candidate patch. No separate acceptance-criteria artifact is allowed. It does
+not receive the arm, prompt, transcript, oracle patch, repetition, aggregate results, or another
+review. Packages are shuffled under opaque identifiers.
 
 Normalization changes metadata only: it replaces run, arm, branch, commit-author, and pull-request
 identifiers with opaque values and normalizes timestamps. It never removes or rewrites substantive

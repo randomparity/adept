@@ -385,10 +385,12 @@ nested campaign tasks to independent campaign samples.
 ## Label-blinded review
 
 Functional evaluation is objective and separate from qualitative review. A fresh reviewer receives
-a shuffled, opaque package containing the patch, the pre-validation frozen public issue body and
-common-revision repository instructions, and relevant agent-visible test results. No separate
-acceptance-criteria artifact is allowed. The package must not identify the arm, prompt, transcript,
-oracle patch, repetition, aggregates, another review, branch, commit author, or pull request.
+a shuffled, opaque package containing the patch; a read-only snapshot made by applying that patch
+to the pre-validation frozen common-revision tree; the frozen public issue body and repository
+instructions; and relevant agent-visible test results. The snapshot contains no Git metadata or
+material outside the frozen agent-visible set and candidate patch. No separate acceptance-criteria
+artifact is allowed. The package must not identify the arm, prompt, transcript, oracle patch,
+repetition, aggregates, another review, branch, commit author, or pull request.
 
 Normalization may replace only run, arm, branch, commit-author, pull-request, and timestamp
 metadata with opaque values. It must not remove or rewrite substantive patches, tests, design
