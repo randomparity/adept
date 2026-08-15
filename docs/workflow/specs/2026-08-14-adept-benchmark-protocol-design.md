@@ -74,9 +74,9 @@ it.
 - Shell-visible commands are the benchmark repository's pinned build tools plus benchmark-pinned
   `git`, `gh`, container runtime, language toolchain, and package manager versions. Preflight
   records their paths and versions and rejects additions or mismatches.
-- Network destinations are the model service, path-scoped benchmark-owned GitHub repository and
-  API routes, and a benchmark-owned mirror of dependency artifacts frozen from the common
-  revision's manifests before oracle-backed validation. The mirror records immutable paths and
+- Agent-spawned process destinations are path-scoped benchmark-owned GitHub repository and API
+  routes and a benchmark-owned mirror of dependency artifacts frozen from the common revision's
+  manifests before oracle-backed validation. The mirror records immutable paths and
   digests and exposes no index, search, latest-version, task-package, source-distribution, or
   documentation discovery route. An egress proxy rejects task upstreams, public registries,
   external documentation, general GitHub search, later commits, pull requests, issue discussions,
@@ -85,7 +85,8 @@ it.
 - Every agent-spawned process runs in an externally enforced default-deny network namespace whose
   only network path is the benchmark proxy. Direct model transport, DNS, Internet, host-network,
   and alternate-proxy routes are absent; the harness owns model transport outside the namespace.
-  Freeze and digest the namespace, firewall, proxy, and DNS configuration before smoke.
+  Model credentials and model-service proxy routes are absent from child environments. Freeze and
+  digest the namespace, firewall, proxy, credential, and DNS configuration before smoke.
 - Model settings, enabled features, environment variables, tool inventory, Codex version output,
   OS, host architecture, and container runtime are captured before each run.
 
@@ -381,11 +382,11 @@ repetition stratum. Choose the smallest lexical digest of
 `SHA-256("adept-v1-calibration" + NUL + manifest-digest + NUL + canonical-matrix-id)`, where the
 matrix ID is `<mode>/<cell-id>/<arm>/<repetition>`; neither package digest participates. One
 arm-blinded human independently applies the same four-item ordinal 0-3 rubric: correctness risk,
-maintainability, test quality, and security/reliability. Pool all 72 primary/human item pairs and
-compute one linearly weighted Cohen's kappa with weight `1 - abs(primary - human) / 3`. Acceptance
-is `kappa >= 0.60`. Publish matrix IDs, selection digests, both score sets, statistic, and
-threshold. Fewer than 18 reviewable packages or a failed threshold permits raw findings and
-disagreements only, not numeric qualitative aggregates.
+maintainability, test quality, and security/reliability. For each dimension, compute linearly
+weighted Cohen's kappa over its 18 pairs with weight `1 - abs(primary - human) / 3`. A dimension
+permits a numeric aggregate only at `kappa >= 0.60`; otherwise it publishes raw findings and
+disagreements. Publish matrix IDs, selection digests, both score sets, all four statistics, and the
+threshold. Fewer than 18 reviewable packages permits no numeric qualitative aggregate.
 
 ## AI-SPEC and evaluation plan
 
@@ -411,8 +412,8 @@ The evaluation cases are:
   environment, prompt, tools, task-material digest, Git object graph, refs, dependency mirror, and
   egress proxy. Any oracle-derived acceptance hint, hidden test, gold patch, later upstream object
   or ref, later task package, fix pull request, fix discussion, or discovery route fails. Live
-  direct-IP, DNS, host-network, alternate-proxy, upstream, registry, and general-GitHub probes must
-  fail while declared proxy routes succeed.
+  direct-IP, DNS, host-network, alternate-proxy, model-service, model-credential, upstream,
+  registry, and general-GitHub probes must fail while declared child-process proxy routes succeed.
 - **EV-3, upstream mutation or excessive credentials (severity 5, block):** run smoke with audited
   repository and token targets. Writes outside benchmark-owned state or broader credentials fail.
 - **EV-4, cross-run state reuse (severity 4, block):** seed one dirty branch, PR, issue label, and

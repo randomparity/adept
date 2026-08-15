@@ -157,9 +157,8 @@ Shell-visible commands are the task repository's pinned build tools plus benchma
 preflight must compare tool names, paths, and versions with the allowlist. An observed unexpected
 capability is invalid, even if all arms happen to expose it.
 
-Network destinations are limited through a path-scoped egress proxy to:
+Network destinations for agent-spawned processes are limited through a path-scoped egress proxy to:
 
-- the model service;
 - benchmark-owned GitHub repository and API routes; and
 - a benchmark-owned dependency-artifact mirror frozen from the common revision's manifests before
   oracle-backed validation.
@@ -173,8 +172,9 @@ Domain-level GitHub permission alone is insufficient.
 Every agent-spawned process must run inside an externally enforced default-deny network namespace.
 Its only network path is the benchmark proxy endpoint; it has no direct route to the model
 transport, DNS resolver, Internet address, host network, or alternate proxy. The harness owns model
-transport outside that namespace. Freeze and digest the effective namespace, firewall, proxy, and
-DNS configuration before smoke.
+transport outside that namespace. Model credentials and model-service proxy routes must be absent
+from child environments. Freeze and digest the effective namespace, firewall, proxy, credential,
+and DNS configuration before smoke.
 
 Credentials must be identical across arms and scoped to benchmark-owned repositories. GitHub
 writes are limited to run-owned branches, issues, pull requests, comments, labels, and, for
@@ -449,12 +449,13 @@ frozen before outcomes and does not use either retained package digest.
 
 A human reviewer, blinded to arm and primary result, independently applies the same rubric. The
 rubric produces ordinal scores from 0 through 3 for correctness risk, maintainability, test
-quality, and security/reliability. Pool the four primary/human score pairs for all 18 packages into
-72 paired observations. Compute one linearly weighted Cohen's kappa with category weight
-`1 - abs(primary - human) / 3`. Agreement is acceptable only at `kappa >= 0.60`. Publish the sample
-matrix IDs and selection digests, both score sets, statistic, and threshold. If fewer than 18
-reviewable packages exist or the threshold fails, publish raw findings and disagreements only; do
-not publish numeric qualitative aggregates.
+quality, and security/reliability. For each dimension separately, compute linearly weighted Cohen's
+kappa over its 18 primary/human score pairs with category weight
+`1 - abs(primary - human) / 3`. A dimension is calibrated only at `kappa >= 0.60`; only that
+dimension may have a numeric aggregate. Publish the sample matrix IDs and selection digests, both
+score sets, all four statistics, and the threshold. If fewer than 18 reviewable packages exist,
+publish no numeric qualitative aggregate. A dimension below threshold publishes raw findings and
+disagreements only, without suppressing a separately calibrated dimension's numeric aggregate.
 
 ## Safety and leakage controls
 
@@ -490,8 +491,8 @@ Baseline execution is blocked until the following evidence passes:
   tools, task-material digest, Git objects, refs, dependency mirror, and proxy routes expose no
   oracle-derived acceptance hint, hidden evaluator test, gold patch, later upstream object or ref,
   later task package, fix pull request, fix discussion, or discovery route. Live negative probes
-  for direct IP, DNS, host-network, alternate-proxy, upstream, registry, and general-GitHub access
-  must fail while declared proxy routes succeed.
+  for direct IP, DNS, host-network, alternate-proxy, model-service, model-credential, upstream,
+  registry, and general-GitHub access must fail while declared child-process proxy routes succeed.
 - **EV-3, mutation and credentials — six live smoke units.** Audited targets show no upstream
   write and no excessive credential.
 - **EV-4, cross-run reuse — model-free fixture.** A dirty branch, pull request, label, and file
