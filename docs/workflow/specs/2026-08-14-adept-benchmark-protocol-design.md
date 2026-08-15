@@ -63,12 +63,27 @@ it.
   arm receives only its declared plugins, skills, tools, rules, and prompt.
 - Approval policy: `never`; sandbox: `workspace-write`; network and GitHub credentials are identical
   across arms and scoped only to benchmark-owned repositories.
+- Built-in capabilities in every arm: local shell execution and stdin, patch editing, local image
+  inspection, and Codex agent collaboration. No MCP server, app connector, interactive browser,
+  external memory, or undeclared plugin is available.
+- Shell-visible commands are the benchmark repository's pinned build tools plus benchmark-pinned
+  `git`, `gh`, container runtime, language toolchain, and package manager versions. Preflight
+  records their paths and versions and rejects additions or mismatches.
+- Network destinations are the model service, benchmark-owned GitHub repositories and API,
+  read-only task upstreams, and manifest-declared package registries and official documentation.
+  GitHub writes are limited to run-owned branches, issues, pull requests, comments, labels, and
+  permitted campaign merges in benchmark-owned repositories.
 - Model settings, enabled features, environment variables, tool inventory, Codex version output,
   OS, host architecture, and container runtime are captured before each run.
 
 The Adept plugin must be built or installed from that Git commit. Preflight resolves the source
 checkout to the full commit, verifies a clean tree, and records a digest of the installed plugin
 tree. A revision or digest mismatch invalidates the run before Codex starts.
+
+The Adept arm's only capability delta is the pinned Adept plugin and its skill instructions. The
+bare and generic arms load no plugin. The resolved tool names, command versions, destinations,
+credentials, configuration, and plugin trees must match this allowlist before every run; capturing
+an unexpected capability does not make it valid.
 
 OpenAI's model catalog exposes `gpt-5.6-sol` but no dated snapshot. The identifier is a controlled
 request value, not proof of fixed server weights. Any response/service fingerprint exposed by
@@ -85,6 +100,19 @@ bit-identical model behavior.
   digests retained by each run.
 - #119 selects exactly six public instances and records each upstream license, issue URL,
   repository, original base commit, tests, and adaptation evidence.
+
+#119 enumerates the pinned test split by ascending `instance_id` and retains a candidate ledger.
+It excludes non-public repositories, incompatible licenses, unavailable pinned evaluator images,
+tasks without reproducible tests, and any task authored or contributed to SWE-bench by an Adept
+maintainer. Every exclusion records its rule and source evidence before any arm is run.
+
+For each repository in lexical order, #119 examines task triples in `instance_id` order. Candidate
+common revisions are the triples' distinct original base commits ordered by commit time and SHA.
+The first revision at which all three unchanged issue statements remain applicable and all three
+gold patches pass their pinned evaluator is that triple's qualifying revision. Select the first two
+qualifying repository-disjoint triples. Freeze and publish the manifest plus the complete accepted
+and rejected ledger before smoke or measured arm output is observed. If fewer than two groups
+qualify, #119 reports the shortfall and changes this protocol before selecting discretionarily.
 
 The selected tasks form two groups of three. Every group belongs to one upstream repository and has
 one declared common starting revision. #119 must prove that each issue statement remains applicable
@@ -232,10 +260,17 @@ does not drop failed cells or pool individual and campaign observations.
 
 ## Blinded quality and security/reliability review
 
-Functional evaluation is objective and separate. A fresh reviewer context receives a normalized
+Functional evaluation is objective and separate. A fresh reviewer context receives a label-blinded
 patch package, repository instructions, public issue and acceptance criteria, and relevant test
 results. It does not receive the arm, prompt, transcript, oracle patch, repetition, aggregate
 results, or another review. Packages are shuffled under opaque identifiers.
+
+Normalization changes metadata only: it replaces run, arm, branch, commit-author, and pull-request
+identifiers with opaque values and normalizes timestamps. It never removes or rewrites substantive
+patches, tests, design records, comments, or filenames, even when they reveal workflow style. Each
+package retains source and normalized digests plus a machine-readable transformation log. Before
+scoring, the reviewer records an arm guess and confidence. The report publishes guess accuracy and
+confidence distributions and describes the exercise as label-blinded, not fully arm-blinded.
 
 The reviewer records material code-quality findings and a trust-boundary/security inventory using
 one fixed rubric. A second human-reviewed calibration sample checks agreement before any numeric
@@ -285,8 +320,14 @@ The evaluation cases are:
 
 Measurement is code-based for pins, digests, counts, timing, terminal classes, evaluator results,
 and artifact completeness. Quality/security judgment remains review evidence until calibrated
-against a human-reviewed sample. The smoke proof must cover EV-1 through EV-4 and EV-6 through
-EV-10 before the baseline begins.
+against a human-reviewed sample.
+
+The six smoke run units cover the live path for EV-1 through EV-3, EV-9, and EV-10. A separate
+bounded protocol-validation suite uses harness fixtures and does not invoke the model: dirty state
+for EV-4, conflicting pins for EV-6, synthetic wall and usage events for EV-7, and three synthetic
+process/capture records for EV-8. These fixtures are validation cases, not run units or replacement
+attempts. EV-5 remains a non-blocking design review case. Evidence for every applicable EV row and
+all six smoke units must pass before the baseline begins.
 
 ## Threat model
 
@@ -333,7 +374,8 @@ the trusted services and environment.
 4. Dataset eligibility requires two three-task common-revision groups and gold/evaluator validation
    before baseline execution.
 5. Exact arm prompts and resolved inventories make contamination reviewable.
-6. Six smoke units cover every block-gated eval row before baseline collection.
+6. Six smoke units and the separate protocol-validation suite cover every block-gated eval row
+   before baseline collection.
 7. Existing structural and public-safety guardrails pass. No automated check asserts prose wording.
 
 ## Verification and rollback
