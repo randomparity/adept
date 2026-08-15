@@ -36,7 +36,7 @@ Every run must use:
 - Adept source revision `3d74a47dfc7091f9f683c8c2119ba1648dfef821` in the Adept arm.
 
 The invocation must also use `--ignore-user-config`, `--ignore-rules`, `--strict-config`, and a
-fresh benchmark-owned `CODEX_HOME`. The only configuration values are:
+fresh parent-only benchmark-owned `CODEX_HOME`. The only configuration values are:
 
 ```toml
 model = "gpt-5.6-sol"
@@ -48,6 +48,14 @@ sandbox_workspace_write.network_access = true
 
 Network access remains limited by the required path-scoped egress proxy; this setting does not
 authorize a destination absent from that proxy allowlist.
+
+The harness-side Codex process owns the credential-bearing `CODEX_HOME` and model transport in a
+parent mount and environment namespace. That path and its authentication source must not be mounted
+into the tool sandbox. Every model-directed process receives a different empty, credential-free
+`CODEX_HOME` path inside the child namespace. Its environment allowlist excludes `OPENAI_API_KEY`,
+model bearer tokens, parent proxy values, parent `CODEX_HOME`, and every resolved model-auth source.
+The child retains only its separately scoped benchmark GitHub credential and route-scoped proxy
+credential. Preflight freezes and digests both namespace views and the child environment allowlist.
 
 Enabled Codex features are `multi_agent`, `plugins`, `skill_search`, `shell_tool`, `unified_exec`,
 and `view_image`. Every other feature reported by Codex CLI `0.147.0` must be disabled.
@@ -173,8 +181,8 @@ Every agent-spawned process must run inside an externally enforced default-deny 
 Its only network path is the benchmark proxy endpoint; it has no direct route to the model
 transport, DNS resolver, Internet address, host network, or alternate proxy. The harness owns model
 transport outside that namespace. Model credentials and model-service proxy routes must be absent
-from child environments. Freeze and digest the effective namespace, firewall, proxy, credential,
-and DNS configuration before smoke.
+from child environments and child-visible filesystems. Freeze and digest the effective namespace,
+mount, firewall, proxy, credential, and DNS configuration before smoke.
 
 Credentials must be identical across arms and scoped to benchmark-owned repositories. GitHub
 writes are limited to run-owned branches, issues, pull requests, comments, labels, and, for
@@ -493,6 +501,9 @@ Baseline execution is blocked until the following evidence passes:
   later task package, fix pull request, fix discussion, or discovery route. Live negative probes
   for direct IP, DNS, host-network, alternate-proxy, model-service, model-credential, upstream,
   registry, and general-GitHub access must fail while declared child-process proxy routes succeed.
+  From a representative model-directed process, reads of the resolved parent authentication source,
+  parent `CODEX_HOME`, `auth.json`, and common model-credential variables must fail or be absent;
+  reading the empty child `CODEX_HOME` must expose no credential material.
 - **EV-3, mutation and credentials — six live smoke units.** Audited targets show no upstream
   write and no excessive credential.
 - **EV-4, cross-run reuse — model-free fixture.** A dirty branch, pull request, label, and file

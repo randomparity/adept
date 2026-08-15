@@ -60,7 +60,8 @@ it.
 - Adept source revision: `3d74a47dfc7091f9f683c8c2119ba1648dfef821`.
 - Invocation family: non-interactive `codex exec --json --ephemeral`.
 - Invocation also uses `--ignore-user-config`, `--ignore-rules`, `--strict-config`, and a fresh
-  benchmark-owned `CODEX_HOME`. The only configuration values are `model = "gpt-5.6-sol"`,
+  parent-only benchmark-owned `CODEX_HOME`. The only configuration values are
+  `model = "gpt-5.6-sol"`,
   `model_reasoning_effort = "medium"`, `approval_policy = "never"`, and
   `sandbox_mode = "workspace-write"`, with `sandbox_workspace_write.network_access = true`.
   The path-scoped egress proxy remains authoritative; this setting grants no undeclared route.
@@ -87,6 +88,13 @@ it.
   and alternate-proxy routes are absent; the harness owns model transport outside the namespace.
   Model credentials and model-service proxy routes are absent from child environments. Freeze and
   digest the namespace, firewall, proxy, credential, and DNS configuration before smoke.
+- The harness-side Codex process owns credential-bearing `CODEX_HOME` and model transport in a
+  parent mount/environment namespace not mounted into the tool sandbox. Every model-directed
+  process receives a different empty credential-free `CODEX_HOME`; its environment allowlist
+  strips `OPENAI_API_KEY`, model bearer tokens, parent proxy values, parent `CODEX_HOME`, and every
+  resolved model-auth source. Only separately scoped benchmark GitHub and route-proxy credentials
+  remain.
+  Freeze and digest both namespace views and the child allowlist before smoke.
 - Model settings, enabled features, environment variables, tool inventory, Codex version output,
   OS, host architecture, and container runtime are captured before each run.
 
@@ -414,6 +422,9 @@ The evaluation cases are:
   or ref, later task package, fix pull request, fix discussion, or discovery route fails. Live
   direct-IP, DNS, host-network, alternate-proxy, model-service, model-credential, upstream,
   registry, and general-GitHub probes must fail while declared child-process proxy routes succeed.
+  A representative model-directed process must fail to read the resolved parent auth source,
+  parent `CODEX_HOME`, `auth.json`, or common model-credential variables; its empty child
+  `CODEX_HOME` must contain no credential.
 - **EV-3, upstream mutation or excessive credentials (severity 5, block):** run smoke with audited
   repository and token targets. Writes outside benchmark-owned state or broader credentials fail.
 - **EV-4, cross-run state reuse (severity 4, block):** seed one dirty branch, PR, issue label, and
