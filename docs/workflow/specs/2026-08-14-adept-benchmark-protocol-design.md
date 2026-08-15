@@ -376,12 +376,16 @@ grades its own visible output in the same context.
 Before smoke output, #122 freezes and publishes the rubric bytes/digest, Codex and model versions,
 reviewer prompt/config/tools/network, package builder, normalization rules, and human instructions.
 The primary reviewer is Codex CLI `0.147.0`, `gpt-5.6-sol`, reasoning `medium`, one fresh read-only
-context per package, and no network. Calibration selects 18 packages: within every arm, mode, and
-repetition stratum, choose the lexically smallest SHA-256 package digest. One arm-blinded human
-independently applies the same four-item ordinal 0-3 rubric: correctness risk, maintainability,
-test quality, and security/reliability. Acceptance is linearly weighted Cohen's kappa `>= 0.60`.
-Publish sample IDs, both score sets, statistic, and threshold. Fewer than 18 reviewable packages or
-a failed threshold permits raw findings and disagreements only, not numeric qualitative aggregates.
+context per package, and no network. Calibration selects one package in every arm, mode, and
+repetition stratum. Choose the smallest lexical digest of
+`SHA-256("adept-v1-calibration" + NUL + manifest-digest + NUL + canonical-matrix-id)`, where the
+matrix ID is `<mode>/<cell-id>/<arm>/<repetition>`; neither package digest participates. One
+arm-blinded human independently applies the same four-item ordinal 0-3 rubric: correctness risk,
+maintainability, test quality, and security/reliability. Pool all 72 primary/human item pairs and
+compute one linearly weighted Cohen's kappa with weight `1 - abs(primary - human) / 3`. Acceptance
+is `kappa >= 0.60`. Publish matrix IDs, selection digests, both score sets, statistic, and threshold.
+Fewer than 18 reviewable packages or a failed threshold permits raw findings and disagreements
+only, not numeric qualitative aggregates.
 
 ## AI-SPEC and evaluation plan
 

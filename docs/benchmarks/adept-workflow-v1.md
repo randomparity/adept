@@ -440,12 +440,19 @@ and model versions; reviewer prompt, configuration, tool, and network settings; 
 normalization rules; and human-review instructions. The primary reviewer is Codex CLI `0.147.0`
 with `gpt-5.6-sol`, reasoning `medium`, a fresh read-only context per package, and no network.
 
-The calibration sample contains 18 measured packages: for every arm, mode, and repetition stratum,
-select the package with the lexically smallest SHA-256 package digest. A human reviewer, blinded to
-arm and primary result, independently applies the same rubric. The rubric produces ordinal scores
-from 0 through 3 for correctness risk, maintainability, test quality, and security/reliability.
-Agreement is linearly weighted Cohen's kappa over those item scores and is acceptable only at
-`kappa >= 0.60`. Publish the sample IDs, both score sets, statistic, and threshold. If fewer than 18
+The calibration sample contains 18 measured packages: one for every arm, mode, and repetition
+stratum. For each candidate matrix unit, compute
+`SHA-256("adept-v1-calibration" + NUL + manifest-digest + NUL + canonical-matrix-id)` and select the
+lexically smallest digest in the stratum. `manifest-digest` is the lowercase digest used for the
+run schedule; `canonical-matrix-id` is `<mode>/<cell-id>/<arm>/<repetition>`. This selection is
+frozen before outcomes and does not use either retained package digest.
+
+A human reviewer, blinded to arm and primary result, independently applies the same rubric. The
+rubric produces ordinal scores from 0 through 3 for correctness risk, maintainability, test
+quality, and security/reliability. Pool the four primary/human score pairs for all 18 packages into
+72 paired observations. Compute one linearly weighted Cohen's kappa with category weight
+`1 - abs(primary - human) / 3`. Agreement is acceptable only at `kappa >= 0.60`. Publish the sample
+matrix IDs and selection digests, both score sets, statistic, and threshold. If fewer than 18
 reviewable packages exist or the threshold fails, publish raw findings and disagreements only; do
 not publish numeric qualitative aggregates.
 
