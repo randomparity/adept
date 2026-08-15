@@ -57,6 +57,7 @@ it.
   verified on 2026-08-14.
 - Model identifier: `gpt-5.6-sol`.
 - Reasoning effort: `medium`.
+- Adept source revision: `3d74a47dfc7091f9f683c8c2119ba1648dfef821`.
 - Invocation family: non-interactive `codex exec --json --ephemeral`.
 - User and project configuration: ignored or replaced by a benchmark-owned configuration so each
   arm receives only its declared plugins, skills, tools, rules, and prompt.
@@ -64,6 +65,10 @@ it.
   across arms and scoped only to benchmark-owned repositories.
 - Model settings, enabled features, environment variables, tool inventory, Codex version output,
   OS, host architecture, and container runtime are captured before each run.
+
+The Adept plugin must be built or installed from that Git commit. Preflight resolves the source
+checkout to the full commit, verifies a clean tree, and records a digest of the installed plugin
+tree. A revision or digest mismatch invalidates the run before Codex starts.
 
 OpenAI's model catalog exposes `gpt-5.6-sol` but no dated snapshot. The identifier is a controlled
 request value, not proof of fixed server weights. Any response/service fingerprint exposed by
@@ -107,8 +112,9 @@ credentials, tool inventory, starting revision, budgets, and authorization to cr
    review the complete diff, run repository guardrails, create a pull request, and verify required
    checks and mergeability. For a batch, track dependencies explicitly and do not let one
    issue-local blocker stop unrelated work.`
-3. **Adept** — install the pinned Adept revision. Individual prompt: `$quest <n>`. Campaign
-   prompt: `$campaign <ordered-list>`.
+3. **Adept** — install Adept revision
+   `3d74a47dfc7091f9f683c8c2119ba1648dfef821` and verify it as specified above. Individual prompt:
+   `$quest <n>`. Campaign prompt: `$campaign <ordered-list>`.
 
 No arm receives an oracle patch, hidden evaluator tests, another arm's transcript, or results from
 an earlier repetition. Prompt bytes and resolved system/tool/plugin inventories are retained.
@@ -122,27 +128,41 @@ The first baseline contains:
 
 The 72 run units execute serially. Before execution, derive one seeded, balanced order that rotates
 arms across tasks and repetitions; retain the seed and complete order. The order is frozen before
-the first measured run. It must not group all runs of one arm together. A smoke proof uses one
-manifest task and one repetition per arm and is excluded from baseline aggregates.
+the first measured run. It must not group all runs of one arm together.
+
+The smoke proof contains six serial units: one frozen manifest task in each arm and that task's
+three-task manifest group in each arm. Smoke uses fresh repetitions of baseline-eligible inputs,
+is excluded from aggregates, and does not expose its transcripts or outcomes to later runs.
 
 Each individual run starts from its group's common revision and fresh issue/PR state. Each campaign
 run starts from the same common revision and the same ordered three-issue topology. Changes may
 accumulate within a campaign because that is the workflow behavior under test; no state crosses
 arms or repetitions.
 
+For a campaign, retain the merge commit for each task and evaluate that task at that commit. This
+is its nested functional result. After the last task, replay every task evaluator at final campaign
+HEAD and retain those results separately. A campaign is `resolved` only when every issue reached
+its required merged state and every evaluator passes at final HEAD. A later regression does not
+rewrite the historical nested result, but it makes the campaign `unresolved`.
+
 ## Budgets and terminal outcomes
 
 - Individual hard wall limit: 60 minutes from Codex process start.
-- Individual reported-token ceiling: 250,000 total input, cached-input, output, and reasoning tokens
-  according to the non-overlapping totals Codex exposes.
+- Individual reported-token ceiling: 250,000 billable tokens under the formula below.
 - Campaign hard wall limit: 180 minutes.
 - Campaign reported-token ceiling: 750,000 on the same basis.
 - Environment provisioning is timed separately and excluded from agent wall time.
 
-If Codex exposes cumulative usage during execution, the runner stops at the first event over the
-token ceiling. If usage is available only at termination, the run completes and is classified
-`agent_budget_exhausted` when the final total exceeds the ceiling; the protocol never estimates an
-unavailable live counter. Wall timeout is always enforced externally.
+The authoritative usage record is the latest cumulative Codex usage event. Billable tokens equal
+`input_tokens + output_tokens`. Cached-input tokens are a subset of input tokens, and reasoning
+tokens are a subset of output tokens; retain both as breakdowns but never add them again. Before
+baseline execution, the smoke proof must demonstrate that the pinned CLI emits both additive
+fields as non-negative integers. A missing, partial, decreasing, or malformed usage record is an
+`infrastructure_invalid` telemetry failure, not permission to run without the ceiling.
+
+The runner stops at the first cumulative record over the token ceiling. If cumulative usage is
+available only at termination, the run completes and is classified `agent_budget_exhausted` when
+the final total exceeds the ceiling. Wall timeout is always enforced externally.
 
 Every launched run reaches exactly one terminal class:
 
@@ -158,8 +178,22 @@ Every launched run reaches exactly one terminal class:
 - `infrastructure_invalid` — setup, pin, credential, harness, evaluator, capture, or cleanup
   failed, so the observation cannot compare agent behavior.
 
-Specific evidence may refine these classes in later schemas but cannot silently convert one into
-another. Missing artifacts never count as unresolved; they invalidate the run.
+Attribution uses independently retained process and harness evidence in this precedence order:
+
+| Case | Terminal class |
+| --- | --- |
+| Harness-owned failure | `infrastructure_invalid` |
+| Healthy capture, failed Codex process or malformed output | `agent_error` |
+| Healthy capture, successful Codex exit, missing agent artifact | `agent_error` |
+| Unknown ownership | `infrastructure_invalid` |
+
+Harness-owned failures include setup, evaluator, credential, capture, cleanup, and usage telemetry
+failures. Failed Codex processes include nonzero exits and crashes. Unknown ownership means the
+evidence cannot distinguish an agent failure from a harness or capture failure.
+
+The harness-health record is written outside the agent process and includes process exit, capture
+continuity, disk-write result, and artifact-validation result. Later schemas may refine evidence
+without changing this precedence. Missing artifacts never count as unresolved or inferred success.
 
 ## Retry, reset, and cleanup
 
@@ -176,9 +210,10 @@ repository.
 
 ## Measurements
 
-- **Tokens:** raw input, cached-input, output, and reasoning totals exposed by Codex. Preserve null
-  for unsupported fields. Dollar cost is a derived report value using a separately pinned price
-  table; raw tokens remain authoritative.
+- **Tokens:** raw cumulative input and output totals exposed by Codex, plus cached-input and
+  reasoning breakdowns. The additive budget total is input plus output only. Preserve null for an
+  unsupported breakdown; the two additive fields are mandatory. Dollar cost is derived using a
+  separately pinned price table; raw tokens remain authoritative.
 - **Wall time:** monotonic time from agent process start to terminal outcome. Provisioning,
   functional evaluation, and cleanup are separate durations.
 - **Generated code and design documentation:** added and deleted lines in the final diff, classified
@@ -239,9 +274,10 @@ The evaluation cases are:
   with the issue or repository. The run must invalidate before agent start.
 - **EV-7, cost or loop escape (severity 4, block):** exceed wall or reported-token budget. The run
   must preserve partial evidence and use the correct terminal class.
-- **EV-8, malformed agent output (severity 4, block):** exit without required patch or terminal
-  artifacts. Evidence ownership must decide `agent_error` versus `infrastructure_invalid`; a
-  missing cell or inferred success fails.
+- **EV-8, malformed agent output (severity 4, block):** exercise agent-owned malformed output,
+  capture interruption, and an unknown-cause missing artifact. The attribution table must yield
+  `agent_error`, `infrastructure_invalid`, and `infrastructure_invalid`, respectively; a missing
+  cell or inferred success fails.
 - **EV-9, happy individual path (severity 4, block):** run one smoke task in every arm. Each needs a
   clean start, complete arm proof, retained evidence, and evaluator result.
 - **EV-10, happy campaign path (severity 4, block):** run one smoke group in every arm. Each needs
@@ -297,7 +333,7 @@ the trusted services and environment.
 4. Dataset eligibility requires two three-task common-revision groups and gold/evaluator validation
    before baseline execution.
 5. Exact arm prompts and resolved inventories make contamination reviewable.
-6. Smoke evidence covers every block-gated eval row before baseline collection.
+6. Six smoke units cover every block-gated eval row before baseline collection.
 7. Existing structural and public-safety guardrails pass. No automated check asserts prose wording.
 
 ## Verification and rollback
