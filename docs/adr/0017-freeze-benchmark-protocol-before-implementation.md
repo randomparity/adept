@@ -37,6 +37,11 @@ they do not assert normative sentences or duplicate the contract in code.
 
 ## Considered & rejected
 
+**Publish the protocol without an ADR.** Rejected because the protocol owns experiment values,
+while this ADR preserves the architectural boundary that later issues own machine-readable
+schemas and the executable harness. Without a durable record, later implementation could move
+those concerns into the protocol or mistake a provider model alias for an immutable snapshot.
+
 **Add manifests and run schemas now.** Rejected because #119 and #121 own those interfaces. Adding
 them before their consumers exist would couple this decision to speculative formats.
 
