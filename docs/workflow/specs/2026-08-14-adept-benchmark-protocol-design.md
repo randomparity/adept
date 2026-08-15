@@ -59,8 +59,12 @@ it.
 - Reasoning effort: `medium`.
 - Adept source revision: `3d74a47dfc7091f9f683c8c2119ba1648dfef821`.
 - Invocation family: non-interactive `codex exec --json --ephemeral`.
-- User and project configuration: ignored or replaced by a benchmark-owned configuration so each
-  arm receives only its declared plugins, skills, tools, rules, and prompt.
+- Invocation also uses `--ignore-user-config`, `--ignore-rules`, `--strict-config`, and a fresh
+  benchmark-owned `CODEX_HOME`. The only configuration values are `model = "gpt-5.6-sol"`,
+  `model_reasoning_effort = "medium"`, `approval_policy = "never"`, and
+  `sandbox_mode = "workspace-write"`.
+- Enabled Codex features are `multi_agent`, `plugins`, `skill_search`, `shell_tool`,
+  `unified_exec`, and `view_image`; every other feature reported by the pinned CLI is disabled.
 - Approval policy: `never`; sandbox: `workspace-write`; network and GitHub credentials are identical
   across arms and scoped only to benchmark-owned repositories.
 - Built-in capabilities in every arm: local shell execution and stdin, patch editing, local image
@@ -85,6 +89,19 @@ bare and generic arms load no plugin. The resolved tool names, command versions,
 credentials, configuration, and plugin trees must match this allowlist before every run; capturing
 an unexpected capability does not make it valid.
 
+Every task repository receives this exact common instruction overlay, encoded as UTF-8 with LF
+line endings:
+
+> You are running a public code challenge in a benchmark-owned fork. Follow repository
+> instructions and work only on the stated issue or issues. Do not seek or inspect oracle patches,
+> hidden evaluator tests, other runs, or benchmark results. Upstream remotes are read-only. Mutate
+> only run-owned state in the benchmark-owned repository. This run is unattended; if a necessary
+> product decision cannot be sourced, request input and stop. Stay within the provided wall and
+> token budgets.
+
+Preflight compares the overlay bytes and configuration against protocol-owned SHA-256 digests.
+Repository-native instructions remain task input and are preserved unchanged in every arm.
+
 OpenAI's model catalog exposes `gpt-5.6-sol` but no dated snapshot. The identifier is a controlled
 request value, not proof of fixed server weights. Any response/service fingerprint exposed by
 Codex is retained; absence is reported as unavailable. Results claim protocol reproducibility, not
@@ -106,13 +123,15 @@ It excludes non-public repositories, incompatible licenses, unavailable pinned e
 tasks without reproducible tests, and any task authored or contributed to SWE-bench by an Adept
 maintainer. Every exclusion records its rule and source evidence before any arm is run.
 
-For each repository in lexical order, #119 examines task triples in `instance_id` order. Candidate
-common revisions are the triples' distinct original base commits ordered by commit time and SHA.
-The first revision at which all three unchanged issue statements remain applicable and all three
-gold patches pass their pinned evaluator is that triple's qualifying revision. Select the first two
-qualifying repository-disjoint triples. Freeze and publish the manifest plus the complete accepted
-and rejected ledger before smoke or measured arm output is observed. If fewer than two groups
-qualify, #119 reports the shortfall and changes this protocol before selecting discretionarily.
+For each repository in lexical order, #119 enumerates every three-element combination of eligible
+instances. Sort each combination's IDs lexically, then sort combinations by the tuple
+`(first_id, second_id, third_id)`. Candidate common revisions are the combination's distinct full
+original-base SHAs in lexical order; timestamps play no role. The first revision at which all three
+unchanged issue statements remain applicable and all three gold patches pass their pinned
+evaluator is that combination's qualifying revision. Select the first two qualifying
+repository-disjoint combinations. Freeze and publish the manifest plus the complete accepted and
+rejected ledger before smoke or measured arm output is observed. If fewer than two groups qualify,
+#119 reports the shortfall and changes this protocol before selecting discretionarily.
 
 The selected tasks form two groups of three. Every group belongs to one upstream repository and has
 one declared common starting revision. #119 must prove that each issue statement remains applicable
@@ -154,9 +173,15 @@ The first baseline contains:
 - six task cells × three arms × three repetitions = 54 individual runs; and
 - two three-task campaign cells × three arms × three repetitions = 18 campaign runs.
 
-The 72 run units execute serially. Before execution, derive one seeded, balanced order that rotates
-arms across tasks and repetitions; retain the seed and complete order. The order is frozen before
-the first measured run. It must not group all runs of one arm together.
+The 72 run units execute serially. Define a block as one mode/cell/repetition and its three arm
+runs. Canonical block IDs are `<mode>/<cell-id>/<repetition>`, with repetitions numbered 1 through
+3. The schedule seed is the lowercase SHA-256 digest of the frozen manifest bytes. Sort blocks by
+`SHA-256("adept-v1-order" + NUL + seed + NUL + block-id)`, breaking an impossible digest tie by
+block ID. For each block, let `i` be its zero-based rank among sorted blocks of the same mode. Run
+arms in the cyclic order beginning at `i mod 3` over `[bare, generic, adept]`. Thus each arm occurs
+first, second, and third equally within each mode's six or two cells across three repetitions.
+Retain the manifest digest and full schedule before smoke starts; do not regenerate it after any
+outcome.
 
 The smoke proof contains six serial units: one frozen manifest task in each arm and that task's
 three-task manifest group in each arm. Smoke uses fresh repetitions of baseline-eligible inputs,
