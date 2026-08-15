@@ -43,7 +43,11 @@ model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
 approval_policy = "never"
 sandbox_mode = "workspace-write"
+sandbox_workspace_write.network_access = true
 ```
+
+Network access remains limited by the required path-scoped egress proxy; this setting does not
+authorize a destination absent from that proxy allowlist.
 
 Enabled Codex features are `multi_agent`, `plugins`, `skill_search`, `shell_tool`, `unified_exec`,
 and `view_image`. Every other feature reported by Codex CLI `0.147.0` must be disabled.
@@ -384,13 +388,24 @@ nested campaign tasks to independent campaign samples.
 
 ## Label-blinded review
 
-Functional evaluation is objective and separate from qualitative review. A fresh reviewer receives
-a shuffled, opaque package containing the patch; a read-only snapshot made by applying that patch
-to the pre-validation frozen common-revision tree; the frozen public issue body and repository
-instructions; and relevant agent-visible test results. The snapshot contains no Git metadata or
-material outside the frozen agent-visible set and candidate patch. No separate acceptance-criteria
-artifact is allowed. The package must not identify the arm, prompt, transcript, oracle patch,
-repetition, aggregates, another review, branch, commit author, or pull request.
+Functional evaluation is objective and separate from qualitative review. Every measured attempt
+with a readable patch and candidate tree produces exactly one qualitative-review package and gets
+one fresh reviewer context that contains no earlier package or review. An individual package is one
+attempt and contains its frozen issue body. A campaign package is one complete campaign attempt
+and contains all three frozen issue bodies in campaign order plus its nested and final test results.
+
+Each shuffled, opaque package contains the patch; a read-only snapshot made by applying that patch
+to the pre-validation frozen common-revision tree; the applicable frozen public issue body or
+bodies and repository instructions; and relevant agent-visible test results. The snapshot contains
+no Git metadata or material outside the frozen agent-visible set and candidate patch. No separate
+acceptance-criteria artifact is allowed. The package must not identify the arm, prompt, transcript,
+oracle patch, repetition, aggregates, another review, branch, commit author, or pull request.
+
+A measured agent attempt without a readable patch or candidate tree remains in the qualitative
+denominator as `not_reviewable`, with its terminal class and missing-artifact reason. It receives no
+score and is never imputed as clean or zero-quality. An `infrastructure_invalid` attempt remains in
+the invalid-attempt denominator and is not a qualitative observation; its permitted replacement is
+classified independently. Smoke units are excluded from qualitative baseline aggregates.
 
 Normalization may replace only run, arm, branch, commit-author, pull-request, and timestamp
 metadata with opaque values. It must not remove or rewrite substantive patches, tests, design
