@@ -183,9 +183,10 @@ first, second, and third equally within each mode's six or two cells across thre
 Retain the manifest digest and full schedule before smoke starts; do not regenerate it after any
 outcome.
 
-The smoke proof contains six serial units: one frozen manifest task in each arm and that task's
-three-task manifest group in each arm. Smoke uses fresh repetitions of baseline-eligible inputs,
-is excluded from aggregates, and does not expose its transcripts or outcomes to later runs.
+The smoke proof contains six serial units: the lexically first task in the first selected manifest
+group in each arm, followed by that group in each arm. Arm order is `[bare, generic, adept]` for
+both modes. Smoke uses fresh repetitions of baseline-eligible inputs, is excluded from aggregates,
+and does not expose its transcripts or outcomes to later runs.
 
 Each individual run starts from its group's common revision and fresh issue/PR state. Each campaign
 run starts from the same common revision and the same ordered three-issue topology. Changes may
@@ -231,18 +232,29 @@ Every launched run reaches exactly one terminal class:
 - `infrastructure_invalid` — setup, pin, credential, harness, evaluator, capture, or cleanup
   failed, so the observation cannot compare agent behavior.
 
-Attribution uses independently retained process and harness evidence in this precedence order:
+Apply this precedence to independently retained process and harness evidence; the first matching
+row wins:
 
-| Case | Terminal class |
-| --- | --- |
-| Harness-owned failure | `infrastructure_invalid` |
-| Healthy capture, failed Codex process or malformed output | `agent_error` |
-| Healthy capture, successful Codex exit, missing agent artifact | `agent_error` |
-| Unknown ownership | `infrastructure_invalid` |
+| Order | Evidence | Terminal class |
+| --- | --- | --- |
+| 1 | Harness-owned or unknown-ownership failure | `infrastructure_invalid` |
+| 2 | External wall timer fired before Codex exited | `agent_timeout` |
+| 3 | Authoritative usage first exceeded its ceiling | `agent_budget_exhausted` |
+| 4 | Healthy capture shows failed process or malformed/missing agent output | `agent_error` |
+| 5 | Agent explicitly declines the authorized task | `agent_refusal` |
+| 6 | Agent asks for a benchmark-operator decision needed to continue | `agent_needs_input` |
+| 7 | Agent records another blocker or deliberate handoff | `agent_parked` |
+| 8 | Required merged state and every applicable final evaluator pass | `resolved` |
+| 9 | Any other healthy, completed observation | `unresolved` |
 
 Harness-owned failures include setup, evaluator, credential, capture, cleanup, and usage telemetry
 failures. Failed Codex processes include nonzero exits and crashes. Unknown ownership means the
 evidence cannot distinguish an agent failure from a harness or capture failure.
+
+A repository state produced before a timeout or budget breach does not override the resource
+terminal class. A refusal is an explicit rejection, not a request for information. An input request
+wins over a workflow's simultaneous parked marker; `agent_parked` covers blockers that do not ask
+the benchmark operator to decide. Ties between a wall event and usage event resolve as timeout.
 
 The harness-health record is written outside the agent process and includes process exit, capture
 continuity, disk-write result, and artifact-validation result. Later schemas may refine evidence
@@ -252,7 +264,9 @@ without changing this precedence. Missing artifacts never count as unresolved or
 
 Agent outcomes are never retried. An `infrastructure_invalid` attempt permits one replacement only
 after the original attempt and cause are retained. The replacement keeps the same matrix identity
-with an incremented attempt number. A second infrastructure failure remains invalid.
+with an incremented attempt number. Insert it immediately after the invalid attempt and before the
+next nominal smoke or baseline unit; never reorder later nominal units. Retain the expanded attempt
+schedule as it grows. A second infrastructure failure remains invalid.
 
 Before every run, verify the immutable revisions, clean workspace, empty run-owned branch/PR set,
 expected issue bodies, labels and dependencies, prompt digest, configuration digest, and evaluator
@@ -311,8 +325,9 @@ Codex configuration, and allowed tools. Output is a retained agent trajectory, r
 workflow terminal state, and functional result for later blinded comparison. Allowed sources are
 the public task, repository, repository instructions, live benchmark-owned tracker state, and the
 arm's declared workflow material. Oracle patches, hidden evaluator tests, other arms, prior
-repetitions, and post-run scores are forbidden. On ambiguity the unattended agent records
-`agent_needs_input` or the workflow's parked state; it does not receive an operator answer. Hard
+repetitions, and post-run scores are forbidden. On ambiguity the unattended agent requests input
+and is classified `agent_needs_input`; a blocker that requires no operator decision is
+`agent_parked`. It does not receive an operator answer. Hard
 latency and reported-token budgets are 60 minutes/250,000 for individuals and 180
 minutes/750,000 for campaigns. Success is the required workflow terminal state plus the pinned
 functional evaluator pass, with complete evidence.
