@@ -52,7 +52,7 @@ as they go.
 ### ruff.toml
 
 ```toml
-target-version = "py313"
+target-version = "py312"
 line-length = 100
 
 [lint]

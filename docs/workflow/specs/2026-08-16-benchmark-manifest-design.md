@@ -116,7 +116,7 @@ issue body (no test names, patches, or oracle metadata).
     }
   ],
   "selection": {
-    "candidate_ledger": "ledger-2026-08-16.json",
+    "candidate_ledger": "ledger-2026-08-16-utc.json",
     "manifest_digest": "<sha256-of-canonical-json>"
   }
 }
@@ -287,6 +287,9 @@ cleanly at this revision, so the candidate is ineligible.
 Repository creation is a pre-run prerequisite: the benchmark-owned repo must
 exist before materialization. If it does not, materialization exits with code 2
 (fault) and a diagnostic naming the missing repo.
+Selection and materialization are not designed for concurrent execution. The
+protocol requires serial execution of all run units; concurrent access to the
+benchmark-owned repository during materialization is undefined behavior.
 
 ## Issue materialization (materialize_issues.py)
 
@@ -411,9 +414,9 @@ format-check recipe. No conflict.
 select = ["E", "F", "W", "I", "UP", "B"]
 ```
 
-Line length 100 (matching the repo's global limit). Target Python 3.13 (the
-lowest runner Python that is realistically available; the code will use no
-3.14-only features).
+Line length 100 (matching the repo's global limit). Target Python 3.12 (the
+lowest Python widely available on GitHub Actions runners; the code uses no
+3.13-only features).
 
 ## Security and leakage controls
 
