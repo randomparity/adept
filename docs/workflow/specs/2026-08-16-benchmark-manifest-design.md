@@ -68,6 +68,12 @@ The manifest is benchmark-owned, not agent-visible. It retains oracle material
 (test names, test patches, base commits) needed by the evaluator (#121) but
 never placed in an agent's environment. Gold patches are used only during
 validation and are not retained; their proof is recorded as adaptation evidence.
+Runtime agent-visible isolation — the sanitized Git repository with no later
+commits, refs, or gold-patch objects, and the filesystem/environment boundary
+that keeps the manifest out of the agent's reach — is owned by #120's runner per
+the protocol's §Safety and leakage controls. #119 ensures the manifest is
+benchmark-owned and that materialized issues contain only the unchanged public
+issue body (no test names, patches, or oracle metadata).
 
 ### Manifest JSON structure
 
@@ -153,8 +159,11 @@ validation and are not retained; their proof is recorded as adaptation evidence.
 
 The `manifest_digest` is the lowercase SHA-256 of the manifest's RFC 8785
 canonical JSON bytes, computed over the manifest with the `selection.manifest_digest`
-field set to an empty string. This is the seed for the run schedule (protocol
-§Deterministic measured order).
+field set to an empty string and all `materialized_issue_number` fields set to
+`null`. The digest is computed after selection completes and before materialization
+begins; it is immutable once computed and is the seed for the run schedule (protocol
+§Deterministic measured order). Materialization updates `materialized_issue_number`
+but must not recompute the digest.
 
 ## Manifest validator (validate_manifest.py)
 
@@ -188,6 +197,10 @@ line with the fields the selection algorithm needs: `instance_id`, `repo`,
 The JSONL format is the contract between fetch and select. Tests exercise the
 normalization function (raw dataset row → canonical JSONL line) with fixture
 rows; the network call is not tested in CI.
+Malformed JSONL rows (missing required fields, wrong types, invalid UTF-8) are
+skipped with a warning recorded in the candidate ledger under exclusion rule
+`malformed-dataset-row`, preserving the dataset's public source evidence. The
+selection algorithm does not crash on malformed input.
 
 ## Deterministic selection (select_tasks.py)
 
@@ -197,7 +210,8 @@ Algorithm (protocol §Deterministic task selection):
 
 1. Parse JSONL. Enumerate instances by ascending `instance_id`.
 2. Build the candidate ledger. For each instance, record `instance_id`,
-   `repository`, `license`, `base_commit`, `issue_url`.
+   `repository`, `license` (read from the SWE-bench_Verified dataset's `license`
+   field, not by scanning the upstream repository), `base_commit`, `issue_url`.
 3. Exclude instances per the objective rules:
    - repository not public
    - SPDX license not in `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Apache-2.0`,
@@ -247,11 +261,19 @@ revision, evaluator config. Steps:
    - every `FAIL_TO_PASS` and `PASS_TO_PASS` test passes after the patch
 5. Record adaptation evidence (gold patch applied cleanly, pre-patch failures,
    post-patch pass, evaluator image identifier).
-6. Restore the candidate checkout.
+6. Restore the candidate checkout. Cleanup runs on both success and failure paths:
+   temporary directories are removed, Docker containers are stopped and removed,
+   and git state is restored even when validation fails mid-step (try/finally).
 
 The Docker invocation is via `subprocess.run`. Tests stub the git and docker
 commands via a command-runner parameter and verify the orchestration logic,
 evidence recording, and error handling.
+Docker error handling distinguishes infrastructure failures (daemon unavailable,
+image pull timeout, container crash) from evaluator findings (test results).
+Infrastructure failures exit with code 2 (fault); evaluator findings exit with
+code 1 (finding). No retry: a failed validation attempt is recorded in the ledger
+with its failure category, and the selection algorithm moves to the next candidate
+revision or combination.
 
 ## Issue materialization (materialize_issues.py)
 
@@ -272,6 +294,19 @@ repo name. Steps:
 `--dry-run` mode prints the planned `gh` commands and the expected topology
 without executing writes. Tests exercise dry-run output and the topology digest
 computation with fixture manifests.
+Idempotency: materialize_issues.py detects existing issues in the benchmark-owned
+repo before creating new ones. If an issue already exists and matches the contract
+(correct body, labels, and absence), it is reused; if it exists but does not match,
+the operation fails explicitly with a diagnostic. On partial failure (some issues
+created, others not), the operation reports the incomplete state and does not
+update the manifest. Re-running materialization completes the missing issues
+without duplicating existing ones.
+
+Topology digest: SHA-256 over RFC 8785 canonical JSON of the materialized topology
+state — issue numbers in lexical instance_id order, the exact label set per issue,
+and the verified absence of every relationship and metadata field the protocol
+forbids. The digest is recorded in the manifest and validated on subsequent runs
+to prove topology preservation.
 
 ## File layout
 
