@@ -239,7 +239,9 @@ Algorithm (protocol §Deterministic task selection):
         combination's qualifying common revision.
    f. The first combination with a qualifying common revision is this
       repository's selected group.
-7. Select the first two qualifying combinations from different repositories.
+7. Select the first two qualifying combinations from different repositories. If
+   fewer than two groups qualify, selection stops and reports the shortfall —
+   discretionary replacement is forbidden (protocol §Deterministic task selection).
 8. Emit the manifest and the complete accepted/rejected ledger.
 
 The per-task validation call is a subprocess invocation of
