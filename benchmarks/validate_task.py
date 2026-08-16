@@ -31,11 +31,11 @@ class ValidationError(Exception):
         self.is_infrastructure = is_infrastructure
 
 
-def _run(cmd: list[str], runner=None) -> subprocess.CompletedProcess:
+def _run(cmd: list[str], runner=None, input_data: str | None = None) -> subprocess.CompletedProcess:
     """Run a command, using the provided runner or subprocess.run."""
     if runner is not None:
         return runner(cmd)
-    return subprocess.run(cmd, capture_output=True, text=True)
+    return subprocess.run(cmd, capture_output=True, text=True, input=input_data)
 
 
 def _check_docker_available(runner=None) -> None:
@@ -61,9 +61,18 @@ def validate_task(
     test seam.
     """
     repo = instance.get("repo", "unknown/unknown")
-    instance.get("patch", "")
+    gold_patch = instance.get("patch", "")
     fail_to_pass = instance.get("FAIL_TO_PASS", [])
     instance.get("PASS_TO_PASS", [])
+
+    # Validate repo format to prevent command injection via untrusted dataset.
+    import re
+
+    if not re.match(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", repo):
+        raise ValidationError(
+            f"invalid repo format: {repo!r}",
+            is_infrastructure=True,
+        )
 
     clone_dir = str(Path(work_dir) / "clone")
 
@@ -90,20 +99,20 @@ def validate_task(
             )
 
         # Step 2: git apply --check the gold patch.
+        # Step 2: git apply --check the gold patch (passed via stdin).
         result = _run(
             ["git", "-C", clone_dir, "apply", "--check"],
             runner=runner,
+            input_data=gold_patch,
         )
         if result.returncode != 0:
-            # Feed the patch via stdin — the stub runner doesn't use stdin,
-            # and subprocess.run would need input=gold_patch. For the stub,
-            # the check is based on returncode alone.
             raise ValidationError(f"gold patch apply --check failed: {result.stderr.strip()}")
 
-        # Step 3: git apply the gold patch.
+        # Step 3: git apply the gold patch (passed via stdin).
         result = _run(
             ["git", "-C", clone_dir, "apply"],
             runner=runner,
+            input_data=gold_patch,
         )
         if result.returncode != 0:
             raise ValidationError(f"gold patch apply failed: {result.stderr.strip()}")

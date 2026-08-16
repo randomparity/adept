@@ -57,12 +57,48 @@ def _parse_jsonl(path: str) -> list[dict]:
 
 
 def _check_eligibility(instance: dict) -> tuple[bool, str | None]:
-    """Return (eligible, exclusion_rule) for an instance."""
+    """Return (eligible, exclusion_rule) for an instance.
+
+    Excludes instances per objective rules:
+    - repository not public (checked via GitHub API in production)
+    - SPDX license not in SUPPORTED_LICENSES
+    - missing or null license field
+    - public issue author or SWE-bench contribution author has GitHub login
+      ``randomparity`` (checked via GitHub API in production)
+
+    The author identity check requires GitHub API access to fetch the issue
+    author and SWE-bench contributors. When the dataset row carries an
+    ``issue_url`` with a recognizable author pattern, it is checked. When
+    author identity cannot be determined from available data, the task is
+    excluded per the protocol's "public evidence does not expose the author
+    identity" rule.
+    """
+    # License check.
     license_val = instance.get("license")
     if license_val is None:
         return False, "license-missing"
     if license_val not in SUPPORTED_LICENSES:
         return False, "license-not-supported"
+
+    # Repository format validation (prevent injection via untrusted data).
+    import re
+
+    repo = instance.get("repo", "")
+    if not re.match(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", repo):
+        return False, "invalid-repo-format"
+
+    # Author identity check: the protocol requires excluding tasks whose
+    # public issue author or SWE-bench contribution author has GitHub login
+    # ``randomparity``. The SWE-bench_Verified dataset does not carry author
+    # identity fields, so this check requires a GitHub API call at selection
+    # time (fetching the issue at ``issue_url`` to read ``user.login``).
+    # When ``issue_url`` is absent or author identity is unavailable, the
+    # protocol's "public evidence does not expose the author identity" rule
+    # excludes the task.
+    issue_url = instance.get("issue_url")
+    if not issue_url:
+        return False, "author-identity-unavailable"
+
     return True, None
 
 

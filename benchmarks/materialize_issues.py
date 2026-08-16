@@ -73,6 +73,31 @@ def materialize_issues(
     """
     result = json.loads(json.dumps(manifest))  # deep copy
 
+    if not dry_run:
+        # Pre-check gh authentication.
+        auth_res = _run(["gh", "auth", "status"], runner=runner)
+        if auth_res.returncode != 0:
+            raise MaterializationError(
+                f"gh not authenticated: {auth_res.stderr.strip()}",
+                is_fault=True,
+            )
+        # Pre-check repo existence.
+        repo_res = _run(["gh", "repo", "view", repo], runner=runner)
+        if repo_res.returncode != 0:
+            raise MaterializationError(
+                f"benchmark-owned repo does not exist: {repo}",
+                is_fault=True,
+            )
+        # Idempotency: check for existing issues.
+        list_res = _run(
+            ["gh", "issue", "list", "--repo", repo, "--state", "all", "--limit", "100"],
+            runner=runner,
+        )
+        existing_titles: set[str] = set()
+        if list_res.returncode == 0:
+            for line in (list_res.stdout or "").strip().splitlines():
+                existing_titles.add(line.split("\t")[-1] if "\t" in line else "")
+
     for group in result["groups"]:
         sorted_tasks = sorted(group["tasks"], key=lambda t: t["instance_id"])
         for task in sorted_tasks:
@@ -86,6 +111,15 @@ def materialize_issues(
                     f"--label {','.join(EXACT_LABELS)}"
                 )
                 task["materialized_issue_number"] = None
+                continue
+
+            # Idempotency: skip if issue already exists.
+            if task["instance_id"] in existing_titles:
+                # Find the existing issue number from the list output.
+                for line in (list_res.stdout or "").strip().splitlines():
+                    if task["instance_id"] in line and "\t" in line:
+                        task["materialized_issue_number"] = int(line.split("\t")[0])
+                        break
                 continue
 
             cmd = [
