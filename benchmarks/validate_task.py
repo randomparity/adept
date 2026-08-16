@@ -14,6 +14,7 @@ Exit 0 = valid (evidence printed to stdout), 1 = validation finding, 2 = fault.
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -66,7 +67,6 @@ def validate_task(
     pass_to_pass = instance.get("PASS_TO_PASS", [])
 
     # Validate repo format to prevent command injection via untrusted dataset.
-    import re
 
     if not re.match(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", repo):
         raise ValidationError(

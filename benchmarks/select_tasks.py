@@ -15,6 +15,7 @@ validation: in tests it is a stub; in production it is a subprocess call to
 """
 
 import json
+import re
 import sys
 from itertools import combinations
 from pathlib import Path
@@ -81,7 +82,6 @@ def _check_eligibility(instance: dict) -> tuple[bool, str | None]:
         return False, "license-not-supported"
 
     # Repository format validation (prevent injection via untrusted data).
-    import re
 
     repo = instance.get("repo", "")
     if not re.match(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", repo):
