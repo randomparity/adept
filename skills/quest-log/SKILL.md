@@ -208,6 +208,54 @@ from the issue text; a proposed `night-watch` states its evidence for reversal b
 `daytime-only` is exempt — it authorizes nothing, so waving one through costs a night's
 throughput and nothing else.
 
+## Claim protocol
+
+A `$quest` run holds **implementation authority** over its issue as a
+*claim*: a repository label named `quest-claim/<N>`, never applied to the
+issue. Acquisition is `gh label create` — the server-side unique-name
+constraint is the exclusive operation, so exactly one of two concurrent
+claimants wins (ADR 0018 carries the probe evidence).
+
+- **Description grammar**: `<token>;<login>;<epoch>` — the scope token
+  (`[A-Za-z0-9-]{1,32}`, minted as `q<N>-<8 hex>`), the claiming account's
+  login, and the claim time as UTC epoch seconds. A description that fails
+  any grammar check is a *malformed* claim: treated as foreign everywhere,
+  clearable only by `claim-recover --force` or a manual `gh label delete`.
+- **Token binding**: the claim token **is** the `WORK:SCOPE` annotation
+  token. A `WORK:SCOPE` annotation is authoritative only while its token
+  matches the issue's live claim; an annotation whose token matches no live
+  claim is a dead or displaced quest's residue — not liveness evidence, not
+  a scope charter, and never a reason to stop an active quest. Every
+  consumer that reads `WORK:SCOPE` for authority or liveness applies the
+  token match when a claim is present; on an issue with no claim at all the
+  annotation rule stands unchanged.
+- **Liveness**: `CLAIM_GRACE=600` and `CLAIM_TTL=43200` seconds. A claim is
+  *live* when its age < `CLAIM_TTL` **and** (its age < `CLAIM_GRACE` **or**
+  the issue carries an in-flight status: `in-progress`, `in-review`,
+  `awaiting-merge`). Anything else is *stale*, including every claim on a
+  closed issue. The grace window covers the acquire→status-swap gap; a
+  claim that never reaches an in-flight status is recoverable once grace
+  expires, by design. Epochs are self-asserted: the protocol assumes host
+  clock skew ≤ 300 s (half the grace); a host with worse skew misjudges
+  liveness — an environmental invariant, and one that breaks TLS and git
+  first.
+- **Operations** (tracker engine, github profile):
+  `claim-acquire|claim-verify|claim-release|claim-recover|claim-list`.
+  Exit class `EXIT_CONFLICT=6` reports a live foreign claim with a
+  structured holder payload on stderr; `claim-verify` exits 0 held, 2
+  absent, 6 foreign; `claim-recover` requires `--older-than <seconds>` or
+  `--force` (the structural carrier of an operator's recovery decision).
+- **Write edges**: `$quest` acquires, verifies, and releases;
+  `claim-recover` runs under the staleness rule or explicit operator
+  authorization; `$resurrection` garbage-collects claims on closed issues
+  and deletes orphaned claims on issues it resets. The one-writer-per-edge
+  rule extends to claim edges with exactly these writers.
+- **Verify gates**: `$quest` verifies immediately after acquiring (before
+  any issue mutation), after the `WORK:SCOPE` readback, before branch
+  creation, and before pushing. Gate outcomes are exhaustive: held →
+  proceed; absent or foreign → halt with no further issue mutation;
+  transport → the ordinary retryable path.
+
 ## Annotation convention
 
 Structured reports posted as ordinary issue/PR comments, wrapped in HTML-comment markers.
