@@ -52,9 +52,12 @@ the claim.
   `[A-Za-z0-9-]`, 1–32 characters; going forward `$quest` mints short tokens
   of the form `q<N>-<8 lowercase hex>` (e.g. `q125-26f4f2a7`). `login` is the
   authenticated account that claimed (`gh api user --jq .login`). `epoch` is
-  the claim time as UTC epoch seconds (`date -u +%s`) — chosen over ISO-8601
+  is the claim time as UTC epoch seconds (`date -u +%s`) — chosen over ISO-8601
   because epoch arithmetic is portable where GNU/BSD `date` parsing flags
-  diverge, and the field is shorter.
+  diverge, and the field is shorter. Epochs are self-asserted: the protocol
+  assumes host clock skew ≤ 300 s (half the grace window); hosts with worse
+  skew will misjudge liveness, an environmental invariant rather than a
+  protocol flaw.
 - **Binding.** The claim token **is** the `WORK:SCOPE` annotation token. The
   label binds the claim to the repo; the annotation binds it to the issue and
   to the charter; the label timeline recipe already binds the status
@@ -89,16 +92,19 @@ stdout carries success payloads only), shaped
 
 - `claim-acquire --target O/N <issue> --token <t> --producer <login>`
   Validates the id (`github_require_id`) and token grammar. Creates the
-  label. On success: stdout `{"claimed":true,...}`, exit 0. On
-  already-exists — detected by matching the literal `already exists` message,
-  never the bare 422 (validation failures share the status; GitHub rate
-  limiting answers 403/429, so throttling can never read as a conflict) —
-  reads the label back: token match means this is a retry
-  of our own lost-response create, so stdout `{"claimed":true,"recovered":"self",...}`,
-  exit 0; token mismatch is exit 6 with the holder payload. Other create
-  failures classify per `github_classify`; a failure that may have landed
-  reports `EXIT_PARTIAL` (never retried blind — the re-run's already-exists
-  read is the recovery).
+  label. On success: stdout `{"claimed":true,...}`, exit 0. On HTTP 422 the
+  response is *not* trusted by message alone — validation failures share the
+  status. The discriminator is a read-back: the label exists → token match
+  means this is a retry of our own lost-response create, so stdout
+  `{"claimed":true,"recovered":"self",...}`, exit 0, and token mismatch is
+  exit 6 with the holder payload; the label is absent → the create genuinely
+  failed (invalid name, over-long description), classified per
+  `github_classify` — never as a conflict. The literal `already exists`
+  message match survives only as the partial-write discriminator: a non-422
+  failure whose text carries it takes the same read-back path, while any
+  other failure that may have landed reports `EXIT_PARTIAL` (never retried
+  blind — the re-run's read-back is the recovery). GitHub rate limiting
+  answers 403/429, so throttling can never read as a conflict.
 - `claim-verify --target O/N <issue> --token <t>` — reads the label.
   Token match: stdout `{"held":true,"age_seconds":...}`, exit 0. Token
   mismatch: exit 6 with the holder payload. Absent: `EXIT_NOT_FOUND` (2).
@@ -119,13 +125,19 @@ stdout carries success payloads only), shaped
   and owns the issue. The displaced quest's verify gate G1 — which precedes
   any issue mutation — observes a foreign claim, or a transient not-found
   inside the delete/recreate gap, and halts cleanly; it may re-acquire once
-  the race settles. A live claim fails
-  every `--older-than` guard, so an owner cannot silently lose a live claim
-  to the staleness path; only an operator's `--force` can remove one, and
-  that is an operator-visible conflict, not a protocol failure. A failure
-  between delete and create reports `EXIT_PARTIAL` with
-  `{"stage":"create"}`; the caller re-runs `claim-acquire`, which takes the
-  absent-or-self path.
+  the race settles. A live claim fails every `--older-than` guard, so an
+  owner cannot silently lose a live claim to the staleness path; only an
+  operator's `--force` can remove one, and that is an operator-visible
+  conflict, not a protocol failure — the script carries the authorization,
+  it cannot judge it, and no queryable "quest is live right now" signal
+  exists for it to check. Partial failure has exactly two reachable modes,
+  because the unique-name constraint makes a two-label state impossible and
+  create runs only after a successful delete: (a) delete failed → the old
+  claim stands untouched, recover reports the delete's error class, and a
+  retry matches the same guard; (b) delete succeeded, create failed → the
+  store is absent, recover reports `EXIT_PARTIAL` with `{"stage":"create"}`,
+  and the caller re-runs `claim-acquire`, which takes the absent path and
+  creates the new claim.
 - `claim-list --target O/N` — read-only. stdout JSON array
   `[{"issue":...,"token":...,"producer":...,"at":...}]` for every repo label
   with the `quest-claim/` prefix. The issue number comes from the label
@@ -143,7 +155,10 @@ Claim label names are built from a validated integer, so the
 
 `$quest` step 1 reorders its claim sequence:
 
-1. Mint the scope token (new short form) and read the issue.
+1. Mint the scope token (new short form) and read the issue. Resolve the
+   producer login (`gh api user --jq .login`); a failure here is an auth
+   failure — stop with the `gh` error before claiming, never write a
+   description with an empty or malformed producer field.
 2. `claim-acquire`. On exit 6: read the holder and the issue's status.
    - Holder stale (per the liveness rule) → `claim-recover --older-than
      <threshold>` and continue as the new owner. The threshold is
@@ -175,8 +190,12 @@ Two further verify gates bound the non-atomic windows:
 - **G3** — before branch creation (step 2).
 - **G4** — before the `$deliver` push (step 8).
 
-A gate that reports loss or a foreign holder: halt immediately, make **no**
-further mutation of the issue (labels, comments, or the claim), and report.
+A gate's outcomes are exhaustive: exit 0 → held, proceed; exit 2 (absent —
+including an external deletion racing the gate) **or** exit 6 (foreign
+holder) → claim lost: halt immediately, make **no** further mutation of the
+issue (labels, comments, or the claim), and report — never retry a lost
+claim into re-acquisition at a gate; exit 4 (transport) → retryable, the
+caller's ordinary transport-error path.
 The surviving owner must be able to proceed as if the loser never existed.
 A loser at G3 or G4 may hold a local branch with committed work: the halt
 report names its path, and the operator disposes of it — the branch may
@@ -294,6 +313,14 @@ Behavior suites under `tests/fixtures/quest-log/`, discovered by `just test`:
     exit 0 / create.
   - **Malformed description**: a hand-corrupted store entry → verify exits
     6, never reports held.
+  - **GitHub failure-mode classification** (stub knobs in the existing
+    `GH_FAIL=` pattern): a 422 without `already exists` and an absent store
+    → usage/transport, never exit 6; a 429 → transport; a 5xx on create →
+    partial or transport per the landing rules, never conflict; an external
+    delete between acquire and verify → verify exit 2.
+  - **Recover partial modes**: delete-succeed/create-fail → `EXIT_PARTIAL`
+    `{"stage":"create"}`, and the follow-up `claim-acquire` lands the new
+    claim; delete-fail → old claim untouched, error class reported.
   - **Liveness rule** (the grace/TTL/status matrix) — the rule is arithmetic
     over `age_seconds` and the issue status; the suite exercises the
     boundary ages (below grace, between grace and TTL, past TTL) against
