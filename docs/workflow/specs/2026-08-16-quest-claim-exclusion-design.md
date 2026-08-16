@@ -111,10 +111,12 @@ stdout carries success payloads only), shaped
   (`--force` is the structural carrier of an operator's recovery decision;
   the script cannot take it from a prompt). Then deletes and re-creates with
   the new claim. Delete and re-create are not atomic. The interleaving that
-  matters: two recoverers race one stale claim and the loser's delete lands
-  after the winner's re-create, removing the winner's fresh claim. The loser
-  detects this at verify gate G1 — which precedes any issue mutation — and
-  halts cleanly; the winner owns the issue and proceeds. A live claim fails
+  matters: two recoverers race one stale claim, the slower one's delete
+  lands after the faster one's re-create, and the slower one then re-creates
+  and owns the issue. The displaced quest's verify gate G1 — which precedes
+  any issue mutation — observes a foreign claim, or a transient not-found
+  inside the delete/recreate gap, and halts cleanly; it may re-acquire once
+  the race settles. A live claim fails
   every `--older-than` guard, so an owner cannot silently lose a live claim
   to the staleness path; only an operator's `--force` can remove one, and
   that is an operator-visible conflict, not a protocol failure. A failure

@@ -45,19 +45,24 @@ the issue.
 
 - GitHub has no conditional delete, so release and recover delete-then-act.
   The interleaving that matters: two recoverers race one stale claim, the
-  loser's delete lands after the winner's re-create and removes the winner's
-  fresh claim. The loser detects this at its immediate post-acquire verify,
-  before it has mutated the issue at all, and halts; the winner owns the
-  issue and proceeds. An owner cannot silently lose a live claim to the
-  staleness path — a live claim fails every `--older-than` guard — so the
-  residual case is an operator `--force` landing mid-run, which is an
-  operator-visible conflict, not a protocol failure. Accepted.
+  slower one's delete lands after the faster one's re-create, and the slower
+  one then re-creates and owns the issue. The displaced quest's immediate
+  post-acquire verify observes a foreign claim — or, inside the narrow
+  delete/recreate gap, a transient not-found — and either way it halts
+  having mutated nothing; it may re-acquire once the race settles. An owner
+  cannot silently lose a live claim to the staleness path — a live claim
+  fails every `--older-than` guard — so the residual case is an operator
+  `--force` landing mid-run, which is an operator-visible conflict, not a
+  protocol failure. Accepted.
 - Nothing here serializes the truly irreversible steps — pushes are
   deletable, PRs closeable, and merges belong to the human or orchestrator,
   outside the quest's gates. The protocol's guarantee is that duplicate
   *work* stops before design, not that deletes are serialized.
 - A label whose description does not parse as `<token>;<login>;<epoch>` is
-  treated as a foreign claim, never as evidence of ownership.
+  treated as a foreign claim, never as evidence of ownership. Malformed
+  entries surface in `claim-list` with null fields and are cleared by
+  `claim-recover --force` or a manual `gh label delete` — their unparseable
+  epoch puts them outside `--older-than` recovery.
 - Claims persist past hand-off and merge until `$resurrection` — an
   operator-run, between-runs sweep — collects them. A claim on a closed or
   non-in-flight issue is stale by definition, so residue is inert except
@@ -107,6 +112,12 @@ no gain over the label constraint.
 **Apply the claim label to the issue.** Rejected: applying is idempotent,
 not exclusive — timeline noise without the one property the design needs,
 which repo-level existence already provides.
+
+**External coordination store** (a KV service, or the GitHub Actions
+cache). Rejected: a second infrastructure dependency for a protocol that
+must run from any workstation with `gh` credentials, against the repo's
+no-long-lived-processes anatomy rule — and the label constraint's probed
+exclusivity makes it unnecessary.
 
 **Do nothing (rely on the duplicate-branch conflict).** Rejected: the
 conflict surfaces after both quests have scoped, and later `WORK:SCOPE`
