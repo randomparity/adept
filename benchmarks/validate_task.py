@@ -63,7 +63,7 @@ def validate_task(
     repo = instance.get("repo", "unknown/unknown")
     gold_patch = instance.get("patch", "")
     fail_to_pass = instance.get("FAIL_TO_PASS", [])
-    instance.get("PASS_TO_PASS", [])
+    pass_to_pass = instance.get("PASS_TO_PASS", [])
 
     # Validate repo format to prevent command injection via untrusted dataset.
     import re
@@ -126,7 +126,22 @@ def validate_task(
         # In production, this uses the SWE-bench Docker harness. The stub
         # runner returns canned results.
         pre_result = _run(
-            ["docker", "run", "--rm", "swe-bench:latest", "eval", "--pre-patch"],
+            [
+                "docker",
+                "run",
+                "--rm",
+                "swe-bench:latest",
+                "eval",
+                "--instance-id",
+                instance.get("instance_id", ""),
+                "--test-patch",
+                instance.get("patch", ""),
+                "--fail-to-pass",
+                "\t".join(fail_to_pass),
+                "--pass-to-pass",
+                "\t".join(pass_to_pass),
+                "--pre-patch",
+            ],
             runner=runner,
         )
         # Pre-patch: at least one FAIL_TO_PASS should fail (returncode != 0
@@ -137,7 +152,22 @@ def validate_task(
         # Step 4b: post-patch pass check — all FAIL_TO_PASS and PASS_TO_PASS
         # must pass after the patch.
         post_result = _run(
-            ["docker", "run", "--rm", "swe-bench:latest", "eval", "--post-patch"],
+            [
+                "docker",
+                "run",
+                "--rm",
+                "swe-bench:latest",
+                "eval",
+                "--instance-id",
+                instance.get("instance_id", ""),
+                "--test-patch",
+                instance.get("patch", ""),
+                "--fail-to-pass",
+                "\t".join(fail_to_pass),
+                "--pass-to-pass",
+                "\t".join(pass_to_pass),
+                "--post-patch",
+            ],
             runner=runner,
         )
         if post_result.returncode != 0:
@@ -167,6 +197,14 @@ def _cleanup(clone_dir: str, runner=None) -> None:
     """Best-effort cleanup of temporary directories and Docker containers."""
     try:
         _run(["rm", "-rf", clone_dir], runner=runner)
+    except Exception:
+        pass  # Best-effort; cleanup failures are warnings, not fatal.
+    try:
+        # Clean up any orphaned Docker containers from this run.
+        _run(
+            ["docker", "rm", "-f", "$(docker ps -aq --filter label=com.swe-bench.instance)"],
+            runner=runner,
+        )
     except Exception:
         pass  # Best-effort; cleanup failures are warnings, not fatal.
 
