@@ -62,10 +62,10 @@ the issue.
   fails every `--older-than` guard — so the residual case is an operator
   `--force` landing mid-run, which is an operator-visible conflict, not a
   protocol failure. Accepted.
-- Nothing here serializes the truly irreversible steps — pushes are
-  deletable, PRs closeable, and merges belong to the human or orchestrator,
+- Nothing here serializes the truly irreversible step: a push does not bind
+  the issue until merge, and merges belong to the human or orchestrator,
   outside the quest's gates. The protocol's guarantee is that duplicate
-  *work* stops before design, not that deletes are serialized.
+  *work* stops before design, not that remote state changes are serialized.
 - A label whose description does not parse as `<token>;<login>;<epoch>` is
   treated as a foreign claim, never as evidence of ownership. Malformed
   entries surface in `claim-list` with null fields and are cleared by
@@ -86,6 +86,11 @@ the issue.
   plausible skew.
 - The label namespace carries one transient `quest-claim/<N>` entry per
   claimed issue, visible in the labels UI, never applied to issues.
+- Verify reads are direct-resource GETs (read-your-writes), not search or
+  list calls. A consistency or transport anomaly at a verify gate fails
+  toward halting the legitimate owner — an availability cost of one re-run —
+  never toward dual ownership, which is the safety property the protocol
+  exists for.
 - Rate limiting: GitHub answers throttling with 403/429, which classify as
   auth/transport failures — never as a claim conflict, because conflict
   detection matches the literal `already exists` message and then reads the
@@ -154,7 +159,7 @@ quest mid-flight.
 
 Decided while designing the implementation of issue #125
 (`docs/workflow/specs/2026-08-16-quest-claim-exclusion-design.md`); the
-exclusive-primitive choice was confirmed by the operator in the design
-dialogue over the git-ref alternative. Exclusivity evidence: three rounds of
-eight concurrent `gh label create` calls against this repository,
-2026-08-16.
+exclusive primitive (repo-label CAS over the git-ref alternative) was
+selected by the operator from presented alternatives in the design dialogue
+on 2026-08-16. Exclusivity evidence: three rounds of eight concurrent
+`gh label create` calls against this repository, 2026-08-16.
