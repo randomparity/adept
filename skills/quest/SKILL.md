@@ -82,9 +82,47 @@ issue/repository derivation read also fails, stop before changing `status:*` or 
 Never include the external payload, authentication data, or private environment detail in that
 response.
 
-Set the issue to `status:in-progress` (ensure-create the `status:` labels per
-the quest-log recipe; single-active swap). If ensure-create fails, stop
-with its message rather than proceeding label-less.
+**Claim the issue before touching it.** Mint the scope token now, in the
+short form `q<issue-number>-<8 lowercase hex>` (the quest-log claim protocol
+constrains the grammar), and resolve the producer login
+(`gh api user --jq .login`; a failure is an auth failure — stop with the
+`gh` error). Then acquire the claim:
+
+```sh
+skills/quest-log/assets/tracker.sh claim-acquire --target <owner/name> \
+  <issue-number> --token <scope-token> --producer <login>
+```
+
+On exit 6, read the holder payload and the issue's status:
+
+- Holder stale per the liveness rule → recover:
+  `claim-recover <issue-number> --token <scope-token> --producer <login>
+  --older-than <CLAIM_TTL if the issue carries an in-flight status, else
+  CLAIM_GRACE>` and continue as the new owner.
+- Holder live, interactive root → stop. Report the holder's token,
+  producer, age, and the issue's status; the human decides whether to wait
+  or authorize recovery (a re-invocation carrying that decision uses
+  `claim-recover --force`). Ask, never assume.
+- Holder live, unattended root → stop with no writes to the issue. This is
+  the one exception to the park protocol: the issue belongs to a live
+  quest, and any label or comment write on it is the interference the
+  protocol exists to prevent. Report the blocker in the completion report;
+  under `$campaign`, return it to the orchestrator as a hold.
+
+Then verify gate **G1**: `claim-verify` immediately after acquiring or
+recovering, before any mutation of the issue. Gate outcomes are exhaustive:
+exit 0 → held, proceed; exit 2 or 6 → claim lost: halt immediately, make no
+further mutation of the issue (labels, comments, or the claim), and report —
+never retry a lost claim into re-acquisition at a gate; exit 4 → the
+ordinary retryable transport path. A loser at any gate reports its local
+branch path if one exists; the operator disposes of it.
+
+Only then set the issue to `status:in-progress` (ensure-create the
+`status:` labels per the quest-log recipe; single-active swap). The swap is
+idempotent and not exclusive, and nothing relies on it for exclusivity. If
+ensure-create fails, release the claim first (`claim-release` — the quest
+owns it and is abandoning the issue), then stop with the ensure-create
+message rather than proceeding label-less.
 
 ## Frozen scope charter
 
@@ -138,13 +176,19 @@ phase and the need for human input.
 
 ### Posting the annotation
 
-Mint the annotation token once, include it in the comment, and capture the
-returned comment URL as the annotation's location, not its identity. Read the
-comment back and verify the token and all eight fields before continuing. Post
+Use the scope token minted for the claim (step 1) as the annotation token —
+claim and charter share one identity. Include it in the comment and capture
+the returned comment URL as the annotation's location, not its identity. Read
+the comment back and verify the token and all eight fields before continuing,
+then cross-check the annotation token against the claim token and run verify
+gate **G2** (`claim-verify` again). Post
 it even for a trivial bugfix that skips design -- `$resurrection` reads it as
 the liveness signal.
 
 ## 2. Branch
+
+Verify gate **G3**: `claim-verify` before creating the branch; a lost gate
+halts per step 1's rule.
 
 Fetch, sync `BASE_BRANCH` to `origin/BASE_BRANCH`, and create
 `feat/<short-slug>-<issue-number>` off it. Never work on the default branch. If
@@ -456,6 +500,9 @@ on the simplified diff before shipping; guardrails only catch what the tests
 already assert.
 
 ## 8. Ship It
+
+Verify gate **G4**: `claim-verify` before running `$deliver`; a lost gate
+halts per step 1's rule.
 
 In `build-complete`, re-read the build-to-review handoff before delivery. Only `required` and
 `not-required` may proceed; `required-failed` or any unreadable required

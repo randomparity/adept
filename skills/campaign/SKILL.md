@@ -152,6 +152,7 @@ For each queued issue, check for artifacts from prior runs:
   manifest mutation/readback fails, retain an explicit unreconciled blocker and forbid
   completion. Other close reasons follow the existing done path without re-closing.
 - **`status:` label set** → map to campaign state: `ready`/`needs-triage` → `pending` (triage); `in-progress`/`in-review` → `in-flight` (reconcile artifacts); `awaiting-merge` → verify PR then `ready-to-merge`; `blocked`/`needs-human` → `blocked`. Treat closed as authoritative regardless of label.
+- **Quest claim present** (one `claim-list` read for the batch) → in-flight evidence: map the row to in-flight and reconcile artifacts as for an in-progress label.
 - **Existing PR green + mergeable** → mark `ready-to-merge`, carry to step 4
 - **Persisted step-4 assignments exist** → read them back, don't re-derive
 - **Existing branch/PR incomplete** → **recover branch first**: if a PR exists, resolve its number from the issue link, then `gh pr view <PR> --json headRefName`; else match `feat/<short-slug>-<issue-number>` in `git branch` or `git ls-remote --heads origin` (full shape, not `*-<n>` suffix — #1 must not match ...-11). Persist to manifest. **PR-linked branch → reuse by default** (the PR explicitly names it, satisfying `$quest`'s reuse rule). **Convention-only branch → ask the user** reuse-or-restart before dispatch, and carry the operator's decision in the prompt. Deleting any branch requires explicit user confirmation
@@ -226,6 +227,7 @@ When issue goes **in-flight**, flip status and **read back the actual branch nam
 
 Each prompt carries:
 - Issue number, acceptance criteria, **completion notes verbatim** (private dispatch context) and the **public-safe summary** (the only form allowed on public surfaces: acceptance criteria, `WORK:` annotations, PR bodies)
+- The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
 - Assigned ADR/migration numbers, file scope
@@ -239,6 +241,18 @@ Each prompt carries:
   confirmed `CAMPAIGN-OCCURRENCE: <campaign-identity> source=#N sweep=#N` marker and its public-safe
   `CAMPAIGN-OCCURRENCE-RATIONALE:` field in any new occurrence
 - (Parallel only) external worktree path (`../<repo>-worktrees/<branch>`)
+
+**Claim check before every dispatch and re-dispatch.** Read the claim
+(`claim-list` covers the batch; a read failure holds the row — the step-5
+hold: named in the run output while the rest of the queue drains — and
+reports the error; never dispatch on an unreadable claim state). No claim →
+dispatch; the worker acquires its own. Stale claim → dispatch with recovery
+authorized in the prompt; the worker runs `claim-recover --older-than`.
+Live claim → hold: do not dispatch. When the row's agent has been observed
+ended (the re-dispatch bar above), the operator's re-dispatch answer is the
+recovery authorization; the prompt carries it as an explicit line —
+"Claim recovery authorized: the prior run was observed ended" — beside the
+branch-reuse decision, and the worker runs `claim-recover --force`.
 
 **Serial:** dispatch one, wait for green + mergeable PR, merge (step 6), repeat.
 
