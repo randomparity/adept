@@ -116,7 +116,10 @@ stdout carries success payloads only), shaped
 - `claim-recover --target O/N <issue> --token <t> --producer <login> [--older-than <seconds> | --force]`
   — the stale-claim and operator-authorized recovery path. Reads the label.
   Absent: proceeds straight to create. Present: refuses unless the observed
-  claim's age ≥ `--older-than` seconds **or** `--force` was passed
+  claim's age ≥ `--older-than` seconds **or** `--force` was passed. A
+  malformed description has no evaluable age, so `--older-than` always
+  refuses it — malformed claims are foreign and yield only to `--force` or
+  a manual `gh label delete`, matching the ADR.
   (`--force` is the structural carrier of an operator's recovery decision;
   the script cannot take it from a prompt). Then deletes and re-creates with
   the new claim. Delete and re-create are not atomic. The interleaving that
@@ -199,6 +202,12 @@ Two further verify gates bound the non-atomic windows:
 
 - **G3** — before branch creation (step 2).
 - **G4** — before the `$deliver` push (step 8).
+
+The unattended-root rule is the same at every gate as at the initial
+conflict: halt with no writes to the issue and report the blocker in the
+completion report (under `$campaign`, returned to the orchestrator as a
+hold). A gate loss means the claim is no longer the halting quest's to
+release, so no cleanup write is owed or permitted.
 
 A gate's outcomes are exhaustive: exit 0 → held, proceed; exit 2 (absent —
 including an external deletion racing the gate) **or** exit 6 (foreign
@@ -318,6 +327,8 @@ Behavior suites under `tests/fixtures/quest-log/`, discovered by `just test`:
     never reappears.
   - **Recovery refused**: young claim, `--older-than` not met, no `--force`
     → exit 6, original claim intact. And the `--force` override succeeds.
+    A malformed claim refuses `--older-than` at any age and yields to
+    `--force`.
   - **Owner release / foreign release refused**: release with the token
     deletes; release with a wrong token exits 6 and the claim survives.
   - **Absent paths**: verify/release/recover against no claim → exit 2 / `{}`
