@@ -176,7 +176,9 @@ Claim label names are built from a validated integer, so the
      producer, age, and the issue's status; the human decides whether to
      wait or authorize recovery (a re-invocation carrying that decision uses
      `claim-recover --force`). Ask, never assume.
-   - Holder live, **unattended** root → stop with no writes to the issue.
+   - Holder live, **unattended** root (the `$quest` charter definition: an
+     orchestrator or background task explicitly declared no human reachable)
+     → stop with no writes to the issue.
      This is the one exception to the park protocol (a `WORK:TRAJECTORY` plus
      `status:needs-human`): the issue belongs to a live quest, and any label
      or comment write on it is itself the interference this protocol exists
