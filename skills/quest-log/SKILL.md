@@ -218,7 +218,9 @@ claimants wins (ADR 0018 carries the probe evidence).
 
 - **Description grammar**: `<token>;<login>;<epoch>` — the scope token
   (`[A-Za-z0-9-]{1,32}`, minted as `q<N>-<8 hex>`), the claiming account's
-  login, and the claim time as UTC epoch seconds. A description that fails
+  login, and the claim time as UTC epoch seconds (1–11 digits, not more than
+  a day in the future — the bound keeps age arithmetic inside int64 and
+  defeats hand-crafted future timestamps). A description that fails
   any grammar check is a *malformed* claim: treated as foreign everywhere,
   clearable only by `claim-recover --force` or a manual `gh label delete`.
 - **Token binding**: the claim token **is** the `WORK:SCOPE` annotation

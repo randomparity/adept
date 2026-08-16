@@ -370,6 +370,20 @@ printf 'q101-aaaaaaaa;alice;%s;extra' "$now" >"$GH_STORE/quest-claim/101/descrip
 run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
 assert_exit 6 "$RUN_STATUS" 'four fields is malformed'
 
+# --- absurd epochs are malformed ------------------------------------------------------
+new_store
+mkdir -p "$GH_STORE/quest-claim/101"
+printf 'q101-aaaaaaaa;alice;999999999999999999999999999999' \
+	>"$GH_STORE/quest-claim/101/description"
+run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
+assert_exit 6 "$RUN_STATUS" 'overflow-length epoch is malformed'
+new_store
+mkdir -p "$GH_STORE/quest-claim/101"
+printf 'q101-aaaaaaaa;alice;%s' "$((now + 200000))" \
+	>"$GH_STORE/quest-claim/101/description"
+run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
+assert_exit 6 "$RUN_STATUS" 'future epoch is malformed'
+
 # --- external deletion races a verify gate --------------------------------------------
 new_store
 seed_claim 101 q101-aaaaaaaa alice "$now"

@@ -543,10 +543,15 @@ github_claim_read() { # issue
 	desc=$GH_OUT
 	f1='' f2='' f3='' rest=''
 	IFS=';' read -r f1 f2 f3 rest <<<"$desc"
+	# The epoch is bounded as well as digit-checked: eleven digits caps the
+	# value far below int64 overflow in later age arithmetic, and an epoch
+	# more than a day in the future is a hand-crafted claim meant to defeat
+	# the --older-than guard, not clock skew (skew is bounded at 300 s).
 	if [[ -n $rest || -z $f1 || -z $f2 || -z $f3 ]] ||
 		[[ ! $f1 =~ ^[$github_claim_chars]+$ || ${#f1} -gt 32 ]] ||
 		[[ ! $f2 =~ ^[$github_claim_chars]+$ || ${#f2} -gt 39 ]] ||
-		[[ ! $f3 =~ ^[0123456789]+$ ]]; then
+		[[ ! $f3 =~ ^[0123456789]{1,11}$ ]] ||
+		((f3 > $(date -u +%s) + 86400)); then
 		CLAIM_STATE=malformed
 		return 0
 	fi
@@ -821,7 +826,8 @@ profile_claim_list() {
 			| ($f | length) == 3
 				and ($f[0] | test("^[A-Za-z0-9-]{1,32}$"))
 				and ($f[1] | test("^[A-Za-z0-9-]{1,39}$"))
-				and ($f[2] | test("^[0-9]+$"));
+				and ($f[2] | test("^[0-9]{1,11}$"))
+				and ($f[2] | tonumber) <= (now + 86400);
 		[ .[]
 			| .name as $n
 			| if (.description | grammar) then
