@@ -213,6 +213,9 @@ finding strings (empty = valid), plus a CLI entry point that reads a JSON file
 and exits 0/1/2.
 
 Validation checks (each produces a named finding on failure):
+Each check first verifies the field's presence before testing its value. A
+missing field produces a named finding (e.g. "missing required field: groups")
+rather than a KeyError.
 
 1. `protocol_version` == `PROTOCOL_VERSION`
 2. `schema_version` == `SCHEMA_VERSION`
@@ -320,6 +323,10 @@ Algorithm steps (from the spec):
 
 The `validate_fn` parameter is the seam for testing: tests pass a stub that
 returns success/failure based on known fixture data, avoiding subprocess calls.
+In tests, `validate_fn` is a stub like:
+`lambda instance, rev: evidence if (instance["instance_id"], rev) in known_good else None`
+— returning an evidence dict for known-valid pairs, None otherwise. Tests do not
+require `validate_task.py` to exist; production use does (Task 5).
 
 ### test_select_tasks.py
 
@@ -395,6 +402,13 @@ def validate_task(
 ```
 
 The `runner` parameter defaults to `subprocess.run` and is the test seam.
+CLI: `python3 -m benchmarks.validate_task <instance.json> <revision> <work_dir>`
+Exit 0 = valid (evidence returned), 1 = validation finding (patch doesn't apply,
+tests fail), 2 = infrastructure fault (Docker unavailable, clone fails).
+Before invoking the Docker evaluator, check `docker info` availability; if the
+daemon is unavailable, exit 2 immediately with a diagnostic.
+Network failures (image pull timeout, registry unreachable) are infrastructure
+faults (exit 2); no retry.
 
 ### test_validate_task.py
 
@@ -414,6 +428,9 @@ Tests:
    revision after validation (gold patch removed).
 8. `test_docker_invocation_uses_subprocess_args` — the Docker command is passed
    as a list of args, not a shell string (no `shell=True`).
+9. `test_docker_unavailable_exits_fault` — Docker daemon check fails → exit 2.
+10. `test_cleanup_on_failure` — temp dirs and containers removed even when
+    validation fails mid-step.
 
 Tests use a stub `runner` that returns canned `CompletedProcess` results and a
 fixture git repo created with `git init` + commits.
@@ -462,6 +479,11 @@ Labels: `type:bug`, `priority:P2`, `status:ready`, `risk:night-watch`,
 
 Topology digest: SHA-256 of canonical JSON over the materialized state (issue
 numbers, bodies, labels, absence contract).
+Partial failure: if any issue creation fails, exit 2 (fault), report which
+issues were created and which failed, and do not update the manifest. Do not
+attempt to delete already-created issues (destructive, not idempotent).
+Re-running materialization completes missing issues per the spec's idempotency
+contract.
 
 ### test_materialize_issues.py
 
@@ -479,6 +501,10 @@ Tests:
    recomputed value.
 7. `test_gh_invocation_uses_args_not_shell` — subprocess calls use arg lists.
 8. `test_two_groups_create_six_issues` — 2 groups × 3 tasks = 6 issues.
+9. `test_partial_failure_exits_fault` — issue creation fails mid-group → exit 2,
+    manifest not updated.
+10. `test_existing_issue_mismatch_is_fatal` — existing issue with wrong labels
+    → fatal error.
 
 Tests use a stub `runner` that captures commands and returns canned issue
 numbers.
@@ -528,6 +554,8 @@ Tests:
 1. `test_normalize_row_maps_all_fields` — a fixture row with all fields maps
    correctly.
 2. `test_fail_to_pass_parsed_from_json_string` — SWE-bench stores these as JSON
+Network failures during fetch are fatal (exit 2); `huggingface_hub` provides
+built-in retry for transient HTTP errors. No additional retry logic needed.
    strings; the normalizer parses them to lists.
 3. `test_pass_to_pass_parsed_from_json_string`.
 4. `test_missing_issue_url_handled` — `issue_url` may be absent; normalizer
