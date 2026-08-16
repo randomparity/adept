@@ -43,9 +43,15 @@ issue number. It is never applied to the issue; its existence on the repo is
 the claim.
 
 - **Exclusive acquisition.** `gh label create` enforces a server-side
-  unique-name constraint: of two concurrent creates, exactly one succeeds.
-  This is the exclusive operation the issue requires; a label swap on the
-  issue or an append-only comment cannot provide it.
+  unique-name constraint (the create-a-label endpoint answers 422
+  `already_exists` for a taken name; ADR 0018 records the live probe): of
+  two concurrent creates, exactly one succeeds. This is the exclusive
+  operation the issue requires; a label swap on the issue or an append-only
+  comment cannot provide it. Note where the load sits: exclusivity is
+  load-bearing for *liveness* (one winner proceeds), but not for *safety* —
+  even a hypothetical dual-success stores exactly one description, and the
+  winner-take-nothing case is caught by the immediate G1 read-back token
+  comparison before either claimant mutates the issue.
 - **Description grammar** (100-character budget, live-probed
   2026-08-16): `<token>;<login>;<epoch>` — three semicolon-separated fields,
   nothing else. `token` is the quest's scope token, constrained to

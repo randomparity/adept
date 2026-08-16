@@ -160,6 +160,10 @@ if [[ $1 == label && $2 == delete ]]; then
 	exit 1
 fi
 if [[ $1 == api ]]; then
+	if [[ ${GH_FAIL:-} == rate ]]; then
+		printf 'gh: API rate limit exceeded for user ID 1 (HTTP 429)\n' >&2
+		exit 1
+	fi
 	path=$2
 	case $path in
 	repos/*/labels/quest-claim%2F*)
@@ -408,6 +412,37 @@ assert_exit 1 "$RUN_STATUS" 'invalid token is usage'
 run claim-acquire --profile github --target example/repo 'not-a-number' \
 	--token q101-aaaaaaaa --producer alice
 assert_exit 1 "$RUN_STATUS" 'non-numeric issue is usage'
+
+# --- transport failure at a verify gate is never a claim loss ----------------------
+new_store
+seed_claim 101 q101-aaaaaaaa alice "$now"
+GH_FAIL=rate
+run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
+assert_exit 4 "$RUN_STATUS" 'rate-limited verify is transport, never loss'
+GH_FAIL=
+
+# --- parser edge cases --------------------------------------------------------------
+new_store
+seed_claim 101 q101-aaaaaaaa alice "$now;"
+run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
+assert_exit 0 "$RUN_STATUS" 'trailing semicolon parses clean'
+new_store
+mkdir -p "$GH_STORE/quest-claim/101"
+printf 'q101-aaaaaaaa; alice;%s' "$now" >"$GH_STORE/quest-claim/101/description"
+run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
+assert_exit 6 "$RUN_STATUS" 'whitespace field is malformed'
+new_store
+mkdir -p "$GH_STORE/quest-claim/101"
+printf 'q101-aaaaaaaa;alice;%s;extra' "$now" >"$GH_STORE/quest-claim/101/description"
+run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
+assert_exit 6 "$RUN_STATUS" 'four fields is malformed'
+
+# --- external deletion races a verify gate --------------------------------------------
+new_store
+seed_claim 101 q101-aaaaaaaa alice "$now"
+rm -rf "${GH_STORE:?}/quest-claim/101"
+run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
+assert_exit 2 "$RUN_STATUS" 'externally deleted claim verifies absent'
 
 # --- claim-list --------------------------------------------------------------------
 new_store
@@ -885,7 +920,10 @@ claimants wins (ADR 0018 carries the probe evidence).
   `awaiting-merge`). Anything else is *stale*, including every claim on a
   closed issue. The grace window covers the acquire→status-swap gap; a
   claim that never reaches an in-flight status is recoverable once grace
-  expires, by design.
+  expires, by design. Epochs are self-asserted: the protocol assumes host
+  clock skew ≤ 300 s (half the grace); a host with worse skew misjudges
+  liveness — an environmental invariant, and one that breaks TLS and git
+  first.
 - **Operations** (tracker engine, github profile):
   `claim-acquire|claim-verify|claim-release|claim-recover|claim-list`.
   Exit class `EXIT_CONFLICT=6` reports a live foreign claim with a
