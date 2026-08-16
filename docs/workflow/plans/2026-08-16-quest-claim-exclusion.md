@@ -1053,8 +1053,9 @@ dispatch; the worker acquires its own. Stale claim → dispatch with recovery
 authorized in the prompt; the worker runs `claim-recover --older-than`.
 Live claim → hold: do not dispatch. When the row's agent has been observed
 ended (the re-dispatch bar above), the operator's re-dispatch answer is the
-recovery authorization; the prompt carries it and the worker runs
-`claim-recover --force`.
+recovery authorization; the prompt carries it as an explicit line —
+"Claim recovery authorized: the prior run was observed ended" — beside the
+branch-reuse decision, and the worker runs `claim-recover --force`.
 ```
 
    and in the step-5 prompt contract list, add: "The worker mints its own
