@@ -39,6 +39,10 @@ Transcribed from the spec and repo rules; every task inherits them.
   (`git ls-files '*-test.sh'`).
 - Public repo: no absolute host paths, hostnames, or credentials in any
   committed file (`scripts/check-public-safety.sh`).
+- Fix loop: when a verification step fails, fix the cause and re-run that
+  step's verification before advancing. Never skip ahead to the next step
+  or task with a red verification behind you; never weaken an assertion to
+  reach green.
 
 ## File map
 
@@ -274,8 +278,8 @@ for round in 1 2 3 4 5 6 7 8 9 10; do
 	wait "$pA" || sA=$?
 	wait "$pB" || sB=$?
 	case "$sA:$sB" in
-	0:6) winner=q101-aaaaaaaa ;;
-	6:0) winner=q101-bbbbbbbb ;;
+	0:6) winner=q101-aaaaaaaa; loser=q101-bbbbbbbb ;;
+	6:0) winner=q101-bbbbbbbb; loser=q101-aaaaaaaa ;;
 	*) fail "round $round: exits $sA:$sB, expected one 0 and one 6" ;;
 	esac
 	[[ -f $GH_STORE/quest-claim/101/description ]] ||
@@ -285,6 +289,10 @@ for round in 1 2 3 4 5 6 7 8 9 10; do
 	"$winner";*) ;;
 	*) fail "round $round: store holds '$stored', winner was $winner" ;;
 	esac
+	run claim-verify --profile github --target example/repo 101 --token "$winner"
+	assert_exit 0 "$RUN_STATUS" "round $round: winner verifies held"
+	run claim-verify --profile github --target example/repo 101 --token "$loser"
+	assert_exit 6 "$RUN_STATUS" "round $round: loser verifies foreign"
 done
 
 # --- staleness and recovery ---------------------------------------------------
@@ -341,6 +349,8 @@ for round in 1 2 3 4 5 6 7 8 9 10; do
 	q101-bbbbbbbb\;*) owner=q101-bbbbbbbb; loser=q101-aaaaaaaa ;;
 	*) fail "recover round $round: store holds '$stored'" ;;
 	esac
+	run claim-verify --profile github --target example/repo 101 --token "$owner"
+	assert_exit 0 "$RUN_STATUS" "recover round $round: owner verifies held"
 	run claim-verify --profile github --target example/repo 101 --token "$loser"
 	[[ $RUN_STATUS == 2 || $RUN_STATUS == 6 ]] ||
 		fail "recover round $round: displaced verify exited $RUN_STATUS"
@@ -825,9 +835,11 @@ assert_contains 'implemented' "$sandbox/out"
 6. Run the contract suite: `tests/fixtures/quest-log/tracker-test.sh` —
    expect `tracker-test: all assertions passed` (the bidirectional
    declaration gate now covers the five new operations).
-7. Prove the suite bites: temporarily change one `assert_exit 6` in the
-   simultaneous-claims round to `assert_exit 0`, re-run, watch it fail,
-   revert.
+7. Prove the suite bites, in four sub-steps: (a) change one `assert_exit 6`
+   in the simultaneous-claims round to `assert_exit 0`; (b) re-run the
+   suite and confirm it **fails**; (c) revert the edit; (d) re-run and
+   confirm green again. A suite that does not redden at (b) proves nothing,
+   and a suite left weakened by skipping (c) proves nothing from then on.
 8. `just lint && just format-check` — expect no findings.
 9. Commit: `feat: add quest-claim operations to the tracker engine (#125)`.
 
@@ -956,8 +968,9 @@ branch path if one exists; the operator disposes of it.
 Only then set the issue to `status:in-progress` (ensure-create the
 `status:` labels per the quest-log recipe; single-active swap). The swap is
 idempotent and not exclusive, and nothing relies on it for exclusivity. If
-ensure-create fails, stop with its message rather than proceeding
-label-less.
+ensure-create fails, release the claim first (`claim-release` — the quest
+owns it and is abandoning the issue), then stop with the ensure-create
+message rather than proceeding label-less.
 ````
 
 2. In `### Posting the annotation`, replace the first sentence ("Mint the
@@ -981,7 +994,10 @@ label-less.
 
 **Acceptance.** The four gates and the conflict paths are present; the
 token-mint instruction appears once (step 1), referenced from the
-annotation section.
+annotation section. Reading check on the conflict paths (prose has no
+executable harness): the unattended branch names the no-writes exception
+and the campaign hold return, the interactive branch stops and asks, and
+the ensure-create failure path releases the claim before stopping.
 
 ## Task 5 — consumer skills
 
@@ -1030,8 +1046,9 @@ annotation section.
 
 ```markdown
 **Claim check before every dispatch and re-dispatch.** Read the claim
-(`claim-list` covers the batch; a read failure holds the row and reports
-the error — never dispatch on an unreadable claim state). No claim →
+(`claim-list` covers the batch; a read failure holds the row — the step-5
+hold: named in the run output while the rest of the queue drains — and
+reports the error; never dispatch on an unreadable claim state). No claim →
 dispatch; the worker acquires its own. Stale claim → dispatch with recovery
 authorized in the prompt; the worker runs `claim-recover --older-than`.
 Live claim → hold: do not dispatch. When the row's agent has been observed
