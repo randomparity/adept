@@ -11,7 +11,9 @@ actively working the same repo. Read → plan → one confirmation → apply.
 ## Steps
 
 1. **Resolve repo.** `gh repo view --json nameWithOwner --jq .nameWithOwner` → `owner/name`.
-2. **Sweep in-flight issues.** Do **not** filter with `gh issue list --label status:...` —
+2. **Sweep in-flight issues.** Fetch quest claims once
+   (`skills/quest-log/assets/tracker.sh claim-list --target <owner/name>`) for
+   the checks below. Do **not** filter with `gh issue list --label status:...` —
    `gh` mis-encodes the colon and multiple `--label` flags AND (see the skill's colon-label
    gotcha), so either returns nothing. List by state once and filter **client-side**:
    `gh issue list --repo <owner/name> --state open --json number,labels,title --limit 500`,
@@ -23,13 +25,20 @@ actively working the same repo. Read → plan → one confirmation → apply.
    - **merged PR with `Closes #N`** (`gh pr list --repo <owner/name> --state merged --search
      "N in:body"` — verify the `Closes` link) → plan: close issue, strip `status:` labels.
    - **open PR** → plan: correct the label to match the PR's actual state.
-   - **no PR, no matching branch, and stale** (gate below) → plan: reset to `status:ready`.
+   - **no PR, no matching branch, and stale** (gate below) → plan: reset to `status:ready`,
+     and delete the issue's orphaned `quest-claim/<N>` label (release guarded by the
+     observed token) if `claim-list` showed one.
+   - **claim on a closed issue** → plan: delete the claim (release guarded by the
+     observed token; the owner is gone). A claim never extends or vetoes the reset
+     window — its TTL gates quest-versus-quest recovery, not this sweep.
 3. **Staleness gate** (prevents clobbering a legitimately-quiet in-flight issue whose branch
    was never pushed). Reset a `status:in-progress` issue only when ALL hold:
    (a) no open/merged PR references it;
    (b) no branch matches its name/number (`git branch -a`, `git ls-remote --heads`);
    (c) no `WORK:SCOPE` annotation posted after the current `status:in-progress` label was
-       applied (liveness — read via the skill's latest-complete recipe);
+       applied (liveness — read via the skill's latest-complete recipe, applying the
+       quest-log token-binding rule: an annotation whose token matches no live claim is
+       residue, not liveness);
    (d) the `status:` label's age exceeds the threshold (default 60 min), read via the
        skill's timeline recipe. **Empty timeline result = stale-unknown → do NOT reset;
        surface for a human.** Fail closed, never clobber.
