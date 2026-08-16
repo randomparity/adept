@@ -49,7 +49,11 @@ the issue.
   one then re-creates and owns the issue. The displaced quest's immediate
   post-acquire verify observes a foreign claim — or, inside the narrow
   delete/recreate gap, a transient not-found — and either way it halts
-  having mutated nothing; it may re-acquire once the race settles. An owner
+  having mutated no issue or repository state; it may re-acquire once the
+  race settles. A quest halted at a later gate may hold a local branch with
+  committed work: the halt report names it, and the operator disposes of it —
+  the branch may carry salvageable work, so the protocol neither deletes it
+  nor pretends it away. An owner
   cannot silently lose a live claim to the staleness path — a live claim
   fails every `--older-than` guard — so the residual case is an operator
   `--force` landing mid-run, which is an operator-visible conflict, not a
@@ -112,6 +116,11 @@ no gain over the label constraint.
 **Apply the claim label to the issue.** Rejected: applying is idempotent,
 not exclusive — timeline noise without the one property the design needs,
 which repo-level existence already provides.
+
+**The label description as the CAS slot** (quests `gh label edit` the
+description, detecting conflict by read-before-write). Rejected: label edit
+is an unconditional PATCH — last writer wins, and read-before-write
+comparison is the append-only-comment failure in another costume.
 
 **External coordination store** (a KV service, or the GitHub Actions
 cache). Rejected: a second infrastructure dependency for a protocol that

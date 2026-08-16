@@ -90,7 +90,10 @@ stdout carries success payloads only), shaped
 - `claim-acquire --target O/N <issue> --token <t> --producer <login>`
   Validates the id (`github_require_id`) and token grammar. Creates the
   label. On success: stdout `{"claimed":true,...}`, exit 0. On
-  already-exists: reads the label back — token match means this is a retry
+  already-exists — detected by matching the literal `already exists` message,
+  never the bare 422 (validation failures share the status; GitHub rate
+  limiting answers 403/429, so throttling can never read as a conflict) —
+  reads the label back: token match means this is a retry
   of our own lost-response create, so stdout `{"claimed":true,"recovered":"self",...}`,
   exit 0; token mismatch is exit 6 with the holder payload. Other create
   failures classify per `github_classify`; a failure that may have landed
@@ -174,8 +177,11 @@ Two further verify gates bound the non-atomic windows:
 
 A gate that reports loss or a foreign holder: halt immediately, make **no**
 further mutation of the issue (labels, comments, or the claim), and report.
-The surviving owner must be able to proceed as if the loser never existed;
-the loser's local branch stays local.
+The surviving owner must be able to proceed as if the loser never existed.
+A loser at G3 or G4 may hold a local branch with committed work: the halt
+report names its path, and the operator disposes of it — the branch may
+carry salvageable work, so the protocol neither deletes it nor pretends it
+away.
 
 Parked quests keep their claim. A `status:blocked`/`status:needs-human`
 issue is outside the in-flight set, so its claim is recoverable (past grace)
