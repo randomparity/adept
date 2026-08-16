@@ -103,13 +103,19 @@ stdout carries success payloads only), shaped
   message match survives only as the partial-write discriminator: a non-422
   failure whose text carries it takes the same read-back path, while any
   other failure that may have landed reports `EXIT_PARTIAL` (never retried
-  blind — the re-run's read-back is the recovery). GitHub rate limiting
+  blind — the re-run's read-back is the recovery). Should GitHub change the
+  message text, the degradation lands on `EXIT_PARTIAL` — halt and report —
+  never on a false conflict or a duplicate claim. GitHub rate limiting
   answers 403/429, so throttling can never read as a conflict.
 - `claim-verify --target O/N <issue> --token <t>` — reads the label.
   Token match: stdout `{"held":true,"age_seconds":...}`, exit 0. Token
   mismatch: exit 6 with the holder payload. Absent: `EXIT_NOT_FOUND` (2).
   Malformed description (not exactly three valid fields): treated as a
-  foreign claim — exit 6, holder token reported as unparseable.
+  foreign claim — exit 6, holder token reported as unparseable. This is
+  intended, not a trap: a malformed claim can never prove ownership to
+  anyone, so treating it as foreign halts every quest that encounters it
+  until an operator clears it with `--force` or `gh label delete` — the
+  fail-closed direction.
 - `claim-release --target O/N <issue> --token <t>` — reads the label.
   Absent: `{}`, exit 0 (idempotent). Token match: deletes, `{}`, exit 0.
   Mismatch: exit 6 — an owner never deletes a foreign claim.
@@ -224,9 +230,10 @@ carry salvageable work, so the protocol neither deletes it nor pretends it
 away.
 
 Parked quests keep their claim. A `status:blocked`/`status:needs-human`
-issue is outside the in-flight set, so its claim is recoverable (past grace)
-by the next `$quest` the human runs — which is the documented exit edge for
-those states. Resume by the same run is impossible (a resumed session mints
+issue is outside the in-flight set, so its claim is recoverable — explicitly:
+once its age passes `CLAIM_GRACE`, any `$quest` a human runs on the issue
+recovers it with `--older-than $CLAIM_GRACE` — which is the documented exit
+edge for those states. Resume by the same run is impossible (a resumed session mints
 a new token), so resume *is* recovery: the status-inconsistency rule makes
 it immediate for parked issues, and the TTL bounds it for dead in-flight
 ones.
@@ -241,6 +248,17 @@ write edges — `$quest` acquires and releases, recovery is `claim-recover`
 under the staleness rule or explicit operator authorization, `$resurrection`
 garbage-collects. The "one writer per transition edge" rule extends: claim
 edges have exactly the writers just named.
+
+One more convention closes the annotation-supersession hole the issue
+names: **a `WORK:SCOPE` annotation is authoritative only while its token
+matches the issue's live claim.** Latest-complete-wins still orders
+annotations, but an annotation whose token matches no live claim is a dead
+or displaced quest's residue — not liveness evidence, not a scope charter,
+and never a reason to stop an active quest. Every consumer that reads
+`WORK:SCOPE` for authority or liveness (`$resurrection`'s staleness gate,
+`$campaign`'s poll) applies the token match when a claim is present; an
+issue with no claim at all predates or bypasses the protocol, and the
+annotation rule stands unchanged there.
 
 ## seek-quest integration
 
@@ -271,7 +289,9 @@ occupancy set; the claim signal is listed there as an addition by ADR 0018.
 
 - Step 3 reconcile: a `quest-claim/<N>` label is in-flight evidence (map the
   row to in-flight and recover artifacts as today).
-- Step 5 pre-dispatch and re-dispatch: read the claim.
+- Step 5 pre-dispatch and re-dispatch: read the claim. A `claim-list` or
+  claim read that fails (transport/auth) → hold the row and report the
+  error; never dispatch on an unreadable claim state.
   - No claim → dispatch; the worker acquires its own.
   - Stale claim → dispatch with recovery authorized in the prompt; the
     worker runs `claim-recover --older-than`.
@@ -318,8 +338,13 @@ Behavior suites under `tests/fixtures/quest-log/`, discovered by `just test`:
   fixture's stand-in for GitHub's unique constraint), read/delete operate on
   it. Cases:
   - **Simultaneous claims**: two `claim-acquire` processes launched
-    concurrently, K rounds; exactly one exit 0 and one exit 6 per round, and
-    the store holds the winner's token.
+    concurrently as backgrounded subshells with distinct tokens, K=10
+    rounds; exactly one exit 0 and one exit 6 per round, and the store
+    holds the winner's token.
+  - **Concurrent recoverers**: two `claim-recover --older-than` processes
+    raced against one stale claim, K=10 rounds; at rest the store holds
+    exactly one claim (one recoverer's), and the displaced recoverer's
+    follow-up `claim-verify` exits 2 or 6 — never 0.
   - **Foreign token verify**: verify with the wrong token → exit 6 with the
     holder payload.
   - **Self-recovery**: acquire, then acquire again with the same token →
