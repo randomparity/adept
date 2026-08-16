@@ -52,6 +52,11 @@ not skills and are not auto-discovered as invocable commands.
 The manifest schema is a new external contract consumed by #120–#123. Changing
 it after the first baseline creates a new schema version rather than silently
 breaking downstream consumers.
+Tool version pinning — including `huggingface_hub` and `pyarrow` versions used by
+`fetch_dataset.py` — is owned by #120's `benchmark-environment-v1.lock.json`, not by
+this ADR or the manifest. The protocol pins dataset and evaluator revisions, not
+library versions; the environment lock records every shell-visible executable and
+library version.
 
 ## Considered & rejected
 
