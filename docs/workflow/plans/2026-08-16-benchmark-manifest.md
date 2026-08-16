@@ -231,6 +231,7 @@ rather than a KeyError.
 10. each `issue_url` matches `https://github.com/...`
 11. each `license` is in `SUPPORTED_LICENSES`
 12. each `original_base_commit` is a 40-hex SHA
+16. each `test_patch` is a non-empty string
 13. each `fail_to_pass` is a non-empty list
 14. each `adaptation_evidence` has all `REQUIRED_EVIDENCE_FIELDS`
 15. `manifest_digest` matches `compute_manifest_digest(manifest)`
@@ -324,9 +325,9 @@ Algorithm steps (from the spec):
 The `validate_fn` parameter is the seam for testing: tests pass a stub that
 returns success/failure based on known fixture data, avoiding subprocess calls.
 In tests, `validate_fn` is a stub like:
-`lambda instance, rev: evidence if (instance["instance_id"], rev) in known_good else None`
-— returning an evidence dict for known-valid pairs, None otherwise. Tests do not
-require `validate_task.py` to exist; production use does (Task 5).
+`lambda instance, rev: evidence if (instance["instance_id"], rev) in known_good else (_ for _ in ()).throw(ValidationError("not valid"))`
+— returning an evidence dict for known-valid pairs, raising ValidationError
+otherwise. Tests do not require `validate_task.py` to exist; production use does.
 
 ### test_select_tasks.py
 
@@ -346,6 +347,8 @@ Tests:
 8. `test_first_two_disjoint_repos_selected` — two groups from different repos.
 9. `test_insufficient_groups_raises` — fewer than 2 qualifying combos raises an
    error with a clear message.
+14. `test_single_repo_multiple_combos` — a repo with enough eligible instances
+    to produce multiple qualifying combinations selects only the first.
 10. `test_ledger_records_exclusions` — every excluded instance has a rule +
     evidence.
 11. `test_ledger_records_combinations` — every tested combo is in the ledger
@@ -431,6 +434,8 @@ Tests:
 9. `test_docker_unavailable_exits_fault` — Docker daemon check fails → exit 2.
 10. `test_cleanup_on_failure` — temp dirs and containers removed even when
     validation fails mid-step.
+11. `test_infrastructure_fault_vs_finding_exit_codes` — Docker failure → exit 2,
+    evaluator failure → exit 1.
 
 Tests use a stub `runner` that returns canned `CompletedProcess` results and a
 fixture git repo created with `git init` + commits.
@@ -561,6 +566,8 @@ built-in retry for transient HTTP errors. No additional retry logic needed.
 4. `test_missing_issue_url_handled` — `issue_url` may be absent; normalizer
    sets it to `None` rather than crashing.
 5. `test_empty_row_raises` — an empty dict raises a clear error.
+6. `test_malformed_fail_to_pass_json` — a FAIL_TO_PASS field with invalid JSON
+   is handled as a malformed-dataset-row exclusion, not a crash.
 
 ### Verification
 
