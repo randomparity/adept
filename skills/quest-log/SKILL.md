@@ -246,7 +246,11 @@ claimants wins (ADR 0018 carries the probe evidence).
   Exit class `EXIT_CONFLICT=6` reports a live foreign claim with a
   structured holder payload on stderr; `claim-verify` exits 0 held, 2
   absent, 6 foreign; `claim-recover` requires `--older-than <seconds>` or
-  `--force` (the structural carrier of an operator's recovery decision).
+  `--force` (the structural carrier of an operator's recovery decision). A
+  recover that loses a race to another claimant mid-sequence exits
+  `EXIT_PARTIAL` with `{"stage":"create"}`; the caller re-runs
+  `claim-acquire`, whose read-back then reports the winner as an ordinary
+  exit-6 conflict.
 - **Write edges**: `$quest` acquires, verifies, and releases;
   `claim-recover` runs under the staleness rule or explicit operator
   authorization; `$resurrection` garbage-collects claims on closed issues
