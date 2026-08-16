@@ -47,13 +47,17 @@ the issue.
   The interleaving that matters: two recoverers race one stale claim, the
   slower one's delete lands after the faster one's re-create, and the slower
   one then re-creates and owns the issue. The displaced quest's immediate
-  post-acquire verify observes a foreign claim — or, inside the narrow
-  delete/recreate gap, a transient not-found — and either way it halts
-  having mutated no issue or repository state; it may re-acquire once the
-  race settles. A quest halted at a later gate may hold a local branch with
-  committed work: the halt report names it, and the operator disposes of it —
-  the branch may carry salvageable work, so the protocol neither deletes it
-  nor pretends it away. An owner
+  post-acquire verify — milliseconds to seconds after its own create —
+  observes a foreign claim, or, inside the narrow delete/recreate gap, a
+  transient not-found, and either way it halts. Its transient create did
+  touch the label store, but the same race that displaces it overwrites that
+  entry: at rest the store holds exactly one claim, the survivor's, so no
+  cleanup is owed and no duplicate claims exist to untangle. The displaced
+  quest mutates no issue state; it may re-acquire once the race settles. A
+  quest halted at a later gate may hold a local branch with committed work:
+  the halt report names it, and the operator disposes of it — the branch may
+  carry salvageable work, so the protocol neither deletes it nor pretends it
+  away. An owner
   cannot silently lose a live claim to the staleness path — a live claim
   fails every `--older-than` guard — so the residual case is an operator
   `--force` landing mid-run, which is an operator-visible conflict, not a
@@ -82,6 +86,13 @@ the issue.
   plausible skew.
 - The label namespace carries one transient `quest-claim/<N>` entry per
   claimed issue, visible in the labels UI, never applied to issues.
+- Rate limiting: GitHub answers throttling with 403/429, which classify as
+  auth/transport failures — never as a claim conflict, because conflict
+  detection matches the literal `already exists` message and then reads the
+  label back. Claim operations add at most two `gh` calls per quest run
+  against a 5,000/hour authenticated budget, so the protocol carries no
+  per-operation backoff; throttling is the caller's ordinary transport-error
+  path, as it is for every other tracker operation.
 
 ## Considered & rejected
 
@@ -128,10 +139,16 @@ must run from any workstation with `gh` credentials, against the repo's
 no-long-lived-processes anatomy rule — and the label constraint's probed
 exclusivity makes it unnecessary.
 
-**Do nothing (rely on the duplicate-branch conflict).** Rejected: the
-conflict surfaces after both quests have scoped, and later `WORK:SCOPE`
-annotations supersede each other under latest-complete-wins without stopping
-either quest — the failure the issue reports.
+**Do nothing (rely on the duplicate-branch conflict), including human
+arbitration at merge time.** The conflict *is* eventually detected — at
+branch creation, at duplicate PRs, or at merge — so this is not undetectable.
+Rejected because the charter requires detection before design, branch
+creation, or implementation (criterion 2), and an exclusive or
+compare-and-set-like claim operation (criterion 5); merge-time arbitration
+fires after both quests have spent design, build, and review, which is the
+waste the issue exists to prevent, and later `WORK:SCOPE` annotations still
+supersede each other under latest-complete-wins without stopping either
+quest mid-flight.
 
 ## Provenance
 
