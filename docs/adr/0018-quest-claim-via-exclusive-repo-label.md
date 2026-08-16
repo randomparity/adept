@@ -11,95 +11,113 @@ each swap it to `status:in-progress` (idempotent), each mint and validate its
 own `WORK:SCOPE` token, and proceed on duplicate branches and PRs. No
 operation in the workflow is exclusive, so nothing can fail for exactly one
 of two concurrent claimants. The issue requires a claim protocol built on an
-operation with exclusive or compare-and-set-like semantics, and explicitly
-rules out a label swap or append-only comment as sufficient. ADR 0004
-established `$seek-quest`'s occupancy signals; a claim adds one more signal
-to that set without replacing any.
+operation with exclusive or compare-and-set-like semantics, and rules out a
+label swap or append-only comment as sufficient. ADR 0004 established
+`$seek-quest`'s occupancy signals; a claim adds one signal to that set
+without replacing any.
 
 ## Decision
 
 A claim on issue `<N>` is a **repository label** named `quest-claim/<N>`,
 never applied to the issue. Acquisition is `gh label create`, whose
-server-side unique-name constraint is the exclusive operation: of two
-concurrent creators exactly one succeeds. The label description (100-character
-budget, live-probed) is `<token>;<login>;<epoch>`; the token is the
-`WORK:SCOPE` scope token, which binds claim, charter, and issue. The five
-operations — acquire, verify, release, recover, list — are tracker-engine
-operations in `quest-log`'s `tracker.sh`, so every skill shares one
-implementation and exit taxonomy. A new exit class `EXIT_CONFLICT=6` reports
-a live foreign claim with a structured holder payload on stderr.
+unique-name constraint is the exclusive operation: creating a label that
+exists fails with HTTP 422 `already exists`, and a live probe (three rounds
+of eight concurrent creates against this repository) produced exactly one
+winner per round and 21 deterministic `already exists` failures — no second
+success, no anomalous outcome. The label description is
+`<token>;<login>;<epoch>`; the token is the `WORK:SCOPE` scope token, binding
+claim, charter, and issue. Five operations — acquire, verify, release,
+recover, list — live in `quest-log`'s tracker engine so every skill shares
+one implementation and exit taxonomy; a new exit class reports a live foreign
+claim with a structured holder payload.
 
-Liveness is a rule over claim age and issue status, with two constants:
-`CLAIM_GRACE` 600 s (covers the acquire→status-swap window) and `CLAIM_TTL`
-12 h (bounds a dead in-flight quest's occupancy). Stale claims are recovered
-by `claim-recover --older-than`; operator decisions are recovered by
-`claim-recover --force`, the structural carrier of an authorization the
-script cannot read out of a prompt. `$quest` verifies its claim after
-scoping, before branch creation, and before pushing; a lost gate halts the
-quest with no further mutation of the issue.
+Liveness is a rule over claim age and issue status: `CLAIM_GRACE` 600 s
+covers the acquire→status-swap window; `CLAIM_TTL` 12 h bounds a dead
+in-flight quest's occupancy. Stale claims are recovered by
+`claim-recover --older-than`; operator decisions by `claim-recover --force`,
+the structural carrier of an authorization a script cannot read out of a
+prompt. `$quest` verifies its claim immediately after acquiring (before any
+issue mutation), after the scope-charter readback, before branch creation,
+and before pushing; a lost gate halts the quest with no further mutation of
+the issue.
 
 ## Consequences
 
-- Release and recover delete-then-act; GitHub has no conditional delete.
-  The residual race (two recoverers, or a recoverer racing a fresh claim) is
-  bounded by the verify gates: a quest whose claim was deleted under it
-  detects the loss before any irreversible step. Documented, accepted.
-- Claims persist past hand-off and merge until `$resurrection` collects
-  them; a claim on a closed or non-in-flight issue is stale by definition,
-  so the residue is inert and self-healing.
+- GitHub has no conditional delete, so release and recover delete-then-act.
+  The interleaving that matters: two recoverers race one stale claim, the
+  loser's delete lands after the winner's re-create and removes the winner's
+  fresh claim. The loser detects this at its immediate post-acquire verify,
+  before it has mutated the issue at all, and halts; the winner owns the
+  issue and proceeds. An owner cannot silently lose a live claim to the
+  staleness path — a live claim fails every `--older-than` guard — so the
+  residual case is an operator `--force` landing mid-run, which is an
+  operator-visible conflict, not a protocol failure. Accepted.
+- Nothing here serializes the truly irreversible steps — pushes are
+  deletable, PRs closeable, and merges belong to the human or orchestrator,
+  outside the quest's gates. The protocol's guarantee is that duplicate
+  *work* stops before design, not that deletes are serialized.
+- A label whose description does not parse as `<token>;<login>;<epoch>` is
+  treated as a foreign claim, never as evidence of ownership.
+- Claims persist past hand-off and merge until `$resurrection` — an
+  operator-run, between-runs sweep — collects them. A claim on a closed or
+  non-in-flight issue is stale by definition, so residue is inert except
+  that `$seek-quest` drops claimed candidates without judging liveness: a
+  stale claim hides a candidate from recommendation until the next sweep.
+  Conservative direction, accepted.
 - Claim tokens constrain the `WORK:SCOPE` token grammar to
-  `[A-Za-z0-9-]{1,32}`; `$quest` mints `q<N>-<8 hex>`. Tokens minted before
-  this protocol are unaffected — they were never claims.
-- `$seek-quest` drops any ready candidate carrying a claim without judging
-  liveness; a stale claim hides a candidate from recommendation until
-  `$resurrection` sweeps it. Conservative direction, accepted.
-- Epoch seconds in the description rather than ISO-8601: portable arithmetic
-  across GNU/BSD `date`, shorter field, at the cost of human readability in
-  the label UI.
+  `[A-Za-z0-9-]{1,32}`; `$quest` mints `q<N>-<8 hex>`. The issue number
+  scopes the namespace, so a collision needs two claims on the *same* issue
+  drawing the same 32-bit value (~10^-9 per pair); a colliding claim reads
+  as one's own, so the entropy floor stands. Clocks: epochs are
+  self-asserted and hosts may skew; the 600 s grace and 12 h TTL absorb any
+  plausible skew.
 - The label namespace carries one transient `quest-claim/<N>` entry per
-  claimed issue. `gh label list` output and the labels UI show them; they
-  are never applied to issues, so issue timelines are untouched.
+  claimed issue, visible in the labels UI, never applied to issues.
 
 ## Considered & rejected
 
 **Git-ref compare-and-set** (`git push origin <sha>:refs/quest-claims/<N>`).
-Genuinely atomic, and invisible to ordinary fetches. Rejected: claim metadata
-lives in plumbing objects (commit-tree, fetch-by-ref to verify); stale
-recovery needs delete-then-recreate against the same non-CAS window, or a
-force push, which operator policy denies; refs are invisible in every UI; and
-it builds a second, git-side coordination substrate beside the tracker engine
-every skill already shares instead of extending the one that exists.
+Genuinely atomic — the one alternative whose exclusivity was never in doubt,
+a property the label constraint now matches with probe evidence. Rejected on
+the remaining grounds: metadata lives in plumbing objects (commit-tree,
+fetch-by-ref to verify); stale recovery needs delete-then-recreate through
+the same non-atomic window, or a force push, which operator policy denies;
+refs are invisible in every UI; and it builds a second coordination substrate
+beside the tracker engine every skill already shares.
 
-**Claim comment plus detection window** (post a claim comment, re-read after
-a delay, resolve collisions latest-wins). Rejected by the issue itself:
-append-only comments have no exclusive operation, so two claimants can both
-pass a re-read that either could have raced; the window makes every quest
-pay a delay to shrink, not close, the race.
+**Claim comment plus detection window.** Rejected by the issue itself:
+append-only comments have no exclusive operation, and a re-read delay shrinks
+the race without closing it.
 
-**Assignee-based claims.** Rejected: assignment is not exclusive or
-compare-and-set — two concurrent assignments both succeed — and it carries no
-token binding, so a foreign `WORK:SCOPE` still cannot be attributed.
-`$seek-quest` already treats assignees as an occupancy signal for
-human-assigned work; that stays.
+**GitHub issue lock API** (`PUT .../issues/<N>/lock`). Rejected: locking is
+idempotent (re-locking returns 204, so it is not an exclusive operation);
+worse, a locked issue rejects comments, which are the workflow's own
+annotation channel — a claiming quest could not post its `WORK:SCOPE`.
+Locks also carry no token metadata.
+
+**Assignee-based claims.** Rejected: assignment is not exclusive (two
+concurrent assignments both succeed) and binds no token. Assignees stay an
+occupancy signal for human-assigned work, per ADR 0004.
 
 **GitHub Projects v2 field as the claim slot.** Rejected: field updates are
-not conditional (no If-Match write), so the operation is not exclusive; it
-also adds a second state store and a heavier API surface for no gain over
-the label constraint.
+GraphQL mutations with no documented conditional-write semantics, and the
+primitive would add a second state store and a Projects-board dependency for
+no gain over the label constraint.
 
 **Apply the claim label to the issue.** Rejected: applying is idempotent,
-not exclusive, so it adds timeline noise without adding the only property
-the design needs, which repo-level existence already provides.
+not exclusive — timeline noise without the one property the design needs,
+which repo-level existence already provides.
 
 **Do nothing (rely on the duplicate-branch conflict).** Rejected: the
-conflict surfaces after both quests have scoped and chartered, so duplicate
-work is already spent, and later `WORK:SCOPE` annotations supersede each
-other under latest-complete-wins without stopping either quest — the failure
-the issue reports.
+conflict surfaces after both quests have scoped, and later `WORK:SCOPE`
+annotations supersede each other under latest-complete-wins without stopping
+either quest — the failure the issue reports.
 
 ## Provenance
 
 Decided while designing the implementation of issue #125
 (`docs/workflow/specs/2026-08-16-quest-claim-exclusion-design.md`); the
 exclusive-primitive choice was confirmed by the operator in the design
-dialogue over the git-ref alternative.
+dialogue over the git-ref alternative. Exclusivity evidence: three rounds of
+eight concurrent `gh label create` calls against this repository,
+2026-08-16.

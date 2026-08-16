@@ -110,12 +110,17 @@ stdout carries success payloads only), shaped
   claim's age ≥ `--older-than` seconds **or** `--force` was passed
   (`--force` is the structural carrier of an operator's recovery decision;
   the script cannot take it from a prompt). Then deletes and re-creates with
-  the new claim. Delete and re-create are not atomic; the bounded window is
-  closed by the verify gates below — a quest whose fresh claim is deleted by
-  a racing recoverer detects the loss at its next verify gate before
-  anything irreversible. A failure between delete and create reports
-  `EXIT_PARTIAL` with `{"stage":"create"}`; the caller re-runs
-  `claim-acquire`, which takes the absent-or-self path.
+  the new claim. Delete and re-create are not atomic. The interleaving that
+  matters: two recoverers race one stale claim and the loser's delete lands
+  after the winner's re-create, removing the winner's fresh claim. The loser
+  detects this at verify gate G1 — which precedes any issue mutation — and
+  halts cleanly; the winner owns the issue and proceeds. A live claim fails
+  every `--older-than` guard, so an owner cannot silently lose a live claim
+  to the staleness path; only an operator's `--force` can remove one, and
+  that is an operator-visible conflict, not a protocol failure. A failure
+  between delete and create reports `EXIT_PARTIAL` with
+  `{"stage":"create"}`; the caller re-runs `claim-acquire`, which takes the
+  absent-or-self path.
 - `claim-list --target O/N` — read-only. stdout JSON array
   `[{"issue":...,"token":...,"producer":...,"at":...}]` for every repo label
   with the `quest-claim/` prefix. The issue number comes from the label
@@ -150,15 +155,20 @@ Claim label names are built from a validated integer, so the
      or comment write on it is itself the interference this protocol exists
      to prevent. The blocker is reported in the completion report and, under
      `$campaign`, returned to the orchestrator as a hold.
-3. Ensure-create status labels and swap to `status:in-progress` (unchanged).
-4. Post `WORK:SCOPE` carrying the same token (unchanged), read it back, and
-   cross-check the annotation token against the claim token.
-5. **Verify gate G1**: `claim-verify` immediately after the readback.
+3. **Verify gate G1**: `claim-verify` immediately after acquiring or
+   recovering, *before any mutation of the issue*. A quest that loses its
+   claim here has written nothing, which is what makes the
+   concurrent-recoverer interleaving safe: the loser halts cleanly and the
+   winner's state is untouched.
+4. Ensure-create status labels and swap to `status:in-progress` (unchanged).
+5. Post `WORK:SCOPE` carrying the same token (unchanged), read it back, and
+   cross-check the annotation token against the claim token, then
+   **verify gate G2**: `claim-verify` again after the readback.
 
 Two further verify gates bound the non-atomic windows:
 
-- **G2** — before branch creation (step 2).
-- **G3** — before the `$deliver` push (step 8).
+- **G3** — before branch creation (step 2).
+- **G4** — before the `$deliver` push (step 8).
 
 A gate that reports loss or a foreign holder: halt immediately, make **no**
 further mutation of the issue (labels, comments, or the claim), and report.
