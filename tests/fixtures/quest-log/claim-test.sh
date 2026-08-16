@@ -60,6 +60,7 @@ if [[ $1 == label && $2 == create ]]; then
 		exit 1
 		;;
 	esac
+	mkdir -p "$GH_STORE/quest-claim"
 	if mkdir "$GH_STORE/$name" 2>/dev/null; then
 		printf '%s' "$desc" >"$GH_STORE/$name/description"
 		printf 'Created label %s\n' "$name"
@@ -78,7 +79,7 @@ if [[ $1 == label && $2 == delete ]]; then
 	exit 1
 fi
 if [[ $1 == api ]]; then
-	if [[ ${GH_FAIL:-} == rate ]]; then
+	if [[ ${GH_FAIL_API:-} == rate ]]; then
 		printf 'gh: API rate limit exceeded for user ID 1 (HTTP 429)\n' >&2
 		exit 1
 	fi
@@ -138,6 +139,7 @@ export GH_CALL_LOG="$sandbox/calls"
 export PATH="$sandbox/bin:$PATH"
 # The stub reads GH_FAIL; the export attribute sticks to later assignments.
 export GH_FAIL=''
+export GH_FAIL_API=''
 now=$(date -u +%s)
 
 run() { # op args... -- runs the tracker, captures status in RUN_STATUS
@@ -347,10 +349,10 @@ assert_exit 1 "$RUN_STATUS" 'non-numeric issue is usage'
 # --- transport failure at a verify gate is never a claim loss ----------------------
 new_store
 seed_claim 101 q101-aaaaaaaa alice "$now"
-GH_FAIL=rate
+GH_FAIL_API=rate
 run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
 assert_exit 4 "$RUN_STATUS" 'rate-limited verify is transport, never loss'
-GH_FAIL=
+GH_FAIL_API=
 
 # --- parser edge cases --------------------------------------------------------------
 new_store

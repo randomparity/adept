@@ -326,6 +326,10 @@ assert_contains 'degraded=unknown' "$sandbox/out"
 	fail 'declares github view exited non-zero'
 assert_contains 'implemented' "$sandbox/out"
 
+"$tracker" declares --profile github claim-acquire >"$sandbox/out" 2>&1 ||
+	fail 'declares github claim-acquire exited non-zero'
+assert_contains 'implemented' "$sandbox/out"
+
 status=0
 "$tracker" declares --profile fixture undeclared-op >"$sandbox/out" 2>"$sandbox/err" ||
 	status=$?
@@ -678,14 +682,16 @@ assert_error "$sandbox/err" usage 'non-numeric blocker'
 # gate above: an operation added later that takes an issue selector and forgets
 # github_require_id fails here, where a list of today's operations would not.
 # target_url and label_ensure are exempt because their contracts name no issue.
-# search is exempt for a different reason and is not covered: its --parent is an
+# claim_list is exempt for the same reason: it lists the repo's claim labels
+# and takes no selector. search is exempt for a different reason and is not
+# covered: its --parent is an
 # issue selector, deliberately left unguarded because GitHub's parent-issue:
 # qualifier accepts forms this contract does not define. That is open, and this
 # repository's deferral record 0011 owns it.
 # Presence, not arity: an operation taking two selectors that guards one and
 # forgets the other passes here, which is why the per-selector cases below name
 # both of link-parent's.
-guard_exempt='^(target_url|label_ensure|search)$'
+guard_exempt='^(target_url|label_ensure|search|claim_list)$'
 while IFS= read -r op; do
 	[[ -n $op ]] || continue
 	[[ $op =~ $guard_exempt ]] && continue

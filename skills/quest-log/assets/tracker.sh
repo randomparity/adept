@@ -22,6 +22,8 @@ EXIT_AUTH=3
 EXIT_TRANSPORT=4
 # shellcheck disable=SC2034
 EXIT_PARTIAL=5
+# shellcheck disable=SC2034
+EXIT_CONFLICT=6
 
 asset_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 
