@@ -281,6 +281,9 @@ Infrastructure failures exit with code 2 (fault); evaluator findings exit with
 code 1 (finding). No retry: a failed validation attempt is recorded in the ledger
 with its failure category, and the selection algorithm moves to the next candidate
 revision or combination.
+A `git apply --check` failure (patch conflict, missing context, format error) is a
+validation finding (exit 1), not an infrastructure failure — the patch does not apply
+cleanly at this revision, so the candidate is ineligible.
 Repository creation is a pre-run prerequisite: the benchmark-owned repo must
 exist before materialization. If it does not, materialization exits with code 2
 (fault) and a diagnostic naming the missing repo.
