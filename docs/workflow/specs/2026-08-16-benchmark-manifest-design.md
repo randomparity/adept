@@ -197,10 +197,11 @@ line with the fields the selection algorithm needs: `instance_id`, `repo`,
 The JSONL format is the contract between fetch and select. Tests exercise the
 normalization function (raw dataset row → canonical JSONL line) with fixture
 rows; the network call is not tested in CI.
-Malformed JSONL rows (missing required fields, wrong types, invalid UTF-8) are
-skipped with a warning recorded in the candidate ledger under exclusion rule
-`malformed-dataset-row`, preserving the dataset's public source evidence. The
-selection algorithm does not crash on malformed input.
+Malformed JSONL rows are skipped with a warning recorded in the candidate ledger.
+`instance_id` is required; rows missing it are unprocessable and skipped under
+exclusion rule `missing-required-field`. Rows with wrong types or invalid UTF-8
+use `malformed-dataset-row`. Extra fields are ignored. The selection algorithm
+does not crash on malformed input.
 
 ## Deterministic selection (select_tasks.py)
 
@@ -216,6 +217,7 @@ Algorithm (protocol §Deterministic task selection):
    - repository not public
    - SPDX license not in `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Apache-2.0`,
      `ISC`, `Python-2.0`, `PSF-2.0`
+   - missing or null `license` field uses exclusion rule `license-missing`
    - public issue author or SWE-bench contribution author has GitHub login
      `randomparity`
    - public evidence does not expose the author identity for that check
@@ -264,6 +266,9 @@ revision, evaluator config. Steps:
 6. Restore the candidate checkout. Cleanup runs on both success and failure paths:
    temporary directories are removed, Docker containers are stopped and removed,
    and git state is restored even when validation fails mid-step (try/finally).
+Cleanup failures (e.g. directory permissions, Docker daemon unavailable) are
+reported as warnings and do not prevent the validation result from being
+recorded; best-effort cleanup is attempted on all paths.
 
 The Docker invocation is via `subprocess.run`. Tests stub the git and docker
 commands via a command-runner parameter and verify the orchestration logic,
@@ -274,6 +279,9 @@ Infrastructure failures exit with code 2 (fault); evaluator findings exit with
 code 1 (finding). No retry: a failed validation attempt is recorded in the ledger
 with its failure category, and the selection algorithm moves to the next candidate
 revision or combination.
+Repository creation is a pre-run prerequisite: the benchmark-owned repo must
+exist before materialization. If it does not, materialization exits with code 2
+(fault) and a diagnostic naming the missing repo.
 
 ## Issue materialization (materialize_issues.py)
 
@@ -296,17 +304,20 @@ without executing writes. Tests exercise dry-run output and the topology digest
 computation with fixture manifests.
 Idempotency: materialize_issues.py detects existing issues in the benchmark-owned
 repo before creating new ones. If an issue already exists and matches the contract
-(correct body, labels, and absence), it is reused; if it exists but does not match,
-the operation fails explicitly with a diagnostic. On partial failure (some issues
-created, others not), the operation reports the incomplete state and does not
-update the manifest. Re-running materialization completes the missing issues
-without duplicating existing ones.
+(correct body, labels, and absence), it is reused; if it exists but does not match
+(extra label, comment, reaction, or missing required label), the operation fails
+fatally — stops all materialization and reports the unexpected state. On partial
+failure (some issues created, others not), the operation reports the incomplete
+state and does not update the manifest. Re-running materialization completes the
+missing issues without duplicating existing ones.
 
 Topology digest: SHA-256 over RFC 8785 canonical JSON of the materialized topology
 state — issue numbers in lexical instance_id order, the exact label set per issue,
 and the verified absence of every relationship and metadata field the protocol
-forbids. The digest is recorded in the manifest and validated on subsequent runs
-to prove topology preservation.
+forbids (encoded as explicit `false` fields in the digested structure). The digest
+is computed during materialization, before the manifest is updated, and recorded
+in the manifest. On subsequent runs, a digest mismatch is a fatal error indicating
+external modification or a different materialization run.
 
 ## File layout
 
