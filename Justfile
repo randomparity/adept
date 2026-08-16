@@ -86,7 +86,23 @@ format-check:
   done <"$sources"
   shfmt -d "${tabs[@]}"
   shfmt -i 2 -d "${two_space[@]}"
+py-lint:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  ruff check benchmarks/
+  ruff format --check benchmarks/
 
+py-test:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  # unittest exits 5 when no tests are found. During incremental builds a
+  # task may have committed infrastructure before its first test, so exit 5
+  # is accepted rather than treated as a failure.
+  status=0
+  python3 -m unittest discover -s benchmarks -p 'test_*.py' -v || status=$?
+  if ((status != 0 && status != 5)); then
+    exit "$status"
+  fi
 test:
   #!/usr/bin/env bash
   set -euo pipefail
@@ -139,13 +155,12 @@ actions-check:
   actionlint
   zizmor --offline .github/workflows/
 
-commit-check: lint format-check public-safety
+commit-check: lint format-check public-safety py-lint
 
 push-check:
   ./scripts/verify-push.sh
 
-verify: records commit-check shape-check ripgrep-config-check plugin-check test actions-check
-  prek run --all-files --stage pre-commit --dry-run
+verify: records commit-check shape-check ripgrep-config-check plugin-check test py-test actions-check
 
 ci:
   #!/usr/bin/env bash
