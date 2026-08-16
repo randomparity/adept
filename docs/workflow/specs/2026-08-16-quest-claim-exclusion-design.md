@@ -92,21 +92,20 @@ stdout carries success payloads only), shaped
 
 - `claim-acquire --target O/N <issue> --token <t> --producer <login>`
   Validates the id (`github_require_id`) and token grammar. Creates the
-  label. On success: stdout `{"claimed":true,...}`, exit 0. On HTTP 422 the
-  response is *not* trusted by message alone — validation failures share the
-  status. The discriminator is a read-back: the label exists → token match
-  means this is a retry of our own lost-response create, so stdout
-  `{"claimed":true,"recovered":"self",...}`, exit 0, and token mismatch is
-  exit 6 with the holder payload; the label is absent → the create genuinely
-  failed (invalid name, over-long description), classified per
-  `github_classify` — never as a conflict. The literal `already exists`
-  message match survives only as the partial-write discriminator: a non-422
-  failure whose text carries it takes the same read-back path, while any
-  other failure that may have landed reports `EXIT_PARTIAL` (never retried
-  blind — the re-run's read-back is the recovery). Should GitHub change the
-  message text, the degradation lands on `EXIT_PARTIAL` — halt and report —
-  never on a false conflict or a duplicate claim. GitHub rate limiting
-  answers 403/429, so throttling can never read as a conflict.
+  label. On success: stdout `{"claimed":true,...}`, exit 0. **Every** create
+  failure is resolved by read-back, never by message text — the store's
+  state is the only trustworthy discriminator between "lost the race",
+  "won but lost the response", and "the create genuinely failed" (invalid
+  name, over-long description, validation 422s of every stripe): the label
+  exists with our token → `{"claimed":true,"recovered":"self",...}`, exit 0;
+  exists with a foreign or unparseable token → exit 6 with the holder
+  payload; absent → the create genuinely failed, classified per
+  `github_classify` — never as a conflict. A read-back that itself fails
+  (the create may have landed and the store is unreadable) reports
+  `EXIT_PARTIAL`; the re-run's read-back is the recovery, never a blind
+  retry. No error-message text participates anywhere, so a GitHub wording
+  change cannot steer the classification. GitHub rate limiting answers
+  403/429, so throttling can never read as a conflict.
 - `claim-verify --target O/N <issue> --token <t>` — reads the label.
   Token match: stdout `{"held":true,"age_seconds":...}`, exit 0. Token
   mismatch: exit 6 with the holder payload. Absent: `EXIT_NOT_FOUND` (2).
