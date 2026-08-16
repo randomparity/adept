@@ -140,9 +140,13 @@ stdout carries success payloads only), shaped
   creates the new claim.
 - `claim-list --target O/N` — read-only. stdout JSON array
   `[{"issue":...,"token":...,"producer":...,"at":...}]` for every repo label
-  with the `quest-claim/` prefix. The issue number comes from the label
-  *name*, never the description; an entry whose description does not parse
-  is still listed with the unparsed fields null — a claimed issue must never
+  whose name matches `quest-claim/<digits>` exactly (anything else under the
+  prefix is not a claim and is not listed). Exact schema per entry: `issue`
+  is a string of digits from the label *name*, never the description;
+  `token`, `producer`, `at` are strings, or **all three** null with
+  `"malformed": true` when the description fails any grammar check — no
+  partial parsing, so a bad field can never ride beside good ones;
+  well-formed entries carry `"malformed": false`. A claimed issue must never
   vanish from the list because its description is odd. Feeds `$seek-quest`'s
   occupancy filter and `$resurrection`'s sweep.
 
@@ -181,6 +185,12 @@ Claim label names are built from a validated integer, so the
    concurrent-recoverer interleaving safe: the loser halts cleanly and the
    winner's state is untouched.
 4. Ensure-create status labels and swap to `status:in-progress` (unchanged).
+   The swap is idempotent and **not** exclusive, and nothing relies on it
+   for exclusivity: two racing swaps converge to the same value, and the
+   verify gates arbitrate ownership. A claim that never reaches an
+   in-flight status — its quest crashed or halted between acquire and this
+   swap — becomes recoverable once its grace expires, by design: a quest
+   that never declared in-progress must not hold the issue.
 5. Post `WORK:SCOPE` carrying the same token (unchanged), read it back, and
    cross-check the annotation token against the claim token, then
    **verify gate G2**: `claim-verify` again after the readback.
@@ -237,11 +247,12 @@ occupancy set; the claim signal is listed there as an addition by ADR 0018.
 - Sweep gains claim awareness via one `claim-list` read:
   - Claim on a **closed** issue → plan: delete the claim (release guarded by
     the observed token; the owner is gone).
-  - Claim whose issue the staleness gate resets to `status:ready` → the same
-    plan row deletes the orphaned claim.
-  - A **live** claim (per the liveness rule) is liveness evidence in the
-    step-3 staleness gate: do not reset. An expired claim counts for
-    nothing.
+  - Claim whose issue the existing step-3 staleness gate resets to
+    `status:ready` → the same plan row deletes the orphaned claim. The gate's
+    four conditions are unchanged: a claim **never** extends or vetoes the
+    reset window — its 12 h TTL gates quest-versus-quest recovery, not this
+    sweep, so a dead quest's issue is recovered on the same 60-minute
+    evidence as before this protocol existed.
 - Reconciliation table rows name the claim deletions beside the label
   actions; the single confirmation covers them.
 
@@ -312,7 +323,9 @@ Behavior suites under `tests/fixtures/quest-log/`, discovered by `just test`:
   - **Absent paths**: verify/release/recover against no claim → exit 2 / `{}`
     exit 0 / create.
   - **Malformed description**: a hand-corrupted store entry → verify exits
-    6, never reports held.
+    6, never reports held; `claim-list` still lists the entry with
+    `token`/`producer`/`at` all null and `"malformed": true`; a label under
+    the prefix with non-digit suffix is not listed at all.
   - **GitHub failure-mode classification** (stub knobs in the existing
     `GH_FAIL=` pattern): a 422 without `already exists` and an absent store
     → usage/transport, never exit 6; a 429 → transport; a 5xx on create →
