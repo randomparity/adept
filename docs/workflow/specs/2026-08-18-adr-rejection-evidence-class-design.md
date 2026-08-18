@@ -29,7 +29,7 @@ belief rather than the claim's load.
 | R3 | A **judgment** ground says so with the token `judgment:`, and is legitimate without a command. Naming which class it is — complexity, fit, taste, cost — is optional colour, not the obligation. | #137 acceptance criterion 3; ADR 0019, "naming the class is the whole obligation" |
 | R3b | The `$spellcraft` text states the non-exemption rule to the **writer**: the tag classes the ground and does not exempt a factual premise sitting inside it, so a `judgment:` resting on an unrun behaviour claim is the same defect wearing the other label. | ADR 0019 Decision; without it R4 finds against a writer for a rule their instructions never carried |
 | R3c | Where a ground is both factual and judgment, the `$spellcraft` text says the bullet leads with `verified:`. | necessary consequence of R2 + R3: one tag opens the ground, and the factual half is the half that owes evidence |
-| R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it. Where a record carries no tags at all, the clause yields one observation that the record predates the contract rather than a finding per bullet. | #137 acceptance criterion 2, proposal step 2; non-retrofit consequence in ADR 0019 |
+| R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it. Where a record carries no tags at all, the clause yields one observation — that the record either predates the contract or ignores it wholesale — rather than a finding per bullet. | #137 acceptance criterion 2, proposal step 2; non-retrofit consequence in ADR 0019 |
 | R4b | The added focus clause states that a `verified:` ground's command and result are the ground rather than argument, so the focus's existing size clause does not read as an instruction to cut them. | necessary consequence of R4: the ADR reviewer sees only the focus string |
 | R5 | `skills/tome-of-lore/SKILL.md`'s ADR template states the same requirement, so the two statements of the contract cannot drift. | dispatch brief criterion 4 |
 | R6 | The existing size discipline holds. The `$spellcraft` text says what the tag displaces — the paragraph of justification behind the ground, never the sentence or two that states the ground — and carries one short example bullet per tag — a named alternative followed by a `verified:` ground, and one followed by a `judgment:` ground. R6 is met when the displacement sentence and both examples are present; it is not a claim about record length. | #137 acceptance criterion 4 |
@@ -129,10 +129,13 @@ Whatever handles this has to be readable **from the record alone**: the reviewer
 file path and the focus string — no diff, no base ref, no adoption date. "The bullets this
 change writes" is a test it cannot run, and a date threshold is one it cannot resolve,
 since `$spellcraft` ships to repositories that adopt the contract on their own schedule.
-What is readable is whether the record carries any tags at all. A wholly untagged record
-predates the contract, so the clause yields one observation to that effect instead of a
-finding per bullet. The residual is a post-contract writer who ignores the rule entirely
-and gets one observation rather than several findings — still surfaced, just once.
+What is readable is whether the record carries any tags at all. The clause therefore
+reports that observation once — a wholly untagged record either predates the contract or
+ignores it wholesale — instead of filing a finding per bullet. It states the observable
+rather than the inference on purpose: the reviewer cannot tell the two apart from one
+file, and a change whose subject is unevidenced assertions must not install one in its own
+enforcement clause. The residual is that a post-contract writer who ignores the rule
+entirely draws one report rather than several — still surfaced, just once.
 
 ## Testing
 

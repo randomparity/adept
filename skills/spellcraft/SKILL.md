@@ -350,9 +350,9 @@ For each ADR path in the set, run `$trial-loop` in file-list mode:
   states — whichever tag precedes it, since a judgment resting on an unrun behaviour claim
   is the same defect relabelled. The command and result a factual ground carries are the
   ground, not argument, so the size clause above does not ask for them to be cut. A record
-  carrying no tags at all predates this contract: say so once rather than filing a finding
-  per bullet. This ADR file is the review target, not settled
-  ground — challenge its decision on the merits.`
+  carrying no tags at all either predates this contract or ignores it wholesale: report
+  that once rather than filing a finding per bullet. This ADR file is the review target,
+  not settled ground — challenge its decision on the merits.`
 
 Do **not** pass the spec/plan reviews' "don't reopen settled ADR choices" focus
 here: it would tell the review to treat its own target as settled and neuter it.
