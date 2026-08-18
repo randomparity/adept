@@ -171,3 +171,8 @@ authority, and the fence structure and five headings are unchanged. Requirement 
 Both tasks are additive prose in tracked files, with no migration and no state to unwind.
 The two commits revert **together**: reverting Task 1 alone strands Task 2's restatement
 and ADR 0019's tags on a vocabulary no skill defines any more, and no gate would catch it.
+
+The ADR commit is **not** part of that revert. ADR 0019 is a record under this repository's
+own gate, which fails a change that deletes one (`E-GONE`), so reverting the PR as a unit
+goes red in CI. A full rollback is: revert the two skill commits, and supersede 0019 with a
+new record carrying the banner — never delete it.
