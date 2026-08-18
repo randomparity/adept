@@ -26,7 +26,8 @@ Design: [spec](../specs/2026-08-18-adr-rejection-evidence-class-design.md) ·
 - Never commit to `main`. Work is on `feat/adr-rejection-evidence-class-137`.
 - The repository is public: no host paths, hostnames, credentials, or session state.
 - Guardrail command: `just verify`. Run it bare — no pipes, no `|| true`.
-- Wrap prose at the 100-character line limit already used in both files.
+- Wrap prose to match the surrounding lines (both files sit in the 80–92 column range).
+  No gate measures Markdown line width — matching the neighbours is the whole rule.
 
 ## Task 1 — state the contract and the review clause in `$spellcraft`
 
@@ -64,8 +65,12 @@ factual half is the half that owes evidence.
 
 What the tag replaces is the paragraph of justification behind the ground, never the
 sentence or two that states the ground. A tagged bullet reads
-`verified: prek install exits 2 under a global hooks path (prek 0.2.4, macOS)` or
-`judgment: a second index adds a merge-conflict surface for a lookup nothing performs`,
+
+- **Configure the hooks path globally.** verified: `prek install` refuses and exits 2
+  under a global `core.hooksPath` (prek 0.4.13, macOS).
+- **Keep a second index of the records.** judgment: a merge-conflict surface for a lookup
+  nothing performs.
+
 in place of the reasoning it summarises. A rejected alternative is a road nobody drives,
 so nobody re-tests the reason it was rejected; the tag is what tells a later reader which
 grounds were checked.
@@ -79,19 +84,24 @@ one-line example per tag. Requirements R1, R2, R3, R3b, R3c, R6.
 ### Step 1.2 — extend the ADR-review focus
 
 Anchor: step 2's `focus:` string, the one beginning `Focus on the soundness of the
-decision under its stated context`. Insert the following two sentences immediately after
-`its remedy is cutting rather than more text.` and before `This ADR file is the review
-target`. Change nothing else in the string, and leave the spec-review and plan-review
-focus strings alone.
+decision under its stated context`. Insert the three sentences below immediately before
+the contiguous string `This ADR file is the review target` — that is, at the end of the
+sentence about record size, whose closing words wrap onto their own line as
+`is cutting rather than more text.` Change nothing else in the string, and leave the
+spec-review and plan-review focus strings alone.
+
+The `focus:` string is a bullet's continuation, so its lines carry two spaces of indent.
+Insert the block with that indent, as shown:
 
 ```
-Evidence class is in scope: a rejection whose ground is stated as fact but carries no
-command, result, or source is a finding, as is a claim about a rejected alternative's
-behaviour that you cannot reproduce from what the bullet states — whichever tag precedes
-it, since a judgment resting on an unrun behaviour claim is the same defect relabelled.
-The command and result a factual ground carries are the ground, not argument, so the size
-clause above does not ask for them to be cut. A record carrying no tags at all predates
-this contract: say so once rather than filing a finding per bullet.
+  Evidence class is in scope: a rejection whose ground is stated as fact but carries no
+  command, result, or source is a finding, as is a claim about a rejected alternative's
+  behaviour that you cannot reproduce from what the bullet states — whichever tag
+  precedes it, since a judgment resting on an unrun behaviour claim is the same defect
+  relabelled. The command and result a factual ground carries are the ground, not
+  argument, so the size clause above does not ask for them to be cut. A record carrying
+  no tags at all predates this contract: say so once rather than filing a finding per
+  bullet.
 ```
 
 **Acceptance:** the focus names both R4 conditions, is tag-insensitive, reconciles with
@@ -144,9 +154,13 @@ record, and a sentence about which skill owns the rule is instruction, not recor
 
 ### Step 2.3 — verify
 
-Run `just verify` bare. Expected: exit 0. `just records` in particular must stay green —
-the ADR profile asserts on the `## Considered & rejected` *heading*, not on the template
-prose beneath it, so extending that line cannot redden it. Confirm rather than assume.
+Run `just verify` bare. Expected: exit 0. `just records` stays green because the record
+gate reads `docs/adr/` and byte-compares the six gate assets under
+`skills/tome-of-lore/assets/`; it never opens a `SKILL.md`. Confirm rather than assume.
+
+**Acceptance:** the template's `Considered & rejected` placeholder names both tokens and
+the factual class's parts, one sentence below the closing fence names `$spellcraft` as the
+authority, and the fence structure and five headings are unchanged. Requirement R5.
 
 ### Step 2.4 — commit
 
@@ -154,5 +168,6 @@ prose beneath it, so extending that line cannot redden it. Confirm rather than a
 
 ## Rollback
 
-Both tasks are additive prose in tracked files. `git revert` of either commit restores the
-prior text with no migration, no state, and no consumer to notify.
+Both tasks are additive prose in tracked files, with no migration and no state to unwind.
+The two commits revert **together**: reverting Task 1 alone strands Task 2's restatement
+and ADR 0019's tags on a vocabulary no skill defines any more, and no gate would catch it.

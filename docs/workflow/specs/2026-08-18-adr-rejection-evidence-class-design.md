@@ -32,7 +32,7 @@ belief rather than the claim's load.
 | R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it. Where a record carries no tags at all, the clause yields one observation that the record predates the contract rather than a finding per bullet. | #137 acceptance criterion 2, proposal step 2; non-retrofit consequence in ADR 0019 |
 | R4b | The added focus clause states that a `verified:` ground's command and result are the ground rather than argument, so the focus's existing size clause does not read as an instruction to cut them. | necessary consequence of R4: the ADR reviewer sees only the focus string |
 | R5 | `skills/tome-of-lore/SKILL.md`'s ADR template states the same requirement, so the two statements of the contract cannot drift. | dispatch brief criterion 4 |
-| R6 | The existing size discipline holds. The `$spellcraft` text says what the tag displaces — the paragraph of justification behind the ground, never the sentence or two that states the ground — and carries one one-line example bullet per tag, a `verified:` one and a `judgment:` one. R6 is met when the displacement sentence and both examples are present; it is not a claim about record length. | #137 acceptance criterion 4 |
+| R6 | The existing size discipline holds. The `$spellcraft` text says what the tag displaces — the paragraph of justification behind the ground, never the sentence or two that states the ground — and carries one short example bullet per tag — a named alternative followed by a `verified:` ground, and one followed by a `judgment:` ground. R6 is met when the displacement sentence and both examples are present; it is not a claim about record length. | #137 acceptance criterion 4 |
 | R7 | `just verify` passes. | `CLAUDE.md`, *Verifying a change* |
 
 ## Non-requirements
@@ -141,8 +141,8 @@ The change is skill prose. It is verified by:
 - `just verify` — the repository guardrail suite, which covers skill shape, link
   resolution, public safety, and record form (R7).
 - Reading the two edits back against the table above, requirement by requirement. R6 is
-  the one with a concrete artifact: the `$spellcraft` text carries a one-line `verified:`
-  example and a one-line `judgment:` example, or it does not.
+  the one with a concrete artifact: the `$spellcraft` text carries the displacement
+  sentence, a `verified:` example bullet, and a `judgment:` example bullet, or it does not.
 - ADR 0019 itself, whose `Considered & rejected` section is written to the new contract.
   It is the first record under the rule and the worked example of it; a rule its own
   founding record cannot follow is the wrong rule.
