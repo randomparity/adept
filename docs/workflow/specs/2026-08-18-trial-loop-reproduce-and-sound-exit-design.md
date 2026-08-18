@@ -65,33 +65,49 @@ Sourced from #138's acceptance criteria and the frozen `WORK:SCOPE` on that issu
 
 ### Where the reproduction instruction lives
 
-In `$trial-loop`'s step 1, as a standing instruction the loop transmits on every pass
-alongside the target, charter, and focus — **not** in caller focus texts.
+Written once in `$trial-loop`'s step 1; the loop **appends it to the focus it transmits**
+on every pass. It is not copied into any caller's focus text.
+
+Focus is the only slot that exists. The `CHARTER` block is fixed at eight fields plus focus
+(`skills/trial-loop/SKILL.md:213`), so a ninth element would break the block's invariant
+and the reviewer's parse; and `$gauntlet` classifies every non-flag, non-path token as
+focus text (`skills/gauntlet/SKILL.md:59-67`), so a prose instruction outside the block
+arrives as focus whatever the source file calls it. Authored once, transmitted as focus,
+weighted as the user's priority. Its own wording — reproduce *before* evaluating — is what
+orders it against the caller's evaluative focus, since `$gauntlet` has no category that
+ranks one focus clause above another.
 
 #138 proposes both ("the dispatch contract … and the focus text `$spellcraft` and `$quest`
 pass"). Stating it in the dispatch alone is a deliberate narrowing, recorded in ADR 0020:
-four copies of one rule in four files, with nothing detecting divergence, is the drift the
-frozen scope flags as a risk, and the dispatch is the one point every caller passes
-through. It also covers `--reviewer detect-evil` and any future caller without further
-edits. The tradeoff, recorded in ADR 0020's consequences, is that the instruction reaches
-`$detect-evil` whether or not that reviewer was designed around it.
-
-Consequently no caller focus text changes for reproduction. The caller edits this change
-makes are the ones requirement 7 asks for: recognising the new exit.
+four call sites across two caller files, with nothing detecting divergence, against one
+statement at the point every caller passes through — which also covers
+`--reviewer detect-evil` and any future caller for free. Consequently no caller focus text
+changes for reproduction; the caller edits this change makes are the ones requirement 7
+asks for.
 
 ### What the instruction asks for
 
-Four things, in order:
-
-- identify the target's load-bearing factual claims — the claims the target's argument
-  rests on, whose falsity would change the conclusion;
-- attempt to reproduce each;
-- report claim, observation, the command run, and the environment it ran in;
-- do this before evaluating the argument.
+Four things, in order: identify the target's load-bearing factual claims — the ones whose
+falsity would change the conclusion; attempt to reproduce each; report claim, observation,
+the command run, and the environment it ran in; and do this before evaluating the argument.
 
 A target with no load-bearing factual claims is answered in one sentence saying so. A
-command the reviewer cannot run in its environment is reported as that observation, not as
-a confirmation.
+command the reviewer cannot run is reported as that observation, not as a confirmation.
+
+### Reproduction stays read-only
+
+`skills/trial-loop/SKILL.md:301` and `skills/gauntlet/SKILL.md:344` make the reviewer
+read-only with respect to the target and git state, with `--out` the sole write exception.
+This change creates no second one: reproduction is inspection plus commands that write
+nothing into the target's working tree, and anything that would write is reported as the
+observation.
+
+The bound is load-bearing, not decoration. In working-tree mode `$gauntlet` resolves its
+target from `git status`, and the cycle-start `git stash create` snapshot is the baseline
+the self-collision fraction measures against — so a reviewer's build artifacts would become
+the next pass's target *and* count as lines that did not exist at cycle start, inflating
+the loop's own convergence signal and pushing the run toward the own-surface or rescope
+exit on evidence the reviewer manufactured.
 
 ### Where the report goes
 
@@ -113,20 +129,34 @@ record the run wrote is a file in the target) is unchanged.
 *Sound with record notes*, added to *Stop conditions* as its own bullet. Three
 preconditions:
 
-1. a pass in this cycle reported every load-bearing claim reproduced and confirmed, and no
-   target edit since has changed what those claims assert;
+1. a pass in this cycle **named** the load-bearing claims it reproduced and reported each
+   confirmed, and no target edit since has changed what those claims assert;
 2. every standing finding is consequence-free under the test below;
 3. the pass's findings can all be disposed of without editing the target.
+
+Condition 1 requires named claims, not a verdict about claims. Otherwise the exit is
+vacuously reachable: the reviewer chooses which claims count as load-bearing, and the
+instruction deliberately legitimates "this target asserts nothing reproducible" as an
+answer — so a lazy or mistaken pass would hand the orchestrator condition 1 and the exit
+would turn entirely on a consequence test nothing checks. A target with nothing to
+reproduce leaves the loop through `approve`, *converged with deferrals*, or the cap, as it
+does today.
 
 The third precondition is the same guarantee *converged with deferrals* gets from its
 "you changed nothing since the previous pass" half: a pass that applies a fix is never the
 pass that exits, so no fix ships unreviewed.
 
-Precedence: `approve` wins if the reviewer returns it. Where this exit and *converged with
-deferrals* both apply, report this one — it carries strictly more information (the
-confirmed claims) and lists the deferral owners anyway under the run's disclosure rule.
-A finding the consequence test calls consequential cancels the exit and the loop continues
-ordinarily.
+The exit is an ordinary run-ending exit and inherits *Stop conditions*' on-every-exit
+obligations in full — working-tree guardrails and commit, suppression disclosure, deferral
+disclosure. That section currently says "all four exits" at `skills/trial-loop/SKILL.md:268`
+and `:477`; both become "every exit", which is correct now and stays correct.
+
+Precedence: `approve` wins if the reviewer returns it. The rescope and self-collision exits
+outrank this one, because they carry obligations it does not — charter authority, and one
+confirming pass — and an exit whose conditions the orchestrator itself judges must not be
+the cheap way past them. Where this and *converged with deferrals* both apply, report this
+one: it says everything that exit says and adds which claims were confirmed. A finding the
+consequence test calls consequential cancels the exit and the loop continues ordinarily.
 
 ### The consequence test
 

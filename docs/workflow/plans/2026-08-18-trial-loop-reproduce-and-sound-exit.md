@@ -48,17 +48,29 @@ Replace this paragraph:
 
 with the same paragraph amended to name the reproduction instruction as supplied rather
 than prohibited, and to say that what "nothing else" forbids is the run's own history —
-followed by the standing instruction as an indented block quote, then two short paragraphs
-saying (a) the report rides in `summary` and the failures ride in `findings`, so no schema
-changes, and (b) reproduction is what the *sound with record notes* exit keys on, so a run
-with no reproducing pass behaves exactly as before.
+followed by the standing instruction as an indented block quote, then short paragraphs
+covering (a) that the loop **appends the instruction to the focus it transmits**, so it
+lands in the `focus:` field of the `CHARTER` block and in the focus position of the
+arguments, leaving the block's eight-fields-plus-focus invariant intact; (b) that the
+report rides in `summary` and the failures ride in `findings`, so no schema changes; and
+(c) that reproduction is what the *sound with record notes* exit keys on, so a run with no
+reproducing pass behaves exactly as before.
 
 The block quote asks for, in order: identify the load-bearing factual claims (the ones
 whose falsity would change the conclusion); attempt to reproduce each; lead `summary` with
-claim versus observation naming the command and the environment; file an unreproducible
-claim as an ordinary finding citing the claim's lines with claim, observation, command, and
-environment in the body; report a command that cannot be run here as that observation and
-never as a confirmation; answer a target that asserts nothing reproducible in one sentence.
+the claims **named**, claim versus observation, and the command and environment; file an
+unreproducible claim as an ordinary finding citing the claim's lines with claim,
+observation, command, and environment in the body; report a command that cannot be run here
+as that observation and never as a confirmation; answer a target that asserts nothing
+reproducible in one sentence.
+
+The instruction must also state the **read-only bound**: reproduction is inspection plus
+commands that write nothing into the target's working tree. `skills/trial-loop/SKILL.md:301`
+and `skills/gauntlet/SKILL.md:344` make the reviewer read-only with respect to the target
+and git state with `--out` the sole write exception, and this change creates no second one.
+Say why in one clause: in working-tree mode the target is resolved from `git status` and
+the self-collision baseline is a `git stash create` snapshot, so reviewer-written files
+would become the next pass's target and inflate the loop's convergence signal.
 
 Leave the following paragraph ("One exception is structural rather than optional…")
 untouched — the deferral-record disclosure exception still stands.
@@ -81,9 +93,13 @@ Insert a new bullet immediately after the *converged with deferrals* bullet (the
 "Report it distinctly — it is not `approve` — and list the records.") and before the
 final-budgeted-iteration bullet. The new bullet states:
 
-- the trigger: a pass reported every load-bearing claim reproduced and confirmed, nothing
-  changed since has altered what those claims assert, and every standing finding is
-  consequence-free;
+- the trigger: a pass **named** the load-bearing claims it reproduced and reported each
+  confirmed, nothing changed since has altered what those claims assert, and every standing
+  finding is consequence-free;
+- that named claims are required, not a verdict about claims — a pass answering "this
+  target asserts nothing reproducible" satisfies the instruction but not this condition,
+  and such a target leaves through `approve`, *converged with deferrals*, or the cap as it
+  does today;
 - the consequence test as three questions — does the decision the target records change,
   does any behaviour change, would a future maintainer acting on the target as it stands do
   something different — with one yes cancelling the exit;
@@ -93,8 +109,17 @@ final-budgeted-iteration bullet. The new bullet states:
   line answers yes on the third question and is consequential;
 - the no-edit precondition, with the same reason *converged with deferrals* gives: a pass
   that applies a fix is never the pass that exits;
-- distinct reporting, the note list, and precedence over *converged with deferrals* where
-  both apply.
+- that it is an ordinary run-ending exit inheriting the section's on-every-exit obligations
+  in full — working-tree guardrails and commit, suppression disclosure, deferral disclosure;
+- distinct reporting, the note list, and precedence: the rescope and self-collision exits
+  outrank it (they carry obligations it does not), and it outranks *converged with
+  deferrals* where both apply.
+
+### Step 2.1a — correct the stale exit counts
+
+In the same section, `skills/trial-loop/SKILL.md:268` and `:477` both say "all four exits".
+Replace both with "every exit", so the preamble's obligations cover the new bullet and no
+enumeration needs maintaining again.
 
 ### Step 2.2 — amend the cap bullet
 
