@@ -199,8 +199,35 @@ require_assets() {
 # have already printed their name column by the time they scan, so this prints the reason
 # alone — the same shape their ordinary failures print.
 fail_scan() {
+  local what=$1 status=$2 tool=${3:-grep}
   failed=$((failed + 1))
-  printf 'FAIL could not scan %s (grep exit %s)\n' "$1" "$2"
+  printf 'FAIL could not scan %s (%s exit %s)\n' "$what" "$tool" "$status"
+}
+
+# expect_unchanged <before-copy> <record> <ok-note> <changed-note> — the three migrator
+# write guards. Deletion is separated out before the comparison: `cmp -s` reports an absent
+# file with the same status it reports for one it could not read, and "the run removed the
+# record" is the worse of the two outcomes these guards exist to catch, not an environment
+# problem. Both paths are named either way.
+expect_unchanged() {
+  local before=$1 rec=$2 ok=$3 changed=$4 scan=0
+  if [ ! -e "$rec" ]; then
+    failed=$((failed + 1))
+    printf 'FAIL the run removed %s\n' "$rec"
+    return 0
+  fi
+  cmp -s "$before" "$rec" || scan=$?
+  case $scan in
+  0)
+    passed=$((passed + 1))
+    printf 'ok   %s\n' "$ok"
+    ;;
+  1)
+    failed=$((failed + 1))
+    printf 'FAIL %s\n' "$changed"
+    ;;
+  *) fail_scan "$before vs $rec" "$scan" cmp ;;
+  esac
 }
 
 # expect_error_code <stderr-file> <code> [pattern] — the verdict eight bespoke cases share:
@@ -2905,19 +2932,8 @@ MD
   cp "$d/docs/debt/0001-valid.md" "$d.before"
   run_migrator "dry run reports without writing" 0 - "$d"
   printf '  %-4s %-44s ' "" "dry run leaves the record byte-identical"
-  scan=0
-  cmp -s "$d.before" "$d/docs/debt/0001-valid.md" || scan=$?
-  case $scan in
-  0)
-    passed=$((passed + 1))
-    printf 'ok   nothing written\n'
-    ;;
-  1)
-    failed=$((failed + 1))
-    printf 'FAIL the default run wrote to the record\n'
-    ;;
-  *) fail_scan "$d.before and the record" "$scan" ;;
-  esac
+  expect_unchanged "$d.before" "$d/docs/debt/0001-valid.md" \
+    'nothing written' 'the default run wrote to the record'
 
   d=$(migrator_dir migrate_write)
   b=$(base_of "$d")
@@ -2947,19 +2963,8 @@ MD
   printf 'uncommitted\n' >"$d/stray.txt"
   run_migrator "dirty worktree refused" 1 E-DIRTY "$d" --write
   printf '  %-4s %-44s ' "" "the refused run wrote nothing"
-  scan=0
-  cmp -s "$d.before" "$d/docs/debt/0001-valid.md" || scan=$?
-  case $scan in
-  0)
-    passed=$((passed + 1))
-    printf 'ok   record untouched\n'
-    ;;
-  1)
-    failed=$((failed + 1))
-    printf 'FAIL wrote despite a dirty worktree\n'
-    ;;
-  *) fail_scan "$d.before and the record" "$scan" ;;
-  esac
+  expect_unchanged "$d.before" "$d/docs/debt/0001-valid.md" \
+    'record untouched' 'wrote despite a dirty worktree'
 
   # A hook that edits a region the gate protects. The self-check is marker_only_change, the
   # gate's own predicate, so this is the same rejection the gate would issue — reached before
@@ -2977,19 +2982,8 @@ SH
   MIGRATE_PROFILES=rogue run_migrator "self-check refuses a prose edit" 1 E-SELF-CHECK "$d" \
     --write
   printf '  %-4s %-44s ' "" "the self-check ran before any write"
-  scan=0
-  cmp -s "$d.before" "$d/docs/debt/0001-valid.md" || scan=$?
-  case $scan in
-  0)
-    passed=$((passed + 1))
-    printf 'ok   record untouched\n'
-    ;;
-  1)
-    failed=$((failed + 1))
-    printf 'FAIL wrote output its own self-check rejected\n'
-    ;;
-  *) fail_scan "$d.before and the record" "$scan" ;;
-  esac
+  expect_unchanged "$d.before" "$d/docs/debt/0001-valid.md" \
+    'record untouched' 'wrote output its own self-check rejected'
 
   # The no-invention rule, on the transform an adopting repo with legacy ADRs most needs. A
   # date already on the line is parenthesised; a bare status word has no date to take, and
@@ -3198,7 +3192,7 @@ STUB
   esac
   if [ -z "$notes" ]; then
     passed=$((passed + 1))
-    printf 'ok   %s\n' "$reported"
+    printf 'ok   fault counted, file and status named\n'
   else
     failed=$((failed + 1))
     printf 'FAIL%s\n' "$notes"
