@@ -13,14 +13,29 @@ CHECKER="$ROOT/scripts/check-public-safety.sh"
 # the baseline cases, which assert the gate stays green.
 unset RIPGREP_CONFIG_PATH
 
+# Hooks export repository-local selectors that override every fixture's `git -C`.
+# Clear Git's reported set before this suite creates or inspects a repository --
+# which the very first fixture below already does.
+clear_git_env
 fixture_init public-safety-test
 # The scanner-filename cases below need a checkout-shaped path, so this second
 # fixture cannot live under TMPDIR.
 fixture_scratch "$ROOT/.public-safety-path-test."
 HOME_PATH_FIXTURE=$FIXTURE_SCRATCH
 
-mkdir -p "$SCRATCH/repo"
-printf 'gitdir: /Vol%s/Private Disk/repo/.git/worktrees/example\n' 'umes' >"$SCRATCH/repo/.git"
+# A real repository, because the gate enumerates the tracked files under every
+# directory it is handed and reports a `git ls-files` that could not answer.
+# Nothing here is committed: the fixtures below are untracked, the walk reaches
+# them, and the empty listing is the legitimate outcome pinned further down.
+mkdir -p "$SCRATCH/repo/nested"
+git init -q -b main "$SCRATCH/repo"
+# A linked worktree's `.git` is a file naming an absolute path, so on a checkout
+# under a denied prefix it is a match the gate must not report -- it is Git
+# metadata, not content. Nested rather than at the fixture root so the fixture
+# stays a repository git can list; `--glob '!.git'` matches the basename at any
+# depth, which is the exclusion under test.
+printf 'gitdir: /Vol%s/Private Disk/repo/.git/worktrees/example\n' 'umes' \
+	>"$SCRATCH/repo/nested/.git"
 printf 'public content\n' >"$SCRATCH/repo/README.md"
 
 if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
@@ -290,12 +305,6 @@ rm -f "$SCRATCH/repo/bom.md"
 # public repo, while ripgrep's walk -- which applies those same rules to tracked
 # files -- never opens it. Before the gate named its tracked files explicitly it
 # printed nothing and exited 0 here, the same answer it gives for a clean tree.
-#
-# The suite unsets git's local environment so a caller's GIT_DIR or
-# GIT_INDEX_FILE cannot reach these fixtures. It happens here rather than at the
-# top of the file because only the cases below build git repositories.
-clear_git_env
-
 hidden_secret="token: $(printf '%s%s' 'ghp' '_abcdefghijklmnopqrstuvwxyz01')"
 
 for ignore_file in .gitignore .ignore; do
@@ -456,6 +465,112 @@ git -C "$untracked" commit -qm 'public seed'
 printf '%s\n' "$hidden_secret" >"$untracked/CLAUDE.local.md"
 if ! "$CHECKER" "$untracked" >"$SCRATCH/output" 2>&1; then
 	printf 'public-safety-test: an untracked ignored file must not fail the gate\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# A `git ls-files` read through a process substitution reports the loop's
+# status, never git's, so a listing that emitted some paths and then died left
+# the gate scanning a short set and exiting 0 -- and the `2>/dev/null` on that
+# call removed the one thing that would have said why. The stub reproduces
+# exactly that shape: one path on stdout, a diagnostic on stderr, a non-zero
+# exit. The fixture is a real repository so the fault is the stub's and not the
+# directory's.
+GIT_REAL=$(command -v git)
+STUB_BIN="$SCRATCH/stub-bin"
+mkdir -p "$STUB_BIN"
+cat >"$STUB_BIN/git" <<EOF
+#!/usr/bin/env bash
+for argument in "\$@"; do
+	if [ "\$argument" = ls-files ]; then
+		printf 'partial.txt\0'
+		printf 'stub git: the listing stopped partway\n' >&2
+		exit 128
+	fi
+done
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$STUB_BIN/git"
+
+partial="$SCRATCH/partial-listing"
+mkdir -p "$partial"
+git init -q -b main "$partial"
+git -C "$partial" config user.name 'Fixture Developer'
+git -C "$partial" config user.email fixture@example.invalid
+printf '%s\n' "$hidden_secret" >"$partial/partial.txt"
+printf 'partial.txt\n' >"$partial/.gitignore"
+git -C "$partial" add -f partial.txt .gitignore
+git -C "$partial" commit -qm 'a listing that stops partway'
+
+partial_status=0
+PATH="$STUB_BIN:$PATH" "$CHECKER" "$partial" >"$SCRATCH/output" 2>&1 || partial_status=$?
+if [ "$partial_status" -ne 2 ]; then
+	printf 'public-safety-test: a listing that stopped partway must fault, got %s\n' \
+		"$partial_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+if ! grep -qF 'could not list the tracked files' "$SCRATCH/output"; then
+	printf 'public-safety-test: the fault should name what could not be listed\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+# The diagnostic git itself printed has to survive: discarding it is what left
+# a short scan with nothing on stderr to explain it.
+if ! grep -qF 'stub git: the listing stopped partway' "$SCRATCH/output"; then
+	printf "public-safety-test: git's own diagnostic should reach the caller\n" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The other side of that rule, pinned deliberately: an empty listing under a
+# zero status is a legitimate answer, not a fault. Unlike
+# `git rev-parse --local-env-vars`, which always names at least GIT_DIR, this
+# listing has a genuine empty case -- a checkout subdirectory with nothing
+# tracked under it, and a repository before its first `git add`. The walk still
+# covers the tree, so an empty listing must not disarm the scan either.
+empty_listing="$SCRATCH/empty-listing"
+mkdir -p "$empty_listing"
+git init -q -b main "$empty_listing"
+git -C "$empty_listing" config user.name 'Fixture Developer'
+git -C "$empty_listing" config user.email fixture@example.invalid
+printf 'public content\n' >"$empty_listing/README.md"
+git -C "$empty_listing" add README.md
+git -C "$empty_listing" commit -qm 'public seed'
+mkdir -p "$empty_listing/nothing-tracked"
+if ! "$CHECKER" "$empty_listing/nothing-tracked" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: a subtree with nothing tracked must not fault\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+printf '%s\n' "$hidden_secret" >"$empty_listing/nothing-tracked/leak.txt"
+empty_status=0
+"$CHECKER" "$empty_listing/nothing-tracked" >"$SCRATCH/output" 2>&1 || empty_status=$?
+if [ "$empty_status" -ne 1 ]; then
+	printf 'public-safety-test: an empty listing must not disarm the walk, got %s\n' \
+		"$empty_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# skills/quest/scripts/publish-forge-review hands this gate a single regular
+# file. There are no tracked files to enumerate under one -- ripgrep opens a
+# path named on the command line whatever the ignore rules say -- so the
+# enumeration must not be asked about it, and `git -C <file>` failing must not
+# turn a file scan into a fault.
+file_target="$SCRATCH/file-target.md"
+printf 'public content\n' >"$file_target"
+if ! "$CHECKER" "$file_target" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: a regular file scan target must not fault\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+printf '%s\n' "$hidden_secret" >"$file_target"
+file_status=0
+"$CHECKER" "$file_target" >"$SCRATCH/output" 2>&1 || file_status=$?
+if [ "$file_status" -ne 1 ]; then
+	printf 'public-safety-test: a secret in a file scan target must fail the gate, got %s\n' \
+		"$file_status" >&2
 	cat "$SCRATCH/output" >&2
 	exit 1
 fi

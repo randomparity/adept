@@ -72,12 +72,53 @@ denied_patterns=(
 # by a FIFO blocks the scan forever with no writer, which is a burned CI timeout
 # rather than a wrong answer, but the walk-only shape never had it. -f drops a
 # dangling symlink and a directory substitution in the same breath.
+#
+# The listing is captured to a file rather than read from a process
+# substitution. `while ... done < <(git ls-files -z)` reports the loop's status
+# and never git's, so a listing that emitted some paths and then died left this
+# gate scanning a short set and reporting a pass -- and the `2>/dev/null` that
+# call carried removed the one thing on stderr that would have said why. Both
+# halves are what ADR 0005 rules out; list-shell-sources.sh captures its own
+# walk for the same reason.
+#
+# Any non-zero status is a fault. `git ls-files` exits 128 both for a directory
+# that is no repository and for a repository it could not read, so no branch
+# can tell them apart, and stopping is the only reading that cannot go green
+# over content it never listed. That makes "a directory handed to this gate is
+# inside a git worktree" part of the contract, which is what the gate is for:
+# the tracked set is the set that ships.
+#
+# A scan path that is not a directory is not asked. A regular file -- the shape
+# skills/quest/scripts/publish-forge-review passes -- already names itself on
+# the command line, so ripgrep opens it whatever the ignore rules say and there
+# is nothing to enumerate; `git -C` on it could only ever fail. A path that is
+# not there at all reaches ripgrep, which faults on it below.
+#
+# An empty listing under a zero status is a legitimate answer, not a fault.
+# Unlike `git rev-parse --local-env-vars`, which always names at least GIT_DIR,
+# this listing has a real empty case: a checkout subdirectory with nothing
+# tracked under it, and a repository before its first `git add`. The walk still
+# covers the tree in both.
+tracked_listing=$(mktemp) || {
+	echo "public-safety: could not create a scratch file for the tracked listing" >&2
+	exit 2
+}
+trap 'rm -f "$tracked_listing"' EXIT
+
 scan_targets=("${scan_paths[@]}")
 for scan_path in "${scan_paths[@]}"; do
+	[[ -d "$scan_path" ]] || continue
+	listing_status=0
+	git -C "$scan_path" ls-files -z >"$tracked_listing" || listing_status=$?
+	if [ "$listing_status" -ne 0 ]; then
+		printf 'public-safety: could not list the tracked files under %s (git ls-files exit %s)\n' \
+			"$scan_path" "$listing_status" >&2
+		exit 2
+	fi
 	while IFS= read -r -d '' tracked; do
 		[[ -f "$scan_path/$tracked" ]] || continue
 		scan_targets+=("$scan_path/$tracked")
-	done < <(git -C "$scan_path" ls-files -z 2>/dev/null)
+	done <"$tracked_listing"
 done
 
 # Two names under /home are not people. GitHub's runner images publish
