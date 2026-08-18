@@ -14,9 +14,14 @@ These four rules govern what may ship here. They are construction rules, not asp
 
 **2. Executable code clears a bar or it does not ship.** A script is permitted only when it does something a model cannot do reliably inline — a deterministic file operation that would otherwise burn context or be performed inconsistently. `sdd-workspace`, `task-brief`, `review-package`, and `detect-host-architecture` clear this bar. A browser mockup server does not.
 
-**3. No long-lived processes.** No servers, no port binding, no PID files, no lockfiles, no daemon lifecycle, no liveness checks against a previous invocation. Every script runs and exits.
+**3. No long-lived processes in anything a skill invokes.** No servers, no port binding, no PID files, no lockfiles, no daemon lifecycle, no liveness checks against a previous invocation. Every executable this repo ships runs and exits.
 
 This rule is not theoretical. The inherited `brainstorming` skill — since absorbed into `$spellcraft` — shipped a Node HTTP server with shell PID lifecycle management — 1,411 lines — and both open bugs against it were defects in the "is the previous instance still alive" logic. That whole bug class exists only because something had to survive between invocations. It was deleted rather than fixed.
+
+**What the rule governs is a process a model has to reason about stopping.** That is the whole failure: the skill started something, and then no invocation could tell whether it was still there or how to end it. Two things are therefore outside the rule, because in both the harness owns the lifecycle and supplies the end signal the deleted server never had.
+
+- **Harness configuration.** `.claude/settings.json` hooks, and any scratch state a hook keeps to enforce a budget across turns, are not processes and are not a skill's to stop. A hook fires, decides, and exits.
+- **Agent orchestration.** A dispatched worker is a harness-managed run with an end-of-run notification. Waiting on one is not a liveness check against a previous invocation; inferring its liveness from timestamps *is*, and `references/dispatch-liveness.md` forbids that for the same reason this rule exists.
 
 **4. Nothing automated asserts on prose.** No gate greps Markdown for a sentence; no test pins a table row. A predecessor gate of 563 lines plus a 753-line suite did exactly that and produced false reds under bracketed checkout paths, non-UTF-8 bytes, and a developer's personal ripgrep configuration. Prose correctness is a reading problem.
 

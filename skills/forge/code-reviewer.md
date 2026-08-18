@@ -10,6 +10,9 @@ ordinary engineering standards, while the findings are still cheap to act on.
 ```
 Worker (reviewer):
   description: "Whole-branch review"
+  background: false  # REQUIRED: this wait is serial — nothing proceeds until this
+                     # worker returns, so a backgrounded dispatch buys no parallelism
+                     # and invites the dispatcher to spend turns checking on it.
   model: [MODEL — REQUIRED: select the most-capable available model]
   prompt: |
     Review this branch the way a senior engineer would — attentive to

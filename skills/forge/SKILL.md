@@ -223,6 +223,16 @@ either choice could be wrong.
 
 ### Silent party workers
 
+**The per-task loop is serial, so dispatch it blocking** — set `background: false` on the
+implementer, the task reviewer, the fix worker, and the whole-branch review. Nothing in the loop
+can proceed until the current worker returns: the review package needs the implementer's commits,
+the fix worker needs the review, and the re-review needs the fix. A backgrounded dispatch buys no
+parallelism there and costs a turn every time this session wonders how it is going. A dispatcher
+blocked on a worker cannot poll it, which removes the failure mode instead of governing it.
+
+The contract below still applies to a blocking dispatch, because a blocking dispatch can still end
+without a report.
+
 The implementer, task reviewer, fix worker, and whole-branch reviewer are separate report waits.
 Apply [dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md) to
 each. Before any replacement, append the worker, wait site, observations, recovery-chain
@@ -389,6 +399,15 @@ expensive than the stronger model would have been. Use a mid-tier floor for
 reviewers and for implementers working from prose; reserve the cheapest tier for
 transcription — where the plan text already contains the code to write — and for
 single-file mechanical fixes.
+
+**This governs your own model too.** A coordinating session runs on the most
+capable model by default and then pays that rate for every turn it spends
+dispatching, waiting, checking and reporting — which across a long build
+outnumbers the turns it spends deciding anything. Capability is what the
+dispatches above need; coordination is not where it earns its price. Where the
+harness allows it, run a coordinating session no higher than the most capable
+worker it dispatches, and keep the waiting off the model entirely — see Silent
+party workers.
 
 ### What goes in a dispatch
 

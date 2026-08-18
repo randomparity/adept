@@ -5,10 +5,25 @@ malformed report: keep any caller-specific validation or malformed-return retry 
 
 ## Probe and hold
 
-Allow roughly ten minutes of silence before sending the worker a direct, non-destructive probe.
-Wait through the next normal collection point, no more than roughly ten further minutes, for the
-reply. A reply of any content proves the worker is alive. No reply does not prove it ended, and
-elapsed time, commit age, tracker inactivity, or a missing artifact never authorizes replacement.
+**Ask the cheap question first.** Tracker state, a pushed branch, a file the worker writes — these
+answer "has it moved?" for the price of a shell command, not a dispatcher turn. Ask them from a
+background task, not from the model.
+
+**Nothing derived from a timestamp distinguishes alive from ended.** Commit age, elapsed time,
+tracker inactivity, and a missing artifact narrow which waits are worth a second look and do
+nothing else. None of them authorizes replacement, and a run that has started treating the commit
+stream as its liveness signal has already left this contract.
+
+**One probe per worker per run.** After roughly ten minutes of silence a dispatcher may send the
+worker one direct, non-destructive probe, then wait through the next normal collection point — no
+more than roughly ten further minutes — for the reply. A reply of any content proves the worker
+alive. No reply proves nothing, and it ends the probe budget: the wait becomes a hold.
+
+**A second probe to the same worker is the failure this budget exists to prevent.** It buys the
+same non-answer at the price of a full dispatcher turn, because a worker inside a long tool call
+answers at its next turn boundary and not on demand — so the probe is least informative for
+exactly the workers a dispatcher worries about. Silence that has already cost its probe is a
+recorded hold, not an open question to keep asking.
 
 The dispatcher that created the wait owns a silent chain for the rest of the run. It records the
 hold in the workflow's existing run report or ledger and may drain unrelated work. A later valid
@@ -17,12 +32,27 @@ at reconciliation with the same replacement budget.
 
 ## Waiting mechanics
 
-Wait through the harness: a completion notification, or a single background task read when it
-returns. Never wait by foreground sleep polling — every wake of a sleep-and-check loop replays the
-dispatcher's full context through the model, so an hour of five-minute sleeps costs more than the
-report it waits for. While a wait is open, drain other work in hand; when the outstanding reports
-are the only work left, say plainly what is blocked and on what, and wait through the harness
-rather than manufacturing polls to look busy.
+**Never wait by foreground sleep polling.** Every wake of a sleep-and-check loop replays the
+dispatcher's full context — skill text, run history and all — through the model, so an hour of
+five-minute sleeps costs more than the report it waits for. A wait must cost zero model turns
+until it ends.
+
+Two mechanisms cost zero. Prefer the harness's completion notification. Where the workflow waits
+on durable state rather than on a report — a tracker row, a pull request, a pushed branch — put
+the entire wait in **one** background shell task that blocks until the condition holds or its own
+deadline expires, and read it once when it returns:
+
+```bash
+# One background task for the whole wait. Not one per check.
+timeout 3600 bash -c 'until <condition>; do sleep 60; done'; echo "wait ended: $?"
+```
+
+The `sleep` runs in the shell, where it is free. Set the outer `timeout` to the longest the wait
+could legitimately take, so the read returns a result rather than a reason to open another wait.
+
+While a wait is open, drain other work in hand. When the outstanding reports are the only work
+left, say plainly what is blocked and on what, and then wait — never manufacture polls to look
+busy.
 
 ## Observed end and reconciliation
 
