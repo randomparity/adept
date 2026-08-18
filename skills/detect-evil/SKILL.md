@@ -67,8 +67,10 @@ point where data or control crosses a change in trust level:
   channel, with what retention.
 
 State the inventory explicitly in the summary, even when it is empty. An empty inventory is
-a legitimate and common result — say so, and return `approve`. A scan that reports findings
-without ever naming a boundary has skipped the method.
+a legitimate and common result — say so. The verdict still follows the rule in *Output*:
+`approve` requires no defensible finding, including one raised by the claims below or by a
+standing category. A scan that reports findings without ever naming a boundary has skipped
+the method.
 
 ### Reproduce the claims the inventory rests on
 
@@ -98,10 +100,8 @@ any: a guardrail that leaves build output, refreshes a lockfile, or fixes in pla
 artifacts in the working tree the next pass resolves its target from, and one that runs the
 changed code — whether the diff added the guardrail or merely gave it new input — is the
 execution *Hard constraints* forbids. Any failure routes the claim to not checkable here,
-naming the rule that stopped you. A safety argument resting on a gate nobody in this pass
-could run is exactly the case where being unable to check is material, so that claim is a
-finding rather than a silent gap. The same holds for a claim whose only proof would be an
-exploit or a probe against a live host.
+naming the rule that stopped you, as does a claim whose only proof would be an exploit or a
+probe against a live host.
 
 Every claim you name ends in exactly one of three states, and none may be left unstated:
 
@@ -117,7 +117,8 @@ Every claim you name ends in exactly one of three states, and none may be left u
   command would write into the working tree, change git state, or run the diff's code, the
   budget ran out before you attempted it, or *Hard constraints* forbids it outright. Report
   it as that observation, never as a confirmation. It is a finding only where not being able
-  to check it is itself material to the crossing. The bar is materiality, not runnability: a
+  to check it is itself material to the crossing — a crossing whose only safety evidence is
+  a gate nobody here could run is often where it is. The bar is materiality, not runnability: a
   scan that filed every un-runnable claim would return `needs-attention` on most diffs and
   teach a reader to skim the ones that matter.
 
@@ -225,17 +226,14 @@ Three differences in how the fields are filled:
   right places, and it is the field a later reviewer checks the scan against.
 - **The claims block follows the inventory immediately**, still ahead of any verdict-bearing
   prose: each load-bearing claim you named, claim versus observation, the command you ran,
-  and the environment you ran it in. Open the block by saying what it covers — the claims
-  this scan's inventory rested on — because a calling loop lifts the block into a transcript,
-  an exit note, and a pull-request body, where a security-scoped list read as something wider
-  claims coverage nobody offered. That label discloses the scan's reach; it does not disclaim
-  a shortfall. A reviewer picks which claims are load-bearing, this scan picks the ones its
-  inventory rests on, and that pick is the claim list a calling loop reads back. The order is
-  fixed, so the two rules never compete for the same opening — the inventory leads because a
-  claim qualifies a boundary and cannot be read before the surface it qualifies, and the
-  claims block is labelled as its own block so a calling loop can lift it back out of the
-  artifact. Elsewhere the obligation is `$gauntlet`'s Method, which leads its `summary` with
-  the claims; here it sits one block later.
+  and the environment you ran it in. Open it by naming what it covers — the claims this
+  scan's inventory rested on. A reviewer picks which claims are load-bearing; that pick is
+  what a calling loop reads back, so the label states this scan's reach rather than
+  disclaiming a shortfall. The order is fixed: the inventory leads because a claim qualifies
+  a boundary and cannot be read before the surface it qualifies, and the claims block stays
+  labelled as its own so a loop can lift it back out. Elsewhere the obligation is
+  `$gauntlet`'s Method, which leads its `summary` with the claims; here it sits one block
+  later.
 - **`suppressions` carries governing-ADR re-litigation only**, on the same terms as
   `$gauntlet`: a decision an accepted ADR settled is not re-argued here either.
   A security finding that cites a fact outside that record is new risk, not re-litigation —
