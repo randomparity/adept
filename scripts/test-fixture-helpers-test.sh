@@ -241,10 +241,18 @@ grep -qF 'git reported no local env vars' "$SCRATCH/child.out" ||
 #
 # Every script(1) call closes its own stdin. script forwards its stdin to the
 # pty it allocates, so the child still sees a terminal and the case still bites;
-# what closing prevents is script draining the caller's stdin. `just test` feeds
-# the suite list to a `while read` loop on stdin, and a script that inherits it
-# swallows the remaining suites -- the run then reports the suites it reached
-# and exits 0, which is a green board for a test pass that never happened.
+# what closing prevents is script draining whatever the caller happens to have
+# open on fd 0. The probe cannot know what that is, so it cannot rely on the
+# caller to keep it clear -- closing here is the only way to guarantee the
+# caller's stream survives the call, whoever the caller turns out to be.
+#
+# `just test` was once such a caller: before commit 6b16f603, the recipe fed
+# the discovered suite list to a `while read` loop on stdin, and an unclosed
+# script(1) here would have drained it, truncating the run to a suite subset
+# reported as a full pass. The recipe now closes each suite's own stdin at the
+# call site (`"./$suite" </dev/null` in the Justfile), so that particular
+# route to the hazard is gone -- but the closing above does not depend on it
+# and holds regardless of what the next caller's stdin turns out to be.
 pty_marker=$SCRATCH/pty-probe-marker
 pty_probe=$SCRATCH/pty-probe.sh
 cat >"$pty_probe" <<PROBE
