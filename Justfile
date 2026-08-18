@@ -90,6 +90,14 @@ format-check:
 test:
   #!/usr/bin/env bash
   set -euo pipefail
+  # Captured rather than read from a process substitution, for the reason the
+  # lint recipe above gives. The count floor below catches only a discovery
+  # that returned nothing at all; a `git ls-files` that emits some paths and
+  # then dies leaves the count non-zero and the run green over a suite set
+  # nobody checked was complete.
+  suites="$(mktemp)"
+  trap 'rm -f "$suites"' EXIT
+  git ls-files -z -- '*-test.sh' >"$suites"
   count=0
   while IFS= read -r -d '' suite; do
     case $suite in
@@ -99,9 +107,12 @@ test:
       ;;
     esac
     printf '== %s\n' "$suite"
-    "./$suite"
+    # The loop's stdin is the suite list, so a suite that read stdin would
+    # swallow the suites queued behind it and truncate the run to another
+    # green partial pass.
+    "./$suite" </dev/null
     count=$((count + 1))
-  done < <(git ls-files -z -- '*-test.sh')
+  done <"$suites"
   if ((count == 0)); then
     printf 'test: no suites discovered\n' >&2
     exit 1
