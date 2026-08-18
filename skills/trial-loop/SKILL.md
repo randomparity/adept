@@ -65,6 +65,15 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   hash.
 - `focus`: optional focus text appended after the target arguments. This is
   also part of the supplied challenge arguments — challenge extracts it.
+- `iteration_budget`: optional caller-supplied cycle cap, 2 through 5; omission
+  means 5. Only a caller holding a validated risk assessment — a triage subtype,
+  a divination verdict, an explicit human instruction — may lower it; the loop
+  never derives a lower budget itself. The floor is 2 because a pass that
+  applied fixes always needs a confirming pass. A lower budget is not a lower
+  bar: the final-iteration stop condition still blocks on unresolved findings —
+  it just fires earlier, because on a small well-understood change the passes a
+  full budget adds mostly re-review surface earlier passes wrote, and each pass
+  is a fresh full-context reviewer, the loop's dominant cost.
 - `charter`: the scope boundary you freeze before iteration 1 (below). Not an
   argument the caller types — you derive it.
 
@@ -98,7 +107,8 @@ and starts a new cycle under the existing rescope caps.
 ## The charter — freeze it before the first pass
 
 Two terms, used precisely below. A **run** is one `$trial-loop` invocation, start
-to report. A **cycle** is one charter's up-to-five iterations; a charter change
+to report. A **cycle** is one charter's iterations, up to the `iteration_budget`
+(five unless the caller lowered it); a charter change
 starts a new cycle inside the same run. Disclosure and the final report are always
 **run**-scoped.
 
@@ -181,7 +191,7 @@ surface: <frozen permitted surface>
 ambiguities: <frozen ambiguity list>
 focus: <review focus, unchanged>
 
-Repeat up to 5 iterations:
+Repeat up to `iteration_budget` iterations (5 unless the caller lowered it):
 
 Each selected-reviewer dispatch below is a report wait governed by
 [dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md). Retain the
@@ -324,7 +334,13 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    then stop as blocked rather than act on a stale file.
 3. Paste an audit line into the transcript:
    `review iteration <n>: reviewer=<gauntlet|detect-evil>, verdict=<verdict>, findings=<count>,
-   suppressed=<suppressed_count>`.
+   suppressed=<suppressed_count>, self_collision=<k>/<count>`.
+   Count `<k>` on **every** pass using the self-collision definition under *Stop
+   conditions* — a finding whose cited lines did not exist at the cycle-start
+   baseline. The fraction is the loop's convergence signal, and a signal
+   computed only when suspicion has already formed never fires; the run that
+   motivated this line ground to the cap while every late pass was majority
+   self-collision, unmeasured.
 4. If `verdict` is `approve`: when `suppressed_count > 0`, surface each `suppressions`
    entry (concern + ADR) in the transcript — an `approve` that suppressed a
    governing-ADR finding is exactly the over-suppression case the verdict alone hides,
@@ -422,6 +438,20 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    cite it rather than writing a second. When the deferral changes how the design
    should be read, note it in the durable target as well.
 
+   **When the owner is a tracker issue instead** — the repo keeps no deferral
+   records, or its conventions route findings to the tracker — file it through
+   `$bounty`, never with a bare issue-create. Bounty's all-state deduplication
+   and recurrence gate are the growth bound: a fourth-or-later instance of one
+   defect class consolidates into a sweep rather than adding another open
+   instance, which a direct create silently bypasses — the observed failure
+   mode is a batch that fixes three issues and files three more, each a
+   sibling of a class already tracked. Carry the finding's reachability answer
+   into the draft verbatim. A deferral whose trigger was never constructed
+   outside a stub is evidence, not backlog: route it as a record-and-close
+   occurrence or as evidence appended to the class's existing sweep, not as a
+   new open issue — the concern stays searchable without an open queue entry
+   that no one intends to schedule.
+
    Reserve `blocked` for what step 6 defines: correctness-required work you cannot do
    here. Do not route an ordinary out-of-charter finding into it — `blocked` halts the
    run, and halting on every adjacent defect is the failure this change removes. If
@@ -507,14 +537,16 @@ most damage.
   lands — the selected reviewer cannot return `approve` while a defensible finding stands, so a
   loop that only exits on `approve` grinds to the cap and reports blocked on a target that
   is finished. Report it distinctly — it is not `approve` — and list the records.
-- 5th iteration of a cycle still returns `needs-attention` → stop as blocked and
+- Final budgeted iteration of a cycle (the 5th by default, or the caller's
+  `iteration_budget`) still returns `needs-attention` → stop as blocked and
   summarize the remaining findings. Do not continue to the next workflow step
   without explicit user approval.
 - Remediation would pull in a migration, public contract, dependency, subsystem,
   or threat model outside the charter → **end the cycle** for rescoping. Report what
   the fix would require; do not widen the charter yourself to keep the loop running.
 - Two successive passes return findings that are **half or more self-collision** → end
-  the cycle for rescoping. Count this mechanically rather than by impression. A finding
+  the cycle: for rescoping, or through the own-surface convergence route below.
+  Count this mechanically rather than by impression. A finding
   is a **self-collision** when the lines it cites did not exist at the **start of the
   cycle** — the loop is reporting on text its own fixes wrote. Record that baseline when
   the cycle starts, because nothing else preserves it: step 8's per-pass commits move
@@ -532,7 +564,26 @@ most damage.
   unreachable while describing the failing run exactly.
 
   That pattern is scope growth, not convergence: the loop is now reviewing its own
-  output, and another iteration adds surface rather than removing risk. Deferral records
+  output, and another iteration adds surface rather than removing risk.
+
+  Route this exit by where the collisions sit. Self-collision findings citing
+  **production** lines are the scope growth above — end the cycle for rescoping.
+  But when, across those two passes, every standing finding sits in **test or
+  verification surface this run itself added** and no finding cites production
+  lines — the reviewer is affirming the chartered change and polishing the test
+  harness the loop wrote to prove it — the target is finished and the loop is
+  reviewing its own proof. Dispose the defensible findings at the size of the
+  risk, run **one** confirming pass, and exit as *converged on own surface* —
+  reported distinctly, like *converged with deferrals* — even if that confirming
+  pass returns more findings of the same class; the class that triggered this
+  exit cannot re-arm it. A finding that cites production lines, on this pass or
+  the confirming one, cancels the exit and re-enters the ordinary loop. This
+  exit is not a license to ship broken tests: each final-class finding still
+  gets a real disposition — a defect a fix introduced is `accepted-fixed`; only
+  a remedy costing more than it removes is discharged by recording the
+  consequence or `rejected-with-evidence`.
+
+  Deferral records
   this run wrote sit outside the count entirely — neither self-collision nor new ground.
   They are bookkeeping inside the charter, and counting them either way distorts the
   fraction: as self-collision they rescope the loop over its own audit trail, as new
