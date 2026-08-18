@@ -273,8 +273,9 @@ dispatch.
 - **Two self-applied tests.** An orchestrator wanting out of the loop can call a
   consequential finding inconsequential, and can call an edit since the confirming pass
   claim-preserving. Bounded only by distinct reporting and by the note list — which names
-  each confirmed claim with the pass that confirmed it — reaching `WORK:REVIEW` and the
-  pull request. Recorded in ADR 0020.
+  every claim a pass accounted for, marked confirmed or not-checkable, with the pass that
+  accounted for it — reaching the review summary's `verdict:` field by name, `WORK:REVIEW`,
+  and the pull request. Recorded in ADR 0020.
 - **Cross-file drift.** The obligation sits in `$gauntlet`'s Method, the transmission in
   `$trial-loop`, and the exit name is consumed in `$quest` and `$spellcraft`, with nothing
   detecting divergence — the same residual ADR 0019 accepted for its contract.

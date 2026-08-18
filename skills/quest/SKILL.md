@@ -421,12 +421,15 @@ dependencies, compatibility, migrations, observability, and whether the chosen
 approach is simpler or safer than viable alternatives.` Address every
 defensible finding and commit after each accepted fix.
 
-A *sound with record notes* exit is a non-blocking outcome: the branch's
-load-bearing claims were reproduced and confirmed and the standing findings carry
-no consequence for the decision, the behaviour, or a future maintainer's actions.
-Proceed, and put the outstanding notes in the review summary so they reach
-`WORK:REVIEW` and the pull request — they are the part a reader cannot
-reconstruct from the verdict.
+A *sound with record notes* exit is a non-blocking outcome: a pass accounted for
+the branch's load-bearing claims — confirmed, or reported as not checkable in the
+reviewer's environment — and the standing findings carry no consequence for the
+decision, the behaviour, or a future maintainer's actions. Proceed, and put the
+outstanding notes in the review summary so they reach `WORK:REVIEW` and the pull
+request; they are the part a reader cannot reconstruct. Record the exit **by
+name** in that summary's `verdict:` field — it is neither `approve` nor
+`needs-attention`, and writing the reviewer's last verdict there would publish
+the opposite of what the exit means.
 
 Pass the loop an iteration budget derived from the step 1 classification: a
 trivial bugfix or a revalidated governed small change passes

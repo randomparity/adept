@@ -140,8 +140,9 @@ Two of the exit's tests are judgments the orchestrator applies to itself, and no
 detects either being made self-servingly: whether a standing finding is consequence-free,
 and whether an edit since the confirming pass changed what a confirmed claim asserts. What
 bounds them is disclosure — the exit is reported distinctly rather than as `approve`, and
-its note list names each confirmed claim with the pass that confirmed it, reaching the
-review summary, the `WORK:REVIEW` annotation, and the pull request. The bound cannot hang
+its note list names every claim a pass accounted for, marked confirmed or not-checkable,
+with the pass that accounted for it, reaching the review summary (in the `verdict:` field,
+by name), the `WORK:REVIEW` annotation, and the pull request. The bound cannot hang
 on the exit alone: step 6 lets the consequence test be taken on any pass, so the loop's
 on-every-exit disclosure carries every consequence-free `rejected-with-evidence` finding
 too, whichever exit the run takes. Weaker than a gate, and the price of anatomy rule 4.

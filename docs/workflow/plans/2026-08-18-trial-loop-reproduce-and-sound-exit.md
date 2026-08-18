@@ -41,12 +41,16 @@ disprove the change").
 Add a short paragraph to *Method*, before or after the existing one, requiring the reviewer
 to identify the target's load-bearing factual claims — the ones whose falsity would change
 its conclusion — attempt to reproduce each, and lead `summary` by naming those claims with
-claim versus observation, the command run, and the environment. State that a claim it
-cannot reproduce is a finding under the ordinary bar; that a command it cannot run is
-reported as that observation, never as a confirmation; that reproduction is read-only under
-*Hard constraints* (`:344`), so anything that would write into the target's working tree is
-reported rather than run; and that a target asserting nothing reproducible is answered in
-one sentence.
+claim versus observation, the command run, and the environment, with the terse ship/no-ship
+assessment *Output* specifies following that block rather than displaced by it. Split the
+two failure modes: a claim the reviewer **ran and could not reproduce** is a finding; a
+claim it **could not check here** is reported as that observation, never as a confirmation,
+and is a finding only where the inability to check is itself material. Without the split,
+any target whose guardrail suite writes while it runs has an un-runnable load-bearing claim,
+an automatic finding, and no path to `approve`. State that reproduction is read-only under
+*Hard constraints* (`:344`), so anything that would write into the target's working tree or
+change git state is reported rather than run; and that a target asserting nothing
+reproducible is answered in one sentence.
 
 This is the binding statement. It must not be phrased as a focus-text preference — the
 whole reason it lives here is that `:199` and `:226-228` make focus advisory.
@@ -122,9 +126,13 @@ Insert a new bullet immediately after the *converged with deferrals* bullet (the
 "Report it distinctly — it is not `approve` — and list the records.") and before the
 final-budgeted-iteration bullet. The new bullet states:
 
-- the trigger: a pass **named** the load-bearing claims it reproduced and reported each
-  confirmed, nothing changed since has altered what those claims assert, and every standing
-  finding is consequence-free;
+- the trigger: a pass **named** the target's load-bearing factual claims and **accounted
+  for every one it named** — confirmed, or reported as not checkable in the reviewer's
+  environment — nothing changed since has altered what those claims assert, and every
+  standing finding is consequence-free;
+- that a finding that a later pass could not reproduce a claim condition 1 relies on is
+  consequential by definition and cancels the exit, since a load-bearing claim is one whose
+  falsity changes the conclusion;
 - that named claims are required, not a verdict about claims — a pass answering "this
   target asserts nothing reproducible" satisfies the instruction but not this condition,
   and such a target leaves through `approve`, *converged with deferrals*, or the cap as it
@@ -140,8 +148,8 @@ final-budgeted-iteration bullet. The new bullet states:
   that applies a fix is never the pass that exits;
 - that it is an ordinary run-ending exit inheriting the section's on-every-exit obligations
   in full — working-tree guardrails and commit, suppression disclosure, deferral disclosure;
-- distinct reporting, the note list (each confirmed claim with the pass that confirmed it),
-  and precedence: *converged with deferrals*, the rescope exit, and the self-collision exit
+- distinct reporting, the note list (every claim a pass accounted for, marked confirmed or
+  not-checkable, with the pass that accounted for it), and precedence: *converged with deferrals*, the rescope exit, and the self-collision exit
   all outrank this one where they apply — the first because its no-edit test covers the
   whole target where condition 1 covers only the confirmed claims, the other two because
   they carry obligations this exit does not.
@@ -162,6 +170,15 @@ reading *Stop conditions* alone misses `:268`. Replace all three with "every exi
 `:505` site scopes suppression and deferral disclosure, which the new exit inherits, so
 missing it is the failure this step exists to prevent.
 
+### Step 2.1b — record the claims block
+
+Condition 1 reads back which claims a pass named and how each was accounted for, and
+nothing in the loop preserves it: the compact object does not carry it and the artifact is
+superseded next pass. Extend step 3's audit line (`skills/trial-loop/SKILL.md`, *The Loop*)
+to require pasting the claims block beneath it on every pass — each named claim marked
+confirmed or not checkable here, taken from the `summary` in the artifact step 2 already
+opens, and `claims: none named` when a pass named none.
+
 ### Step 2.2 — amend the cap bullet
 
 Append to the final-budgeted-iteration bullet a sentence saying it fires when a standing
@@ -172,7 +189,7 @@ many passes confirmed the mechanism.
 ### Step 2.3 — extend *What to report back* and the caller contract
 
 In *What to report back*, require naming the exit when the run took it, listing the notes,
-and naming the claims a pass reproduced and confirmed.
+and naming every claim a pass accounted for with its confirmed / not-checkable mark.
 
 In *Caller contract — do not stop on the verdict*, add that a *sound with record notes*
 exit means the caller advances, carrying the notes into its own report.
