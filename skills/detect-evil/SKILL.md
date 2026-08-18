@@ -70,6 +70,44 @@ State the inventory explicitly in the summary, even when it is empty. An empty i
 a legitimate and common result — say so, and return `approve`. A scan that reports findings
 without ever naming a boundary has skipped the method.
 
+### Reproduce the claims the inventory rests on
+
+**A claim that keeps a boundary off the list is checked, not accepted.** A diff argues for
+its own safety in prose: a comment saying the caller already validated this, a commit
+message saying the path is unreachable, a spec saying a guardrail covers the category, a
+review note saying the check happens one layer up. Each such claim, if true, keeps a
+crossing out of the inventory or answers a step 2 question without a check in the code.
+Identify the load-bearing ones — the ones whose falsity would put a boundary back on the
+list or reopen a crossing — and attempt to reproduce each before you call the inventory
+complete. This is an obligation, not a preference: a caller may restate it in focus text,
+but focus only weights, and a calling loop may key its exits on whether a pass actually
+reproduced anything.
+
+Reproduction is bounded by *Hard constraints* and adds no exception to them. Re-read the
+code the claim points at, run the guardrail the claim credits, search for the sibling check
+the claim says exists. Do not execute the diff's code, run an exploit, or probe a host to
+settle a claim — a claim whose only proof would be running the changed code is, by
+construction, one you cannot check here.
+
+Every claim you name ends in exactly one of three states, and none may be left unstated:
+
+- **confirmed** — you read the code or ran the guardrail and the claim holds. Name what you
+  read or ran; a claim recorded as confirmed on inspection alone says that in those words.
+- **refuted** — you checked and it does not hold. This is a finding under the existing
+  *Finding bar*, carried in the existing schema with no new field: it names the boundary or
+  category the claim was standing in for, cites the claim's own file and lines, and puts the
+  claim, what you observed, the command, and the environment in the `body`. A refuted
+  load-bearing claim is a defensible finding, so `verdict` is `needs-attention` like any
+  other.
+- **not checkable here** — the tool, network, platform, or access it needs is absent, or
+  *Hard constraints* forbids the command. Report it as that observation, never as a
+  confirmation. It is a finding only where not being able to check it is itself material to
+  the crossing — making every un-runnable claim a finding would foreclose `approve` on any
+  diff whose guardrail suite writes while it runs, which is most of them.
+
+A diff that rests on no such claim gets one sentence saying so, exactly as an empty
+inventory does. That is an answer, not a gap.
+
 ### Reconcile against the spec's threat model, when the branch wrote one
 
 In branch mode, check whether the diff adds or modifies a spec carrying a threat model —
@@ -164,11 +202,19 @@ is the honest outcome for most diffs.
 
 Exactly `$gauntlet`'s schema, severity vocabulary (`critical | high | medium | low`), and
 markdown/JSON forms, so a caller can consume either command's artifact without branching.
-Two differences in how the fields are filled:
+Three differences in how the fields are filled:
 
 - **`summary` opens with the boundary inventory from step 1** — the surface you enumerated,
   before any verdict. That is what a reader needs to judge whether the scan looked in the
   right places, and it is the field a later reviewer checks the scan against.
+- **The claims block follows the inventory immediately**, still ahead of any verdict-bearing
+  prose: each load-bearing claim you named, claim versus observation, the command you ran,
+  and the environment you ran it in. The order is fixed, so the two rules never compete for
+  the same opening — the inventory leads because a claim qualifies a boundary and cannot be
+  read before the surface it qualifies, and the claims block is labelled as its own block so
+  a calling loop can lift it back out of the artifact. Elsewhere the obligation is
+  `$gauntlet`'s Method, which leads its `summary` with the claims; here it sits one block
+  later, and nothing else about it changes.
 - **`suppressions` carries governing-ADR re-litigation only**, on the same terms as
   `$gauntlet`: a decision an accepted ADR settled is not re-argued here either.
   A security finding that cites a fact outside that record is new risk, not re-litigation —
