@@ -2117,11 +2117,23 @@ if [ ! -e "$d.bin/.mktemp-spent" ]; then
   echo "mktemp: stub failure (check-records-test.sh forcing E-REWRITE-TMPFILE)" >&2
   exit 1
 fi
-exec $real_mktemp "\$@"
+exec "$real_mktemp" "\$@"
 STUB
   chmod +x "$d.bin/mktemp"
   run_case "temp file unavailable for the anti-erasure rules" 1 E-REWRITE-TMPFILE "$d" \
     BASE_SHA="$b" PATH="$d.bin:$PATH"
+  # The comment above explains the invariant; this holds it. Only one mktemp call fails, so if
+  # E-TMPFILE is on stderr the failure landed at the base pass instead and exit=1 is no longer
+  # attributable to this site — which is what makes a warn_full demotion visible. Reverting the
+  # stub to the always-fail shape used three lines above trips exactly this assertion.
+  printf '  %-4s %-44s ' "" "the failure landed at the anti-erasure pass"
+  if grep -q '::error::E-TMPFILE: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL the base pass also faulted, so exit=1 is unattributable\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-TMPFILE did not fire\n'
+  fi
 
   # A profile that sets its variables but defines no status hook. Without this check the
   # engine would silently reuse the previous profile's hook, since load_profile unsets the
