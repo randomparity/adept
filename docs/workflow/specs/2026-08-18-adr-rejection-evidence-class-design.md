@@ -155,8 +155,11 @@ The change is skill prose. It is verified by:
   sentence that names `$spellcraft` as the authority, so a reader who finds either finds
   the other.
 - **Claims outside the rejection list stay untagged.** The reported instance also carried
-  false load-bearing claims elsewhere in the record. Accepted residual: rejections are the
-  claims nobody re-tests, and tagging every factual sentence would bloat what R6 protects.
+  false load-bearing claims elsewhere in the record — two of its five. Accepted residual:
+  rejections are the claims nobody re-tests, and tagging every factual sentence would bloat
+  what R6 protects. Owned by
+  [#139](https://github.com/randomparity/adept/issues/139), so the residual has a queue
+  position rather than only a mention here.
 - **Tag theatre** — `verified:` written without running anything. Not closed here by
   construction; R4's review clause is what catches it, and issue #138 is the half that
   makes the reviewer check. Stated so the residual is on the record rather than assumed
