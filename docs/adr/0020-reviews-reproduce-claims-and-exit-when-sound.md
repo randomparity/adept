@@ -32,34 +32,36 @@ load-bearing line. The useful axis is consequence, not subject matter.
 
 ## Decision
 
-**The loop appends a standing reproduction instruction to the focus it transmits.** It is
-written once, in `$trial-loop`'s dispatch step, and no caller repeats it. Transport-wise it
-arrives at the reviewer as focus text and is weighted as the user's stated priority: the
-`CHARTER` block is fixed at eight fields plus focus (`skills/trial-loop/SKILL.md:213`), and
-`$gauntlet` classifies every non-flag, non-path token as focus (`skills/gauntlet/SKILL.md:59-67`),
-so focus is the only slot that exists. Its own wording — reproduce *before* evaluating —
-is what orders it against the caller's evaluative focus.
+**Reproduction is a reviewer obligation, stated in `$gauntlet`'s Method.** Before
+evaluating a target's argument, the reviewer identifies its load-bearing factual claims —
+the ones whose falsity would change its conclusion — attempts to reproduce each, and leads
+its `summary` by naming those claims with claim versus observation, the command run, and
+the environment. It must live there because focus text cannot oblige: `$gauntlet` weights
+focus heavily but "still report[s] any other material issue" (`skills/gauntlet/SKILL.md:199`)
+and focus only reorders attack surfaces (`:226-228`). A rule the loop needs to key an exit
+on cannot be advisory.
 
-The instruction asks the reviewer to identify the target's load-bearing factual claims,
-attempt to reproduce each, and lead its `summary` with claim versus observation, naming the
-command run and the environment it ran in.
+**`$trial-loop` appends the same instruction to the focus it transmits**, on every pass and
+whichever reviewer is selected, and names `$gauntlet`'s Method as its authority. Focus is
+the only slot that exists — the `CHARTER` block is fixed at eight fields plus focus
+(`skills/trial-loop/SKILL.md:213`) — and the transmission is what carries the obligation to
+`--reviewer detect-evil` and to a vendored reviewer whose Method predates it. No caller
+repeats it.
 
 **Reproduction stays read-only.** `skills/trial-loop/SKILL.md:301` and
-`skills/gauntlet/SKILL.md:344` both make the reviewer read-only with respect to the target
-and git state, with `--out` the sole write exception, and this decision creates no second
-one. Reproduction is inspection plus commands that write nothing into the target's working
-tree; anything that would write is reported as the observation — "could not run here" —
-never as a confirmation. That bound is not decoration: in working-tree mode `$gauntlet`
-resolves its target from `git status`, and the cycle-start `git stash create` baseline is
-what the self-collision fraction measures against, so a reviewer's build artifacts would
-become the next pass's target and inflate the loop's own convergence signal.
+`skills/gauntlet/SKILL.md:344` make the reviewer read-only with respect to the target and
+git state, with `--out` the sole write exception, and this decision creates no second one.
+Reproduction is inspection plus commands that write nothing into the target's working tree;
+anything that would write is reported as the observation — "could not run here" — never as
+a confirmation. In working-tree mode `$gauntlet` resolves its target from `git status` and
+the self-collision baseline is a `git stash create` snapshot, so a reviewer's build
+artifacts would otherwise become the next pass's target.
 
 **A claim the reviewer cannot reproduce is a finding**, under `$gauntlet`'s existing schema
 with no new fields: `file`, `line_start`, and `line_end` cite the claim; `body` carries the
-claim, the observation, the command, and the environment; `recommendation` is the ordinary
-remedy. The report rides in `summary` and the failures ride in `findings`, so the compact
-object is unchanged and step 2 reads the block from the artifact it already opens on every
-iteration (`skills/trial-loop/SKILL.md:329-333`).
+claim, the observation, the command, and the environment. The report rides in `summary` and
+the failures ride in `findings`, so the compact object is unchanged and step 2 reads the
+block from the artifact it already opens on every iteration.
 
 **A verified-sound target exits as *sound with record notes*.** The condition fires when
 all three hold:
@@ -73,7 +75,7 @@ all three hold:
 Condition 1 needs named claims, not a verdict about claims. A pass answering "this target
 asserts nothing reproducible" satisfies the instruction but not this condition: a target
 with nothing to reproduce leaves the loop through `approve`, *converged with deferrals*, or
-the cap, exactly as it does today.
+the cap, as it does today.
 
 **The consequence test.** For each standing finding, ask what changes if it is never
 addressed: does the decision the target records change; does any behaviour change; would a
@@ -85,8 +87,9 @@ It answers yes on the third question, so this exit must not fire on it.
 
 **The exit is an ordinary run-ending exit.** It inherits *Stop conditions*' on-every-exit
 obligations in full — working-tree guardrails and commit, suppression disclosure, deferral
-disclosure. The stale "all four exits" counts at `skills/trial-loop/SKILL.md:268` and
-`:477` become "every exit" in the same change, so no enumeration needs maintaining again.
+disclosure. Every "all four exits" count in that section becomes "every exit" in the same
+change; a line-anchored search finds only two of the three, so the change is made by
+reading the section, not by grep.
 
 **Precedence.** `approve` wins whenever the reviewer returns it. The rescope and
 self-collision exits outrank this one, because they carry obligations it does not — charter
@@ -97,49 +100,79 @@ report this one: it says everything that exit says and adds which claims were co
 whenever a standing finding is consequential.
 
 **`$quest` and `$spellcraft` recognise the new exit as non-blocking** and carry its notes
-into their own reporting. `skills/trial-loop/SKILL.md` is the authority; they name the exit
-only to route on it.
+into their own reporting. `skills/trial-loop/SKILL.md` is the authority for the loop's
+exits; they name this one only to route on it.
 
 ## Consequences
 
 Reproduction costs commands and time on the reviewer's first act of every pass. Under the
 read-only bound, a claim that needs a build to check often yields "could not run here" —
-which is a finding, not a confirmation, and not condition 1 satisfied.
+a finding, not a confirmation, and not condition 1 satisfied.
 
-The consequence test is a judgment the orchestrator applies to itself, and nothing detects
-an orchestrator that calls a consequential finding inconsequential to leave early. Two
-things bound it: the exit is reported distinctly rather than as `approve`, and it must list
-its outstanding notes, which reach the review summary, the `WORK:REVIEW` annotation, and
-the pull request. Weaker than a gate, and the price of anatomy rule 4.
+Two of the exit's tests are judgments the orchestrator applies to itself, and nothing
+detects either being made self-servingly: whether a standing finding is consequence-free,
+and whether an edit since the confirming pass changed what a confirmed claim asserts. What
+bounds them is disclosure — the exit is reported distinctly rather than as `approve`, and
+its note list names each confirmed claim with the pass that confirmed it, reaching the
+review summary, the `WORK:REVIEW` annotation, and the pull request. Weaker than a gate, and
+the price of anatomy rule 4.
 
-Callers now handle a sixth outcome name; the two here are updated in the same change, a
-vendored older copy elsewhere is not. The instruction also reaches `$detect-evil`, since
-the loop transmits it whichever reviewer is selected — intended, though `$detect-evil` was
-not designed around it and its scan is unchanged. And the rule is stated in `$trial-loop`
-and consumed by name in two callers with nothing detecting divergence: the same residual
-ADR 0019 records, accepted on the same terms.
+Two residuals this change does not close. A target with no reproducible claims and only
+consequence-free findings still runs to the cap and reports `blocked` — the reported
+failure in a narrower form, accepted because condition 1 is what makes "sound" earned
+rather than asserted. And `$quest` and `$spellcraft` branch today only on `approve` and
+blocked: at `dd3f5b0`, `rg --no-config -n 'converged' skills/quest/SKILL.md
+skills/spellcraft/SKILL.md` exits 1 with no matches, so *converged with deferrals* and
+*converged on own surface* are already unrouted there. This change adds a third name and
+leaves those two as they were; the gap is filed as issue #141 rather than fixed here,
+`docs/debt/` being outside this change's surface.
+
+The instruction reaches `$detect-evil` through the transmitted focus, since the loop sends
+it whichever reviewer is selected — intended, though `$detect-evil` was not designed around
+it and its scan is unchanged.
+
+The rule now sits in two files: `$gauntlet`'s Method holds the obligation and
+`$trial-loop`'s dispatch transmits it, with nothing detecting divergence between them. That
+is the price of making it binding, and it is the same residual ADR 0019 records for its own
+two-file contract.
 
 ## Considered & rejected
 
 **Copy the reproduction instruction into each caller's focus text, as #138 proposes.**
 judgment: fit — four call sites across two files (`skills/spellcraft/SKILL.md:341`, `:369`,
 `:468` and `skills/quest/SKILL.md:417`) versus one statement at the point every caller
-passes through, which also covers `--reviewer detect-evil` and any future caller for free.
+passes through, which also covers `--reviewer detect-evil` for free.
 
-**State the obligation in `$gauntlet`'s Method instead.** judgment: it is the loop, not the
-reviewer, that needs the evidence, because the new exit keys on it; and stating it in both
-files is the divergence the rejection above avoids.
+**State it in `$trial-loop`'s dispatch alone, leaving `$gauntlet` untouched.** verified:
+`skills/gauntlet/SKILL.md:199` tells the reviewer to weight focus heavily "but still report
+any other material issue you can defend", and `:226-228` limits focus to reordering attack
+surfaces and one summary duty. A contract-compliant reviewer could decline to reproduce
+anything, condition 1 would never hold, and the run would land on the cap — the failure
+this record removes.
+
+**State it in `$gauntlet`'s Method alone, with no transmission.** judgment: a vendored older
+`$gauntlet` and `--reviewer detect-evil` would both silently skip it, and the loop cannot
+tell which reviewer copy it dispatched.
 
 **Add a `reproduction` array to `$gauntlet`'s JSON output and the compact object.**
 verified: at `dd3f5b0`, `rg --no-config -n 'findings_count' skills/` returns six hits —
 `skills/gauntlet/SKILL.md:64` and `:322` define the object, and
 `skills/trial-loop/SKILL.md:38`, `:305`, `:319` and `skills/quest/SKILL.md:464` consume it
-field by field — so a sixth field changes every one of them, and #138's second acceptance
-criterion requires the existing schema unchanged.
+field by field — so a sixth field changes every one of them.
 
 **Carry the instruction as a ninth field in the `CHARTER` block.** verified:
 `skills/trial-loop/SKILL.md:213` states "The block has exactly the eight charter fields plus
-focus", and a ninth element breaks the block's own invariant and the reviewer's parse.
+focus", and a ninth element breaks the block's invariant and the reviewer's parse.
+
+**Fire the exit on the consequence test and the no-edit precondition alone, dropping
+condition 1.** judgment: it would exit targets nobody checked under a name asserting they
+were, and the note list would have nothing to list. The cost is the residual recorded above
+— a claim-free target still reaches the cap.
+
+**Have the orchestrator reproduce the claims itself.** judgment: the orchestrator is not
+read-only, so its commands are unbounded where the reviewer's are; and it would reproduce
+once per run rather than once per pass, which cannot re-confirm a target the loop has since
+edited — the very thing condition 1 requires.
 
 **Key the exit on prose-versus-fact.** verified: #138's evidence refutes it — the branch
 review's top finding was ADR prose whose consequence was a maintainer deleting a
@@ -147,14 +180,12 @@ load-bearing line, and a subject-matter test waves exactly that finding through.
 
 **Widen *converged with deferrals* to cover this.** verified: that exit proves stability —
 no finding both new and not self-collision, against an unchanged target
-(`skills/trial-loop/SKILL.md:512-514`). A consequence-free finding is new and cites
-original surface, so covering it would merge two different convergence proofs into one
-unreadable condition.
+(`skills/trial-loop/SKILL.md:512-514`). A consequence-free finding is new and cites original
+surface, so covering it would merge two convergence proofs into one unreadable condition.
 
 **Let the reviewer judge the target sound and return `approve`.** verified:
 `skills/gauntlet/SKILL.md:345` approves only when no defensible finding exists, and
-`skills/trial-loop/SKILL.md:597` forbids forcing `approve` by lowering the bar. A
-consequence-free finding is still defensible.
+`skills/trial-loop/SKILL.md:597` forbids forcing `approve` by lowering the bar.
 
 **Let the reviewer, not the orchestrator, decide a finding is consequence-free.** verified:
 `skills/trial-loop/SKILL.md:291-293` keeps each pass naive of the run's history, so the

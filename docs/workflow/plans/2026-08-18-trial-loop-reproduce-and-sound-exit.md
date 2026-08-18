@@ -19,8 +19,9 @@ Decision: `docs/adr/0020-reviews-reproduce-claims-and-exit-when-sound.md`. Issue
   `{verdict, findings_count, suppressed_count, path, run_id}` are unchanged. No new fields.
 - The exit is named **sound with record notes**, in italics, everywhere it appears. It must
   not be confused with `rejected-with-evidence`, which is a per-finding disposition.
-- The reproduction instruction is stated **once**, in `$trial-loop`'s step 1. Do not copy it
-  into `$quest`'s or `$spellcraft`'s focus texts.
+- The reproduction **obligation** is stated in `$gauntlet`'s Method; `$trial-loop`'s step 1
+  transmits the same instruction with the focus and names `$gauntlet` as its authority. Do
+  not copy it into `$quest`'s or `$spellcraft`'s focus texts.
 - `docs/debt/` is outside the permitted surface. Write no deferral record; do not touch the
   `records` recipe.
 - Public repository: no host paths, hostnames, or session state. The checkout root is
@@ -30,7 +31,32 @@ Decision: `docs/adr/0020-reviews-reproduce-claims-and-exit-when-sound.md`. Issue
 - Conventional commits, imperative subject ≤ 72 chars, one logical change each, ending with
   the `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>` trailer.
 
-## Task 1 — require reproduction in `$trial-loop`'s dispatch
+## Task 0 — state the reproduction obligation in `$gauntlet`'s Method
+
+File: `skills/gauntlet/SKILL.md`, section *Method* (the paragraph beginning "Actively try to
+disprove the change").
+
+### Step 0.1 — add the obligation
+
+Add a short paragraph to *Method*, before or after the existing one, requiring the reviewer
+to identify the target's load-bearing factual claims — the ones whose falsity would change
+its conclusion — attempt to reproduce each, and lead `summary` by naming those claims with
+claim versus observation, the command run, and the environment. State that a claim it
+cannot reproduce is a finding under the ordinary bar; that a command it cannot run is
+reported as that observation, never as a confirmation; that reproduction is read-only under
+*Hard constraints* (`:344`), so anything that would write into the target's working tree is
+reported rather than run; and that a target asserting nothing reproducible is answered in
+one sentence.
+
+This is the binding statement. It must not be phrased as a focus-text preference — the
+whole reason it lives here is that `:199` and `:226-228` make focus advisory.
+
+### Step 0.2 — verify and commit
+
+`just verify` bare, exit 0. Commit as
+`feat(gauntlet): reproduce load-bearing claims before evaluating`.
+
+## Task 1 — transmit the instruction from `$trial-loop`'s dispatch
 
 File: `skills/trial-loop/SKILL.md`. Anchor: the paragraph in step 1 beginning "Ask the
 reviewer to report an excluded concern".
@@ -117,9 +143,12 @@ final-budgeted-iteration bullet. The new bullet states:
 
 ### Step 2.1a — correct the stale exit counts
 
-In the same section, `skills/trial-loop/SKILL.md:268` and `:477` both say "all four exits".
-Replace both with "every exit", so the preamble's obligations cover the new bullet and no
-enumeration needs maintaining again.
+"all four exits" appears **three** times, at `skills/trial-loop/SKILL.md:268`, `:477`, and
+`:505` — the third wrapping a line break, so a line-anchored grep finds only two. Find them
+with `rg --no-config -n --multiline --multiline-dotall 'all four\s+exits'
+skills/trial-loop/SKILL.md`, or by reading the section. Replace all three with "every
+exit". The `:505` site is the one scoping suppression and deferral disclosure, which the
+new exit inherits, so missing it is the failure this step exists to prevent.
 
 ### Step 2.2 — amend the cap bullet
 

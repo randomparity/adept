@@ -65,25 +65,31 @@ Sourced from #138's acceptance criteria and the frozen `WORK:SCOPE` on that issu
 
 ### Where the reproduction instruction lives
 
-Written once in `$trial-loop`'s step 1; the loop **appends it to the focus it transmits**
-on every pass. It is not copied into any caller's focus text.
+Two places, with a clear authority split, and neither of them a caller's focus text.
 
-Focus is the only slot that exists. The `CHARTER` block is fixed at eight fields plus focus
-(`skills/trial-loop/SKILL.md:213`), so a ninth element would break the block's invariant
-and the reviewer's parse; and `$gauntlet` classifies every non-flag, non-path token as
-focus text (`skills/gauntlet/SKILL.md:59-67`), so a prose instruction outside the block
-arrives as focus whatever the source file calls it. Authored once, transmitted as focus,
-weighted as the user's priority. Its own wording — reproduce *before* evaluating — is what
-orders it against the caller's evaluative focus, since `$gauntlet` has no category that
-ranks one focus clause above another.
+**The obligation is in `$gauntlet`'s Method.** Focus text cannot oblige: `$gauntlet` weights
+focus heavily but "still report[s] any other material issue you can defend"
+(`skills/gauntlet/SKILL.md:199`), and focus only reorders attack surfaces and adds one
+summary duty (`:226-228`). A reviewer that ignored a focus-only reproduction request would
+still be contract-compliant — and then condition 1 of the new exit could never hold and the
+run would land on the cap, which is the failure being removed. So the obligation is stated
+where it binds.
 
-#138 proposes both ("the dispatch contract … and the focus text `$spellcraft` and `$quest`
-pass"). Stating it in the dispatch alone is a deliberate narrowing, recorded in ADR 0020:
-four call sites across two caller files, with nothing detecting divergence, against one
-statement at the point every caller passes through — which also covers
-`--reviewer detect-evil` and any future caller for free. Consequently no caller focus text
-changes for reproduction; the caller edits this change makes are the ones requirement 7
-asks for.
+**`$trial-loop`'s dispatch transmits the same instruction with the focus** on every pass,
+naming `$gauntlet`'s Method as its authority. That is what carries it to
+`--reviewer detect-evil`, whose Method is `$detect-evil`'s, and to a vendored `$gauntlet`
+copy predating the Method change. Focus is the only slot available: the `CHARTER` block is
+fixed at eight fields plus focus (`skills/trial-loop/SKILL.md:213`), and `$gauntlet`
+classifies every non-flag, non-path token as focus (`skills/gauntlet/SKILL.md:59-67`).
+
+#138 proposes the dispatch plus each caller's focus text. Stating it in the dispatch and
+`$gauntlet` instead is a deliberate narrowing, recorded in ADR 0020: four call sites across
+two caller files against one transmission point every caller passes through. Consequently
+no caller focus text changes for reproduction; the caller edits this change makes are the
+ones requirement 7 asks for.
+
+The residual is two statements of one rule with nothing detecting divergence — the price of
+making it binding, and the same residual ADR 0019 accepted.
 
 ### What the instruction asks for
 
@@ -148,8 +154,11 @@ pass that exits, so no fix ships unreviewed.
 
 The exit is an ordinary run-ending exit and inherits *Stop conditions*' on-every-exit
 obligations in full — working-tree guardrails and commit, suppression disclosure, deferral
-disclosure. That section currently says "all four exits" at `skills/trial-loop/SKILL.md:268`
-and `:477`; both become "every exit", which is correct now and stays correct.
+disclosure. That section says "all four exits" in **three** places —
+`skills/trial-loop/SKILL.md:268`, `:477`, and `:505`, the last wrapping a line break so a
+line-anchored grep finds only two — and the third is the one scoping suppression and
+deferral disclosure, the obligation the new exit most needs. All three become "every exit",
+which is correct now and stays correct.
 
 Precedence: `approve` wins if the reviewer returns it. The rescope and self-collision exits
 outrank this one, because they carry obligations it does not — charter authority, and one
@@ -190,6 +199,12 @@ standing finding is consequential — so the two conditions read as the pair the
   verdict in its step 6 review summary. Both gain the new exit as a non-blocking outcome
   whose notes go into the summary and therefore into `WORK:REVIEW` and the pull request.
 
+Both callers branch today only on `approve` and blocked: at `dd3f5b0`,
+`rg --no-config -n 'converged' skills/quest/SKILL.md skills/spellcraft/SKILL.md` exits 1
+with no matches, so *converged with deferrals* and *converged on own surface* are already
+unrouted there. This change adds a third name and leaves those two as they are — routing
+them is outside the frozen surface and is filed as issue #141 instead.
+
 ### Naming
 
 *sound with record notes* — the phrase #138 uses. It does not collide with
@@ -210,12 +225,18 @@ dispatch.
 
 ## Risks
 
-- **The consequence test is self-applied.** An orchestrator wanting out of the loop can
-  call a consequential finding inconsequential. Bounded only by distinct reporting and by
-  the notes reaching `WORK:REVIEW` and the pull request. Recorded in ADR 0020.
-- **Cross-file drift.** The exit name is stated in `$trial-loop` and consumed by name in
-  `$quest` and `$spellcraft`, with nothing detecting divergence — the same residual ADR
-  0019 accepted for its contract.
+- **Two self-applied tests.** An orchestrator wanting out of the loop can call a
+  consequential finding inconsequential, and can call an edit since the confirming pass
+  claim-preserving. Bounded only by distinct reporting and by the note list — which names
+  each confirmed claim with the pass that confirmed it — reaching `WORK:REVIEW` and the
+  pull request. Recorded in ADR 0020.
+- **Cross-file drift.** The obligation sits in `$gauntlet`'s Method, the transmission in
+  `$trial-loop`, and the exit name is consumed in `$quest` and `$spellcraft`, with nothing
+  detecting divergence — the same residual ADR 0019 accepted for its contract.
+- **A claim-free target still reaches the cap.** Condition 1 requires a reproducing pass,
+  so a target that asserts nothing reproducible and accumulates only consequence-free
+  findings still reports `blocked`. Accepted in ADR 0020: without condition 1 the exit
+  would call targets sound that nobody checked.
 - **Reproduction cost on every pass.** Mitigated by the one-sentence answer for targets
   with no factual claims, and by the reported evidence that reproducing passes are the
   ones that find defects.
