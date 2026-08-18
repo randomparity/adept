@@ -15,6 +15,15 @@ hold in the workflow's existing run report or ledger and may drain unrelated wor
 report completes the held wait. A later harness end-of-run notification continues that same chain
 at reconciliation with the same replacement budget.
 
+## Waiting mechanics
+
+Wait through the harness: a completion notification, or a single background task read when it
+returns. Never wait by foreground sleep polling — every wake of a sleep-and-check loop replays the
+dispatcher's full context through the model, so an hour of five-minute sleeps costs more than the
+report it waits for. While a wait is open, drain other work in hand; when the outstanding reports
+are the only work left, say plainly what is blocked and on what, and wait through the harness
+rather than manufacturing polls to look busy.
+
 ## Observed end and reconciliation
 
 Only the harness's end-of-run notification, or a dispatcher-requested stop followed by that
