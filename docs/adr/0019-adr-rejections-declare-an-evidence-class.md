@@ -14,8 +14,9 @@ ADR-review focus.
 
 A rejected alternative is a road nobody drives, so nobody re-tests the reason it was
 rejected. An unverified rejection can therefore stand unchallenged, and any later decision
-leaning on it inherits the error silently. Issue #137 reports the instance: one ADR carried
-five load-bearing factual claims that turned out false, three of them rejection grounds.
+leaning on it inherits the error silently. Issue #137 reports the instance: one ADR in
+another repository (`randomparity/hmc-mcp`, ADR 0032) carried five load-bearing factual
+claims that turned out false, three of them rejection grounds.
 The review loop did catch all three — but only because the reviewer reproduced them
 independently, and only after the design had been reversed twice across five iterations.
 
@@ -27,8 +28,8 @@ name an ADR ground.
 
 ## Decision
 
-Every `Considered & rejected` bullet opens with one of two tags declaring how its ground
-was established:
+Every `Considered & rejected` bullet names its alternative, then opens the ground that sank
+it with one of two tags declaring how that ground was established:
 
 - `verified:` — a **factual** ground, carrying the command run and what it produced. Name
   the environment wherever the result could depend on it — a commit, a released version, a
@@ -62,7 +63,8 @@ section buys for those lines is a rejection a later reader can re-run.
 
 A writer who cannot evidence a factual ground has two honest exits — get the evidence, or
 re-state the ground as the judgment it was — and one dishonest one, writing `verified:`
-over nothing. Issue #138, the review-side half, is what closes that.
+over nothing. Nothing here closes that; issue #138, the review-side half, is what would
+catch it.
 
 The contract covers rejection grounds only, and it is stated in two documents with nothing
 detecting divergence between them. Both residuals are recorded in the design doc.
@@ -93,6 +95,10 @@ token to omit leaves a reviewer nothing to point at.
 
 **Add a third class for a factual ground believed but not run.** judgment: a sanctioned
 resting place for the claim this record exists to expose.
+
+**Tag every load-bearing factual claim in a record, not only rejection grounds.** judgment:
+cost — a tag per sentence, against a size discipline this decision has to respect.
+Rejections are the claims nobody re-tests, so they are where the tag earns its lines.
 
 **Do nothing.** judgment: a clause per judgment ground and a command with its result per
 factual one, against the reported instance's two design reversals across five review

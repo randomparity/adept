@@ -44,7 +44,8 @@ belief rather than the claim's load.
 
 ### The vocabulary
 
-Every `Considered & rejected` bullet opens with one of two tags:
+Every `Considered & rejected` bullet names its alternative, then opens the ground that sank
+it with one of two tags:
 
 - `verified:` — a factual ground, carrying the command run and what it produced, plus the
   environment wherever the result could depend on it (a commit, a released version, a
