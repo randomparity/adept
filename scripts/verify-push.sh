@@ -8,9 +8,28 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
 
 # Hooks export selectors for their source worktree. Root discovery above needs
 # those values; every later command must resolve inside the detached worktree.
+#
+# Captured rather than read from a process substitution, which reports the
+# loop's status and never rev-parse's: a rev-parse that could not answer leaves
+# the loop reading nothing, nothing unset, and every command below resolving
+# against the hook's repository instead of this one -- a scan that could not run
+# read as one that found nothing (ADR 0005). clear_git_env in
+# scripts/test-fixture-helpers.sh is the same fix at the same call.
+local_env_vars=$(git -C "$ROOT" rev-parse --local-env-vars) || {
+	printf 'verify-push: cannot read git local env vars\n' >&2
+	exit 2
+}
+# Empty output is the same failure wearing a zero exit status: git has always
+# named at least GIT_DIR here, so nothing to clear means the answer did not
+# arrive rather than that there was nothing to do.
+[ -n "$local_env_vars" ] || {
+	printf 'verify-push: git reported no local env vars\n' >&2
+	exit 2
+}
 while IFS= read -r variable; do
-	[[ -n $variable ]] && unset "$variable"
-done < <(git -C "$ROOT" rev-parse --local-env-vars)
+	[ -n "$variable" ] || continue
+	unset "$variable"
+done <<<"$local_env_vars"
 ZERO_OID=$(git -C "$ROOT" hash-object --stdin </dev/null)
 ZERO_OID=${ZERO_OID//[0123456789abcdef]/0}
 

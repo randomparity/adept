@@ -233,6 +233,50 @@ set -e
 [[ $failure_status == 73 && $failure_output == *'retained cleanup path'* ]] ||
 	fail 'cleanup failure should preserve the ci failure status'
 
+# The verifier clears Git's repository-local selectors before it resolves
+# anything inside the detached worktree. Read through a process substitution
+# that loop reported its own status and never rev-parse's, so a rev-parse that
+# could not answer left nothing unset and every later command resolving against
+# the hook's repository instead of this one. Both shapes of that failure -- a
+# non-zero status, and the same silence wearing a zero one -- must stop the run
+# before ci is reached.
+cat >"$FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == -C && \${3:-} == rev-parse && \${4:-} == --local-env-vars ]]; then
+  printf 'stub git: cannot report the local env vars\n' >&2
+  exit 128
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$FAIL_BIN/git"
+new_repo
+set +e
+env_fault_output=$(run_verifier_with_git \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\\n" "$FAIL_BIN" 2>&1)
+env_fault_status=$?
+set -e
+[[ $env_fault_status -ne 0 && $env_fault_output == *'cannot read git local env vars'* ]] ||
+	fail "unreadable local env vars should stop the run: $env_fault_output"
+assert_no_ci 'unreadable local env vars'
+
+cat >"$FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == -C && \${3:-} == rev-parse && \${4:-} == --local-env-vars ]]; then
+  exit 0
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$FAIL_BIN/git"
+new_repo
+set +e
+env_empty_output=$(run_verifier_with_git \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\\n" "$FAIL_BIN" 2>&1)
+env_empty_status=$?
+set -e
+[[ $env_empty_status -ne 0 && $env_empty_output == *'reported no local env vars'* ]] ||
+	fail "an empty local env var list should stop the run: $env_empty_output"
+assert_no_ci 'empty local env vars'
+
 HOOK_REPO="$SCRATCH/hook-repo"
 HOOK_BIN="$SCRATCH/hook-bin"
 mkdir -p "$HOOK_BIN"
