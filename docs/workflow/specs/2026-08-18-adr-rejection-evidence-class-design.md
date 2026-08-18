@@ -14,8 +14,8 @@ alternative is a road nobody drives, so nobody re-tests the reason it was reject
 unverified rejection can stand unchallenged for years, and any later decision leaning on
 it inherits the error silently.
 
-The reported instance (issue #137, from a session on `randomparity/hmc-mcp`) had three of
-five load-bearing factual claims fail, all three of them rejection grounds, two of which
+The reported instance (issue #137, from a session on `randomparity/hmc-mcp`) had five
+load-bearing factual claims turn out false, three of them rejection grounds, two of which
 reversed the design after the fact. Each read as a technical finding. None had been run.
 The chosen option's claims *were* verified — verification tracked the author's prior
 belief rather than the claim's load.
@@ -47,7 +47,11 @@ belief rather than the claim's load.
 Every `Considered & rejected` bullet opens with one of two tags:
 
 - `verified:` — a factual ground, carrying the command run, what it produced, and the
-  environment it ran in.
+  environment it ran in, named durably (a commit, a released version, a platform) so a
+  later reader can return to it. "This branch" is not an environment: the branch is
+  deleted on merge, and the record is immutable. Where the ground is factual but no
+  command settles it — a documented platform limit, an absent upstream API, a decision
+  someone made — `verified:` carries the source that settles it instead.
 - `judgment:` — complexity, fit, taste, or cost. No command; the label is the point.
 
 Two tags, not a spectrum. A third class ("plausible", "assumed") would be a place for an
@@ -67,9 +71,10 @@ Two places, both normative, because they are the two documents a writer reads:
 2. `skills/tome-of-lore/SKILL.md`, in the shipped ADR template block, where a writer
    copying the template sees it (R5).
 
-The tome-of-lore statement is the template line plus one sentence naming the two tags. It
-is not a second, fuller specification: one authority, one restatement short enough that
-divergence is visible on sight.
+The tome-of-lore statement is the template line plus one sentence naming the two tags and
+naming `$spellcraft` as the authority for them. It is not a second, fuller specification.
+A cross-reference alone would not do: a template is copied rather than followed, so a
+pointer sitting in `$spellcraft` leaves the copied template silent about the rule.
 
 ### Enforcement
 
@@ -91,8 +96,13 @@ The change is skill prose. It is verified by:
 
 ## Risks
 
-- **Drift between the two statements.** Mitigated by keeping tome-of-lore's to a template
-  line plus one sentence, and by ADR 0019 recording that spellcraft is the authority.
+- **Drift between the two statements.** Nothing detects it — anatomy rule 4 forbids a
+  gate. Reduced, not closed, by keeping tome-of-lore's to a template line plus one
+  sentence that names `$spellcraft` as the authority, so a reader who finds either finds
+  the other.
+- **Claims outside the rejection list stay untagged.** The reported instance also carried
+  false load-bearing claims elsewhere in the record. Accepted residual: rejections are the
+  claims nobody re-tests, and tagging every factual sentence would bloat what R6 protects.
 - **Tag theatre** — `verified:` written without running anything. Not closed here by
   construction; R4's review clause is what catches it, and issue #138 is the half that
   makes the reviewer check. Stated so the residual is on the record rather than assumed
