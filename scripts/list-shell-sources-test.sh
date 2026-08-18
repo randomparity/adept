@@ -381,6 +381,13 @@ printf '%s\n' "$out" | grep -q 'git-stub: discovery stopped partway' ||
 if printf '%s\n' "$out" | grep -q 'suites passed'; then
 	fail "test: the recipe reported a pass over a partial discovery: $out"
 fi
+# Failing at the end is not the same as failing before the damage. A recipe
+# that ran the suites it did receive and only then noticed the discovery had
+# died satisfies both checks above, so the suite's own marker has to be absent
+# too: the discovery must stop the run before anything from a short list runs.
+if printf '%s\n' "$out" | grep -q 'partial-test: pass'; then
+	fail "test: the recipe ran a suite from a discovery that had already failed: $out"
+fi
 
 # Capturing the list to a file makes that file the read loop's stdin, so the
 # recipe runs each suite with stdin closed. Without that a suite reading stdin
