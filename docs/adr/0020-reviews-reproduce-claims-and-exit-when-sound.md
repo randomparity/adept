@@ -40,9 +40,13 @@ the environment. It lives in Method because a rule the loop keys an exit on cann
 advisory, and focus text is (see the rejections below).
 
 **`$trial-loop` appends the same instruction to the focus it transmits**, on every pass and
-whichever reviewer is selected, naming `$gauntlet`'s Method as its authority. That
-transmission is what carries the obligation to `--reviewer detect-evil` and to a vendored
-reviewer whose Method predates it. No caller repeats it.
+whichever reviewer is selected, naming `$gauntlet`'s Method as its authority. It rides
+*inside* `focus`, so `skills/trial-loop/SKILL.md:291`'s "and nothing else" and its
+naive-pass guarantee are unchanged; that clause is amended only to say so, since a standing
+instruction beside a "nothing else" clause otherwise reads as a prohibited extra. The
+transmission delivers the instruction to every reviewer, but it binds only one whose own
+Method carries the obligation — for `--reviewer detect-evil` and for a vendored `$gauntlet`
+predating this record, delivery is all it is. No caller repeats it.
 
 **Reproduction stays read-only.** `skills/trial-loop/SKILL.md:301` and
 `skills/gauntlet/SKILL.md:344` make the reviewer read-only with respect to the target and
@@ -82,16 +86,16 @@ It answers yes on the third question, so this exit must not fire on it.
 
 **The exit is an ordinary run-ending exit**, inheriting *Stop conditions*' on-every-exit
 obligations in full: working-tree guardrails and commit, suppression disclosure, deferral
-disclosure. Every "all four exits" count in that section becomes "every exit" in the same
-change; a line-anchored search finds only two of the three, so the change is made by
-reading the section, not by grep.
+disclosure. `$trial-loop`'s standing "all four exits" counts are corrected to "every exit"
+in the same change; the implementation plan names the sites, since a literal search misses
+one of them.
 
-**Precedence.** `approve` wins whenever the reviewer returns it. The rescope and
-self-collision exits outrank this one, because they carry obligations it does not — charter
-authority, and one confirming pass. Where this and *converged with deferrals* both apply,
-report this one: it says everything that exit says and adds which claims were confirmed.
-Cap exhaustion is unchanged: the final budgeted iteration still stops as `blocked` whenever
-a standing finding is consequential.
+**Precedence.** `approve` wins whenever the reviewer returns it, and *converged with
+deferrals* wins over this exit where both apply — its no-edit test covers the whole target,
+where condition 1 covers only the confirmed claims. The rescope and self-collision exits
+outrank it too, carrying obligations it does not: charter authority, and one confirming
+pass. Cap exhaustion is unchanged — the final budgeted iteration still stops as `blocked`
+whenever a standing finding is consequential.
 
 **`$quest` and `$spellcraft` recognise the new exit as non-blocking** and carry its notes
 into their own reporting. `skills/trial-loop/SKILL.md` is the authority for the loop's
@@ -121,9 +125,11 @@ skills/spellcraft/SKILL.md` exits 1 with no matches, so *converged with deferral
 leaves those two as they were; the gap is filed as issue #141 rather than fixed here,
 `docs/debt/` being outside this change's surface.
 
-The instruction reaches `$detect-evil` through the transmitted focus, since the loop sends
-it whichever reviewer is selected — intended, though `$detect-evil` was not designed around
-it and its scan is unchanged.
+A third residual follows from the transmission being delivery rather than obligation: under
+`--reviewer detect-evil`, or a vendored `$gauntlet` predating this record, condition 1 is
+not reliable and such a run can still reach the cap on a finished target. Making focus bind
+is not available, so this is accepted rather than fixed; `$detect-evil`'s scan is unchanged
+either way.
 
 The rule now sits in two files: `$gauntlet`'s Method holds the obligation and
 `$trial-loop`'s dispatch transmits it, with nothing detecting divergence between them. That
@@ -132,10 +138,11 @@ two-file contract.
 
 ## Considered & rejected
 
-**Copy the reproduction instruction into each caller's focus text, as #138 proposes.**
-judgment: fit — four call sites across two files (`skills/spellcraft/SKILL.md:341`, `:369`,
-`:468` and `skills/quest/SKILL.md:417`) versus one statement at the point every caller
-passes through, which also covers `--reviewer detect-evil` for free.
+**Copy the reproduction instruction into each caller's focus text.** judgment: fit — four
+call sites across two files (`skills/spellcraft/SKILL.md:341`, `:369`, `:468` and
+`skills/quest/SKILL.md:417`) versus one statement at the point every caller passes through.
+(#138 names caller focus text as a second site alongside the dispatch contract; the
+dispatch half is what this record adopts.)
 
 **State it in `$trial-loop`'s dispatch alone, leaving `$gauntlet` untouched.** verified:
 `skills/gauntlet/SKILL.md:199` tells the reviewer to weight focus heavily "but still report
@@ -144,9 +151,10 @@ surfaces and one summary duty. A contract-compliant reviewer could decline to re
 anything, condition 1 would never hold, and the run would land on the cap — the failure
 this record removes.
 
-**State it in `$gauntlet`'s Method alone, with no transmission.** judgment: a vendored older
-`$gauntlet` and `--reviewer detect-evil` would both silently skip it, and the loop cannot
-tell which reviewer copy it dispatched.
+**State it in `$gauntlet`'s Method alone, with no transmission.** judgment: reach — a
+single-file rule reaches only reviewers whose installed copy carries it, and
+`skills/trial-loop/SKILL.md:204-205` has the loop read and dispatch whichever installed
+reviewer is selected, with no step that inspects what that copy says.
 
 **Add a `reproduction` array to `$gauntlet`'s JSON output and the compact object.**
 verified: at `dd3f5b0`, `rg --no-config -n 'findings_count' skills/` returns six hits —
@@ -156,7 +164,7 @@ field by field — so a sixth field changes every one of them.
 
 **Carry the instruction as a ninth field in the `CHARTER` block.** verified:
 `skills/trial-loop/SKILL.md:213` states "The block has exactly the eight charter fields plus
-focus", and a ninth element breaks the block's invariant and the reviewer's parse.
+focus", so a ninth element breaks the block's own invariant.
 
 **Fire the exit on the consequence test and the no-edit precondition alone, dropping
 condition 1.** judgment: it would exit targets nobody checked under a name asserting they

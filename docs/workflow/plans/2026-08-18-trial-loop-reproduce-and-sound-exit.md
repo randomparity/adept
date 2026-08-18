@@ -77,9 +77,12 @@ than prohibited, and to say that what "nothing else" forbids is the run's own hi
 followed by the standing instruction as an indented block quote, then short paragraphs
 covering (a) that the loop **appends the instruction to the focus it transmits**, so it
 lands in the `focus:` field of the `CHARTER` block and in the focus position of the
-arguments, leaving the block's eight-fields-plus-focus invariant intact; (b) that the
+arguments, leaving the block's eight-fields-plus-focus invariant intact and the naive-pass
+guarantee untouched — the instruction rides *inside* focus, it is not a fourth thing
+supplied; (b) that `$gauntlet`'s Method is the authority and the transmission is delivery,
+which binds only a reviewer whose installed copy carries the obligation; (c) that the
 report rides in `summary` and the failures ride in `findings`, so no schema changes; and
-(c) that reproduction is what the *sound with record notes* exit keys on, so a run with no
+(d) that reproduction is what the *sound with record notes* exit keys on, so a run with no
 reproducing pass behaves exactly as before.
 
 The block quote asks for, in order: identify the load-bearing factual claims (the ones
@@ -137,18 +140,27 @@ final-budgeted-iteration bullet. The new bullet states:
   that applies a fix is never the pass that exits;
 - that it is an ordinary run-ending exit inheriting the section's on-every-exit obligations
   in full — working-tree guardrails and commit, suppression disclosure, deferral disclosure;
-- distinct reporting, the note list, and precedence: the rescope and self-collision exits
-  outrank it (they carry obligations it does not), and it outranks *converged with
-  deferrals* where both apply.
+- distinct reporting, the note list (each confirmed claim with the pass that confirmed it),
+  and precedence: *converged with deferrals*, the rescope exit, and the self-collision exit
+  all outrank this one where they apply — the first because its no-edit test covers the
+  whole target where condition 1 covers only the confirmed claims, the other two because
+  they carry obligations this exit does not.
 
 ### Step 2.1a — correct the stale exit counts
 
-"all four exits" appears **three** times, at `skills/trial-loop/SKILL.md:268`, `:477`, and
-`:505` — the third wrapping a line break, so a line-anchored grep finds only two. Find them
-with `rg --no-config -n --multiline --multiline-dotall 'all four\s+exits'
-skills/trial-loop/SKILL.md`, or by reading the section. Replace all three with "every
-exit". The `:505` site is the one scoping suppression and deferral disclosure, which the
-new exit inherits, so missing it is the failure this step exists to prevent.
+"all four exits" appears **three** times in `skills/trial-loop/SKILL.md`, and they are not
+all in one section:
+
+- `:268` — inside *The Loop* (step 1's working-tree commit-deferral paragraph);
+- `:477` — inside *Stop conditions*, the on-every-exit commit obligation;
+- `:505` — inside *Stop conditions*, the disclosure obligation, wrapping a line break so a
+  line-anchored grep misses it.
+
+Find all three with `rg --no-config -n --multiline --multiline-dotall 'all four\s+exits'
+skills/trial-loop/SKILL.md`; a literal `rg -n 'all four exits'` returns only two, and
+reading *Stop conditions* alone misses `:268`. Replace all three with "every exit". The
+`:505` site scopes suppression and deferral disclosure, which the new exit inherits, so
+missing it is the failure this step exists to prevent.
 
 ### Step 2.2 — amend the cap bullet
 

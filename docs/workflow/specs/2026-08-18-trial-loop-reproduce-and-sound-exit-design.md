@@ -76,11 +76,16 @@ run would land on the cap, which is the failure being removed. So the obligation
 where it binds.
 
 **`$trial-loop`'s dispatch transmits the same instruction with the focus** on every pass,
-naming `$gauntlet`'s Method as its authority. That is what carries it to
-`--reviewer detect-evil`, whose Method is `$detect-evil`'s, and to a vendored `$gauntlet`
-copy predating the Method change. Focus is the only slot available: the `CHARTER` block is
-fixed at eight fields plus focus (`skills/trial-loop/SKILL.md:213`), and `$gauntlet`
-classifies every non-flag, non-path token as focus (`skills/gauntlet/SKILL.md:59-67`).
+naming `$gauntlet`'s Method as its authority. It rides *inside* focus, not as a fourth
+thing supplied, so `skills/trial-loop/SKILL.md:291`'s naive-pass guarantee is untouched and
+the "and nothing else" clause is amended only to say so. Focus is the only slot available:
+the `CHARTER` block is fixed at eight fields plus focus (`:213`), and `$gauntlet` classifies
+every non-flag, non-path token as focus (`skills/gauntlet/SKILL.md:59-67`).
+
+The transmission is **delivery, not obligation**. It reaches `--reviewer detect-evil` and a
+vendored `$gauntlet` copy predating the Method change, but focus is advisory for them too,
+so on those reviewers condition 1 is unreliable and the run can still reach the cap. That
+residual is accepted, not fixed — nothing available makes focus bind.
 
 #138 proposes the dispatch plus each caller's focus text. Stating it in the dispatch and
 `$gauntlet` instead is a deliberate narrowing, recorded in ADR 0020: four call sites across
@@ -154,18 +159,20 @@ pass that exits, so no fix ships unreviewed.
 
 The exit is an ordinary run-ending exit and inherits *Stop conditions*' on-every-exit
 obligations in full — working-tree guardrails and commit, suppression disclosure, deferral
-disclosure. That section says "all four exits" in **three** places —
-`skills/trial-loop/SKILL.md:268`, `:477`, and `:505`, the last wrapping a line break so a
-line-anchored grep finds only two — and the third is the one scoping suppression and
-deferral disclosure, the obligation the new exit most needs. All three become "every exit",
-which is correct now and stays correct.
+disclosure. `skills/trial-loop/SKILL.md` says "all four exits" in **three** places, and not
+all in one section: `:268` in *The Loop*, `:477` and `:505` in *Stop conditions* — the last
+wrapping a line break so a line-anchored grep finds only two, and it is the one scoping
+suppression and deferral disclosure, the obligation the new exit most needs. All three
+become "every exit", which is correct now and stays correct.
 
-Precedence: `approve` wins if the reviewer returns it. The rescope and self-collision exits
-outrank this one, because they carry obligations it does not — charter authority, and one
-confirming pass — and an exit whose conditions the orchestrator itself judges must not be
-the cheap way past them. Where this and *converged with deferrals* both apply, report this
-one: it says everything that exit says and adds which claims were confirmed. A finding the
-consequence test calls consequential cancels the exit and the loop continues ordinarily.
+Precedence: `approve` wins if the reviewer returns it. *Converged with deferrals* outranks
+this exit where both apply, because its no-edit test covers the whole target while
+condition 1 covers only what the confirmed claims assert — an orchestrator that rewrote a
+section after the confirming pass satisfies condition 1 and does not satisfy that one. The
+rescope and self-collision exits outrank it too, carrying obligations it does not — charter
+authority, and one confirming pass — and an exit whose conditions the orchestrator itself
+judges must not be the cheap way past them. A finding the consequence test calls
+consequential cancels the exit and the loop continues ordinarily.
 
 ### The consequence test
 
@@ -240,6 +247,7 @@ dispatch.
 - **Reproduction cost on every pass.** Mitigated by the one-sentence answer for targets
   with no factual claims, and by the reported evidence that reproducing passes are the
   ones that find defects.
-- **`$detect-evil` receives an instruction it was not designed around.** Accepted in ADR
-  0020: a security pass that reproduces its claims is strictly better, and its scan is
-  unchanged.
+- **The transmission does not bind a reviewer whose Method lacks the obligation.** Under
+  `--reviewer detect-evil`, or a vendored `$gauntlet` predating this change, focus is
+  advisory, so condition 1 is unreliable and such runs can still reach the cap. Accepted in
+  ADR 0020; `$detect-evil`'s scan is unchanged either way.
