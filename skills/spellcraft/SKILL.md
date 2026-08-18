@@ -133,6 +133,35 @@ norm, not a terse outlier. A record running longer than the artifact it
 governs has stopped recording the decision and started defending it; a 514-line ADR
 over a 19-line state machine is the failure this bounds. State the decision and stop.
 
+Every `Considered & rejected` bullet names its alternative, then opens the ground that
+sank it with one of two tags saying how that ground was established:
+
+- **`verified:`** — a factual ground. It carries the command run and what that command
+  produced, plus the environment wherever the result could depend on it — a commit, a
+  released version, a platform — named so a later reader can return to it, since "this
+  branch" is gone after the merge and the record is not. Where the ground is factual but
+  no command settles it, `verified:` carries the source that does.
+- **`judgment:`** — complexity, fit, taste, or cost. It carries no evidence; the token is
+  the obligation, and naming which of the four applies is optional.
+
+Both are legitimate grounds. A judgment presented as a fact is not. The tag classes the
+ground, so it does not exempt a factual premise sitting inside that ground: a `judgment:`
+resting on an unrun behaviour claim is the same defect wearing the other label. Where an
+alternative is sunk by both a measured fact and a judgment, lead with `verified:` — the
+factual half is the half that owes evidence.
+
+What the tag replaces is the paragraph of justification behind the ground, never the
+sentence or two that states the ground. A tagged bullet reads
+
+- **Configure the hooks path globally.** verified: `prek install` refuses and exits 2
+  under a global `core.hooksPath` (prek 0.4.13, macOS).
+- **Keep a second index of the records.** judgment: a merge-conflict surface for a lookup
+  nothing performs.
+
+in place of the reasoning it summarises. A rejected alternative is a road nobody drives,
+so nobody re-tests the reason it was rejected; the tag is what tells a later reader which
+grounds were checked.
+
 Use the orchestrator-assigned ADR number if you were given one (from
 `$attunement` step 7); otherwise take the next free number. Link the ADR from
 the spec. Run the relevant doc guardrails and commit the spec/ADR.
@@ -315,7 +344,14 @@ For each ADR path in the set, run `$trial-loop` in file-list mode:
   option; unstated or understated consequences and residuals; and whether a simpler
   decision would meet the same context. Size is in scope: a record arguing for its
   decision at greater length than the decision governs is a finding, and its remedy
-  is cutting rather than more text. This ADR file is the review target, not settled
+  is cutting rather than more text. Evidence class is in scope: a rejection whose ground
+  is stated as fact but carries no command, result, or source is a finding, as is a claim
+  about a rejected alternative's behaviour that you cannot reproduce from what the bullet
+  states — whichever tag precedes it, since a judgment resting on an unrun behaviour claim
+  is the same defect relabelled. The command and result a factual ground carries are the
+  ground, not argument, so the size clause above does not ask for them to be cut. A record
+  carrying no tags at all predates this contract: say so once rather than filing a finding
+  per bullet. This ADR file is the review target, not settled
   ground — challenge its decision on the merits.`
 
 Do **not** pass the spec/plan reviews' "don't reopen settled ADR choices" focus
