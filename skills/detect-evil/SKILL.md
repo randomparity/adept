@@ -83,16 +83,26 @@ complete. This binds the scan rather than informing it: a caller may restate it 
 text, but focus reorders attack surfaces and does no more than that, and a calling loop may
 key its exits on whether a pass actually reproduced anything.
 
+It is nonetheless a bounded add-on, the same way the reconciliation below is: step 2's
+crossing checks are the core scan and never degrade to make room for it. When budget runs
+short, stop reproducing and say in the claims block how many load-bearing claims you
+identified against how many you attempted. A reported shortfall is visible to whoever reads
+the scan; a quietly shorter list of named claims is not, and it makes the claims look
+complete precisely when they are least so.
+
 Reproduction is bounded by *Hard constraints* and adds no exception to them. Re-read the
 code the claim points at, search for the sibling check the claim says exists, run the
-guardrail the claim credits — where that guardrail is already present at the base ref,
-running it exercises the repo's tool rather than the change, and is allowed. Where the diff
-itself adds or modifies that guardrail, running it would execute the diff's code, which
-*Hard constraints* forbids: record the claim as not checkable here and say which rule
-stopped you. A safety argument resting on a gate nobody in this pass could run is exactly
-the case where being unable to check is material, so that claim is a finding rather than a
-silent gap. The same holds for any claim whose only proof would be running the changed code,
-an exploit, or a probe against a live host.
+guardrail the claim credits — that last only where the guardrail is already present at the
+base ref **and** running it writes nothing into the working tree and changes no git state.
+Both tests, not either: a base-ref guardrail exercises the repo's tool rather than the
+change, but one that leaves build output, refreshes a lockfile, or fixes in place lands its
+artifacts in the working tree the next pass resolves its target from. A guardrail the diff
+itself adds or modifies fails the first test — running it executes the diff's code, which
+*Hard constraints* forbids. Either failure routes the claim to not checkable here, naming
+the rule that stopped you. A safety argument resting on a gate nobody in this pass could run
+is exactly the case where being unable to check is material, so that claim is a finding
+rather than a silent gap. The same holds for any claim whose only proof would be running the
+changed code, an exploit, or a probe against a live host.
 
 Every claim you name ends in exactly one of three states, and none may be left unstated:
 
@@ -104,11 +114,12 @@ Every claim you name ends in exactly one of three states, and none may be left u
   claim, what you observed, the command, and the environment in the `body`. A refuted
   load-bearing claim is a defensible finding, so `verdict` is `needs-attention` like any
   other.
-- **not checkable here** — the tool, network, platform, or access it needs is absent, or
-  *Hard constraints* forbids the command. Report it as that observation, never as a
-  confirmation. It is a finding only where not being able to check it is itself material to
-  the crossing. The bar is materiality, not runnability: a scan that filed every un-runnable
-  claim would return `needs-attention` on most diffs and teach a reader to skim the ones
+- **not checkable here** — the tool, network, platform, or access it needs is absent, the
+  command would write into the working tree or change git state, or *Hard constraints*
+  forbids it outright. Report it as that observation, never as a confirmation. It is a
+  finding only where not being able to check it is itself material to the crossing. The bar
+  is materiality, not runnability: a scan that filed every un-runnable claim would return
+  `needs-attention` on most diffs and teach a reader to skim the ones
   that matter.
 
 A diff that rests on no such claim gets one sentence saying so, exactly as an empty
@@ -215,15 +226,20 @@ Three differences in how the fields are filled:
   right places, and it is the field a later reviewer checks the scan against.
 - **The claims block follows the inventory immediately**, still ahead of any verdict-bearing
   prose: each load-bearing claim you named, claim versus observation, the command you ran,
-  and the environment you ran it in. The order is fixed, so the two rules never compete for
+  and the environment you ran it in. Open the block by saying what it covers — the claims
+  this scan's inventory rested on, not the target's full load-bearing set — because a
+  calling loop lifts the block into a transcript, an exit note, and a pull-request body,
+  where a security-scoped list read as the complete one is a claim of coverage nobody made.
+  The order is fixed, so the two rules never compete for
   the same opening — the inventory leads because a claim qualifies a boundary and cannot be
   read before the surface it qualifies, and the claims block is labelled as its own block so
   a calling loop can lift it back out of the artifact. Elsewhere the obligation is
   `$gauntlet`'s Method, which leads its `summary` with the claims; here it sits one block
-  later. Two further differences are deliberate, and are what a maintainer syncing the two
+  later. Three further differences are deliberate, and are what a maintainer syncing the two
   files reconciles to rather than away: the claim set is anchored to this scan's inventory
-  instead of to the target's conclusion, and the reproduction bound additionally excludes
-  the diff's own code.
+  instead of to the target's conclusion; the reproduction bound additionally excludes the
+  diff's own code and any guardrail the diff introduces; and reproduction is a bounded
+  add-on here, degrading before the crossing checks do.
 - **`suppressions` carries governing-ADR re-litigation only**, on the same terms as
   `$gauntlet`: a decision an accepted ADR settled is not re-argued here either.
   A security finding that cites a fact outside that record is new risk, not re-litigation —
