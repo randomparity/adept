@@ -64,17 +64,18 @@ delivered-head-sha: <full exact delivered PR head SHA>
 `verdict:` is unchanged in meaning — the reviewer's last verdict on the last `$trial-loop` run,
 the run `findings:` and `iterations:` already count.
 
-**Four permitted `exit:` values**, one per way a run can reach step 8:
+**Five permitted `exit:` values**, one per way a run can reach step 8:
 
-| run ending | `verdict:` | `exit:` |
+| run ending | `exit:` | `verdict:` observed |
 |---|---|---|
-| reviewer returned `approve` | `approve` | `none` |
-| *converged with deferrals* | `needs-attention` | `converged-with-deferrals` |
-| *sound with record notes* | `needs-attention` | `sound-with-record-notes` |
-| *converged on own surface* | `needs-attention` | `converged-on-own-surface` |
+| reviewer returned `approve` | `none` | `approve` |
+| *converged with deferrals* | `converged-with-deferrals` | `needs-attention` |
+| *sound with record notes* | `sound-with-record-notes` | `needs-attention` |
+| *converged on own surface* | `converged-on-own-surface` | `needs-attention` or `approve` |
+| blocked at the iteration budget, continued on explicit human approval | `blocked-at-budget` | `needs-attention` |
 
-Cap exhaustion and rescoping park the quest before `$deliver`, so no run reaching step 8 needs a
-fifth value.
+Only the `exit:` column is prescribed; `verdict:` is whatever the reviewer actually returned.
+Every other stop parks the issue before `$deliver` rather than publishing.
 
 **Payloads stay out.** Deferral records with owning paths, outstanding notes with their
 findings, and the confirmed/refuted/not-checkable claim list continue to the `WORK:REVIEW` body
@@ -106,6 +107,8 @@ change what that section describes.
   no routing prose for them.
 - `$trial-loop`'s exits and report obligations — unchanged.
 - The `WORK:REVIEW` annotation's outer payload shape — ADR 0016.
+- Teaching `$bards-tale` step 3d to read `exit:` — issue #149, filed during this change's ADR
+  review. Until then a retrospective narrates a named exit as blocked.
 
 ## Verification
 
