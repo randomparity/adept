@@ -432,6 +432,12 @@ exit \"\$sort_status\"" \
 # That is why the two messages differ, and why this case cannot be folded into
 # Case 18: the sed shim unlinks the list after rule 1 and 2's loop has already
 # consumed it, so only the rule 6 probe can fire.
+#
+# That last part holds because the baseline fixture has no `$invocation` and an
+# empty reserved list. Give it one and rule 4's membership grep, which re-reads
+# the same $names, faults first -- loudly, on its own message, so the case would
+# fail rather than pass for the wrong reason, but it is a property of the
+# fixture and not of the design.
 probe_case 'rule 6 list cannot be read' sed \
 	"sed_status=0
 \"$real_sed\" \"\$@\" || sed_status=\$?
@@ -439,12 +445,14 @@ rm -f \"\$TMPDIR\"/check-skill-shape.*/names
 exit \"\$sed_status\"" \
 	rule6-input-fault 'the rule 6 skill-name list could not be read'
 
-# Case 23: the other half of the same guard. A directory at the input path opens
-# without error and then fails at the first `read` with the loop body never
-# running -- the identical fail-open shape, reached without an unopenable path,
-# so an open on its own would let this through. Rule 1 and 2's site stands for
-# all five: the regular-file test lives in the one shared helper, so a case per
-# site would pin the same line five times.
+# Cases 23 and 24 pin the guard's two halves against each other. Rule 1 and 2's
+# site stands for all five in both: each half is one line of the one shared
+# helper, so a case per site would pin the same line five times.
+#
+# Case 23: a directory at the input path opens without error and then fails at
+# the first `read` with the loop body never running -- the identical fail-open
+# shape, reached without an unopenable path, so an open on its own would let
+# this through.
 #
 # This shim globs the scratch directory rather than the file, because the path
 # has to be recreated after the unlink and a glob through the removed name
@@ -455,6 +463,26 @@ for d in \"\$TMPDIR\"/check-skill-shape.*; do
 	rm -f \"\$d/names\"
 	mkdir \"\$d/names\"
 done" \
-	rule12-input-directory 'the rule 1 and 2 skill-name list could not be read'
+	rule12-input-directory \
+	'the rule 1 and 2 skill-name list could not be read (no regular file at that path)'
+
+# Case 24: the open half, and the only case that reaches it. Every case above
+# unlinks its input, which fails the regular-file test first, so without this one
+# the open could be deleted outright and the suite would stay green. A regular
+# file the process may not read is what only the open can see.
+#
+# chmod 000 does not deny root, so on a root runner this would assert something
+# the environment cannot produce -- a spurious red, not a defect. Skipped there
+# and said aloud, the same guard .github/scripts/check-records-test.sh puts on
+# its own chmod cases.
+if [ "$(id -u)" -eq 0 ]; then
+	printf 'check-skill-shape-test: skip %s (running as root; chmod 000 does not deny access)\n' \
+		'rule 1 and 2 list unreadable'
+else
+	probe_case 'rule 1 and 2 list unreadable' wc \
+		"printf '1\n'
+chmod 000 \"\$TMPDIR\"/check-skill-shape.*/names" \
+		rule12-input-unreadable 'the rule 1 and 2 skill-name list could not be read'
+fi
 
 printf 'check-skill-shape-test: ok\n'

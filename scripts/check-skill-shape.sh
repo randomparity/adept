@@ -83,35 +83,46 @@ name_listed() { # name rule -- 0 listed, 1 not listed, faults when the scan fail
 # passing answer here.
 #
 # `done <file || fault` does reach that failed redirect -- the loop returns 1 --
-# and is still the wrong instrument, twice over. It puts the whole loop, body
-# included, into a `set -e`-exempt context, so every rule body below would keep
-# running past a failure that aborts the script today. And the status it reads
-# is the loop's, which is the body's last: an ordinary body failure would be
-# reported as an unreadable input. Both measured on 3.2.57.
+# and is still the wrong instrument, twice over. The decisive objection is that
+# the status it reads is the loop's, which is the body's last: an ordinary body
+# failure would be reported as an unreadable input. The second is latent rather
+# than live -- it puts the whole loop, body included, into a `set -e`-exempt
+# context, and no body below relies on that abort today, but one written later
+# would stop being protected without anything saying so. Both measured on 3.2.57.
 #
-# The guard is an open and a regular-file test, and it needs both. A directory
-# at the path satisfies the open and then fails at the first `read` with the
-# body never running -- the same fail-open shape reached without an unopenable
-# path -- and `-f` is what separates it. What stays open is the window between
-# this check and the loop's own open. An actor able to swap the path mid-run can
-# still win that race, and can win it against a single-open form too, so the
-# check narrows it rather than closing it; every one of these files is one this
-# script wrote inside its own mktemp scratch directory moments earlier.
+# The guard is a regular-file test and then an open, and it needs both halves in
+# that order. A directory satisfies an open and then fails at the first `read`
+# with the body never running -- the same fail-open shape, reached without an
+# unopenable path -- and `-f` is what separates it. A FIFO satisfies an open too
+# and blocks it until a writer arrives, so testing before opening is what keeps
+# a swapped path from hanging the gate rather than reddening it. The open then
+# covers the case `-f` cannot see: a regular file this process may not read.
+#
+# `{ :; } <"$1" || fault` is not the shape rejected above. Its body is `:`, which
+# cannot fail, so the `||` can only be reading the redirect, and there is no rule
+# body to exempt from `set -e`.
+#
+# Two residuals, and the list is not offered as complete. The window between this
+# check and the loop's own open stays open: an actor able to swap the path
+# mid-run can win it, and can win it against a single-open form too, so the check
+# narrows that race rather than closing it. And a `read` that faults partway
+# through a list ends its loop silently, so a rule can still be decided over a
+# prefix. Every one of these files is one this script wrote inside its own mktemp
+# scratch directory moments earlier, so both need interference from outside the
+# process.
 #
 # Callers name their own rule, per ADR 0005: rules 1 and 2 and rule 6 both read
 # $names, and one shared message would leave the operator, and the suite, unable
-# to tell which loop stopped. That ADR also asks for the exit status, and here
-# it is bash's own diagnostic on the line above: a failed redirect is 1 whatever
-# the errno, so printing the 1 would say less than the line already printed.
+# to tell which loop stopped. That ADR also asks for the exit status. A failed
+# redirect is 1 whatever the errno, so the open branch leaves the reason to
+# bash's own diagnostic on the line above rather than printing a constant; the
+# `-f` branch, which bash says nothing about, carries its reason in the message.
 # Reporting from here rather than returning a fault value is the deviation
 # name_listed documents above, admissible for the same reason -- `fault` is
 # terminal and both are called from the main shell.
 require_readable() { # path rule -- returns when the input can be read as lines
-	local probe_status=0
-	{ :; } <"$1" || probe_status=$?
-	if [ "$probe_status" -ne 0 ] || [ ! -f "$1" ]; then
-		fault "$2 could not be read: $1"
-	fi
+	[ -f "$1" ] || fault "$2 could not be read (no regular file at that path): $1"
+	{ :; } <"$1" || fault "$2 could not be read: $1"
 }
 
 workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")" ||
