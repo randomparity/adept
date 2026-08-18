@@ -207,6 +207,13 @@ Report only material findings. Skip style, naming, low-value cleanup, and specul
 3. What is the likely impact?
 4. What concrete change would reduce the risk?
 5. Is that change smaller than the risk it removes?
+6. How is the failure reached — what concrete input, state, or environment
+   triggers it, and was that trigger constructed or only inferred? A finding
+   demonstrable only by stubbing the failing component says so in those words.
+   Like question 5, this governs routing downstream, never whether the finding
+   is reported: a real defect with no constructible trigger is still reported —
+   and its disposition (fix, defer, or record-and-close) is made with the
+   reachability stated rather than discovered later.
 
 Prefer one strong finding over several weak ones. If the change really does look safe, say so directly and return no findings.
 

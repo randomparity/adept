@@ -438,6 +438,20 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    cite it rather than writing a second. When the deferral changes how the design
    should be read, note it in the durable target as well.
 
+   **When the owner is a tracker issue instead** — the repo keeps no deferral
+   records, or its conventions route findings to the tracker — file it through
+   `$bounty`, never with a bare issue-create. Bounty's all-state deduplication
+   and recurrence gate are the growth bound: a fourth-or-later instance of one
+   defect class consolidates into a sweep rather than adding another open
+   instance, which a direct create silently bypasses — the observed failure
+   mode is a batch that fixes three issues and files three more, each a
+   sibling of a class already tracked. Carry the finding's reachability answer
+   into the draft verbatim. A deferral whose trigger was never constructed
+   outside a stub is evidence, not backlog: route it as a record-and-close
+   occurrence or as evidence appended to the class's existing sweep, not as a
+   new open issue — the concern stays searchable without an open queue entry
+   that no one intends to schedule.
+
    Reserve `blocked` for what step 6 defines: correctness-required work you cannot do
    here. Do not route an ordinary out-of-charter finding into it — `blocked` halts the
    run, and halting on every adjacent defect is the failure this change removes. If

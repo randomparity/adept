@@ -445,8 +445,10 @@ candidate approved surface: <read and pass the report's exact candidate approved
 **Security pass.** When the branch diff is security-relevant, also run
 `$detect-evil` and disposition its findings on the same terms -- fixed, or owned
 by a tracked deferral (a deferral record where the repo keeps them, otherwise a
-tracker issue). Non-blocking: `needs-attention` is work to do, never a reason
-to park.
+tracker issue filed through `$bounty`, whose recurrence gate bounds instance
+growth and routes an unreachable-in-practice finding to record-and-close rather
+than the open queue). Non-blocking: `needs-attention` is work to do, never a
+reason to park.
 
 Dispatch it the way `$trial-loop` dispatches its reviewer -- a subagent running
 `$detect-evil --json --out <path> --base <BASE_BRANCH>`, artifact on a
