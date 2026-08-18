@@ -16,6 +16,18 @@ if [ "$root_status" -ne 0 ]; then
 		"$root_status" >&2
 	exit 2
 fi
+# Empty output at exit 0 gets the same treatment the local-env-vars read gets
+# below, and matters more here: `git -C ""` is a no-op that resolves in the
+# current directory, so an empty ROOT would send every command below -- two of
+# them mutating, `worktree add` and `worktree remove` -- at whatever repository
+# the ambient cwd and GIT_DIR select. No real `git rev-parse --show-toplevel`
+# was found to answer this way (a bare repository, a run inside .git, and an
+# empty GIT_WORK_TREE all exit 128), so this guards a substituted or future git
+# rather than a demonstrated path.
+[ -n "$ROOT" ] || {
+	printf 'verify-push: git reported no worktree root\n' >&2
+	exit 2
+}
 
 # Hooks export selectors for their source worktree. Root discovery above needs
 # those values; every later command must resolve inside the detached worktree.
