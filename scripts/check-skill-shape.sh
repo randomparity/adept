@@ -29,16 +29,6 @@ set -euo pipefail
 # would assert the remaining rules were checked and passed. Cleanup is the one
 # exception and runs the other way: a failed removal reports itself and names the
 # path, but never displaces a status the run had already earned.
-#
-# One residual is left open, and it fails open rather than closed. A `done <file`
-# redirect that cannot be opened prints a bash diagnostic, skips the loop
-# entirely, and lets the run reach `all rules pass` and exit 0 -- measured on
-# bash 3.2.57, this repository's declared floor. `done <file || fault` would read
-# the loop body's status rather than the redirect's, and the honest fix is a
-# readability probe at each of the five loops, which is more than the risk buys
-# here: every one of those files is one this script just wrote inside its own
-# mktemp scratch directory, so the path needs outside interference to fire.
-# Tracked as issue #81.
 
 status=0
 
@@ -82,6 +72,31 @@ name_listed() { # name rule -- 0 listed, 1 not listed, faults when the scan fail
 		fault "$2 scan of $names failed (grep exit $scan_status)"
 	fi
 	return "$scan_status"
+}
+
+# Each `done <file` below reads a file this script wrote and decides a rule's
+# verdict, so ADR 0005 covers it: the redirect has the same three outcomes a
+# scan does, and the third is the one bash 3.2 loses. A redirect that cannot be
+# opened prints bash's own diagnostic, skips the loop body entirely, and lets
+# execution continue -- measured on 3.2.57, this repository's floor. That is the
+# fail-open direction, because an unrun rule reports nothing and nothing is the
+# passing answer here. `done <file || fault` does not close it: the `||` reads
+# the loop's status, which is the body's, so it fires on an unrelated body
+# failure and stays silent on the redirect it was written for.
+#
+# The probe opens the file the same way the redirect will rather than testing
+# -r, so it answers the question the loop is about to ask instead of a proxy for
+# it. Callers name their own rule, per ADR 0005: rules 1 and 2 and rule 6 both
+# read $names, and one shared message would leave the operator, and the suite,
+# unable to tell which loop stopped. Reporting from here rather than returning a
+# fault value is the deviation name_listed documents above, admissible for the
+# same reason -- `fault` is terminal and both are called from the main shell.
+readable() { # path rule -- returns when the file opens, faults when it does not
+	local probe_status=0
+	{ :; } <"$1" || probe_status=$?
+	if [ "$probe_status" -ne 0 ]; then
+		fault "$2 could not be read: $1 (probe exit $probe_status)"
+	fi
 }
 
 workspace="$(mktemp -d "${TMPDIR:-/tmp}/check-skill-shape.XXXXXX")" ||
@@ -138,6 +153,7 @@ fi
 
 # Rule 1: every skill directory has a SKILL.md.
 # Rule 2: its `name:` frontmatter matches the directory name.
+readable "$names" 'the rule 1 and 2 skill-name list'
 while IFS= read -r name; do
 	skill_file="$root/skills/$name/SKILL.md"
 	if [ ! -f "$skill_file" ]; then
@@ -167,6 +183,7 @@ rg --no-config -v '^#|^$' "$root/scripts/reserved-skill-names.txt" |
 if [ "$reserved_status" -gt 1 ]; then
 	fault "reading the reserved-name list failed (exit $reserved_status)"
 fi
+readable "$workspace/reserved" 'the rule 3 reserved-name list'
 while IFS= read -r reserved; do
 	if name_listed "$reserved" 'rule 3 reserved-name'; then
 		report "$reserved: collides with a reserved harness name"
@@ -191,6 +208,7 @@ fi
 # shellcheck disable=SC2016 # the $ is a literal to strip, not an expansion
 sed 's/.*`\$//;s/`//' "$workspace/raw" | sort -u >"$workspace/refs" ||
 	fault 'could not collate the invocation list'
+readable "$workspace/refs" 'the rule 4 invocation list'
 while IFS= read -r ref; do
 	if ! name_listed "$ref" 'rule 4 invocation'; then
 		report "\$$ref is invoked but no such skill exists"
@@ -213,6 +231,7 @@ if [ "$links_status" -gt 1 ]; then
 fi
 sort -u "$workspace/rawlinks" >"$workspace/links" ||
 	fault 'could not collate the reference-link list'
+readable "$workspace/links" 'the rule 5 reference-link list'
 while IFS= read -r rel; do
 	[ -n "$rel" ] || continue
 	# Resolve the link lexically rather than handing `..` to the kernel: only
@@ -231,6 +250,7 @@ done <"$workspace/links"
 # inventory-vs-reference shape as rule 4, pointed at docs/cheatsheet.md
 # instead of at skills/*/SKILL.md. Membership only, no wording or
 # table-shape assertion.
+readable "$names" 'the rule 6 skill-name list'
 while IFS= read -r name; do
 	coverage_status=0
 	rg --no-config -qF -- "\`$name\`" "$root/docs/cheatsheet.md" || coverage_status=$?

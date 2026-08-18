@@ -359,4 +359,80 @@ assert_gate 'fault outranks finding, finding still printed' 2 \
 	'mislabelled: SKILL.md declares name: not-the-directory-name' \
 	"$precedence_status" "$precedence_output"
 
+# Cases 18-22 cover the five loops that read a scratch file. An unopenable
+# redirect is the one fault direction that fails *open* on bash 3.2 -- the loop
+# body is skipped, the run carries on, and a rule nobody checked reports the
+# passing answer -- so each site gets its own case rather than one shared case
+# and an argument, and each asserts the rule name so no two sites can satisfy
+# each other's assertion.
+#
+# The shims differ from cases 12-16's: those make a command fail, these let it
+# succeed and then unlink the file the next loop is about to open, which is the
+# outside interference the gate cannot otherwise be made to see. Each case gets
+# its own TMPDIR so the shim's glob resolves to that run's scratch directory and
+# not to one cases 8 and 9 deliberately left behind under $SCRATCH.
+real_sort=$(command -v sort)
+real_sed=$(command -v sed)
+
+probe_case() { # name shim-command shim-body fixture expected-fragment
+	local name=$1 shim_command=$2 shim_body=$3 fixture=$4 expected=$5
+	local shim=$SCRATCH/shim-$fixture tmp=$SCRATCH/tmp-$fixture root status=0 output
+	mkdir -p "$shim" "$tmp"
+	printf '#!/usr/bin/env bash\n%s\n' "$shim_body" >"$shim/$shim_command"
+	chmod +x "$shim/$shim_command"
+	root=$(new_baseline "$fixture")
+	output=$(PATH="$shim:$PATH" TMPDIR="$tmp" "$gate" "$root" 2>&1) || status=$?
+	assert_gate "$name" 2 "$expected" "$status" "$output"
+}
+
+# Case 18: rule 1 and 2's loop. wc runs once, immediately before that loop, so a
+# shim that answers with a count and then unlinks the list leaves the loop with
+# nothing to open. The count it prints has to be non-zero or the gate stops at
+# the empty-tree fault instead.
+probe_case 'rule 1 and 2 list cannot be read' wc \
+	"printf '1\n'
+rm -f \"\$TMPDIR\"/check-skill-shape.*/names" \
+	rule12-input-fault 'the rule 1 and 2 skill-name list could not be read'
+
+# Case 19: rule 3's loop. sort writes the reserved list and nothing else runs
+# before the loop, so the shim sorts as usual and unlinks afterwards. The
+# earlier sort calls unlink a path that does not exist yet, which -f absorbs.
+probe_case 'rule 3 reserved list cannot be read' sort \
+	"sort_status=0
+\"$real_sort\" \"\$@\" || sort_status=\$?
+rm -f \"\$TMPDIR\"/check-skill-shape.*/reserved
+exit \"\$sort_status\"" \
+	rule3-input-fault 'the rule 3 reserved-name list could not be read'
+
+# Case 20: rule 4's loop. sed runs at exactly one site, the invocation
+# collation, and the shell waits for the whole pipeline before reaching the
+# loop, so the unlink lands whichever pipeline member finishes first.
+probe_case 'rule 4 invocation list cannot be read' sed \
+	"sed_status=0
+\"$real_sed\" \"\$@\" || sed_status=\$?
+rm -f \"\$TMPDIR\"/check-skill-shape.*/refs
+exit \"\$sed_status\"" \
+	rule4-input-fault 'the rule 4 invocation list could not be read'
+
+# Case 21: rule 5's loop, reached by the same sort shim aimed at the link list.
+# Rules 3 and 4 run in between and must not fault first, which they do not:
+# their own lists are written before this shim's target exists.
+probe_case 'rule 5 link list cannot be read' sort \
+	"sort_status=0
+\"$real_sort\" \"\$@\" || sort_status=\$?
+rm -f \"\$TMPDIR\"/check-skill-shape.*/links
+exit \"\$sort_status\"" \
+	rule5-input-fault 'the rule 5 reference-link list could not be read'
+
+# Case 22: rule 6's loop, which reads the same $names file rule 1 and 2 read.
+# That is why the two messages differ, and why this case cannot be folded into
+# Case 18: the sed shim unlinks the list after rule 1 and 2's loop has already
+# consumed it, so only the rule 6 probe can fire.
+probe_case 'rule 6 list cannot be read' sed \
+	"sed_status=0
+\"$real_sed\" \"\$@\" || sed_status=\$?
+rm -f \"\$TMPDIR\"/check-skill-shape.*/names
+exit \"\$sed_status\"" \
+	rule6-input-fault 'the rule 6 skill-name list could not be read'
+
 printf 'check-skill-shape-test: ok\n'
