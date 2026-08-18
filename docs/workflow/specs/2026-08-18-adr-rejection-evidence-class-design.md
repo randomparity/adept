@@ -27,7 +27,7 @@ belief rather than the claim's load.
 | R1 | The ADR section of `skills/spellcraft/SKILL.md` requires an evidence class on every `Considered & rejected` bullet. | #137 acceptance criterion 1 |
 | R2 | A **factual** ground carries inline evidence — the command run, the observed result, and the environment it ran in. | #137 proposal step 1 |
 | R3 | A **judgment** ground (complexity, fit, taste, cost) says so in those words, and is legitimate without a command. | #137 acceptance criterion 3 |
-| R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states. | #137 acceptance criterion 2, proposal step 2 |
+| R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it, since the tag classes the ground and does not exempt a factual premise inside it. | #137 acceptance criterion 2, proposal step 2 |
 | R5 | `skills/tome-of-lore/SKILL.md`'s ADR template states the same requirement, so the two statements of the contract cannot drift. | dispatch brief criterion 4 |
 | R6 | The existing size discipline holds: the guidance shows the evidence tag **replacing** reasoning prose, not appended to it. | #137 acceptance criterion 4 |
 | R7 | `just verify` passes. | `CLAUDE.md`, *Verifying a change* |

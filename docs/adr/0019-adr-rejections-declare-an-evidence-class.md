@@ -43,7 +43,9 @@ Both are legitimate grounds. A judgment presented as a fact is not.
 
 The tag classes the ground; the ground stays the sentence or two that sank the alternative.
 What the tag **replaces** is the paragraph of justification behind that sentence, never the
-sentence itself.
+sentence itself. And the tag classes only the ground — it does not exempt a factual premise
+sitting inside it. A behaviour claim is a behaviour claim whatever tag precedes it, and a
+`judgment:` resting on one is the same defect wearing the other label.
 
 The `$spellcraft` ADR-review focus gains one clause: a rejection stated as fact but
 carrying no evidence is a finding, as is a behaviour claim about a rejected alternative
@@ -81,8 +83,8 @@ owner's comment on #137 settles it — reproduction without tagging leaves the n
 unable to tell which grounds were checked.
 
 **Cross-reference `$tome-of-lore`'s template from `$spellcraft` rather than restating the
-rule.** judgment: a template is copied, not followed, so a pointer in `$spellcraft` leaves
-the copied template silent about the rule — which is where the writer's hands are.
+rule.** judgment: fit — a pointer in `$spellcraft` cannot reach a template that gets copied
+out, and the copy is what the writer's hands are on.
 
 **Add a gate that checks ADRs for the tags.** judgment: a token-prefix check confirms only
 that the token is present, the one part a writer skipping the work still types.
