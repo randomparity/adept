@@ -171,7 +171,9 @@ cycle 2's first pass under a charter that had since widened.
 as the evidence. `accepted-fixed` and `deferred-tracked` both edit the target — the latter
 because a deferral record is a file in it — and the exit's third precondition forbids that.
 `$trial-loop` step 6's `rejected-with-evidence` line gains the same clause so the two
-agree.
+agree. Because step 6 runs on every pass, the on-every-exit disclosure gains the same
+findings: without that, the consequence judgment could be taken on iteration 2 and the run
+could leave through *converged with deferrals* with nothing disclosing it.
 
 The third precondition is the same guarantee *converged with deferrals* gets from its
 "you changed nothing since the previous pass" half: a pass that applies a fix is never the

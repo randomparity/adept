@@ -133,8 +133,10 @@ detects either being made self-servingly: whether a standing finding is conseque
 and whether an edit since the confirming pass changed what a confirmed claim asserts. What
 bounds them is disclosure — the exit is reported distinctly rather than as `approve`, and
 its note list names each confirmed claim with the pass that confirmed it, reaching the
-review summary, the `WORK:REVIEW` annotation, and the pull request. Weaker than a gate, and
-the price of anatomy rule 4.
+review summary, the `WORK:REVIEW` annotation, and the pull request. The bound cannot hang
+on the exit alone: step 6 lets the consequence test be taken on any pass, so the loop's
+on-every-exit disclosure carries every consequence-free `rejected-with-evidence` finding
+too, whichever exit the run takes. Weaker than a gate, and the price of anatomy rule 4.
 
 Two residuals this change does not close. A target with no reproducible claims and only
 consequence-free findings still runs to the cap and reports `blocked` — the reported

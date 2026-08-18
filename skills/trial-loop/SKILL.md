@@ -70,8 +70,9 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   a divination verdict, an explicit human instruction — may lower it; the loop
   never derives a lower budget itself. The floor is 2 because a pass that
   applied fixes always needs a confirming pass. A lower budget is not a lower
-  bar: the final-iteration stop condition still blocks on unresolved findings —
-  it just fires earlier, because on a small well-understood change the passes a
+  bar: the final-iteration stop condition still blocks on unresolved
+  **consequential** findings — it just fires earlier, because on a small
+  well-understood change the passes a
   full budget adds mostly re-review surface earlier passes wrote, and each pass
   is a fresh full-context reviewer, the loop's dominant cost.
 - `charter`: the scope boundary you freeze before iteration 1 (below). Not an
@@ -540,10 +541,14 @@ resolves its target from a `git status` the commit just emptied, reviews nothing
 returns `approve` with a fresh artifact and a matching `run_id`. That is the least
 supervised path in the whole loop.
 
-Then disclose every suppression (concern + ADR)
-and every `deferred-tracked` concern (concern + owning record path) recorded anywhere in
-the **run**, across all cycles — not just the current one. This holds for every
-exit below. Cap exhaustion and rescoping are the exits a human is most likely to
+Then disclose every suppression (concern + ADR),
+every `deferred-tracked` concern (concern + owning record path), and every
+`rejected-with-evidence` finding taken on the **consequence-free** ground (concern + the
+pass that raised it) recorded anywhere in the **run**, across all cycles — not just the
+current one. The third is there because the consequence test is a judgment you apply to
+yourself: step 6 lets you take it on any pass, so binding its disclosure to the *sound with
+record notes* exit alone would leave every other exit carrying the judgment unaudited.
+This holds for every exit below. Cap exhaustion and rescoping are the exits a human is most likely to
 pick up cold later, so they are the ones where a silently dropped deferral does the
 most damage.
 
@@ -633,11 +638,14 @@ most damage.
 - Final budgeted iteration of a cycle (the 5th by default, or the caller's
   `iteration_budget`) still returns `needs-attention` → stop as blocked and
   summarize the remaining findings. Do not continue to the next workflow step
-  without explicit user approval. This fires when a standing finding is still
-  **consequential**; the exit above is what keeps a finished target from landing
-  here, and the two are a pair. `blocked` at the cap stays the honest outcome
-  whenever consequence-bearing work is outstanding, however many passes confirmed
-  the mechanism.
+  without explicit user approval. The trigger is unchanged: `needs-attention` at
+  the budget. What the exit above removes from it is the one case of a target
+  whose claims a pass named and accounted for and whose standing findings carry
+  no consequence; everything else reaching the budget still stops as blocked —
+  including a target with nothing reproducible to confirm, and a run whose
+  reviewer produced no reproduction report at all. `blocked` at the cap stays the
+  honest outcome whenever consequence-bearing work is outstanding, however many
+  passes confirmed the mechanism.
 - Remediation would pull in a migration, public contract, dependency, subsystem,
   or threat model outside the charter → **end the cycle** for rescoping. Report what
   the fix would require; do not widen the charter yourself to keep the loop running.
