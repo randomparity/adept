@@ -76,26 +76,41 @@ name_listed() { # name rule -- 0 listed, 1 not listed, faults when the scan fail
 
 # Each `done <file` below reads a file this script wrote and decides a rule's
 # verdict, so ADR 0005 covers it: the redirect has the same three outcomes a
-# scan does, and the third is the one bash 3.2 loses. A redirect that cannot be
+# scan does, and the third is the one bash 3.2 loses. An input that cannot be
 # opened prints bash's own diagnostic, skips the loop body entirely, and lets
 # execution continue -- measured on 3.2.57, this repository's floor. That is the
 # fail-open direction, because an unrun rule reports nothing and nothing is the
-# passing answer here. `done <file || fault` does not close it: the `||` reads
-# the loop's status, which is the body's, so it fires on an unrelated body
-# failure and stays silent on the redirect it was written for.
+# passing answer here.
 #
-# The probe opens the file the same way the redirect will rather than testing
-# -r, so it answers the question the loop is about to ask instead of a proxy for
-# it. Callers name their own rule, per ADR 0005: rules 1 and 2 and rule 6 both
-# read $names, and one shared message would leave the operator, and the suite,
-# unable to tell which loop stopped. Reporting from here rather than returning a
-# fault value is the deviation name_listed documents above, admissible for the
-# same reason -- `fault` is terminal and both are called from the main shell.
-readable() { # path rule -- returns when the file opens, faults when it does not
+# `done <file || fault` does reach that failed redirect -- the loop returns 1 --
+# and is still the wrong instrument, twice over. It puts the whole loop, body
+# included, into a `set -e`-exempt context, so every rule body below would keep
+# running past a failure that aborts the script today. And the status it reads
+# is the loop's, which is the body's last: an ordinary body failure would be
+# reported as an unreadable input. Both measured on 3.2.57.
+#
+# The guard is an open and a regular-file test, and it needs both. A directory
+# at the path satisfies the open and then fails at the first `read` with the
+# body never running -- the same fail-open shape reached without an unopenable
+# path -- and `-f` is what separates it. What stays open is the window between
+# this check and the loop's own open. An actor able to swap the path mid-run can
+# still win that race, and can win it against a single-open form too, so the
+# check narrows it rather than closing it; every one of these files is one this
+# script wrote inside its own mktemp scratch directory moments earlier.
+#
+# Callers name their own rule, per ADR 0005: rules 1 and 2 and rule 6 both read
+# $names, and one shared message would leave the operator, and the suite, unable
+# to tell which loop stopped. That ADR also asks for the exit status, and here
+# it is bash's own diagnostic on the line above: a failed redirect is 1 whatever
+# the errno, so printing the 1 would say less than the line already printed.
+# Reporting from here rather than returning a fault value is the deviation
+# name_listed documents above, admissible for the same reason -- `fault` is
+# terminal and both are called from the main shell.
+require_readable() { # path rule -- returns when the input can be read as lines
 	local probe_status=0
 	{ :; } <"$1" || probe_status=$?
-	if [ "$probe_status" -ne 0 ]; then
-		fault "$2 could not be read: $1 (probe exit $probe_status)"
+	if [ "$probe_status" -ne 0 ] || [ ! -f "$1" ]; then
+		fault "$2 could not be read: $1"
 	fi
 }
 
@@ -153,7 +168,7 @@ fi
 
 # Rule 1: every skill directory has a SKILL.md.
 # Rule 2: its `name:` frontmatter matches the directory name.
-readable "$names" 'the rule 1 and 2 skill-name list'
+require_readable "$names" 'the rule 1 and 2 skill-name list'
 while IFS= read -r name; do
 	skill_file="$root/skills/$name/SKILL.md"
 	if [ ! -f "$skill_file" ]; then
@@ -183,7 +198,7 @@ rg --no-config -v '^#|^$' "$root/scripts/reserved-skill-names.txt" |
 if [ "$reserved_status" -gt 1 ]; then
 	fault "reading the reserved-name list failed (exit $reserved_status)"
 fi
-readable "$workspace/reserved" 'the rule 3 reserved-name list'
+require_readable "$workspace/reserved" 'the rule 3 reserved-name list'
 while IFS= read -r reserved; do
 	if name_listed "$reserved" 'rule 3 reserved-name'; then
 		report "$reserved: collides with a reserved harness name"
@@ -208,7 +223,7 @@ fi
 # shellcheck disable=SC2016 # the $ is a literal to strip, not an expansion
 sed 's/.*`\$//;s/`//' "$workspace/raw" | sort -u >"$workspace/refs" ||
 	fault 'could not collate the invocation list'
-readable "$workspace/refs" 'the rule 4 invocation list'
+require_readable "$workspace/refs" 'the rule 4 invocation list'
 while IFS= read -r ref; do
 	if ! name_listed "$ref" 'rule 4 invocation'; then
 		report "\$$ref is invoked but no such skill exists"
@@ -231,7 +246,7 @@ if [ "$links_status" -gt 1 ]; then
 fi
 sort -u "$workspace/rawlinks" >"$workspace/links" ||
 	fault 'could not collate the reference-link list'
-readable "$workspace/links" 'the rule 5 reference-link list'
+require_readable "$workspace/links" 'the rule 5 reference-link list'
 while IFS= read -r rel; do
 	[ -n "$rel" ] || continue
 	# Resolve the link lexically rather than handing `..` to the kernel: only
@@ -250,7 +265,7 @@ done <"$workspace/links"
 # inventory-vs-reference shape as rule 4, pointed at docs/cheatsheet.md
 # instead of at skills/*/SKILL.md. Membership only, no wording or
 # table-shape assertion.
-readable "$names" 'the rule 6 skill-name list'
+require_readable "$names" 'the rule 6 skill-name list'
 while IFS= read -r name; do
 	coverage_status=0
 	rg --no-config -qF -- "\`$name\`" "$root/docs/cheatsheet.md" || coverage_status=$?

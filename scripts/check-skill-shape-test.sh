@@ -394,9 +394,11 @@ probe_case 'rule 1 and 2 list cannot be read' wc \
 rm -f \"\$TMPDIR\"/check-skill-shape.*/names" \
 	rule12-input-fault 'the rule 1 and 2 skill-name list could not be read'
 
-# Case 19: rule 3's loop. sort writes the reserved list and nothing else runs
-# before the loop, so the shim sorts as usual and unlinks afterwards. The
-# earlier sort calls unlink a path that does not exist yet, which -f absorbs.
+# Case 19: rule 3's loop. sort writes the reserved list, so the shim sorts as
+# usual and unlinks the result afterwards -- deterministically, because the
+# shell opened the redirect before the shim started and the shim's own sort has
+# already finished writing. The earlier sort calls unlink a path that does not
+# exist yet, which -f absorbs.
 probe_case 'rule 3 reserved list cannot be read' sort \
 	"sort_status=0
 \"$real_sort\" \"\$@\" || sort_status=\$?
@@ -404,14 +406,16 @@ rm -f \"\$TMPDIR\"/check-skill-shape.*/reserved
 exit \"\$sort_status\"" \
 	rule3-input-fault 'the rule 3 reserved-name list could not be read'
 
-# Case 20: rule 4's loop. sed runs at exactly one site, the invocation
-# collation, and the shell waits for the whole pipeline before reaching the
-# loop, so the unlink lands whichever pipeline member finishes first.
-probe_case 'rule 4 invocation list cannot be read' sed \
-	"sed_status=0
-\"$real_sed\" \"\$@\" || sed_status=\$?
+# Case 20: rule 4's loop, on the same sort shim aimed at the invocation list.
+# The list is collated by `sed ... | sort -u >refs`, whose two stages run
+# concurrently, so unlinking from the sed end would depend on losing a race with
+# the sort still writing. Unlinking from the sort end has no race to lose: that
+# shim writes the file itself and removes it afterwards.
+probe_case 'rule 4 invocation list cannot be read' sort \
+	"sort_status=0
+\"$real_sort\" \"\$@\" || sort_status=\$?
 rm -f \"\$TMPDIR\"/check-skill-shape.*/refs
-exit \"\$sed_status\"" \
+exit \"\$sort_status\"" \
 	rule4-input-fault 'the rule 4 invocation list could not be read'
 
 # Case 21: rule 5's loop, reached by the same sort shim aimed at the link list.
@@ -434,5 +438,23 @@ probe_case 'rule 6 list cannot be read' sed \
 rm -f \"\$TMPDIR\"/check-skill-shape.*/names
 exit \"\$sed_status\"" \
 	rule6-input-fault 'the rule 6 skill-name list could not be read'
+
+# Case 23: the other half of the same guard. A directory at the input path opens
+# without error and then fails at the first `read` with the loop body never
+# running -- the identical fail-open shape, reached without an unopenable path,
+# so an open on its own would let this through. Rule 1 and 2's site stands for
+# all five: the regular-file test lives in the one shared helper, so a case per
+# site would pin the same line five times.
+#
+# This shim globs the scratch directory rather than the file, because the path
+# has to be recreated after the unlink and a glob through the removed name
+# matches nothing.
+probe_case 'rule 1 and 2 list replaced by a directory' wc \
+	"printf '1\n'
+for d in \"\$TMPDIR\"/check-skill-shape.*; do
+	rm -f \"\$d/names\"
+	mkdir \"\$d/names\"
+done" \
+	rule12-input-directory 'the rule 1 and 2 skill-name list could not be read'
 
 printf 'check-skill-shape-test: ok\n'
