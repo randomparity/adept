@@ -288,10 +288,46 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
 
    Ask the reviewer to report an excluded concern **only** when it invalidates
    the target, the target makes it worse, or its deferral has no evidence or
-   owner. Supply the target, charter, and focus — and nothing else. No prior
-   verdicts, no finding history, no intended fixes: each pass must be naive apart
-   from the dependencies and exclusions the current charter records, or you are
-   grading the reviewer's memory instead of the target.
+   owner. Supply the target, charter, and focus — and nothing else. What
+   "nothing else" forbids is **the run's own history**: no prior verdicts, no
+   finding history, no intended fixes. Each pass must be naive of how you got
+   here, apart from the dependencies and exclusions the current charter records,
+   or you are grading the reviewer's memory instead of the target. The
+   reproduction instruction below is not history and is not a fourth thing
+   supplied — it rides *inside* focus, so this clause is unchanged by it.
+
+   **Reproduce before you evaluate.** Append this to the focus you transmit, on
+   every pass and whichever reviewer is selected:
+
+   > Before evaluating the target's argument, identify its load-bearing factual
+   > claims — the ones whose falsity would change its conclusion — and attempt to
+   > reproduce each. Lead your `summary` by naming those claims, with claim
+   > versus observation for each, the command you ran, and the environment you
+   > ran it in. A claim you cannot reproduce is a finding in its own right, filed
+   > under the ordinary schema: cite the claim's lines, and put the claim, what
+   > you observed, the command, and the environment in the body. A command you
+   > cannot run here is reported as that observation, never as a confirmation.
+   > Reproduction is read-only — inspection plus commands that write nothing into
+   > the target's working tree. A target that asserts nothing reproducible gets
+   > one sentence saying so.
+
+   `$gauntlet`'s *Method* is the authority for that obligation; appending it here
+   is **delivery**, and delivery binds only a reviewer whose own installed copy
+   carries it. Focus weights, it does not oblige — so under
+   `--reviewer detect-evil`, or a vendored `$gauntlet` predating this contract,
+   treat the reproduction report as absent unless the pass actually produced one.
+
+   The read-only bound is not decoration. In working-tree mode the reviewer's
+   target is resolved from `git status`, and the cycle-start `git stash create`
+   snapshot is the baseline the self-collision fraction measures against — so a
+   reviewer's build artifacts would become the next pass's target *and* count as
+   lines that did not exist at cycle start.
+
+   Nothing about the schema changes: the report rides in `summary` and the
+   failures ride in `findings`, so the compact object is unchanged and step 2
+   reads the block from the artifact it already opens. This is what the *sound
+   with record notes* exit keys on — a run whose passes reproduce nothing simply
+   never satisfies that exit's first condition and behaves exactly as before.
 
    One exception is structural rather than optional: a deferral record you wrote is a file
    in the target, so a later pass reads it. That is disclosure by design — a record states
