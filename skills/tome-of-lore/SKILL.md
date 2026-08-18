@@ -44,8 +44,8 @@ What this costs, going forward.
 ## Considered & rejected
 
 Alternatives, and why each was not chosen. Each ground opens with `verified:` — the
-command run, what it produced, and the environment where that matters — or `judgment:`
-for complexity, fit, taste, or cost.
+command run, what it produced, and the environment where that matters, or the source that
+settles it where no command does — or `judgment:` for complexity, fit, taste, or cost.
 ```
 
 `$spellcraft` owns those two tags and states the rule in full; it is the authority if the
