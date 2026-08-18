@@ -2092,18 +2092,32 @@ STUB
   chmod +x "$d.bin/mktemp"
   run_case "temp file unavailable" 1 E-TMPFILE "$d" BASE_SHA="$b" PATH="$d.bin:$PATH"
 
-  # The same forced failure, pinned at the anti-erasure pass instead of the base pass. The two
-  # sites need separate codes for this case to mean anything: run_case asserts on the code alone,
-  # and the base pass runs first over every record, so a case asserting a bare E-TMPFILE here
-  # would stay green with check_not_rewritten's fail-open restored — which is the blindness the
-  # case exists to detect.
+  # The same forced failure, pinned at the anti-erasure pass instead of the base pass. Two things
+  # are needed for the case to discriminate, and run_case's two assertions are why.
+  #
+  # A code of its own, because run_case asserts on the code alone and the base pass fires
+  # E-TMPFILE over every record: a case asserting a bare E-TMPFILE here would stay green with
+  # check_not_rewritten's fail-open restored, which is the blindness the case exists to detect.
+  #
+  # And a stub that fails once rather than always, keyed by count the way write_ls_files_stub is
+  # keyed by path. run_case's other assertion is the exit status, and a stub failing every call
+  # lets evaluate_base_conformance's E-TMPFILE supply that exit on its own — leaving the case
+  # pinning only that a string reached stderr, not that this site fails the run. run_profile calls
+  # check_no_disappearances before the record loop, so check_not_rewritten reaches mktemp first
+  # and one failure lands exactly there; the rest of the run gets the real binary. Exit 1 is then
+  # attributable to this report alone, and demoting it to warn_full reddens the case.
   d=$(case_dir rewrite_no_tmpdir)
   b=$(base_of "$d")
   mkdir -p "$d.bin"
-  cat >"$d.bin/mktemp" <<'STUB'
+  real_mktemp=$(command -v mktemp)
+  cat >"$d.bin/mktemp" <<STUB
 #!/bin/sh
-echo "mktemp: stub failure (check-records-test.sh forcing E-REWRITE-TMPFILE)" >&2
-exit 1
+if [ ! -e "$d.bin/.mktemp-spent" ]; then
+  : >"$d.bin/.mktemp-spent"
+  echo "mktemp: stub failure (check-records-test.sh forcing E-REWRITE-TMPFILE)" >&2
+  exit 1
+fi
+exec $real_mktemp "\$@"
 STUB
   chmod +x "$d.bin/mktemp"
   run_case "temp file unavailable for the anti-erasure rules" 1 E-REWRITE-TMPFILE "$d" \

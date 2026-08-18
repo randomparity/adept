@@ -611,7 +611,7 @@ check_not_rewritten() {
   local base=$1 path=$2 tmp blob_status=0
   # Returning 0 here exempted the record from all three rules below with no diagnostic at all,
   # so a run over an unusable temp directory reported every record as unrewritten. Its own code
-  # rather than evaluate_base_conformance's E-TMPFILE: that one fires first over every record,
+  # rather than evaluate_base_conformance's E-TMPFILE: that one also fires over every record,
   # so a reader — and the suite, which asserts on the code — cannot tell from an E-TMPFILE alone
   # whether the anti-erasure rules ran. err_full for the same reason the branch below uses it:
   # these three rules describe a change, not a record, and are never downgradable.
