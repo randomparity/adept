@@ -375,5 +375,15 @@ out=$(PATH=$git_stub:$PATH GIT_STUB_REAL=$git_real "$just_real" \
 	test 2>&1) || status=$?
 [ "$status" -ne 0 ] ||
 	fail "test: a discovery that failed partway did not fail the recipe: $out"
+# A non-zero status alone would also be satisfied by a recipe that never
+# reached the discovery at all -- a mistyped justfile path, a shim that could
+# not execute. The shim's own diagnostic proves the recipe got as far as
+# `git ls-files`, and the absence of the summary proves it did not go on to
+# report a pass over what that discovery had already emitted.
+printf '%s\n' "$out" | grep -q 'git-stub: discovery stopped partway' ||
+	fail "test: the recipe never reached the stubbed discovery: $out"
+if printf '%s\n' "$out" | grep -q 'suites passed'; then
+	fail "test: the recipe reported a pass over a partial discovery: $out"
+fi
 
 printf 'list-shell-sources-test: ok%s\n' "$skipped"
