@@ -25,11 +25,12 @@ belief rather than the claim's load.
 | # | Requirement | Source |
 |---|---|---|
 | R1 | The ADR section of `skills/spellcraft/SKILL.md` requires an evidence class on every `Considered & rejected` bullet. | #137 acceptance criterion 1 |
-| R2 | A **factual** ground carries inline evidence — the command run, the observed result, and the environment it ran in. | #137 proposal step 1 |
-| R3 | A **judgment** ground (complexity, fit, taste, cost) says so in those words, and is legitimate without a command. | #137 acceptance criterion 3 |
-| R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it, since the tag classes the ground and does not exempt a factual premise inside it. | #137 acceptance criterion 2, proposal step 2 |
+| R2 | A **factual** ground carries the command run and what it produced, plus the environment wherever the result could depend on it, named durably. Where the ground is factual but no command settles it, `verified:` carries the source that does. | #137 proposal step 1, as settled by ADR 0019 |
+| R3 | A **judgment** ground says so with the token `judgment:`, and is legitimate without a command. Naming which class it is — complexity, fit, taste, cost — is optional colour, not the obligation. | #137 acceptance criterion 3; ADR 0019, "naming the class is the whole obligation" |
+| R3b | The `$spellcraft` text states the non-exemption rule to the **writer**: the tag classes the ground and does not exempt a factual premise sitting inside it, so a `judgment:` resting on an unrun behaviour claim is the same defect wearing the other label. | ADR 0019 Decision; without it R4 finds against a writer for a rule their instructions never carried |
+| R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it. | #137 acceptance criterion 2, proposal step 2 |
 | R5 | `skills/tome-of-lore/SKILL.md`'s ADR template states the same requirement, so the two statements of the contract cannot drift. | dispatch brief criterion 4 |
-| R6 | The existing size discipline holds: the guidance shows the evidence tag **replacing** reasoning prose, not appended to it. | #137 acceptance criterion 4 |
+| R6 | The existing size discipline holds: the `$spellcraft` guidance carries one inline example bullet showing a tag in place of reasoning prose. R6 is met when that example is present; it is not a claim about record length. | #137 acceptance criterion 4 |
 | R7 | `just verify` passes. | `CLAUDE.md`, *Verifying a change* |
 
 ## Non-requirements
@@ -53,10 +54,17 @@ it with one of two tags:
   the record is not. Where the ground is factual but no command settles it — a documented
   platform limit, an absent upstream API, a decision someone made — `verified:` carries
   the source that settles it instead.
-- `judgment:` — complexity, fit, taste, or cost. No command; the label is the point.
+- `judgment:` — complexity, fit, taste, or cost. No command; the token is the point, and
+  naming which of the four applies is optional.
 
 Two tags, not a spectrum. A third class ("plausible", "assumed") would be a place for an
 unverified factual claim to hide with a blessing, which is the defect being closed.
+
+The tag classes the ground, so it does not exempt a factual premise sitting inside that
+ground (R3b): a `judgment:` resting on an unrun behaviour claim is the same defect wearing
+the other label, and R4's reproduction clause bites on it. Where an alternative is sunk by
+both a measured fact and a judgment, the bullet leads with `verified:` and states the
+judgment after it — the factual half is the half that needs evidence.
 
 R6's "replaces rather than appends" governs what the tag displaces: the paragraph of
 justification behind the ground, never the sentence or two that states the ground itself —
@@ -74,13 +82,20 @@ a different object at a different layer.
 
 Two places, both normative, because they are the two documents a writer reads:
 
-1. `skills/spellcraft/SKILL.md`, immediately after the paragraph that bounds record size —
-   so the "replaces prose" framing lands where the size discipline is stated (R6).
-2. `skills/tome-of-lore/SKILL.md`, in the shipped ADR template block, where a writer
-   copying the template sees it (R5).
+1. `skills/spellcraft/SKILL.md`, immediately after the paragraph that bounds record size
+   (the one ending "State the decision and stop.") and before the paragraph on ADR
+   numbering — so the "replaces prose" framing lands where the size discipline is stated
+   (R6). The five-section list above it, the numbering paragraph, and the spec self-review
+   subsection are not disturbed.
+2. `skills/tome-of-lore/SKILL.md`, at the ADR template's `Considered & rejected`
+   placeholder line inside the fenced block — the line currently reading "Alternatives, and
+   why each was not chosen." — extended in place to state the requirement, plus one
+   sentence of prose immediately **below the closing fence** naming `$spellcraft` as the
+   authority. The naming sentence stays outside the fence: text inside it is copied
+   verbatim into every new record, and a sentence about which skill owns the rule is
+   instruction, not record content. The five section headings, the status-line paragraph,
+   and the supersession-banner block are not disturbed.
 
-The tome-of-lore statement is the template line plus one sentence naming the two tags and
-naming `$spellcraft` as the authority for them. It is not a second, fuller specification.
 A cross-reference alone would not do: a template is copied rather than followed, so a
 pointer sitting in `$spellcraft` leaves the copied template silent about the rule.
 
@@ -97,6 +112,9 @@ The change is skill prose. It is verified by:
 
 - `just verify` — the repository guardrail suite, which covers skill shape, link
   resolution, public safety, and record form (R7).
+- Reading the two edits back against the table above, requirement by requirement. R6 is
+  the one with a concrete artifact: the `$spellcraft` text carries an inline example
+  bullet, or it does not.
 - ADR 0019 itself, whose `Considered & rejected` section is written to the new contract.
   It is the first record under the rule and the worked example of it; a rule its own
   founding record cannot follow is the wrong rule.
