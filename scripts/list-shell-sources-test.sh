@@ -337,4 +337,43 @@ for recipe in lint format-check; do
 		fail "$recipe: a lister that failed partway did not fail the recipe: $out"
 done
 
+# The `test` recipe carries the same shape over a different discovery: it reads
+# `git ls-files` rather than the lister, so its stub is a PATH shim rather than
+# a script copy. The shim answers `ls-files` with a partial list and a non-zero
+# status and forwards every other subcommand to the real git, so nothing else
+# the recipe or just may ask git is disturbed. The fixture holds the one suite
+# the shim names, executable and passing: a status-blind recipe runs it, counts
+# one, and reports a green run over a suite set it never finished discovering.
+git_real=$(command -v git || true)
+if [ -z "$git_real" ]; then
+	fail "git is not installed, so the test recipe cannot be exercised"
+fi
+git_stub=$SCRATCH/git-stub
+mkdir -p "$git_stub"
+cat >"$git_stub/git" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${1-}" = ls-files ]; then
+	printf 'scripts/partial-test.sh\0'
+	printf 'git-stub: discovery stopped partway\n' >&2
+	exit 1
+fi
+exec "$GIT_STUB_REAL" "$@"
+STUB
+chmod +x "$git_stub/git"
+partial_suites=$SCRATCH/partial-suites
+mkdir -p "$partial_suites/scripts"
+cat >"$partial_suites/scripts/partial-test.sh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'partial-test: pass\n'
+STUB
+chmod +x "$partial_suites/scripts/partial-test.sh"
+status=0
+out=$(PATH=$git_stub:$PATH GIT_STUB_REAL=$git_real "$just_real" \
+	--working-directory "$partial_suites" --justfile "$recipe_root/Justfile" \
+	test 2>&1) || status=$?
+[ "$status" -ne 0 ] ||
+	fail "test: a discovery that failed partway did not fail the recipe: $out"
+
 printf 'list-shell-sources-test: ok%s\n' "$skipped"
