@@ -230,9 +230,48 @@ expect_unchanged() {
   esac
 }
 
-# expect_error_code <stderr-file> <code> [pattern] — the verdict eight bespoke cases share:
-# the named code fired, the run failed for some other reason (named, so the output says
-# which), or the capture could not be scanned at all. <pattern> defaults to the code's own
+# expect_match <file> <ok-note> <missing-note> [grep-option]... <pattern>, and
+# expect_no_match for the assertions where the *absence* of a line is what passes. Same
+# three arms as expect_error_code, carried once instead of at every call site. Two helpers
+# rather than one with a polarity flag: at the call site "expect_no_match" states the
+# assertion, where a boolean argument would only encode it.
+expect_match() {
+  local file=$1 ok=$2 missing=$3 scan=0
+  shift 3
+  grep -q "$@" "$file" || scan=$?
+  case $scan in
+  0)
+    passed=$((passed + 1))
+    printf 'ok   %s\n' "$ok"
+    ;;
+  1)
+    failed=$((failed + 1))
+    printf 'FAIL %s\n' "$missing"
+    ;;
+  *) fail_scan "$file" "$scan" ;;
+  esac
+}
+
+expect_no_match() {
+  local file=$1 ok=$2 present=$3 scan=0
+  shift 3
+  grep -q "$@" "$file" || scan=$?
+  case $scan in
+  0)
+    failed=$((failed + 1))
+    printf 'FAIL %s\n' "$present"
+    ;;
+  1)
+    passed=$((passed + 1))
+    printf 'ok   %s\n' "$ok"
+    ;;
+  *) fail_scan "$file" "$scan" ;;
+  esac
+}
+
+# expect_error_code <stderr-file> <code> [pattern] — the verdict the bespoke `::error::`
+# cases share: the named code fired, the run failed for some other reason (named, so the
+# output says which), or the capture could not be scanned at all. <pattern> defaults to the code's own
 # `::error::<code>: ` line; pass one only where the assertion is narrower than the code.
 expect_error_code() {
   local err=$1 code=$2 pattern=${3:-"::error::$2: "} scan=0
@@ -709,19 +748,8 @@ target: docs/debt|' "$d/docs/debt/0001-valid.md" >"$d/.tmp" && mv "$d/.tmp" "$d/
   printf '  %-4s %-44s ' "" "resolved record with a passed review-by"
   if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$(base_of "$d")" \
     ./.github/scripts/check-records.sh) >"$d/.out" 2>"$d/.err"; then
-    scan=0
-    grep -q 'REVIEWBY-STALE' "$d/.err" || scan=$?
-    case $scan in
-    0)
-      failed=$((failed + 1))
-      printf 'FAIL W-REVIEWBY-STALE fired on a discharged concern\n'
-      ;;
-    1)
-      passed=$((passed + 1))
-      printf 'ok   exit=0 no staleness warning\n'
-      ;;
-    *) fail_scan "$d/.err" "$scan" ;;
-    esac
+    expect_no_match "$d/.err" 'exit=0 no staleness warning' \
+      'W-REVIEWBY-STALE fired on a discharged concern' 'REVIEWBY-STALE'
   else
     failed=$((failed + 1))
     printf 'FAIL %s\n' "$(sed -n 's/^::error:://p' "$d/.err" | head -1)"
@@ -1017,19 +1045,8 @@ YAML
   printf '  %-4s %-44s ' "" "declared directory rename is exempt"
   if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$b" \
     ./scripts/check-records.sh) >"$d/.o" 2>"$d/.e"; then
-    scan=0
-    grep -q 'was renamed to' "$d/.o" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=0 predecessor exempted\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL exit=0 but no rename note printed\n'
-      ;;
-    *) fail_scan "$d/.o" "$scan" ;;
-    esac
+    expect_match "$d/.o" 'exit=0 predecessor exempted' \
+      'exit=0 but no rename note printed' 'was renamed to'
   else
     failed=$((failed + 1))
     printf 'FAIL %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
@@ -1053,19 +1070,8 @@ YAML
   printf '  %-4s %-44s ' "" "declared same-directory rename is exempt"
   if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$b" \
     ./.github/scripts/check-gate.sh) >"$d/.o" 2>"$d/.e"; then
-    scan=0
-    grep -q 'was renamed to' "$d/.o" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=0 basename predecessor exempted\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL exit=0 but no rename note printed\n'
-      ;;
-    *) fail_scan "$d/.o" "$scan" ;;
-    esac
+    expect_match "$d/.o" 'exit=0 basename predecessor exempted' \
+      'exit=0 but no rename note printed' 'was renamed to'
   else
     failed=$((failed + 1))
     printf 'FAIL %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
@@ -1236,19 +1242,8 @@ STUB
   printf '  %-4s %-44s ' "" "base ref predates the gate"
   if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$b" \
     ./.github/scripts/check-records.sh) >"$d/.out" 2>"$d/.err"; then
-    scan=0
-    grep -q 'I-GATE-BOOTSTRAP' "$d/.out" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=0 I-GATE-BOOTSTRAP\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL exit=0 but I-GATE-BOOTSTRAP never printed\n'
-      ;;
-    *) fail_scan "$d/.out" "$scan" ;;
-    esac
+    expect_match "$d/.out" 'exit=0 I-GATE-BOOTSTRAP' \
+      'exit=0 but I-GATE-BOOTSTRAP never printed' 'I-GATE-BOOTSTRAP'
   else
     failed=$((failed + 1))
     printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.err" | head -1)"
@@ -1412,19 +1407,8 @@ YAML
   printf '  %-4s %-44s ' "" "unrelated records.yml mention doesn't defeat bootstrap"
   if (cd "$d" && env -u GITHUB_ACTIONS RECORD_PROFILES=debt BASE_SHA="$b" \
     ./.github/scripts/check-records.sh) >"$d/.out" 2>"$d/.err"; then
-    scan=0
-    grep -q 'I-GATE-BOOTSTRAP' "$d/.out" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=0 I-GATE-BOOTSTRAP\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL exit=0 but I-GATE-BOOTSTRAP never printed\n'
-      ;;
-    *) fail_scan "$d/.out" "$scan" ;;
-    esac
+    expect_match "$d/.out" 'exit=0 I-GATE-BOOTSTRAP' \
+      'exit=0 but I-GATE-BOOTSTRAP never printed' 'I-GATE-BOOTSTRAP'
   else
     failed=$((failed + 1))
     printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.err" | head -1)"
@@ -1540,19 +1524,8 @@ YAML
   # run_case's own assertions above cannot see it and would stay green if it were deleted.
   # Reuses $d/.out from the run_case call just above rather than invoking the checker again.
   printf '  %-4s %-44s ' "" "renumber note names both paths"
-  scan=0
-  grep -qF 'docs/debt/0002-b.md was renumbered to docs/debt/0003-b.md' "$d/.out" || scan=$?
-  case $scan in
-  0)
-    passed=$((passed + 1))
-    printf 'ok   renumber note printed\n'
-    ;;
-  1)
-    failed=$((failed + 1))
-    printf 'FAIL renumber note missing or names the wrong paths\n'
-    ;;
-  *) fail_scan "$d/.out" "$scan" ;;
-  esac
+  expect_match "$d/.out" 'renumber note printed' \
+    'renumber note missing or names the wrong paths' -F 'docs/debt/0002-b.md was renumbered to docs/debt/0003-b.md'
 
   # The same renumber, with the candidate witness unable to run. The witness answers "did
   # this destination already exist at the base ref"; a fault used to read as "it did not",
@@ -1584,19 +1557,8 @@ STUB
   run_case "renumber candidate scan faults, not reported gone" 1 E-RENUMBER-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
   printf '  %-4s %-44s ' "" "scan fault replaces E-GONE"
-  scan=0
-  grep -q '::error::E-GONE: ' "$d/.err" || scan=$?
-  case $scan in
-  0)
-    failed=$((failed + 1))
-    printf 'FAIL E-GONE also fired for a search that never ran\n'
-    ;;
-  1)
-    passed=$((passed + 1))
-    printf 'ok   E-GONE suppressed\n'
-    ;;
-  *) fail_scan "$d/.err" "$scan" ;;
-  esac
+  expect_no_match "$d/.err" 'E-GONE suppressed' \
+    'E-GONE also fired for a search that never ran' '::error::E-GONE: '
 
   # The same search, with the vanished record's own base-ref copy unreadable rather than a
   # candidate's witness. `git cat-file blob ... || return 1` reported E-GONE off a read that
@@ -1631,19 +1593,8 @@ STUB
   run_case "renumber blob read faults, not reported gone" 1 E-RENUMBER-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
   printf '  %-4s %-44s ' "" "blob fault replaces E-GONE"
-  scan=0
-  grep -q '::error::E-GONE: ' "$d/.err" || scan=$?
-  case $scan in
-  0)
-    failed=$((failed + 1))
-    printf 'FAIL E-GONE also fired for a copy that was never read\n'
-    ;;
-  1)
-    passed=$((passed + 1))
-    printf 'ok   E-GONE suppressed\n'
-    ;;
-  *) fail_scan "$d/.err" "$scan" ;;
-  esac
+  expect_no_match "$d/.err" 'E-GONE suppressed' \
+    'E-GONE also fired for a copy that was never read' '::error::E-GONE: '
 
   d=$(case_dir renumber_with_edit)
   write_record "$d" "0002-b.md"
@@ -1770,19 +1721,8 @@ STUB
   run_case "ADR title read faults, no spurious mismatch" 1 E-TITLE-SCAN "$d" \
     BASE_SHA="$b" RECORD_PROFILES=adr PATH="$stub_bin:$PATH"
   printf '  %-4s %-44s ' "" "scan fault replaces E-TITLE-MISMATCH"
-  scan=0
-  grep -q 'E-TITLE-MISMATCH: ' "$d/.err" || scan=$?
-  case $scan in
-  0)
-    failed=$((failed + 1))
-    printf 'FAIL E-TITLE-MISMATCH also fired for a title never read\n'
-    ;;
-  1)
-    passed=$((passed + 1))
-    printf 'ok   E-TITLE-MISMATCH suppressed\n'
-    ;;
-  *) fail_scan "$d/.err" "$scan" ;;
-  esac
+  expect_no_match "$d/.err" 'E-TITLE-MISMATCH suppressed' \
+    'E-TITLE-MISMATCH also fired for a title never read' 'E-TITLE-MISMATCH: '
 
   # The base-ref blob behind the three anti-erasure rules. `git cat-file blob ... || return 0`
   # read an unreadable copy as an absent one, and absent is the legitimate common case -- a
@@ -1826,19 +1766,8 @@ STUB
   # between the sites, neutralising either conversion would leave the other still firing it and
   # both assertions green.
   printf '  %-4s %-44s ' "" "base conformance read faults, not absent"
-  scan=0
-  grep -q '::error::E-BASE-SHAPE-SCAN: ' "$d/.err" || scan=$?
-  case $scan in
-  0)
-    passed=$((passed + 1))
-    printf 'ok   E-BASE-SHAPE-SCAN\n'
-    ;;
-  1)
-    failed=$((failed + 1))
-    printf 'FAIL an unreadable base copy still read as absent\n'
-    ;;
-  *) fail_scan "$d/.err" "$scan" ;;
-  esac
+  expect_match "$d/.err" 'E-BASE-SHAPE-SCAN' \
+    'an unreadable base copy still read as absent' '::error::E-BASE-SHAPE-SCAN: '
 
   # The base-ref copy is git's bytes now, where it used to be a command substitution's: that
   # stripped every trailing newline and printf put exactly one back, so the base side was
@@ -1891,19 +1820,8 @@ STUB
   run_case "index query faults, record not reported gone" 1 E-TRACKED-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
   printf '  %-4s %-44s ' "" "index fault replaces E-GONE"
-  scan=0
-  grep -q '::error::E-GONE: ' "$d/.err" || scan=$?
-  case $scan in
-  0)
-    failed=$((failed + 1))
-    printf 'FAIL E-GONE also fired for a query that never ran\n'
-    ;;
-  1)
-    passed=$((passed + 1))
-    printf 'ok   E-GONE suppressed\n'
-    ;;
-  *) fail_scan "$d/.err" "$scan" ;;
-  esac
+  expect_no_match "$d/.err" 'E-GONE suppressed' \
+    'E-GONE also fired for a query that never ran' '::error::E-GONE: '
 
   # renumbered_elsewhere. `tracked_in_index "$candidate" || continue` -- the literal
   # `cmd || continue` ADR 0005's Context names -- dropped a faulted candidate out of the
@@ -1920,36 +1838,14 @@ STUB
   run_case "renumber candidate index query faults" 1 E-RENUMBER-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
   printf '  %-4s %-44s ' "" "index fault replaces E-GONE"
-  scan=0
-  grep -q '::error::E-GONE: ' "$d/.err" || scan=$?
-  case $scan in
-  0)
-    failed=$((failed + 1))
-    printf 'FAIL E-GONE also fired for a candidate never checked\n'
-    ;;
-  1)
-    passed=$((passed + 1))
-    printf 'ok   E-GONE suppressed\n'
-    ;;
-  *) fail_scan "$d/.err" "$scan" ;;
-  esac
+  expect_no_match "$d/.err" 'E-GONE suppressed' \
+    'E-GONE also fired for a candidate never checked' '::error::E-GONE: '
   # Three fault origins reach that one code by three different git commands, and the record
   # named as its subject is the one file the search *did* read. Without naming what could not
   # be read, the operator is pointed at the wrong file and a bare exit status is unattributable.
   printf '  %-4s %-44s ' "" "the message names what could not be read"
-  scan=0
-  grep -q 'could not read the index entry for docs/debt/0003-b.md, ' "$d/.err" || scan=$?
-  case $scan in
-  0)
-    passed=$((passed + 1))
-    printf 'ok   candidate index entry named\n'
-    ;;
-  1)
-    failed=$((failed + 1))
-    printf 'FAIL the faulting read is not named in the message\n'
-    ;;
-  *) fail_scan "$d/.err" "$scan" ;;
-  esac
+  expect_match "$d/.err" 'candidate index entry named' \
+    'the faulting read is not named in the message' 'could not read the index entry for docs/debt/0003-b.md, '
 
   # The other half of that caller's decision: a fault on one candidate must not outrank a
   # positive match on another, so it is remembered and returned only once the loop exhausts.
@@ -1979,19 +1875,8 @@ STUB
   run_case "gate file index query faults" 1 E-GATE-TRACKED-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
   printf '  %-4s %-44s ' "" "index fault replaces E-GATE-GONE"
-  scan=0
-  grep -q '::error::E-GATE-GONE: ' "$d/.err" || scan=$?
-  case $scan in
-  0)
-    failed=$((failed + 1))
-    printf 'FAIL E-GATE-GONE also fired for a query that never ran\n'
-    ;;
-  1)
-    passed=$((passed + 1))
-    printf 'ok   E-GATE-GONE suppressed\n'
-    ;;
-  *) fail_scan "$d/.err" "$scan" ;;
-  esac
+  expect_no_match "$d/.err" 'E-GATE-GONE suppressed' \
+    'E-GATE-GONE also fired for a query that never ran' '::error::E-GATE-GONE: '
 
   # check_gate_files, on a declared rename's successor. The exemption turns on the successor
   # being really tracked; a faulted query read as "not tracked" and reported E-GATE-GONE for a
@@ -2180,7 +2065,9 @@ STUB
       printf 'ok   exit=1 E-BASE-REF only\n'
     else
       failed=$((failed + 1))
-      printf 'FAIL%s (first stderr line: %s)\n' "$verdict" "$(head -1 "$d/.err")"
+      printf 'FAIL%s (first error: %s; first fatal: %s)\n' "$verdict" \
+        "$(sed -n 's/^::error:://p' "$d/.err" | head -1)" \
+        "$(sed -n '/^fatal:/p' "$d/.err" | head -1)"
     fi
   fi
 
@@ -2418,19 +2305,8 @@ STUB
   # attributable to this site — which is what makes a warn_full demotion visible. Reverting the
   # stub to the always-fail shape used three lines above trips exactly this assertion.
   printf '  %-4s %-44s ' "" "the failure landed at the anti-erasure pass"
-  scan=0
-  grep -q '::error::E-TMPFILE: ' "$d/.err" || scan=$?
-  case $scan in
-  0)
-    failed=$((failed + 1))
-    printf 'FAIL the base pass also faulted, so exit=1 is unattributable\n'
-    ;;
-  1)
-    passed=$((passed + 1))
-    printf 'ok   E-TMPFILE did not fire\n'
-    ;;
-  *) fail_scan "$d/.err" "$scan" ;;
-  esac
+  expect_no_match "$d/.err" 'E-TMPFILE did not fire' \
+    'the base pass also faulted, so exit=1 is unattributable' '::error::E-TMPFILE: '
 
   # A profile that sets its variables but defines no status hook. Without this check the
   # engine would silently reuse the previous profile's hook, since load_profile unsets the
@@ -2767,19 +2643,8 @@ MD
   printf '  %-4s %-44s ' "" "required ADR index is accepted"
   if (cd "$d" && env -u GITHUB_ACTIONS ADR_INDEX_POLICY=required RECORD_PROFILES=adr \
     BASE_SHA="$b" ./.github/scripts/check-records.sh) >"$d/.required.out" 2>"$d/.required.err"; then
-    scan=0
-    grep -q 'W-INDEX-TABLE' "$d/.required.err" || scan=$?
-    case $scan in
-    0)
-      failed=$((failed + 1))
-      printf 'FAIL emitted W-INDEX-TABLE\n'
-      ;;
-    1)
-      passed=$((passed + 1))
-      printf 'ok   exit=0 no index warning\n'
-      ;;
-    *) fail_scan "$d/.required.err" "$scan" ;;
-    esac
+    expect_no_match "$d/.required.err" 'exit=0 no index warning' \
+      'emitted W-INDEX-TABLE' 'W-INDEX-TABLE'
   else
     failed=$((failed + 1))
     printf 'FAIL checker failed: %s\n' "$(sed -n 's/^::error:://p' "$d/.required.err" | head -1)"
@@ -3171,8 +3036,11 @@ STUB
   # to increment the counter, and a subshell would discard exactly the effect under test.
   before=$failed
   fail_scan "$missing" 7 >"$SCRATCH/fail-scan.out"
-  [ "$failed" -eq $((before + 1)) ] || notes="$notes fail-scan-did-not-count"
-  failed=$before
+  if [ "$failed" -eq $((before + 1)) ]; then
+    failed=$((failed - 1))
+  else
+    notes="$notes fail-scan-did-not-count"
+  fi
   reported=$(cat "$SCRATCH/fail-scan.out")
   case $reported in
   *"$missing"*) ;;
@@ -3190,6 +3058,22 @@ STUB
   " scan-fault($missing exit "*) ;;
   *) notes="$notes scan-count-tag=[$verdict]" ;;
   esac
+  # The two polarity helpers carry most of the converted sites between them. Their 0) and
+  # 1) arms are exercised by every case in the suite; their `*)` arm is exercised by
+  # nothing, which is the whole reason it is worth pinning. Both must reach fail_scan on a
+  # capture they cannot read, and neither may score a pass on the way.
+  before=$failed
+  was_passed=$passed
+  expect_match "$missing" 'unreachable' 'unreachable' 'anything at all' \
+    >"$SCRATCH/expect-helpers.out" 2>/dev/null
+  expect_no_match "$missing" 'unreachable' 'unreachable' 'anything at all' \
+    >>"$SCRATCH/expect-helpers.out" 2>/dev/null
+  [ "$passed" -eq "$was_passed" ] || notes="$notes expect-helper-scored-a-pass"
+  if [ "$failed" -eq $((before + 2)) ]; then
+    failed=$((failed - 2))
+  else
+    notes="$notes expect-helpers-did-not-count"
+  fi
   if [ -z "$notes" ]; then
     passed=$((passed + 1))
     printf 'ok   fault counted, file and status named\n'
