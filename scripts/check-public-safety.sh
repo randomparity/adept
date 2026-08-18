@@ -19,6 +19,15 @@ if ! command -v jq >/dev/null 2>&1; then
 	echo "public-safety: jq is required" >&2
 	exit 2
 fi
+# git is required for a directory scan target, whose tracked files this gate
+# enumerates below and whose listing failing is a fault. A regular-file target
+# is never enumerated and so does not need it, but the directory form is the
+# gate's primary invocation and declaring the requirement once here beats
+# reporting a missing tool second-hand as "git ls-files exit 127".
+if ! command -v git >/dev/null 2>&1; then
+	echo "public-safety: git is required" >&2
+	exit 2
+fi
 
 if (($# > 0)); then
 	scan_paths=("$@")
