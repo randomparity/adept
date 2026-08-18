@@ -4,3 +4,5 @@ CLAUDE.local.md
 .claude/worktrees/
 .claude/settings.local.json
 .codex/
+__pycache__/
+*.pyc
