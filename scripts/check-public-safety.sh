@@ -19,15 +19,6 @@ if ! command -v jq >/dev/null 2>&1; then
 	echo "public-safety: jq is required" >&2
 	exit 2
 fi
-# git is required for a directory scan target, whose tracked files this gate
-# enumerates below and whose listing failing is a fault. A regular-file target
-# is never enumerated and so does not need it, but the directory form is the
-# gate's primary invocation and declaring the requirement once here beats
-# reporting a missing tool second-hand as "git ls-files exit 127".
-if ! command -v git >/dev/null 2>&1; then
-	echo "public-safety: git is required" >&2
-	exit 2
-fi
 
 if (($# > 0)); then
 	scan_paths=("$@")
@@ -107,7 +98,21 @@ denied_patterns=(
 # Unlike `git rev-parse --local-env-vars`, which always names at least GIT_DIR,
 # this listing has a real empty case: a checkout subdirectory with nothing
 # tracked under it, and a repository before its first `git add`. The walk still
-# covers the tree in both.
+# covers the tree in both. There is no count floor to fall back on either --
+# the gate takes arbitrary scan paths, so unlike list-shell-sources.sh, which
+# runs only at this repository's root and can therefore treat an empty subset
+# as broken discovery, this site has no scope over which a floor would hold.
+#
+# What that decision does not establish, stated rather than implied: an empty
+# listing means the *index* has no entries under the path, and the index is not
+# what ships. A worktree whose index was removed -- the documented recovery for
+# a stuck index.lock, and the residue of an interrupted operation -- answers
+# empty at exit 0 while HEAD still carries the content, and the gate then falls
+# back to the ignore-respecting walk that cannot see a `git add -f`'d ignored
+# file. No status check reaches that: git ran and answered truthfully, so it is
+# not the ADR 0005 shape. Choosing the enumeration's source is issue #150, and
+# issue #147 is a second route to the same empty result. Both predate this
+# change and reproduce identically on the pre-fix gate.
 tracked_listing=$(mktemp) || {
 	echo "public-safety: could not create a scratch file for the tracked listing" >&2
 	exit 2
@@ -117,6 +122,17 @@ trap 'rm -f "$tracked_listing"' EXIT
 scan_targets=("${scan_paths[@]}")
 for scan_path in "${scan_paths[@]}"; do
 	[[ -d "$scan_path" ]] || continue
+	# git is required to enumerate a directory, and only a directory. The test
+	# sits here rather than beside the rg and jq preflights because a
+	# regular-file target is never enumerated and genuinely does not need git:
+	# skills/quest/scripts/publish-forge-review scans one, discards stderr and
+	# reports every non-zero status as a leaking body, so an unconditional
+	# preflight would tell that operator their publication leaked content when
+	# the real answer is a host missing a tool that scan never used.
+	if ! command -v git >/dev/null 2>&1; then
+		echo "public-safety: git is required to scan a directory" >&2
+		exit 2
+	fi
 	listing_status=0
 	git -C "$scan_path" ls-files -z >"$tracked_listing" || listing_status=$?
 	if [ "$listing_status" -ne 0 ]; then
