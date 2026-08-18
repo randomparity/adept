@@ -2092,6 +2092,49 @@ STUB
   chmod +x "$d.bin/mktemp"
   run_case "temp file unavailable" 1 E-TMPFILE "$d" BASE_SHA="$b" PATH="$d.bin:$PATH"
 
+  # The same forced failure, pinned at the anti-erasure pass instead of the base pass. Two things
+  # are needed for the case to discriminate, and run_case's two assertions are why.
+  #
+  # A code of its own, because run_case asserts on the code alone and the base pass fires
+  # E-TMPFILE over every record: a case asserting a bare E-TMPFILE here would stay green with
+  # check_not_rewritten's fail-open restored, which is the blindness the case exists to detect.
+  #
+  # And a stub that fails once rather than always, keyed by count the way write_ls_files_stub is
+  # keyed by path. run_case's other assertion is the exit status, and a stub failing every call
+  # lets evaluate_base_conformance's E-TMPFILE supply that exit on its own — leaving the case
+  # pinning only that a string reached stderr, not that this site fails the run. run_profile calls
+  # check_no_disappearances before the record loop, so check_not_rewritten reaches mktemp first
+  # and one failure lands exactly there; the rest of the run gets the real binary. Exit 1 is then
+  # attributable to this report alone, and demoting it to warn_full reddens the case.
+  d=$(case_dir rewrite_no_tmpdir)
+  b=$(base_of "$d")
+  mkdir -p "$d.bin"
+  real_mktemp=$(command -v mktemp)
+  cat >"$d.bin/mktemp" <<STUB
+#!/bin/sh
+if [ ! -e "$d.bin/.mktemp-spent" ]; then
+  : >"$d.bin/.mktemp-spent"
+  echo "mktemp: stub failure (check-records-test.sh forcing E-REWRITE-TMPFILE)" >&2
+  exit 1
+fi
+exec "$real_mktemp" "\$@"
+STUB
+  chmod +x "$d.bin/mktemp"
+  run_case "temp file unavailable for the anti-erasure rules" 1 E-REWRITE-TMPFILE "$d" \
+    BASE_SHA="$b" PATH="$d.bin:$PATH"
+  # The comment above explains the invariant; this holds it. Only one mktemp call fails, so if
+  # E-TMPFILE is on stderr the failure landed at the base pass instead and exit=1 is no longer
+  # attributable to this site — which is what makes a warn_full demotion visible. Reverting the
+  # stub to the always-fail shape used three lines above trips exactly this assertion.
+  printf '  %-4s %-44s ' "" "the failure landed at the anti-erasure pass"
+  if grep -q '::error::E-TMPFILE: ' "$d/.err"; then
+    failed=$((failed + 1))
+    printf 'FAIL the base pass also faulted, so exit=1 is unattributable\n'
+  else
+    passed=$((passed + 1))
+    printf 'ok   E-TMPFILE did not fire\n'
+  fi
+
   # A profile that sets its variables but defines no status hook. Without this check the
   # engine would silently reuse the previous profile's hook, since load_profile unsets the
   # optional hooks between profiles but a required one cannot be defaulted away.
