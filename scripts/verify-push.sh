@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
-	printf 'verify-push: must run inside a Git worktree\n' >&2
+# `git rev-parse --show-toplevel` exits non-zero for more than "you are not in
+# a worktree": dubious ownership under a bind mount or a container UID
+# mismatch, an unreadable or damaged .git, an unreadable parent directory. The
+# old diagnostic asserted the first of those and discarded git's own line,
+# which for dubious ownership carries the exact safe.directory remedy -- and
+# this runs from a pre-push hook, so that line is the only one the operator
+# would ever see. Report what was established instead: the command and the
+# status it returned.
+root_status=0
+ROOT=$(git rev-parse --show-toplevel) || root_status=$?
+if [ "$root_status" -ne 0 ]; then
+	printf 'verify-push: could not resolve the worktree root (git rev-parse --show-toplevel exit %s)\n' \
+		"$root_status" >&2
 	exit 2
-}
+fi
 
 # Hooks export selectors for their source worktree. Root discovery above needs
 # those values; every later command must resolve inside the detached worktree.
