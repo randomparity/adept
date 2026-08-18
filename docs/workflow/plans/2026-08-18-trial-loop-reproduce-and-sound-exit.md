@@ -126,10 +126,10 @@ Insert a new bullet immediately after the *converged with deferrals* bullet (the
 "Report it distinctly — it is not `approve` — and list the records.") and before the
 final-budgeted-iteration bullet. The new bullet states:
 
-- the trigger: a pass **named** the target's load-bearing factual claims and **accounted
-  for every one it named** — confirmed, or reported as not checkable in the reviewer's
-  environment — nothing changed since has altered what those claims assert, and every
-  standing finding is consequence-free;
+- the trigger: a pass in this cycle **named** the target's load-bearing factual claims and
+  **confirmed every one it named** — a refuted or not-checkable-here claim is not confirmed
+  and the condition fails on it — nothing changed since has altered what those claims
+  assert, and every standing finding is consequence-free;
 - that a finding that a later pass could not reproduce a claim condition 1 relies on is
   consequential by definition and cancels the exit, since a load-bearing claim is one whose
   falsity changes the conclusion;
@@ -148,8 +148,8 @@ final-budgeted-iteration bullet. The new bullet states:
   that applies a fix is never the pass that exits;
 - that it is an ordinary run-ending exit inheriting the section's on-every-exit obligations
   in full — working-tree guardrails and commit, suppression disclosure, deferral disclosure;
-- distinct reporting, the note list (every claim a pass accounted for, marked confirmed or
-  not-checkable, with the pass that accounted for it), and precedence: *converged with deferrals*, the rescope exit, and the self-collision exit
+- distinct reporting, the note list (every claim a pass reported, marked confirmed,
+  refuted, or not-checkable, with the pass that reported it), and precedence: *converged with deferrals*, the rescope exit, and the self-collision exit
   all outrank this one where they apply — the first because its no-edit test covers the
   whole target where condition 1 covers only the confirmed claims, the other two because
   they carry obligations this exit does not.
@@ -172,12 +172,12 @@ missing it is the failure this step exists to prevent.
 
 ### Step 2.1b — record the claims block
 
-Condition 1 reads back which claims a pass named and how each was accounted for, and
-nothing in the loop preserves it: the compact object does not carry it and the artifact is
-superseded next pass. Extend step 3's audit line (`skills/trial-loop/SKILL.md`, *The Loop*)
-to require pasting the claims block beneath it on every pass — each named claim marked
-confirmed or not checkable here, taken from the `summary` in the artifact step 2 already
-opens, and `claims: none named` when a pass named none.
+Condition 1 reads back which claims a pass named and how each came out, and nothing in the
+loop preserves it: the compact object does not carry it and the artifact is superseded next
+pass. Extend step 3's audit line (`skills/trial-loop/SKILL.md`, *The Loop*) to require
+pasting the claims block beneath it on every pass — each named claim marked **confirmed**,
+**refuted**, or **not checkable here**, taken from the `summary` in the artifact step 2
+already opens, and `claims: none named` when a pass named none.
 
 ### Step 2.2 — amend the cap bullet
 
@@ -189,7 +189,7 @@ many passes confirmed the mechanism.
 ### Step 2.3 — extend *What to report back* and the caller contract
 
 In *What to report back*, require naming the exit when the run took it, listing the notes,
-and naming every claim a pass accounted for with its confirmed / not-checkable mark.
+and naming every claim a pass reported with its confirmed / refuted / not-checkable mark.
 
 In *Caller contract — do not stop on the verdict*, add that a *sound with record notes*
 exit means the caller advances, carrying the notes into its own report.

@@ -360,9 +360,9 @@ Editing the ADR to address findings is legitimate — it is pre-merge on the des
 branch, and `AGENTS.md`'s immutability applies only once the ADR is merged. If the
 loop reports blocked — including cap exhaustion at 5 iterations — stop as blocked
 per `$trial-loop`'s stop contract; do not run the spec review against an unhardened
-ADR. A *sound with record notes* exit is **not** that case — a pass accounted for the
-ADR's load-bearing claims and its standing findings carry no consequence — so continue
-to the spec review and carry the outstanding notes into the design record.
+ADR. A *sound with record notes* exit is **not** that case — a pass confirmed every
+load-bearing claim it named in the ADR, and the standing findings carry no consequence —
+so continue to the spec review and carry the outstanding notes into the design record.
 
 ## 3. Adversarial-review the spec
 

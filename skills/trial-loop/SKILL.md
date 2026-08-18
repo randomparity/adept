@@ -306,15 +306,16 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    > versus observation for each, the command you ran, and the environment you
    > ran it in; your terse ship/no-ship assessment follows that block. Account for
    > every claim you name: each is confirmed, or explicitly reported as not
-   > checkable in your environment. A claim you ran and could not reproduce is a
-   > finding in its own right, filed under the ordinary schema: cite the claim's
-   > lines, and put the claim, what you observed, the command, and the environment
-   > in the body. A claim you could not check here is reported as that
-   > observation, never as a confirmation, and is a finding only when not being
-   > able to check it is itself material. Reproduction is read-only — inspection
-   > plus commands that write nothing into the target's working tree and change no
-   > git state. A target that asserts nothing reproducible gets one sentence
-   > saying so.
+   > checkable in your environment. Every claim you name ends in one of three
+   > states — confirmed, refuted, or not checkable here — and none may be left
+   > unstated. A claim you ran and could not reproduce is a finding in its own
+   > right, filed under the ordinary schema: cite the claim's lines, and put the
+   > claim, what you observed, the command, and the environment in the body. A
+   > claim you could not check here is reported as that observation, never as a
+   > confirmation, and is a finding only when not being able to check it is itself
+   > material. Reproduction is read-only — inspection plus commands that write
+   > nothing into the target's working tree and change no git state. A target that
+   > asserts nothing reproducible gets one sentence saying so.
 
    `$gauntlet`'s *Method* is the authority for that obligation; appending it here
    is **delivery**, and delivery binds only a reviewer whose own installed copy
@@ -384,11 +385,13 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    self-collision, unmeasured.
 
    Then paste the pass's **claims block** beneath it, taken from the artifact's
-   `summary`: each load-bearing claim the pass named, marked confirmed or not
-   checkable here. Nothing else preserves it — the compact object does not carry it
-   and the artifact is superseded next pass — and the *sound with record notes*
-   exit reads it back. A pass that named none records `claims: none named`, which
-   is what keeps that exit shut rather than a gap you rediscover at iteration 5.
+   `summary`: each load-bearing claim the pass named, marked **confirmed**,
+   **refuted**, or **not checkable here** — the three outcomes the reproduction
+   instruction defines, and only the first satisfies the *sound with record notes*
+   exit. Nothing else preserves this — the compact object does not carry it and the
+   artifact is superseded next pass — and that exit reads it back. A pass that named
+   none records `claims: none named`, which is what keeps the exit shut rather than
+   a gap you rediscover at iteration 5.
 4. If `verdict` is `approve`: when `suppressed_count > 0`, surface each `suppressions`
    entry (concern + ADR) in the transcript — an `approve` that suppressed a
    governing-ADR finding is exactly the over-suppression case the verdict alone hides,
@@ -591,21 +594,21 @@ most damage.
   lands — the selected reviewer cannot return `approve` while a defensible finding stands, so a
   loop that only exits on `approve` grinds to the cap and reports blocked on a target that
   is finished. Report it distinctly — it is not `approve` — and list the records.
-- A pass **in this cycle** named the target's load-bearing factual claims and **accounted
-  for every one it named**, nothing you changed since has altered what those claims assert,
-  and every standing finding is **consequence-free** → exit as *sound with record notes*,
+- A pass **in this cycle** named the target's load-bearing factual claims and **confirmed
+  every one it named**, nothing you changed since has altered what those claims assert, and
+  every standing finding is **consequence-free** → exit as *sound with record notes*,
   listing the notes.
 
-  ***Accounted for*** means each named claim is confirmed, or explicitly reported as not
-  checkable in the reviewer's environment. Named claims, not a verdict about claims: the
-  reviewer picks which claims are load-bearing, so "this target asserts nothing
-  reproducible" satisfies the reproduction instruction and not this condition, and one claim
-  reproduced out of four named satisfies neither. A target with nothing to reproduce leaves
-  through `approve`, *converged with deferrals*, or the cap, as it does today. A
-  not-checkable claim is not automatically a finding — the reviewer files one only where the
-  inability to check is itself material — but where it is one it clears the consequence test
-  like any other, and usually will not, since a load-bearing claim nobody can check is what
-  a future maintainer acts on differently.
+  **Confirmed, and all of them.** A claim the pass refuted, or reported as not checkable in
+  its environment, is not confirmed, so the condition fails on it — one claim reproduced out
+  of four named does not satisfy this, and neither does a claim silently dropped. Named
+  claims, not a verdict about claims, either: the reviewer picks which claims are
+  load-bearing, so "this target asserts nothing reproducible" satisfies the reproduction
+  instruction and not this condition. A target whose claims nobody confirmed leaves through
+  `approve`, *converged with deferrals*, or the cap, as it does today. That is the price of
+  the exit's name — *sound* is earned, and an unchecked claim earns nothing. Whether the
+  reviewer also filed the unconfirmed claim as a finding is its own judgment under its
+  finding bar, and does not change this condition either way.
 
   **Record the claim list as you go**, beside step 3's audit line, from the `summary` in the
   artifact step 2 already opens. Nothing else in the loop preserves it and this condition
@@ -641,9 +644,9 @@ most damage.
 
   This is an ordinary run-ending exit: the on-every-exit obligations above apply in full.
   Report it distinctly — it is not `approve`, and it is not the cap — listing every
-  outstanding note with the finding it came from, and every claim a pass accounted for,
-  marked confirmed or not-checkable-here with the pass that accounted for it. A
-  not-checkable claim is the part a reader most needs, so it must not be lost to a report
+  outstanding note with the finding it came from, and every claim a pass named, marked
+  confirmed, refuted, or not-checkable-here, with the pass that reported it. The
+  unconfirmed ones are the part a reader most needs, so they must not be lost to a report
   shape that names only confirmations. Where this and *converged with deferrals* both apply,
   report *converged with deferrals*: its no-change half covers the whole target, where this
   exit's first condition covers only what the confirmed claims assert. The rescope and
@@ -653,7 +656,7 @@ most damage.
   summarize the remaining findings. Do not continue to the next workflow step
   without explicit user approval. The trigger is unchanged: `needs-attention` at
   the budget. What the exit above removes from it is the one case of a target
-  whose claims a pass named and accounted for and whose standing findings carry
+  whose load-bearing claims a pass confirmed and whose standing findings carry
   no consequence; everything else reaching the budget still stops as blocked —
   including a target with nothing reproducible to confirm, and a run whose
   reviewer produced no reproduction report at all. `blocked` at the cap stays the
@@ -743,9 +746,9 @@ rescopes read as three short clean cycles rather than the up-to-fifteen adversar
 passes they were. Name the selected reviewer. Then report the final verdict, the fixes made, the
 verification performed, every unresolved finding, and every `deferred-tracked` concern from any
 cycle with its owning record path. When the run exited as *sound with record notes*, say so by
-that name, list the outstanding notes, and name every load-bearing claim a pass accounted
-for — confirmed or not checkable here, with the pass that accounted for it. The caller
-routes on the name and cannot reconstruct either list. References, not payloads: cite `<findings-path>` rather
+that name, list the outstanding notes, and name every load-bearing claim a pass reported —
+confirmed, refuted, or not checkable here, with the pass that reported it. The caller routes
+on the name and cannot reconstruct either list. References, not payloads: cite `<findings-path>` rather
 than pasting findings into the caller's context. The deferral list is the part a
 caller cannot reconstruct: it is the difference between "this branch is clean" and
 "this branch is clean and three known defects now have owners."

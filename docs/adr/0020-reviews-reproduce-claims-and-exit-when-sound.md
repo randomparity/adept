@@ -85,20 +85,23 @@ nothing else preserves it across passes and the exit's first condition reads it 
 **A verified-sound target exits as *sound with record notes*.** The condition fires when
 all three hold:
 
-1. a pass in this cycle **named** the target's load-bearing factual claims and accounted
-   for every one it named, and no target edit since has changed what those claims assert;
+1. a pass in this cycle **named** the target's load-bearing factual claims and **confirmed
+   every one it named**, and no target edit since has changed what those claims assert;
 2. every standing finding is consequence-free under the test below; and
 3. the pass's findings can all be disposed of without editing the target, so no fix ships
    unreviewed.
 
-Condition 1 needs named claims, not a verdict about claims. A pass answering "this target
-asserts nothing reproducible" satisfies the instruction but not this condition: a target
-with nothing to reproduce leaves the loop through `approve`, *converged with deferrals*, or
-the cap, as it does today. *Accounted for* means each named claim is confirmed or
-explicitly reported as not checkable in the reviewer's environment — one claim reproduced
-out of four does not satisfy it, and a not-checkable claim is a standing finding that must
-clear the consequence test on its own. The scoping is per cycle: a confirmation predating a
-rescope does not carry into the widened charter.
+Condition 1 needs named claims, not a verdict about claims, and it needs all of them
+confirmed. A pass answering "this target asserts nothing reproducible" satisfies the
+instruction but not this condition; neither does one claim reproduced out of four named,
+nor a claim reported refuted or not checkable in the reviewer's environment. That last case
+is deliberate and is where this decision pays its cost: *sound* is earned, and an unchecked
+claim earns nothing, so a target whose claims nobody could confirm leaves through
+`approve`, *converged with deferrals*, or the cap, as it does today. Whether the reviewer
+also filed an unconfirmed claim as a finding is its own judgment under its finding bar and
+does not move this condition either way — the loop reads the claim list, not the finding
+count. The scoping is per cycle: a confirmation predating a rescope does not carry into the
+widened charter.
 
 Each outstanding note carries a `rejected-with-evidence` disposition, with the consequence
 test as its evidence. The finding is real; what the disposition records is that leaving it
@@ -140,9 +143,10 @@ Two of the exit's tests are judgments the orchestrator applies to itself, and no
 detects either being made self-servingly: whether a standing finding is consequence-free,
 and whether an edit since the confirming pass changed what a confirmed claim asserts. What
 bounds them is disclosure — the exit is reported distinctly rather than as `approve`, and
-its note list names every claim a pass accounted for, marked confirmed or not-checkable,
-with the pass that accounted for it, reaching the review summary (in the `verdict:` field,
-by name), the `WORK:REVIEW` annotation, and the pull request. The bound cannot hang
+its note list names every claim a pass reported, marked confirmed, refuted, or
+not-checkable, with the pass that reported it, reaching the `WORK:REVIEW` annotation and
+the pull request body. Not the `$quest` review summary: that is a fixed five-field
+single-line contract with no member for either list, and widening it is issue #143. The bound cannot hang
 on the exit alone: step 6 lets the consequence test be taken on any pass, so the loop's
 on-every-exit disclosure carries every consequence-free `rejected-with-evidence` finding
 too, whichever exit the run takes. Weaker than a gate, and the price of anatomy rule 4.

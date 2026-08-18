@@ -421,15 +421,19 @@ dependencies, compatibility, migrations, observability, and whether the chosen
 approach is simpler or safer than viable alternatives.` Address every
 defensible finding and commit after each accepted fix.
 
-A *sound with record notes* exit is a non-blocking outcome: a pass accounted for
-the branch's load-bearing claims — confirmed, or reported as not checkable in the
-reviewer's environment — and the standing findings carry no consequence for the
-decision, the behaviour, or a future maintainer's actions. Proceed, and put the
-outstanding notes in the review summary so they reach `WORK:REVIEW` and the pull
-request; they are the part a reader cannot reconstruct. Record the exit **by
-name** in that summary's `verdict:` field — it is neither `approve` nor
-`needs-attention`, and writing the reviewer's last verdict there would publish
-the opposite of what the exit means.
+A *sound with record notes* exit is a non-blocking outcome: a pass confirmed
+every load-bearing claim it named on the branch, and the standing findings carry
+no consequence for the decision, the behaviour, or a future maintainer's actions.
+Proceed, and carry the outstanding notes and the confirmed claim list into the
+`WORK:REVIEW` comment and the PR body — they are the part a reader cannot
+reconstruct, and they are the only thing holding the orchestrator's own
+consequence judgment to account.
+
+The review summary below is a five-field, single-line contract that has no member
+for either list and asks for a `<trial-loop verdict>` this exit is not, so it is
+not where they go. Write the loop's last reviewer verdict in that field as the
+contract says, and name the exit in `WORK:REVIEW` and the PR body instead;
+widening the summary is tracked in issue #143.
 
 Pass the loop an iteration budget derived from the step 1 classification: a
 trivial bugfix or a revalidated governed small change passes

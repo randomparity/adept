@@ -117,10 +117,12 @@ change's own failure mode, reintroduced by its own rule.
 
 ### Recording the claim list
 
-Condition 1 reads back which claims a pass named and how each was accounted for, and
-nothing in the loop preserves that: the compact object does not carry it and the artifact
-is superseded next pass. So step 3's audit line gains the claims block, taken from the
-`summary` in the artifact step 2 already opens. A pass that named none records
+Condition 1 reads back which claims a pass named and how each came out, and nothing in the
+loop preserves that: the compact object does not carry it and the artifact is superseded
+next pass. So step 3's audit line gains the claims block, taken from the `summary` in the
+artifact step 2 already opens, with all three outcomes the reproduction instruction defines
+— confirmed, refuted, not checkable here — since only the first satisfies condition 1 and a
+two-state record would force a refutation into the wrong box. A pass that named none records
 `claims: none named`, which keeps the exit shut explicitly rather than by omission.
 
 ### Reproduction stays read-only
@@ -158,8 +160,8 @@ record the run wrote is a file in the target) is unchanged.
 *Sound with record notes*, added to *Stop conditions* as its own bullet. Three
 preconditions:
 
-1. a pass in this cycle **named** the target's load-bearing factual claims and accounted
-   for every one it named, and no target edit since has changed what those claims assert;
+1. a pass in this cycle **named** the target's load-bearing factual claims and **confirmed
+   every one it named**, and no target edit since has changed what those claims assert;
 2. every standing finding is consequence-free under the test below;
 3. the pass's findings can all be disposed of without editing the target.
 
@@ -171,13 +173,16 @@ would turn entirely on a consequence test nothing checks. A target with nothing 
 reproduce leaves the loop through `approve`, *converged with deferrals*, or the cap, as it
 does today.
 
-**Accounted for**, not merely *reproduced*. Each named claim is confirmed, or explicitly
-reported as not checkable in the reviewer's environment. Without that, "the claims it
-reproduced" reads as a restrictive clause over whatever subset the pass happened to check,
-and one confirmed claim out of four names satisfies the condition — which collapses the
-earned-soundness argument the condition exists for. A not-checkable claim is a standing
-finding and clears the consequence test on its own; usually it will not, because a
-load-bearing claim nobody can check is what a future maintainer acts on differently.
+**Confirmed, and all of them.** "The claims it reproduced" would read as a restrictive
+clause over whatever subset the pass happened to check, so one confirmed claim out of four
+named would satisfy the condition — which collapses the earned-soundness argument the
+condition exists for. A claim refuted, or reported not checkable in the reviewer's
+environment, is not confirmed and the condition fails on it. That is the decision's cost,
+taken deliberately: an intermediate state where an unconfirmed claim still counts would
+let the exit certify soundness nobody established, which is worse than a run that reaches
+the cap. Whether the reviewer also filed the unconfirmed claim as a finding is its own
+judgment under its finding bar and does not move the condition — the loop reads the claim
+list, not the finding count.
 
 **Scoped per cycle**, matching the self-collision baseline. A rescope need not edit the
 target, so without the scoping a confirmation from cycle 1 would satisfy condition 1 on
@@ -273,9 +278,10 @@ dispatch.
 - **Two self-applied tests.** An orchestrator wanting out of the loop can call a
   consequential finding inconsequential, and can call an edit since the confirming pass
   claim-preserving. Bounded only by distinct reporting and by the note list — which names
-  every claim a pass accounted for, marked confirmed or not-checkable, with the pass that
-  accounted for it — reaching the review summary's `verdict:` field by name, `WORK:REVIEW`,
-  and the pull request. Recorded in ADR 0020.
+  every claim a pass reported, marked confirmed, refuted, or not-checkable, with the pass
+  that reported it — reaching `WORK:REVIEW` and the pull request body. Not the `$quest`
+  review summary, whose fixed five-field contract has no member for either list; widening it
+  is issue #143. Recorded in ADR 0020.
 - **Cross-file drift.** The obligation sits in `$gauntlet`'s Method, the transmission in
   `$trial-loop`, and the exit name is consumed in `$quest` and `$spellcraft`, with nothing
   detecting divergence — the same residual ADR 0019 accepted for its contract.
