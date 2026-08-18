@@ -29,7 +29,7 @@ belief rather than the claim's load.
 | R3 | A **judgment** ground says so with the token `judgment:`, and is legitimate without a command. Naming which class it is — complexity, fit, taste, cost — is optional colour, not the obligation. | #137 acceptance criterion 3; ADR 0019, "naming the class is the whole obligation" |
 | R3b | The `$spellcraft` text states the non-exemption rule to the **writer**: the tag classes the ground and does not exempt a factual premise sitting inside it, so a `judgment:` resting on an unrun behaviour claim is the same defect wearing the other label. | ADR 0019 Decision; without it R4 finds against a writer for a rule their instructions never carried |
 | R3c | Where a ground is both factual and judgment, the `$spellcraft` text says the bullet leads with `verified:`. | necessary consequence of R2 + R3: one tag opens the ground, and the factual half is the half that owes evidence |
-| R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it. The clause exempts a record whose `## Status` date precedes the contract: those carry no tags, are not retrofitted, and their untagged bullets are not findings. | #137 acceptance criterion 2, proposal step 2; vintage exemption from ADR 0019's non-retrofit consequence |
+| R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it. Where a record carries no tags at all, the clause yields one observation that the record predates the contract rather than a finding per bullet. | #137 acceptance criterion 2, proposal step 2; non-retrofit consequence in ADR 0019 |
 | R4b | The added focus clause states that a `verified:` ground's command and result are the ground rather than argument, so the focus's existing size clause does not read as an instruction to cut them. | necessary consequence of R4: the ADR reviewer sees only the focus string |
 | R5 | `skills/tome-of-lore/SKILL.md`'s ADR template states the same requirement, so the two statements of the contract cannot drift. | dispatch brief criterion 4 |
 | R6 | The existing size discipline holds. The `$spellcraft` text says what the tag displaces — the paragraph of justification behind the ground, never the sentence or two that states the ground — and carries one one-line example bullet per tag, a `verified:` one and a `judgment:` one. R6 is met when the displacement sentence and both examples are present; it is not a claim about record length. | #137 acceptance criterion 4 |
@@ -117,20 +117,22 @@ the ADR with only the focus string, so the reconciliation has to be in the focus
 the writer-facing guidance: a `verified:` ground's command and result are the ground, not
 argument, and are not what the size clause cuts.
 
-The clause carries a vintage exemption for the same reason. `$spellcraft` step 2 builds its
-changed-ADR set with `git diff --name-only <BASE_BRANCH>...HEAD -- docs/adr/`, and a
-supersession adds a banner to the superseded record's own file — so a merged, pre-contract
-ADR lands in the review set on every supersession PR. An unqualified clause would fire on
-each of that record's untagged bullets, and a merged record permits no edit but the banner,
-so the loop would burn iterations on findings nobody may fix. ADR 0019 states the
+The clause also has to survive being pointed at a pre-contract record. `$spellcraft` step 2
+builds its changed-ADR set with `git diff --name-only <BASE_BRANCH>...HEAD -- docs/adr/`,
+and a supersession adds a banner to the superseded record's own file — so a merged,
+pre-contract ADR lands in the review set on every supersession PR. An unqualified clause
+fires on each of that record's untagged bullets, and a merged record permits no edit but
+the banner, so the loop burns iterations on findings nobody may fix. ADR 0019 states the
 non-retrofit policy, but the reviewer never reads ADR 0019.
 
-The exemption's predicate has to be readable **from the record alone**. The reviewer gets
-one file path and the focus string — no diff, no base ref — so "the bullets this change
-writes" is a test it cannot run, and asking for it would leave the reviewer guessing in the
-one case the exemption exists for. The record's `## Status` date is the vintage signal
-present in the file, so that is the predicate: a record dated before this contract is
-exempt, and one dated after it is not.
+Whatever handles this has to be readable **from the record alone**: the reviewer gets one
+file path and the focus string — no diff, no base ref, no adoption date. "The bullets this
+change writes" is a test it cannot run, and a date threshold is one it cannot resolve,
+since `$spellcraft` ships to repositories that adopt the contract on their own schedule.
+What is readable is whether the record carries any tags at all. A wholly untagged record
+predates the contract, so the clause yields one observation to that effect instead of a
+finding per bullet. The residual is a post-contract writer who ignores the rule entirely
+and gets one observation rather than several findings — still surfaced, just once.
 
 ## Testing
 
