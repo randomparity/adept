@@ -476,6 +476,12 @@ fi
 # exactly that shape: one path on stdout, a diagnostic on stderr, a non-zero
 # exit. The fixture is a real repository so the fault is the stub's and not the
 # directory's.
+#
+# The path the stub names is the clean one, deliberately. The secret lives in
+# the tracked-but-ignored partial.txt the listing died before reaching, so the
+# truncated set the pre-fix gate scanned never contained it and that gate
+# exited 0 over content it had not listed -- the ADR 0005 defect itself, rather
+# than the exit 1 it would have returned had the stub named the secret.
 GIT_REAL=$(command -v git)
 STUB_BIN="$SCRATCH/stub-bin"
 mkdir -p "$STUB_BIN"
@@ -483,7 +489,7 @@ cat >"$STUB_BIN/git" <<EOF
 #!/usr/bin/env bash
 for argument in "\$@"; do
 	if [ "\$argument" = ls-files ]; then
-		printf 'partial.txt\0'
+		printf '.gitignore\0'
 		printf 'stub git: the listing stopped partway\n' >&2
 		exit 128
 	fi
