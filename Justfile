@@ -109,8 +109,7 @@ test:
     printf '== %s\n' "$suite"
     # The loop's stdin is the suite list, so a suite that read stdin would
     # swallow the suites queued behind it and truncate the run to another
-    # green partial pass. test-fixture-helpers-test.sh closes a child's stdin
-    # for the same reason.
+    # green partial pass.
     "./$suite" </dev/null
     count=$((count + 1))
   done <"$suites"
