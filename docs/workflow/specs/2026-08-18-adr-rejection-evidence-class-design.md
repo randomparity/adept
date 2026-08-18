@@ -57,10 +57,12 @@ Every `Considered & rejected` bullet opens with one of two tags:
 Two tags, not a spectrum. A third class ("plausible", "assumed") would be a place for an
 unverified factual claim to hide with a blessing, which is the defect being closed.
 
-R6's "replaces rather than appends" is a discipline on the prose, not a promise that every
-bullet shrinks: a judgment ground costs less than the reasoning it displaces, and a factual
-one often costs more, because a command and its result run longer than the assertion they
-replace. What those lines buy is a rejection a later reader can re-run.
+R6's "replaces rather than appends" governs what the tag displaces: the paragraph of
+justification behind the ground, never the sentence or two that states the ground itself —
+`$spellcraft` already requires that sentence. It is not a promise that every bullet
+shrinks, either: a judgment ground costs less than the reasoning it displaces, and a
+factual one often costs more, because a command and its result run longer than the
+assertion they replace. What those lines buy is a rejection a later reader can re-run.
 
 `verified:` and `judgment:` are new tokens. They deliberately avoid
 `rejected-with-evidence`, which `references/heed-counsel.md:14` and

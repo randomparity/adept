@@ -36,14 +36,17 @@ was established:
   not. Where the ground is factual but no command settles it, `verified:` carries the
   source that does.
 - `judgment:` — complexity, fit, taste, or cost. It carries no evidence; naming the class
-  is the whole obligation.
+  is the whole obligation beyond the ground itself.
 
 Both are legitimate grounds. A judgment presented as a fact is not.
 
-The tag **replaces** the reasoning prose it summarises rather than prefixing it. The
-`$spellcraft` ADR-review focus gains one clause: a rejection stated as fact but carrying no
-evidence is a finding, as is a behaviour claim about a rejected alternative that cannot be
-reproduced from what the bullet states.
+The tag classes the ground; the ground stays the sentence or two that sank the alternative.
+What the tag **replaces** is the paragraph of justification behind that sentence, never the
+sentence itself.
+
+The `$spellcraft` ADR-review focus gains one clause: a rejection stated as fact but
+carrying no evidence is a finding, as is a behaviour claim about a rejected alternative
+that cannot be reproduced from what the bullet states.
 
 `skills/spellcraft/SKILL.md` is the authority for this contract.
 `skills/tome-of-lore/SKILL.md`'s ADR template restates it in one template line plus one
@@ -65,7 +68,9 @@ The contract covers rejection grounds only, and it is stated in two documents wi
 detecting divergence between them. Both residuals are recorded in the design doc.
 
 Records merged before this decision carry no tags and are not retrofitted, being immutable.
-A missing tag therefore means "written earlier", not "unverified".
+In one of those, a missing tag means "written earlier", not "unverified". In a later
+record it means the rule was not followed, which is a finding for the reader who notices —
+enforcement is reading, so nothing else will.
 
 ## Considered & rejected
 
@@ -89,5 +94,6 @@ token to omit leaves a reviewer nothing to point at.
 **Add a third class for a factual ground believed but not run.** judgment: a sanctioned
 resting place for the claim this record exists to expose.
 
-**Do nothing.** judgment: one clause per bullet, against two design reversals across five
-review iterations in the reported instance.
+**Do nothing.** judgment: a clause per judgment ground and a command with its result per
+factual one, against the reported instance's two design reversals across five review
+iterations (#137).
