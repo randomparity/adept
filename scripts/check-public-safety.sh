@@ -113,11 +113,18 @@ denied_patterns=(
 # not the ADR 0005 shape. Choosing the enumeration's source is issue #150, and
 # issue #147 is a second route to the same empty result. Both predate this
 # change and reproduce identically on the pre-fix gate.
-tracked_listing=$(mktemp) || {
-	echo "public-safety: could not create a scratch file for the tracked listing" >&2
-	exit 2
-}
-trap 'rm -f "$tracked_listing"' EXIT
+# The scratch file is created at the first directory scan path rather than up
+# front, for the reason the git guard below gives: a regular-file scan needs no
+# listing, so a temp directory it never writes to must not be able to fail it.
+# The distinction is invisible here -- bare mktemp on macOS resolves through the
+# per-user temp directory and ignores TMPDIR -- and live on Linux, where mktemp
+# honours TMPDIR and fails when it is missing or read-only. That is the CI leg.
+tracked_listing=''
+# An `if` rather than `[ -n ... ] && rm`: these scripts run under `set -e`,
+# where an EXIT trap's non-zero return becomes the exit status, so the
+# short-circuit form would redden every clean run that never made the file. A
+# failed removal still reddens, which is the existing behaviour.
+trap 'if [ -n "$tracked_listing" ]; then rm -f "$tracked_listing"; fi' EXIT
 
 scan_targets=("${scan_paths[@]}")
 for scan_path in "${scan_paths[@]}"; do
@@ -132,6 +139,12 @@ for scan_path in "${scan_paths[@]}"; do
 	if ! command -v git >/dev/null 2>&1; then
 		echo "public-safety: git is required to scan a directory" >&2
 		exit 2
+	fi
+	if [ -z "$tracked_listing" ]; then
+		tracked_listing=$(mktemp) || {
+			echo "public-safety: could not create a scratch file for the tracked listing" >&2
+			exit 2
+		}
 	fi
 	listing_status=0
 	git -C "$scan_path" ls-files -z >"$tracked_listing" || listing_status=$?

@@ -529,6 +529,29 @@ if ! grep -qF 'stub git: the listing stopped partway' "$SCRATCH/output"; then
 	exit 1
 fi
 
+# The contract that fault creates, pinned at the shape a user actually meets
+# rather than only at the stub's: a directory outside any worktree exits 2. The
+# stub above and this case fail differently -- the stub emits a path and a
+# diagnostic before dying, a real non-repository emits nothing -- so softening
+# the contract by special-casing an empty-output non-zero as benign would keep
+# the stub case red and reopen the walk-only path for every such directory.
+outside_worktree="$SCRATCH/outside-worktree"
+mkdir -p "$outside_worktree"
+printf 'public content\n' >"$outside_worktree/README.md"
+outside_status=0
+"$CHECKER" "$outside_worktree" >"$SCRATCH/output" 2>&1 || outside_status=$?
+if [ "$outside_status" -ne 2 ]; then
+	printf 'public-safety-test: a directory outside a worktree must fault, got %s\n' \
+		"$outside_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+if ! grep -qF 'could not list the tracked files' "$SCRATCH/output"; then
+	printf 'public-safety-test: the fault should name what could not be listed\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
 # The other side of that rule, pinned deliberately: an empty listing under a
 # zero status is a legitimate answer, not a fault. Unlike
 # `git rev-parse --local-env-vars`, which always names at least GIT_DIR, this
