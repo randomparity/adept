@@ -180,15 +180,18 @@ require_assets() {
 # bare call aborts the run and a following `; status=$?` never executes, so the `||` that
 # assigns rather than branches is the required form, not merely a permitted one.
 #
-# Four shapes elsewhere in this file are deliberately left alone, so the next reader does
+# `cmp -s` is a scan too and converts with the rest: measured on macOS it exits 1 for "the
+# files differ" and 2 for a file it could not read, and the migrator cases turn that answer
+# straight into a verdict about whether a run wrote to a record — so a fault would arrive
+# labelled "wrote despite a dirty worktree", a claim the run never established.
+#
+# Three shapes elsewhere in this file are deliberately left alone, so the next reader does
 # not have to work out which half they are in. A `grep -v ... >"$f"` that transforms a
 # fixture decides no verdict, and `set -euo pipefail` already stops the run on either
 # non-zero status. A match run over a shell variable rather than a file — `printf '%s\n'
 # "$x" | grep -q` — is the in-memory case ADR 0005 names as outside the rule: its failure
-# modes are not the scan-could-not-run case. `cmp -s a b` is a scan, but it reports a fault
-# as 2 and every caller here treats anything non-zero as the FAIL arm, so the fault is
-# already reported rather than scored as a pass. And `[ -e ]`/`[ -s ]` are metadata tests,
-# not reads — they answer "is there anything there", which is the question, not a proxy
+# modes are not the scan-could-not-run case. And `[ -e ]`/`[ -s ]` are metadata tests, not
+# reads — they answer "is there anything there", which is the question rather than a proxy
 # for it. migrator_why is where that distinction matters: absent and empty are different
 # answers there, so it asks both rather than letting the first fall into the second.
 
@@ -198,6 +201,26 @@ require_assets() {
 fail_scan() {
   failed=$((failed + 1))
   printf 'FAIL could not scan %s (grep exit %s)\n' "$1" "$2"
+}
+
+# expect_error_code <stderr-file> <code> [pattern] — the verdict eight bespoke cases share:
+# the named code fired, the run failed for some other reason (named, so the output says
+# which), or the capture could not be scanned at all. <pattern> defaults to the code's own
+# `::error::<code>: ` line; pass one only where the assertion is narrower than the code.
+expect_error_code() {
+  local err=$1 code=$2 pattern=${3:-"::error::$2: "} scan=0
+  grep -q "$pattern" "$err" || scan=$?
+  case $scan in
+  0)
+    passed=$((passed + 1))
+    printf 'ok   exit=1 %s\n' "$code"
+    ;;
+  1)
+    failed=$((failed + 1))
+    printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$err" | head -1)"
+    ;;
+  *) fail_scan "$err" "$scan" ;;
+  esac
 }
 
 # scan_into_verdict <tag> <file> [grep-option]... <pattern> — the same three-way scan for
@@ -853,19 +876,7 @@ YAML
     failed=$((failed + 1))
     printf 'FAIL passed with an undeclared rename\n'
   else
-    scan=0
-    grep -q '::error::E-GATE-EMPTY-SET: ' "$d/.e" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=1 E-GATE-EMPTY-SET\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
-      ;;
-    *) fail_scan "$d/.e" "$scan" ;;
-    esac
+    expect_error_code "$d/.e" E-GATE-EMPTY-SET
   fi
 
   # A rename must still be caught even when the repo's own workflow happens to sit at the
@@ -907,19 +918,7 @@ YAML
     failed=$((failed + 1))
     printf 'FAIL passed with an undeclared rename\n'
   else
-    scan=0
-    grep -q '::error::E-GATE-EMPTY-SET: ' "$d/.e" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=1 E-GATE-EMPTY-SET\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
-      ;;
-    *) fail_scan "$d/.e" "$scan" ;;
-    esac
+    expect_error_code "$d/.e" E-GATE-EMPTY-SET
   fi
 
   # The other half of E-GATE-EMPTY-SET: a rename that *does* declare its predecessor is
@@ -1158,19 +1157,7 @@ YAML
     failed=$((failed + 1))
     printf 'FAIL passed with an undeclared workflow rename\n'
   else
-    scan=0
-    grep -q '::error::E-GATE-GONE: \.github/workflows/gate\.yml ' "$d/.e" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=1 E-GATE-GONE\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
-      ;;
-    *) fail_scan "$d/.e" "$scan" ;;
-    esac
+    expect_error_code "$d/.e" E-GATE-GONE '::error::E-GATE-GONE: \.github/workflows/gate\.yml '
   fi
 
   # The gate's own protected-path witness, unable to run. It used to be `git cat-file -e ... ||
@@ -1273,19 +1260,7 @@ STUB
     failed=$((failed + 1))
     printf 'FAIL exit=0 on a witness that never ran\n'
   else
-    scan=0
-    grep -q '::error::E-GATE-WITNESS-SCAN: ' "$d/.e2" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=1 E-GATE-WITNESS-SCAN\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e2" | head -1)"
-      ;;
-    *) fail_scan "$d/.e2" "$scan" ;;
-    esac
+    expect_error_code "$d/.e2" E-GATE-WITNESS-SCAN
   fi
 
   # The workflow witness, reached only once the SELF_DIR witness has found nothing -- which is
@@ -1311,19 +1286,7 @@ STUB
     failed=$((failed + 1))
     printf 'FAIL exit=0 on a witness that never ran\n'
   else
-    scan=0
-    grep -q '::error::E-GATE-WITNESS-SCAN: ' "$d/.e3" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=1 E-GATE-WITNESS-SCAN\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e3" | head -1)"
-      ;;
-    *) fail_scan "$d/.e3" "$scan" ;;
-    esac
+    expect_error_code "$d/.e3" E-GATE-WITNESS-SCAN
   fi
 
   # gate_existed_at has two witnesses, and `renamed_gate` above happens to satisfy both at
@@ -1351,19 +1314,7 @@ STUB
     failed=$((failed + 1))
     printf 'FAIL passed with an undeclared rename\n'
   else
-    scan=0
-    grep -q '::error::E-GATE-EMPTY-SET: ' "$d/.e" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=1 E-GATE-EMPTY-SET\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
-      ;;
-    *) fail_scan "$d/.e" "$scan" ;;
-    esac
+    expect_error_code "$d/.e" E-GATE-EMPTY-SET
   fi
 
   d="$SCRATCH/renamed_moved_dir"
@@ -1398,19 +1349,7 @@ YAML
     failed=$((failed + 1))
     printf 'FAIL passed with an undeclared rename\n'
   else
-    scan=0
-    grep -q '::error::E-GATE-EMPTY-SET: ' "$d/.e" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=1 E-GATE-EMPTY-SET\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
-      ;;
-    *) fail_scan "$d/.e" "$scan" ;;
-    esac
+    expect_error_code "$d/.e" E-GATE-EMPTY-SET
   fi
 
   # gate_known_basenames' `.sh`-only filter is what keeps a `.yml` GATE_PREDECESSORS
@@ -2092,19 +2031,7 @@ STUB
     failed=$((failed + 1))
     printf 'FAIL self-protection was off through the symlink\n'
   else
-    scan=0
-    grep -q '::error::E-GATE-GONE: ' "$d/.e" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=1 E-GATE-GONE\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
-      ;;
-    *) fail_scan "$d/.e" "$scan" ;;
-    esac
+    expect_error_code "$d/.e" E-GATE-GONE
   fi
 
   printf -- '-- degraded paths must fail, not pass --\n'
@@ -2187,19 +2114,7 @@ STUB
     failed=$((failed + 1))
     printf 'FAIL passed with self-protection off\n'
   else
-    scan=0
-    grep -q '::error::E-GATE-UNLOCATABLE: ' "$d/.e" || scan=$?
-    case $scan in
-    0)
-      passed=$((passed + 1))
-      printf 'ok   exit=1 E-GATE-UNLOCATABLE\n'
-      ;;
-    1)
-      failed=$((failed + 1))
-      printf 'FAIL failed for another reason: %s\n' "$(sed -n 's/^::error:://p' "$d/.e" | head -1)"
-      ;;
-    *) fail_scan "$d/.e" "$scan" ;;
-    esac
+    expect_error_code "$d/.e" E-GATE-UNLOCATABLE
   fi
 
   d=$(case_dir bad_base)
@@ -2990,13 +2905,19 @@ MD
   cp "$d/docs/debt/0001-valid.md" "$d.before"
   run_migrator "dry run reports without writing" 0 - "$d"
   printf '  %-4s %-44s ' "" "dry run leaves the record byte-identical"
-  if cmp -s "$d.before" "$d/docs/debt/0001-valid.md"; then
+  scan=0
+  cmp -s "$d.before" "$d/docs/debt/0001-valid.md" || scan=$?
+  case $scan in
+  0)
     passed=$((passed + 1))
     printf 'ok   nothing written\n'
-  else
+    ;;
+  1)
     failed=$((failed + 1))
     printf 'FAIL the default run wrote to the record\n'
-  fi
+    ;;
+  *) fail_scan "$d.before and the record" "$scan" ;;
+  esac
 
   d=$(migrator_dir migrate_write)
   b=$(base_of "$d")
@@ -3026,13 +2947,19 @@ MD
   printf 'uncommitted\n' >"$d/stray.txt"
   run_migrator "dirty worktree refused" 1 E-DIRTY "$d" --write
   printf '  %-4s %-44s ' "" "the refused run wrote nothing"
-  if cmp -s "$d.before" "$d/docs/debt/0001-valid.md"; then
+  scan=0
+  cmp -s "$d.before" "$d/docs/debt/0001-valid.md" || scan=$?
+  case $scan in
+  0)
     passed=$((passed + 1))
     printf 'ok   record untouched\n'
-  else
+    ;;
+  1)
     failed=$((failed + 1))
     printf 'FAIL wrote despite a dirty worktree\n'
-  fi
+    ;;
+  *) fail_scan "$d.before and the record" "$scan" ;;
+  esac
 
   # A hook that edits a region the gate protects. The self-check is marker_only_change, the
   # gate's own predicate, so this is the same rejection the gate would issue — reached before
@@ -3050,13 +2977,19 @@ SH
   MIGRATE_PROFILES=rogue run_migrator "self-check refuses a prose edit" 1 E-SELF-CHECK "$d" \
     --write
   printf '  %-4s %-44s ' "" "the self-check ran before any write"
-  if cmp -s "$d.before" "$d/docs/debt/0001-valid.md"; then
+  scan=0
+  cmp -s "$d.before" "$d/docs/debt/0001-valid.md" || scan=$?
+  case $scan in
+  0)
     passed=$((passed + 1))
     printf 'ok   record untouched\n'
-  else
+    ;;
+  1)
     failed=$((failed + 1))
     printf 'FAIL wrote output its own self-check rejected\n'
-  fi
+    ;;
+  *) fail_scan "$d.before and the record" "$scan" ;;
+  esac
 
   # The no-invention rule, on the transform an adopting repo with legacy ADRs most needs. A
   # date already on the line is parenthesised; a bare status word has no date to take, and
@@ -3228,6 +3161,44 @@ STUB
   if [ -z "$notes" ]; then
     passed=$((passed + 1))
     printf 'ok   %s\n' "$why"
+  else
+    failed=$((failed + 1))
+    printf 'FAIL%s\n' "$notes"
+  fi
+
+  # fail_scan is the channel most of the converted sites report through, and scan_count is
+  # the counting form. Neither is reached by a green run, so a dropped counter increment or
+  # an emptied message would ship silently — the same blindness the conversion removed from
+  # the sites themselves. Both are exercised here and their effect on the counters undone,
+  # so the suite's own tally stays honest.
+  printf '  %-4s %-44s ' "" "the fault helpers count and name the fault"
+  notes=""
+  # Its output goes to a file rather than a command substitution: fail_scan's whole job is
+  # to increment the counter, and a subshell would discard exactly the effect under test.
+  before=$failed
+  fail_scan "$missing" 7 >"$SCRATCH/fail-scan.out"
+  [ "$failed" -eq $((before + 1)) ] || notes="$notes fail-scan-did-not-count"
+  failed=$before
+  reported=$(cat "$SCRATCH/fail-scan.out")
+  case $reported in
+  *"$missing"*) ;;
+  *) notes="$notes fail-scan-file-not-named" ;;
+  esac
+  case $reported in
+  *' 7'*) ;;
+  *) notes="$notes fail-scan-status-not-named" ;;
+  esac
+  verdict=""
+  scan_hits="a count that should be cleared"
+  scan_count "$missing" 'anything at all' 2>/dev/null
+  [ -z "$scan_hits" ] || notes="$notes scan-count-kept-a-count"
+  case $verdict in
+  " scan-fault($missing exit "*) ;;
+  *) notes="$notes scan-count-tag=[$verdict]" ;;
+  esac
+  if [ -z "$notes" ]; then
+    passed=$((passed + 1))
+    printf 'ok   %s\n' "$reported"
   else
     failed=$((failed + 1))
     printf 'FAIL%s\n' "$notes"
