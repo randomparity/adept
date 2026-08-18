@@ -52,46 +52,41 @@ delivered-head-sha: <full exact delivered PR head SHA>
 ```
 
 `verdict:` and `exit:` are two different facts about the same `$trial-loop` run — the last run
-on the branch, the one `findings:` and `iterations:` already count. `verdict:` records what the
-selected reviewer returned; `exit:` records how the loop ended. Overloading one field with both
+on the branch, the one `findings:` and `iterations:` already count. `verdict:` is unchanged in
+meaning and stays the verdict the selected reviewer actually returned on the last pass, never a
+value derived from the exit; `exit:` records how the loop ended. Overloading one field with both
 would erase the only record of whether a reviewer ever cleared the branch.
 
 **`exit:` takes exactly one of five values**, one per way a `$trial-loop` run can reach step 8:
 
-| `$trial-loop` run ending | `exit:` | `verdict:` observed |
-|---|---|---|
-| the reviewer returned `approve` | `none` | `approve` |
-| *converged with deferrals* | `converged-with-deferrals` | `needs-attention` |
-| *sound with record notes* | `sound-with-record-notes` | `needs-attention` |
-| *converged on own surface* | `converged-on-own-surface` | `needs-attention` or `approve` |
-| stopped as blocked at the iteration budget, and a human explicitly approved continuing | `blocked-at-budget` | `needs-attention` |
-
-**Only the `exit:` column is prescribed.** `verdict:` is always the verdict the selected
-reviewer actually returned on the last pass, never a value derived from the exit; the third
-column records what that verdict is on a typical run of each row, so a caller who observes
-something else writes what it observed. *converged on own surface* is the row where that
-matters: its confirming pass may return no finding at all (`skills/trial-loop/SKILL.md:697-701`),
-and a run routed there whose confirming pass returns `approve` writes `verdict: approve` beside
-`exit: converged-on-own-surface`.
-
-The fifth row is the one path by which a blocked run reaches this contract. Cap exhaustion stops
-the workflow, but only "without explicit user approval" (`:654-657`), so an approved
-continuation runs on to `$deliver` and must be able to say so — that is precisely the run whose
-`verdict: needs-attention` means what it says. Every other stop parks the issue instead of
-publishing: `$quest`'s blocker path (`skills/quest/SKILL.md:626-642`) takes an unresolvable
-finding to `status:needs-human`, and ending a cycle for rescoping without new authority ends the
-run there (`skills/trial-loop/SKILL.md:665-667`, `:713-716`).
+| `$trial-loop` run ending | `exit:` |
+|---|---|
+| the reviewer returned `approve` | `none` |
+| *converged with deferrals* | `converged-with-deferrals` |
+| *sound with record notes* | `sound-with-record-notes` |
+| *converged on own surface* | `converged-on-own-surface` |
+| stopped as blocked at the iteration budget, then continued on explicit human approval | `blocked-at-budget` |
 
 `none` rather than `approve` in the first row: the field answers "did the run take a named
 exit", and repeating the verdict there would make the two fields look like one fact stated
 twice.
 
+The fifth row is the one path by which a blocked run reaches this contract. Cap exhaustion stops
+the workflow, but only "without explicit user approval" (`skills/trial-loop/SKILL.md:654-657`),
+so an approved continuation is a run that must be able to say what it is. `$quest` documents no
+such resume today — its blocker path (`skills/quest/SKILL.md:626-642`) takes an unresolvable
+finding to `status:needs-human` and stops — so the value exists so that an interactively
+approved continuation has an honest thing to write rather than `none`. Every other stop parks
+the issue instead of publishing, rescoping without new authority included
+(`skills/trial-loop/SKILL.md:665-667`, `:713-716`).
+
 **ADR 0011 governs this vocabulary, and this is its discharge.** That record permits a domain
 enum only where its contract states an explicit one-way conversion to the canonical vocabulary
-and says the domain value is neither a finding severity nor a review verdict. The table above is
-that conversion — every `exit:` value maps to the `verdict:` beside it and never the reverse —
-and an `exit:` value is neither a severity nor a verdict. `blocked-at-budget` is written
-qualified rather than as a bare `blocked` for the same record's reason.
+and says the domain value is neither a finding severity nor a review verdict. The conversion
+here is the simplest one available: the canonical verdict is already a field of its own, always
+written, so a consumer converts by *reading* `verdict:` and never by deriving it from `exit:`.
+An `exit:` value is neither a finding severity nor a review verdict. `blocked-at-budget` is
+written qualified rather than as a bare `blocked` for the same record's reason.
 
 **The exits' payloads stay out of the summary.** Deferral records with their owning paths,
 outstanding notes with the finding each came from, and the claim list marked confirmed, refuted
@@ -100,8 +95,7 @@ or not-checkable-here go to the `WORK:REVIEW` comment and the pull request body,
 unbounded multi-line lists; this artifact is a capped, single-line-field header. `exit:` is the
 routing key that tells a reader which list to expect below it.
 
-**`validate_content` does not gain a field-list check.** The helper is declined new executable
-surface here; see the rejection below.
+`validate_content` gains no field-list check — see the rejection below.
 
 ## Consequences
 
@@ -121,9 +115,10 @@ closing it means a parser in the helper (rejected below).
 (`skills/bards-tale/SKILL.md:202-213`) reads the latest complete `WORK:REVIEW` block for the
 iteration count and carries the verdict into its narrative, so until it reads `exit:` too a
 retrospective still narrates a named exit as blocked. Filed as issue #149;
-`skills/bards-tale/SKILL.md` is outside this change's surface. `$campaign`'s merge step reads
-the same summary (`skills/campaign/SKILL.md`, step 6) but as a human-read hold decision, which
-`exit:` helps rather than misleads.
+`skills/bards-tale/SKILL.md` is outside this change's surface. That issue also owns the reading
+of the summaries already published, which carry five fields and no `exit:` line: absence is not
+`none` — such a summary says nothing about how its run ended. Nothing rewrites a published
+annotation.
 
 Adding a second field to a fixed-shape contract sets the precedent that the summary grows one
 scalar at a time. The bound this record leaves for the next such request is the one it applied
@@ -143,19 +138,25 @@ surface*, so issue #141 can add the step 6 routing for those two without reopeni
 
 **Do nothing — keep the five-field contract and leave the exit name to the annotation prose.**
 This is #138's workaround, recorded at `skills/quest/SKILL.md:432-436`.
-verified: the summary is read on its own, not only as the head of a whole annotation.
-`$campaign`'s merge step reads "the
-PR body, its acceptance criteria, and the `WORK:REVIEW` summary" when deciding a hold
-(`skills/campaign/SKILL.md`, step 6), and `$bards-tale` step 3d extracts fields straight out of
-the block for its narrative (`skills/bards-tale/SKILL.md:202-213`). A summary whose one outcome
-field contradicts the run is a defect the prose below it does not reach either reader.
+verified: the summary is read by field, not only as prose. `$bards-tale` step 3d extracts named
+fields straight out of the block and never reads the text beside them
+(`skills/bards-tale/SKILL.md:202-213`), so under do-nothing the one machine consumer of the
+summary records every named exit as `needs-attention` indefinitely — a wrong retrospective, not
+a missing one. Annotation prose cannot repair a reader that never reads it.
+
+**Qualify `verdict:` instead — write `needs-attention (sound with record notes)`.** This is the
+smallest change that fits the reported problem and needs no new field.
+verified against `docs/adr/0011-canonical-workflow-review-vocabulary.md`: that record makes
+`approve | needs-attention` the cross-workflow review verdict, and a qualified value is no
+longer one of the two. It also stops being comparable between runs — the same field would hold a
+bare word on some and a word-plus-parenthetical on others — which is the property `$bards-tale`
+depends on when it carries the verdict forward. A second field costs one line and keeps both
+values canonical.
 
 **Write the exit name into `verdict:`, replacing the reviewer's verdict.** verified against
 `skills/trial-loop/SKILL.md:645-653` and `:762-763`: a named exit is reported *in addition to*
 the reviewer's last verdict, not instead of it. Collapsing them destroys the only field saying
-whether a reviewer ever returned `approve`, makes `verdict:` non-comparable between two runs
-that both wrote it, and — on the *converged on own surface* row, where the confirming pass may
-return `approve` — would overwrite a genuine clearance with an exit name.
+whether a reviewer ever returned `approve`, and leaves ADR 0011's canonical verdict unwritten.
 
 **Add per-exit payload counts — a notes count, a claims count, a deferral-record count.**
 judgment: shape. Each applies to exactly one exit, so on any given run two of the three describe
