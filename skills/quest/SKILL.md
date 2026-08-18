@@ -420,6 +420,18 @@ dependencies, compatibility, migrations, observability, and whether the chosen
 approach is simpler or safer than viable alternatives.` Address every
 defensible finding and commit after each accepted fix.
 
+Pass the loop an iteration budget derived from the step 1 classification: a
+trivial bugfix or a revalidated governed small change passes
+`iteration budget: 2` — one full review pass plus one confirming pass over the
+fixes; non-trivial work leaves the loop's default of 5. Review passes are the
+pipeline's dominant cost — each is a fresh full-context reviewer — and on a
+small governed change the later passes mostly re-review test surface the
+earlier passes added. The budget lowers cost, not the bar: an unresolved
+defensible finding at the budget still blocks per the loop's stop conditions,
+and if that happens on a change you classified trivial, re-examine the
+classification before re-entering — a trivial change that cannot clear two
+passes was not trivial.
+
 When step 4 ran, append the audit's surface to that focus and ask the reviewer
 to flag unexplained divergence -- components, contracts, files, tests, runtime
 behavior, or complexity the surface does not account for. Implementation detail
