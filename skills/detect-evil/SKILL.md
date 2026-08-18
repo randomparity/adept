@@ -79,15 +79,20 @@ review note saying the check happens one layer up. Each such claim, if true, kee
 crossing out of the inventory or answers a step 2 question without a check in the code.
 Identify the load-bearing ones — the ones whose falsity would put a boundary back on the
 list or reopen a crossing — and attempt to reproduce each before you call the inventory
-complete. This is an obligation, not a preference: a caller may restate it in focus text,
-but focus only weights, and a calling loop may key its exits on whether a pass actually
-reproduced anything.
+complete. This binds the scan rather than informing it: a caller may restate it in focus
+text, but focus reorders attack surfaces and does no more than that, and a calling loop may
+key its exits on whether a pass actually reproduced anything.
 
 Reproduction is bounded by *Hard constraints* and adds no exception to them. Re-read the
-code the claim points at, run the guardrail the claim credits, search for the sibling check
-the claim says exists. Do not execute the diff's code, run an exploit, or probe a host to
-settle a claim — a claim whose only proof would be running the changed code is, by
-construction, one you cannot check here.
+code the claim points at, search for the sibling check the claim says exists, run the
+guardrail the claim credits — where that guardrail is already present at the base ref,
+running it exercises the repo's tool rather than the change, and is allowed. Where the diff
+itself adds or modifies that guardrail, running it would execute the diff's code, which
+*Hard constraints* forbids: record the claim as not checkable here and say which rule
+stopped you. A safety argument resting on a gate nobody in this pass could run is exactly
+the case where being unable to check is material, so that claim is a finding rather than a
+silent gap. The same holds for any claim whose only proof would be running the changed code,
+an exploit, or a probe against a live host.
 
 Every claim you name ends in exactly one of three states, and none may be left unstated:
 
@@ -102,8 +107,9 @@ Every claim you name ends in exactly one of three states, and none may be left u
 - **not checkable here** — the tool, network, platform, or access it needs is absent, or
   *Hard constraints* forbids the command. Report it as that observation, never as a
   confirmation. It is a finding only where not being able to check it is itself material to
-  the crossing — making every un-runnable claim a finding would foreclose `approve` on any
-  diff whose guardrail suite writes while it runs, which is most of them.
+  the crossing. The bar is materiality, not runnability: a scan that filed every un-runnable
+  claim would return `needs-attention` on most diffs and teach a reader to skim the ones
+  that matter.
 
 A diff that rests on no such claim gets one sentence saying so, exactly as an empty
 inventory does. That is an answer, not a gap.
@@ -214,7 +220,10 @@ Three differences in how the fields are filled:
   read before the surface it qualifies, and the claims block is labelled as its own block so
   a calling loop can lift it back out of the artifact. Elsewhere the obligation is
   `$gauntlet`'s Method, which leads its `summary` with the claims; here it sits one block
-  later, and nothing else about it changes.
+  later. Two further differences are deliberate, and are what a maintainer syncing the two
+  files reconciles to rather than away: the claim set is anchored to this scan's inventory
+  instead of to the target's conclusion, and the reproduction bound additionally excludes
+  the diff's own code.
 - **`suppressions` carries governing-ADR re-litigation only**, on the same terms as
   `$gauntlet`: a decision an accepted ADR settled is not re-argued here either.
   A security finding that cites a fact outside that record is new risk, not re-litigation —
