@@ -359,12 +359,17 @@ assert_gate 'fault outranks finding, finding still printed' 2 \
 	'mislabelled: SKILL.md declares name: not-the-directory-name' \
 	"$precedence_status" "$precedence_output"
 
-# Cases 18-22 cover the five loops that read a scratch file. An unopenable
-# redirect is the one fault direction that fails *open* on bash 3.2 -- the loop
-# body is skipped, the run carries on, and a rule nobody checked reports the
-# passing answer -- so each site gets its own case rather than one shared case
-# and an argument, and each asserts the rule name so no two sites can satisfy
-# each other's assertion.
+# Cases 18-24 cover the five loops that read a scratch file, and the two halves
+# of the guard in front of them. Every way an input goes unreadable fails *open*
+# on bash 3.2 -- the loop body is skipped, the run carries on, and a rule nobody
+# checked reports the passing answer -- and an unopenable path is only one of
+# them: a directory opens and then fails at the first `read`, and a regular file
+# this process may not read fails an open that no `-f` test would reach.
+#
+# Cases 18-22 give each loop its own case rather than one shared case and an
+# argument, and each asserts the rule name so no two sites can satisfy each
+# other's assertion. Cases 23 and 24 take the other two shapes at one site,
+# since both halves live in the one shared helper.
 #
 # The shims differ from cases 12-16's: those make a command fail, these let it
 # succeed and then unlink the file the next loop is about to open, which is the

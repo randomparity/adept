@@ -120,7 +120,7 @@ name_listed() { # name rule -- 0 listed, 1 not listed, faults when the scan fail
 # Reporting from here rather than returning a fault value is the deviation
 # name_listed documents above, admissible for the same reason -- `fault` is
 # terminal and both are called from the main shell.
-require_readable() { # path rule -- returns when the input can be read as lines
+require_readable() { # path rule -- returns when the input is a regular file that opens
 	[ -f "$1" ] || fault "$2 could not be read (no regular file at that path): $1"
 	{ :; } <"$1" || fault "$2 could not be read: $1"
 }
