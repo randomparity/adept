@@ -100,8 +100,8 @@ Insert the block with that indent, as shown:
   precedes it, since a judgment resting on an unrun behaviour claim is the same defect
   relabelled. The command and result a factual ground carries are the ground, not
   argument, so the size clause above does not ask for them to be cut. A record carrying
-  no tags at all predates this contract: say so once rather than filing a finding per
-  bullet.
+  no tags at all either predates this contract or ignores it wholesale: report that once
+  rather than filing a finding per bullet.
 ```
 
 **Acceptance:** the focus names both R4 conditions, is tag-insensitive, reconciles with
@@ -133,8 +133,8 @@ fence. Replace that line with:
 
 ```
 Alternatives, and why each was not chosen. Each ground opens with `verified:` — the
-command run, what it produced, and the environment where that matters — or `judgment:`
-for complexity, fit, taste, or cost.
+command run, what it produced, and the environment where that matters, or the source that
+settles it where no command does — or `judgment:` for complexity, fit, taste, or cost.
 ```
 
 Do not change the five section headings, the H1 line, or the status line inside the fence.
