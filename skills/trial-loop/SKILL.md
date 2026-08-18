@@ -265,7 +265,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    the loop having reviewed none of the fixes. Hold the fixes in the tree across the
    cycle so each pass reviews the accumulated state, and commit once when the loop
    exits. *Stop conditions* carries that obligation, because it is the only section that
-   covers all four exits — step 4's `approve` and step 7's `blocked` both leave the loop
+   covers every exit — step 4's `approve` and step 7's `blocked` both leave the loop
    without ever reaching step 8. The trigger is the **run** ending, not a cycle ending: a
    rescope that starts cycle 2 must not commit, or cycle 2's first pass reviews an
    emptied tree and approves. Targeted runs (`--base`, explicit paths) keep step 8
@@ -510,7 +510,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
 
 **On every exit, whatever the verdict:** if the run reviewed the **working tree** *and
 this exit ends the run*, run the relevant guardrails and then
-commit its accumulated fixes now — this is the only place all four exits pass through,
+commit its accumulated fixes now — this is the only place every exit passes through,
 and step 8 deferred to here. Step 8's discipline governs that commit in full: guardrails
 first, one logical change at a time, imperative subject of 72 characters or fewer, the
 project's `Co-Authored-By` trailer, and **explicit paths only** — never `git add -A` or
@@ -538,8 +538,8 @@ supervised path in the whole loop.
 
 Then disclose every suppression (concern + ADR)
 and every `deferred-tracked` concern (concern + owning record path) recorded anywhere in
-the **run**, across all cycles — not just the current one. This holds for all four
-exits below. Cap exhaustion and rescoping are the exits a human is most likely to
+the **run**, across all cycles — not just the current one. This holds for every
+exit below. Cap exhaustion and rescoping are the exits a human is most likely to
 pick up cold later, so they are the ones where a silently dropped deferral does the
 most damage.
 
@@ -573,10 +573,49 @@ most damage.
   lands — the selected reviewer cannot return `approve` while a defensible finding stands, so a
   loop that only exits on `approve` grinds to the cap and reports blocked on a target that
   is finished. Report it distinctly — it is not `approve` — and list the records.
+- A pass **named the load-bearing claims it reproduced** and reported each confirmed,
+  nothing you changed since has altered what those claims assert, and every standing
+  finding is **consequence-free** → exit as *sound with record notes*, listing the notes.
+
+  Named claims, not a verdict about claims. A pass answering "this target asserts nothing
+  reproducible" has satisfied the reproduction instruction but not this condition — the
+  reviewer picks which claims are load-bearing, so a verdict alone makes the condition free.
+  A target with nothing to reproduce leaves through `approve`, *converged with deferrals*,
+  or the cap, as it does today.
+
+  **Apply the consequence test to each standing finding.** If it is never addressed: does
+  the decision the target records change? does any behaviour change? would a future
+  maintainer, acting on the target as it stands, do something different? One yes makes the
+  finding consequential, cancels this exit, and returns the loop to its ordinary course.
+
+  **The test is on consequence, never on subject matter.** "It is only about wording" is not
+  the trigger and never was. The run that motivated this exit also produced the
+  counterexample: a branch review whose top finding was about ADR prose — text that would
+  have led a future maintainer to delete a load-bearing line. That finding answers yes on
+  the third question, so it is consequential and this exit must not fire on it. A loop
+  reading this bullet as "prose findings are free" has reproduced the failure the bullet
+  exists to prevent.
+
+  The exit also requires that you can dispose of the pass's findings **without editing the
+  target**, for the reason *converged with deferrals* requires an unchanged target: if the
+  pass that applies a fix is the pass that exits, the fix ships unreviewed. An edit means
+  another pass, and that pass is the earliest this exit can fire.
+
+  This is an ordinary run-ending exit: the on-every-exit obligations above apply to it in
+  full. Report it distinctly — it is not `approve`, and it is not the cap — and list every
+  outstanding note with the finding it came from and the pass that confirmed each claim, so
+  the caller carries them into its own report. Where this and *converged with deferrals*
+  both apply, report *converged with deferrals*: its no-change half covers the whole target,
+  where this exit's first condition covers only what the confirmed claims assert. The
+  rescope and self-collision exits outrank this one too — they carry obligations it does not.
 - Final budgeted iteration of a cycle (the 5th by default, or the caller's
   `iteration_budget`) still returns `needs-attention` → stop as blocked and
   summarize the remaining findings. Do not continue to the next workflow step
-  without explicit user approval.
+  without explicit user approval. This fires when a standing finding is still
+  **consequential**; the exit above is what keeps a finished target from landing
+  here, and the two are a pair. `blocked` at the cap stays the honest outcome
+  whenever consequence-bearing work is outstanding, however many passes confirmed
+  the mechanism.
 - Remediation would pull in a migration, public contract, dependency, subsystem,
   or threat model outside the charter → **end the cycle** for rescoping. Report what
   the fix would require; do not widen the charter yourself to keep the loop running.
@@ -660,7 +699,10 @@ count, and for every charter change what changed and who authorized it — other
 rescopes read as three short clean cycles rather than the up-to-fifteen adversarial
 passes they were. Name the selected reviewer. Then report the final verdict, the fixes made, the
 verification performed, every unresolved finding, and every `deferred-tracked` concern from any
-cycle with its owning record path. References, not payloads: cite `<findings-path>` rather
+cycle with its owning record path. When the run exited as *sound with record notes*, say so by
+that name, list the outstanding notes, and name the load-bearing claims a pass reproduced and
+confirmed along with the pass that confirmed each — the caller routes on the name and cannot
+reconstruct either list. References, not payloads: cite `<findings-path>` rather
 than pasting findings into the caller's context. The deferral list is the part a
 caller cannot reconstruct: it is the difference between "this branch is clean" and
 "this branch is clean and three known defects now have owners."
@@ -671,6 +713,8 @@ The verdict is **data for whoever invoked you**, not the end of a task. You
 are almost always one step inside a larger workflow. After the loop exits:
 
 - An `approve` verdict means the caller advances to the next phase.
+- A *sound with record notes* exit means the same — it is not blocked — and the caller
+  carries the outstanding notes into its own report.
 - A `needs-attention` verdict means you fix findings and re-enter the loop.
 - Only treat the loop as a stopping point when you have no caller — i.e. a
   human explicitly asked for a one-shot review loop with nothing queued after
