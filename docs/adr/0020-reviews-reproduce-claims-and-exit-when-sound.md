@@ -6,6 +6,11 @@ Accepted (2026-08-18)
 
 ## Context
 
+**Every `skills/` line citation in this record is at `dd3f5b0`**, the merge-base of the
+change that introduced it. That commit is where the problem was observed and where each
+ground was checked; the change itself moves lines in `skills/gauntlet/SKILL.md` and
+`skills/trial-loop/SKILL.md`, so a citation read against a later `HEAD` will not land.
+
 `$trial-loop` dispatches a reviewer against a target and re-dispatches until the reviewer
 returns `approve` or a stop condition fires. Issue #138 reports one run where two gaps in
 that loop bit at once.
@@ -72,8 +77,8 @@ from the artifact it already opens on every iteration.
 **A verified-sound target exits as *sound with record notes*.** The condition fires when
 all three hold:
 
-1. a pass in this cycle **named** the load-bearing claims it reproduced and reported each
-   confirmed, and no target edit since has changed what those claims assert;
+1. a pass in this cycle **named** the target's load-bearing factual claims and accounted
+   for every one it named, and no target edit since has changed what those claims assert;
 2. every standing finding is consequence-free under the test below; and
 3. the pass's findings can all be disposed of without editing the target, so no fix ships
    unreviewed.
@@ -81,7 +86,16 @@ all three hold:
 Condition 1 needs named claims, not a verdict about claims. A pass answering "this target
 asserts nothing reproducible" satisfies the instruction but not this condition: a target
 with nothing to reproduce leaves the loop through `approve`, *converged with deferrals*, or
-the cap, as it does today.
+the cap, as it does today. *Accounted for* means each named claim is confirmed or
+explicitly reported as not checkable in the reviewer's environment — one claim reproduced
+out of four does not satisfy it, and a not-checkable claim is a standing finding that must
+clear the consequence test on its own. The scoping is per cycle: a confirmation predating a
+rescope does not carry into the widened charter.
+
+Each outstanding note carries a `rejected-with-evidence` disposition, with the consequence
+test as its evidence. The finding is real; what the disposition records is that leaving it
+changes nothing. `accepted-fixed` and `deferred-tracked` both edit the target, which the
+exit forbids on the exiting pass.
 
 **The consequence test.** For each standing finding, ask what changes if it is never
 addressed: does the decision the target records change; does any behaviour change; would a

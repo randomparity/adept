@@ -3,6 +3,8 @@
 Issue: randomparity/adept#138. Decision record: `docs/adr/0020-reviews-reproduce-claims-and-exit-when-sound.md`.
 Companion: #137 / ADR 0019, the record-side half of the same problem.
 
+Every `skills/` line citation below is at `dd3f5b0`, this change's merge-base with `main`.
+
 ## Problem
 
 `$trial-loop` runs an adversarial reviewer against a target until it returns `approve` or a
@@ -140,8 +142,8 @@ record the run wrote is a file in the target) is unchanged.
 *Sound with record notes*, added to *Stop conditions* as its own bullet. Three
 preconditions:
 
-1. a pass in this cycle **named** the load-bearing claims it reproduced and reported each
-   confirmed, and no target edit since has changed what those claims assert;
+1. a pass in this cycle **named** the target's load-bearing factual claims and accounted
+   for every one it named, and no target edit since has changed what those claims assert;
 2. every standing finding is consequence-free under the test below;
 3. the pass's findings can all be disposed of without editing the target.
 
@@ -152,6 +154,24 @@ answer — so a lazy or mistaken pass would hand the orchestrator condition 1 an
 would turn entirely on a consequence test nothing checks. A target with nothing to
 reproduce leaves the loop through `approve`, *converged with deferrals*, or the cap, as it
 does today.
+
+**Accounted for**, not merely *reproduced*. Each named claim is confirmed, or explicitly
+reported as not checkable in the reviewer's environment. Without that, "the claims it
+reproduced" reads as a restrictive clause over whatever subset the pass happened to check,
+and one confirmed claim out of four names satisfies the condition — which collapses the
+earned-soundness argument the condition exists for. A not-checkable claim is a standing
+finding and clears the consequence test on its own; usually it will not, because a
+load-bearing claim nobody can check is what a future maintainer acts on differently.
+
+**Scoped per cycle**, matching the self-collision baseline. A rescope need not edit the
+target, so without the scoping a confirmation from cycle 1 would satisfy condition 1 on
+cycle 2's first pass under a charter that had since widened.
+
+**Disposition of an outstanding note**: `rejected-with-evidence`, with the consequence test
+as the evidence. `accepted-fixed` and `deferred-tracked` both edit the target — the latter
+because a deferral record is a file in it — and the exit's third precondition forbids that.
+`$trial-loop` step 6's `rejected-with-evidence` line gains the same clause so the two
+agree.
 
 The third precondition is the same guarantee *converged with deferrals* gets from its
 "you changed nothing since the previous pass" half: a pass that applies a fix is never the

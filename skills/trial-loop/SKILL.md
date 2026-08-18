@@ -303,13 +303,15 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    > claims — the ones whose falsity would change its conclusion — and attempt to
    > reproduce each. Lead your `summary` by naming those claims, with claim
    > versus observation for each, the command you ran, and the environment you
-   > ran it in. A claim you cannot reproduce is a finding in its own right, filed
-   > under the ordinary schema: cite the claim's lines, and put the claim, what
-   > you observed, the command, and the environment in the body. A command you
-   > cannot run here is reported as that observation, never as a confirmation.
-   > Reproduction is read-only — inspection plus commands that write nothing into
-   > the target's working tree. A target that asserts nothing reproducible gets
-   > one sentence saying so.
+   > ran it in; your terse ship/no-ship assessment follows that block. Account for
+   > every claim you name: each is confirmed, or explicitly reported as not
+   > checkable in your environment. A claim you cannot reproduce is a finding in
+   > its own right, filed under the ordinary schema: cite the claim's lines, and
+   > put the claim, what you observed, the command, and the environment in the
+   > body. A command you cannot run here is reported as that observation, never as
+   > a confirmation. Reproduction is read-only — inspection plus commands that
+   > write nothing into the target's working tree and change no git state. A
+   > target that asserts nothing reproducible gets one sentence saying so.
 
    `$gauntlet`'s *Method* is the authority for that obligation; appending it here
    is **delivery**, and delivery binds only a reviewer whose own installed copy
@@ -399,7 +401,9 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
      defect fixes its own contribution under `accepted-fixed` and defers the rest
      here, stating the non-regression boundary;
    - `rejected-with-evidence` — unsupported, or it presumes a requirement or
-     threat model nothing claims; or
+     threat model nothing claims; or real but **consequence-free**, carrying nothing for
+     the decision, the behaviour, or a future maintainer's actions — the *sound with record
+     notes* test under *Stop conditions*, with that test as the evidence; or
    - `blocked` — required for correctness, but needs authority, a design
      decision, or a material charter expansion.
 
@@ -573,15 +577,27 @@ most damage.
   lands — the selected reviewer cannot return `approve` while a defensible finding stands, so a
   loop that only exits on `approve` grinds to the cap and reports blocked on a target that
   is finished. Report it distinctly — it is not `approve` — and list the records.
-- A pass **named the load-bearing claims it reproduced** and reported each confirmed,
-  nothing you changed since has altered what those claims assert, and every standing
-  finding is **consequence-free** → exit as *sound with record notes*, listing the notes.
+- A pass **in this cycle** named the target's load-bearing factual claims and **accounted
+  for every one it named**, nothing you changed since has altered what those claims assert,
+  and every standing finding is **consequence-free** → exit as *sound with record notes*,
+  listing the notes.
 
   Named claims, not a verdict about claims. A pass answering "this target asserts nothing
   reproducible" has satisfied the reproduction instruction but not this condition — the
   reviewer picks which claims are load-bearing, so a verdict alone makes the condition free.
   A target with nothing to reproduce leaves through `approve`, *converged with deferrals*,
   or the cap, as it does today.
+
+  *Accounted for* means each named claim is either confirmed, or explicitly reported as not
+  checkable in the reviewer's environment. A claim reproduced out of four named does not
+  satisfy this condition; neither does a claim silently dropped. A not-checkable claim is a
+  standing finding like any other and has to clear the consequence test below on its own —
+  which it usually will not, since a load-bearing claim nobody can check is exactly what a
+  future maintainer would act on differently.
+
+  The scoping is per **cycle**, not per run: a confirmation made before a rescope widened
+  the charter does not carry into the new cycle, because the claims that matter changed with
+  it.
 
   **Apply the consequence test to each standing finding.** If it is never addressed: does
   the decision the target records change? does any behaviour change? would a future
@@ -600,6 +616,12 @@ most damage.
   target**, for the reason *converged with deferrals* requires an unchanged target: if the
   pass that applies a fix is the pass that exits, the fix ships unreviewed. An edit means
   another pass, and that pass is the earliest this exit can fire.
+
+  Each outstanding note still gets a step 6 disposition, and it is `rejected-with-evidence`
+  — the consequence test is the evidence. The finding is real and the reviewer defended it;
+  what the disposition records is that leaving it changes nothing for the decision, the
+  behaviour, or a future maintainer. It is not `accepted-fixed` or `deferred-tracked`,
+  because both of those edit the target and this exit forbids that on the exiting pass.
 
   This is an ordinary run-ending exit: the on-every-exit obligations above apply to it in
   full. Report it distinctly — it is not `approve`, and it is not the cap — and list every
