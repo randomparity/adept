@@ -358,8 +358,12 @@ Do **not** pass the spec/plan reviews' "don't reopen settled ADR choices" focus
 here: it would tell the review to treat its own target as settled and neuter it.
 Editing the ADR to address findings is legitimate — it is pre-merge on the design
 branch, and `AGENTS.md`'s immutability applies only once the ADR is merged. If the
-loop blocks (5 iterations without `approve`), stop as blocked per `$trial-loop`'s
-stop contract; do not run the spec review against an unhardened ADR.
+loop blocks (5 iterations with a consequential finding still standing), stop as
+blocked per `$trial-loop`'s stop contract; do not run the spec review against an
+unhardened ADR. A *sound with record notes* exit is **not** that case — the ADR's
+load-bearing claims were reproduced and confirmed and its standing findings carry no
+consequence — so continue to the spec review and carry the outstanding notes into the
+design record.
 
 ## 3. Adversarial-review the spec
 

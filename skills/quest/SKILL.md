@@ -23,7 +23,8 @@ ambiguous user-facing design decision.
 > the finished merge and cleanup, if the operator authorized merging; or a
 > blocker you have parked per *On a Blocker* -- naming it in chat is not
 > enough, the issue must carry the state. As a background worker, an
-> `approve` from the review loop means proceed now, not wait.
+> `approve` from the review loop — or a *sound with record notes* exit — means
+> proceed now, not wait.
 
 > **Keep the durable facts durable.** Raw phase context -- brainstorm
 > transcripts, `$gauntlet` payloads, TDD output -- is droppable once the spec,
@@ -420,6 +421,13 @@ dependencies, compatibility, migrations, observability, and whether the chosen
 approach is simpler or safer than viable alternatives.` Address every
 defensible finding and commit after each accepted fix.
 
+A *sound with record notes* exit is a non-blocking outcome: the branch's
+load-bearing claims were reproduced and confirmed and the standing findings carry
+no consequence for the decision, the behaviour, or a future maintainer's actions.
+Proceed, and put the outstanding notes in the review summary so they reach
+`WORK:REVIEW` and the pull request — they are the part a reader cannot
+reconstruct from the verdict.
+
 Pass the loop an iteration budget derived from the step 1 classification: a
 trivial bugfix or a revalidated governed small change passes
 `iteration budget: 2` — one full review pass plus one confirming pass over the
@@ -427,10 +435,12 @@ fixes; non-trivial work leaves the loop's default of 5. Review passes are the
 pipeline's dominant cost — each is a fresh full-context reviewer — and on a
 small governed change the later passes mostly re-review test surface the
 earlier passes added. The budget lowers cost, not the bar: an unresolved
-defensible finding at the budget still blocks per the loop's stop conditions,
-and if that happens on a change you classified trivial, re-examine the
-classification before re-entering — a trivial change that cannot clear two
-passes was not trivial.
+**consequential** defensible finding at the budget still blocks per the loop's
+stop conditions, and if that happens on a change you classified trivial,
+re-examine the classification before re-entering — a trivial change that cannot
+clear two passes was not trivial. A consequence-free finding at the budget is a
+different outcome: on a pass that confirmed the branch's load-bearing claims it
+exits *sound with record notes*, which is not blocked.
 
 When step 4 ran, append the audit's surface to that focus and ask the reviewer
 to flag unexplained divergence -- components, contracts, files, tests, runtime
