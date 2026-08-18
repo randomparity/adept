@@ -104,8 +104,24 @@ Four things, in order: identify the target's load-bearing factual claims — the
 falsity would change the conclusion; attempt to reproduce each; report claim, observation,
 the command run, and the environment it ran in; and do this before evaluating the argument.
 
-A target with no load-bearing factual claims is answered in one sentence saying so. A
-command the reviewer cannot run is reported as that observation, not as a confirmation.
+A target with no load-bearing factual claims is answered in one sentence saying so.
+
+**Could-not-reproduce and could-not-check are different outcomes.** A claim the reviewer
+ran and could not reproduce is a finding, always. A claim it could not check — no tool, no
+network, wrong platform, or a command the read-only bound forbids — is reported as that
+observation and becomes a finding only where the inability to check is itself material.
+Without the split, the most common load-bearing claim in a portable-skill target ("the
+guardrails pass", whose suite writes while it runs) is un-runnable, therefore an automatic
+finding, therefore `approve` is foreclosed and every such run goes to the cap — this
+change's own failure mode, reintroduced by its own rule.
+
+### Recording the claim list
+
+Condition 1 reads back which claims a pass named and how each was accounted for, and
+nothing in the loop preserves that: the compact object does not carry it and the artifact
+is superseded next pass. So step 3's audit line gains the claims block, taken from the
+`summary` in the artifact step 2 already opens. A pass that named none records
+`claims: none named`, which keeps the exit shut explicitly rather than by omission.
 
 ### Reproduction stays read-only
 

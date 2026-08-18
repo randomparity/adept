@@ -68,11 +68,19 @@ Anything that would write into the target's working tree is reported as the obse
 its target from `git status` and the self-collision baseline is a `git stash create`
 snapshot, so a reviewer's build artifacts would otherwise become the next pass's target.
 
-**A claim the reviewer cannot reproduce is a finding**, under `$gauntlet`'s existing schema
-with no new fields: `file`, `line_start`, and `line_end` cite the claim; `body` carries the
-claim, the observation, the command, and the environment. The report rides in `summary` and
-the failures in `findings`, so the compact object is unchanged and step 2 reads the block
-from the artifact it already opens on every iteration.
+**A claim the reviewer ran and could not reproduce is a finding**, under `$gauntlet`'s
+existing schema with no new fields: `file`, `line_start`, and `line_end` cite the claim;
+`body` carries the claim, the observation, the command, and the environment. A claim it
+could not *check* — no tool, no network, wrong platform, or a command the read-only bound
+forbids — is a different thing: reported as that observation, and a finding only where the
+inability to check is itself material. Making every un-runnable claim an automatic finding
+would foreclose `approve` on any target whose guardrail suite writes while it runs, which
+is most of them, and route ordinary runs to the cap — the failure this record removes.
+
+The report rides in `summary` and the failures in `findings`, so the compact object is
+unchanged. Step 2 already opens the artifact on every iteration; the orchestrator takes the
+claims block out of it and records it in the transcript beside step 3's audit line, because
+nothing else preserves it across passes and the exit's first condition reads it back.
 
 **A verified-sound target exits as *sound with record notes*.** The condition fires when
 all three hold:

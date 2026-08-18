@@ -193,13 +193,16 @@ case: continue to the spec review and carry the notes into the design record.
 
 ### Step 3.2 — `$quest`
 
-File: `skills/quest/SKILL.md`. Two edits:
+File: `skills/quest/SKILL.md`. Three edits:
 
-- the preamble sentence "As a background subagent, an `approve` from the review loop means
-  proceed now, not wait" — add the new exit alongside `approve`;
-- step 6, after "Address every defensible finding and commit after each accepted fix" —
-  add that *sound with record notes* is a non-blocking outcome whose notes go into the
-  review summary, and therefore into `WORK:REVIEW` and the pull request;
+- the preamble sentence at `:25-26`, "As a background worker, an `approve` from the review
+  loop means proceed now, not wait" — `worker` is ADR 0011's canonical term for the
+  dispatched role, so quote it that way rather than "subagent" — add the new exit alongside
+  `approve`;
+- step 6 at `:420-421`, after "Address every defensible finding and commit after each
+  accepted fix" (the sentence wraps a line break, so a single-line literal search will not
+  find it) — add that *sound with record notes* is a non-blocking outcome whose notes go
+  into the review summary, and therefore into `WORK:REVIEW` and the pull request;
 - `skills/quest/SKILL.md:429-430`, "an unresolved defensible finding at the budget still
   blocks per the loop's stop conditions" — qualify it as a **consequential** defensible
   finding. After this change the sentence is false as written: the new exit sits before the

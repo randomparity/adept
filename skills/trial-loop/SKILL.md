@@ -306,13 +306,15 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    > versus observation for each, the command you ran, and the environment you
    > ran it in; your terse ship/no-ship assessment follows that block. Account for
    > every claim you name: each is confirmed, or explicitly reported as not
-   > checkable in your environment. A claim you cannot reproduce is a finding in
-   > its own right, filed under the ordinary schema: cite the claim's lines, and
-   > put the claim, what you observed, the command, and the environment in the
-   > body. A command you cannot run here is reported as that observation, never as
-   > a confirmation. Reproduction is read-only — inspection plus commands that
-   > write nothing into the target's working tree and change no git state. A
-   > target that asserts nothing reproducible gets one sentence saying so.
+   > checkable in your environment. A claim you ran and could not reproduce is a
+   > finding in its own right, filed under the ordinary schema: cite the claim's
+   > lines, and put the claim, what you observed, the command, and the environment
+   > in the body. A claim you could not check here is reported as that
+   > observation, never as a confirmation, and is a finding only when not being
+   > able to check it is itself material. Reproduction is read-only — inspection
+   > plus commands that write nothing into the target's working tree and change no
+   > git state. A target that asserts nothing reproducible gets one sentence
+   > saying so.
 
    `$gauntlet`'s *Method* is the authority for that obligation; appending it here
    is **delivery**, and delivery binds only a reviewer whose own installed copy
@@ -380,6 +382,13 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    computed only when suspicion has already formed never fires; the run that
    motivated this line ground to the cap while every late pass was majority
    self-collision, unmeasured.
+
+   Then paste the pass's **claims block** beneath it, taken from the artifact's
+   `summary`: each load-bearing claim the pass named, marked confirmed or not
+   checkable here. Nothing else preserves it — the compact object does not carry it
+   and the artifact is superseded next pass — and the *sound with record notes*
+   exit reads it back. A pass that named none records `claims: none named`, which
+   is what keeps that exit shut rather than a gap you rediscover at iteration 5.
 4. If `verdict` is `approve`: when `suppressed_count > 0`, surface each `suppressions`
    entry (concern + ADR) in the transcript — an `approve` that suppressed a
    governing-ADR finding is exactly the over-suppression case the verdict alone hides,
@@ -595,10 +604,18 @@ most damage.
 
   *Accounted for* means each named claim is either confirmed, or explicitly reported as not
   checkable in the reviewer's environment. A claim reproduced out of four named does not
-  satisfy this condition; neither does a claim silently dropped. A not-checkable claim is a
-  standing finding like any other and has to clear the consequence test below on its own —
-  which it usually will not, since a load-bearing claim nobody can check is exactly what a
-  future maintainer would act on differently.
+  satisfy this condition; neither does a claim silently dropped. A not-checkable claim is
+  not automatically a finding — the reviewer files one only where the inability to check is
+  itself material — but where it *is* a finding, it clears the consequence test on its own
+  like any other, and usually will not, since a load-bearing claim nobody can check is what
+  a future maintainer acts on differently.
+
+  **Record the claim list as you go.** Step 2 already opens `<findings-path>` on every
+  iteration; take the claims block out of that artifact's `summary` and write it into the
+  transcript beside step 3's audit line — the named claims, and confirmed or not-checkable
+  for each. Nothing else in the loop preserves it, and both this condition and the exit's
+  note list read it back, so a run that does not record it cannot satisfy this condition
+  however well the pass reproduced.
 
   The scoping is per **cycle**, not per run: a confirmation made before a rescope widened
   the charter does not carry into the new cycle, because the claims that matter changed with
