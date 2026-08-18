@@ -180,12 +180,17 @@ require_assets() {
 # bare call aborts the run and a following `; status=$?` never executes, so the `||` that
 # assigns rather than branches is the required form, not merely a permitted one.
 #
-# Two shapes elsewhere in this file are deliberately left alone, so the next reader does not
-# have to work out which half they are in. A `grep -v ... >"$f"` that transforms a fixture
-# decides no verdict, and `set -euo pipefail` already stops the run on either non-zero
-# status. And a match run over a shell variable rather than a file — `printf '%s\n' "$x" |
-# grep -q` — is the in-memory case ADR 0005 names as outside the rule: its failure modes are
-# not the scan-could-not-run case.
+# Four shapes elsewhere in this file are deliberately left alone, so the next reader does
+# not have to work out which half they are in. A `grep -v ... >"$f"` that transforms a
+# fixture decides no verdict, and `set -euo pipefail` already stops the run on either
+# non-zero status. A match run over a shell variable rather than a file — `printf '%s\n'
+# "$x" | grep -q` — is the in-memory case ADR 0005 names as outside the rule: its failure
+# modes are not the scan-could-not-run case. `cmp -s a b` is a scan, but it reports a fault
+# as 2 and every caller here treats anything non-zero as the FAIL arm, so the fault is
+# already reported rather than scored as a pass. And `[ -e ]`/`[ -s ]` are metadata tests,
+# not reads — they answer "is there anything there", which is the question, not a proxy
+# for it. migrator_why is where that distinction matters: absent and empty are different
+# answers there, so it asks both rather than letting the first fall into the second.
 
 # The FAIL a scan fault takes in place of the verdict it never reached. The bespoke cases
 # have already printed their name column by the time they scan, so this prints the reason
@@ -276,7 +281,9 @@ migrator_why() {
     esac
     return 0
   fi
-  if [ -s "$err" ]; then
+  if [ ! -e "$err" ]; then
+    printf 'could not read %s (capture missing)' "$err"
+  elif [ -s "$err" ]; then
     printf 'unexpected error: %s' "$(head -1 "$err")"
   fi
 }
@@ -310,7 +317,9 @@ run_case() {
   else
     failed=$((failed + 1))
     printf '  FAIL %-44s %s\n' "$name" "$why"
-    head -3 "$dir/.err" | sed 's/^/         /'
+    if [ -r "$dir/.err" ]; then
+      head -3 "$dir/.err" | sed 's/^/         /'
+    fi
   fi
 }
 
@@ -467,7 +476,9 @@ run_migrator() {
   else
     failed=$((failed + 1))
     printf '  FAIL %-44s %s\n' "$name" "$why"
-    head -3 "$dir.merr" | sed 's/^/         /'
+    if [ -r "$dir.merr" ]; then
+      head -3 "$dir.merr" | sed 's/^/         /'
+    fi
   fi
 }
 
@@ -2261,7 +2272,9 @@ STUB
   1)
     failed=$((failed + 1))
     printf '\n  FAIL run from a subdirectory did not validate records\n'
-    head -3 "$d/.err" | sed 's/^/         /'
+    if [ -r "$d/.err" ]; then
+      head -3 "$d/.err" | sed 's/^/         /'
+    fi
     ;;
   *)
     failed=$((failed + 1))
@@ -3175,6 +3188,13 @@ STUB
   'could not scan '*) ;;
   *) verdict="$verdict migrator-scan-not-a-fault" ;;
   esac
+  # migrator_why's no-code arm asks `[ -s ]`, which answers "absent" and "empty" the same
+  # way — and empty is the passing answer. It asks `[ -e ]` first for that reason.
+  why=$(migrator_why 1 1 - "$missing")
+  case $why in
+  'could not read '*) ;;
+  *) verdict="$verdict migrator-no-code-scored-a-pass" ;;
+  esac
   if [ -z "$verdict" ]; then
     passed=$((passed + 1))
     printf 'ok   all three gating scans report the fault\n'
@@ -3194,16 +3214,17 @@ STUB
   *) notes="$notes file-not-named" ;;
   esac
   case $why in
-  *'grep exit 2'*) ;;
+  *'grep exit '*) ;;
   *) notes="$notes status-not-named" ;;
   esac
   # The accumulator form has to fault distinctly too, or a scan that never ran would be
   # recorded as the ordinary "this line was not there" tag.
   verdict=""
   scan_into_verdict tag-that-cannot-match "$missing" 'anything at all' 2>/dev/null
-  if [ "$verdict" != " scan-fault($missing exit 2)" ]; then
-    notes="$notes accumulator-tag=[$verdict]"
-  fi
+  case $verdict in
+  " scan-fault($missing exit "*) ;;
+  *) notes="$notes accumulator-tag=[$verdict]" ;;
+  esac
   if [ -z "$notes" ]; then
     passed=$((passed + 1))
     printf 'ok   %s\n' "$why"
