@@ -344,21 +344,17 @@ done
 # the recipe or just may ask git is disturbed. The fixture holds the one suite
 # the shim names, executable and passing: a status-blind recipe runs it, counts
 # one, and reports a green run over a suite set it never finished discovering.
-git_real=$(command -v git || true)
-if [ -z "$git_real" ]; then
-	fail "git is not installed, so the test recipe cannot be exercised"
-fi
 git_stub=$SCRATCH/git-stub
 mkdir -p "$git_stub"
-cat >"$git_stub/git" <<'STUB'
+cat >"$git_stub/git" <<STUB
 #!/usr/bin/env bash
 set -euo pipefail
-if [ "${1-}" = ls-files ]; then
+if [ "\${1-}" = ls-files ]; then
 	printf 'scripts/partial-test.sh\0'
 	printf 'git-stub: discovery stopped partway\n' >&2
 	exit 1
 fi
-exec "$GIT_STUB_REAL" "$@"
+exec "$real_git" "\$@"
 STUB
 chmod +x "$git_stub/git"
 partial_suites=$SCRATCH/partial-suites
@@ -370,7 +366,7 @@ printf 'partial-test: pass\n'
 STUB
 chmod +x "$partial_suites/scripts/partial-test.sh"
 status=0
-out=$(PATH=$git_stub:$PATH GIT_STUB_REAL=$git_real "$just_real" \
+out=$(PATH=$git_stub:$PATH "$just_real" \
 	--working-directory "$partial_suites" --justfile "$recipe_root/Justfile" \
 	test 2>&1) || status=$?
 [ "$status" -ne 0 ] ||
@@ -385,5 +381,54 @@ printf '%s\n' "$out" | grep -q 'git-stub: discovery stopped partway' ||
 if printf '%s\n' "$out" | grep -q 'suites passed'; then
 	fail "test: the recipe reported a pass over a partial discovery: $out"
 fi
+
+# Capturing the list to a file makes that file the read loop's stdin, so the
+# recipe runs each suite with stdin closed. Without that a suite reading stdin
+# consumes the entries queued behind it and the run truncates -- the same green
+# partial pass by a second route -- and a suite that prompted would instead hang
+# an interactive run on the terminal. This fixture discovers cleanly and asserts
+# the guarantee from inside a suite. Two entries are load-bearing: after the
+# loop reads a single-entry list there is nothing left to consume, so the
+# unclosed case would look identical to the closed one.
+git_whole=$SCRATCH/git-whole
+mkdir -p "$git_whole"
+cat >"$git_whole/git" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "\${1-}" = ls-files ]; then
+	printf 'scripts/first-test.sh\0scripts/second-test.sh\0'
+	exit 0
+fi
+exec "$real_git" "\$@"
+STUB
+chmod +x "$git_whole/git"
+whole_suites=$SCRATCH/whole-suites
+mkdir -p "$whole_suites/scripts"
+cat >"$whole_suites/scripts/first-test.sh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ -t 0 ]; then
+	printf 'first-test: stdin is the terminal\n' >&2
+	exit 1
+fi
+if IFS= read -r -n 1 byte; then
+	printf 'first-test: stdin carried readable input: %s\n' "$byte" >&2
+	exit 1
+fi
+printf 'first-test: stdin is closed\n'
+STUB
+printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "second-test: pass\\n"\n' \
+	>"$whole_suites/scripts/second-test.sh"
+chmod +x "$whole_suites/scripts/first-test.sh" "$whole_suites/scripts/second-test.sh"
+status=0
+out=$(PATH=$git_whole:$PATH "$just_real" \
+	--working-directory "$whole_suites" --justfile "$recipe_root/Justfile" \
+	test 2>&1) || status=$?
+[ "$status" -eq 0 ] ||
+	fail "test: a discovery that completed did not pass the recipe: $out"
+printf '%s\n' "$out" | grep -q 'first-test: stdin is closed' ||
+	fail "test: a suite was not run with its stdin closed: $out"
+printf '%s\n' "$out" | grep -qF 'test: 2 suites passed' ||
+	fail "test: the recipe did not run every discovered suite: $out"
 
 printf 'list-shell-sources-test: ok%s\n' "$skipped"

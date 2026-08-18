@@ -98,12 +98,7 @@ test:
   suites="$(mktemp)"
   trap 'rm -f "$suites"' EXIT
   git ls-files -z -- '*-test.sh' >"$suites"
-  # Collected into an array before any suite runs, the way lint and
-  # format-check collect theirs. Running the suites inside the read loop would
-  # hand each one the list itself as stdin, so a suite that read stdin would
-  # swallow the suites after it and truncate the run to another green partial
-  # pass -- the same failure by a second route.
-  found=()
+  count=0
   while IFS= read -r -d '' suite; do
     case $suite in
     .github/scripts/check-records-test.sh | \
@@ -111,17 +106,18 @@ test:
       continue
       ;;
     esac
-    found+=("$suite")
+    printf '== %s\n' "$suite"
+    # The loop's stdin is the suite list, so a suite that read stdin would
+    # swallow the suites queued behind it and truncate the run to another
+    # green partial pass. test-fixture-helpers-test.sh closes a child's stdin
+    # for the same reason.
+    "./$suite" </dev/null
+    count=$((count + 1))
   done <"$suites"
-  count=${#found[@]}
   if ((count == 0)); then
     printf 'test: no suites discovered\n' >&2
     exit 1
   fi
-  for suite in "${found[@]}"; do
-    printf '== %s\n' "$suite"
-    "./$suite"
-  done
   printf 'test: %s suites passed\n' "$count"
 
 shape-check:
