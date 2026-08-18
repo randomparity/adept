@@ -46,16 +46,21 @@ belief rather than the claim's load.
 
 Every `Considered & rejected` bullet opens with one of two tags:
 
-- `verified:` — a factual ground, carrying the command run, what it produced, and the
-  environment it ran in, named durably (a commit, a released version, a platform) so a
-  later reader can return to it. "This branch" is not an environment: the branch is
-  deleted on merge, and the record is immutable. Where the ground is factual but no
-  command settles it — a documented platform limit, an absent upstream API, a decision
-  someone made — `verified:` carries the source that settles it instead.
+- `verified:` — a factual ground, carrying the command run and what it produced, plus the
+  environment wherever the result could depend on it (a commit, a released version, a
+  platform). The environment must be named durably: "this branch" is deleted on merge and
+  the record is not. Where the ground is factual but no command settles it — a documented
+  platform limit, an absent upstream API, a decision someone made — `verified:` carries
+  the source that settles it instead.
 - `judgment:` — complexity, fit, taste, or cost. No command; the label is the point.
 
 Two tags, not a spectrum. A third class ("plausible", "assumed") would be a place for an
 unverified factual claim to hide with a blessing, which is the defect being closed.
+
+R6's "replaces rather than appends" is a discipline on the prose, not a promise that every
+bullet shrinks: a judgment ground costs less than the reasoning it displaces, and a factual
+one often costs more, because a command and its result run longer than the assertion they
+replace. What those lines buy is a rejection a later reader can re-run.
 
 `verified:` and `judgment:` are new tokens. They deliberately avoid
 `rejected-with-evidence`, which `references/heed-counsel.md:14` and
