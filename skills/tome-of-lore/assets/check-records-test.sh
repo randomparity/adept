@@ -2092,6 +2092,23 @@ STUB
   chmod +x "$d.bin/mktemp"
   run_case "temp file unavailable" 1 E-TMPFILE "$d" BASE_SHA="$b" PATH="$d.bin:$PATH"
 
+  # The same forced failure, pinned at the anti-erasure pass instead of the base pass. The two
+  # sites need separate codes for this case to mean anything: run_case asserts on the code alone,
+  # and the base pass runs first over every record, so a case asserting a bare E-TMPFILE here
+  # would stay green with check_not_rewritten's fail-open restored — which is the blindness the
+  # case exists to detect.
+  d=$(case_dir rewrite_no_tmpdir)
+  b=$(base_of "$d")
+  mkdir -p "$d.bin"
+  cat >"$d.bin/mktemp" <<'STUB'
+#!/bin/sh
+echo "mktemp: stub failure (check-records-test.sh forcing E-REWRITE-TMPFILE)" >&2
+exit 1
+STUB
+  chmod +x "$d.bin/mktemp"
+  run_case "temp file unavailable for the anti-erasure rules" 1 E-REWRITE-TMPFILE "$d" \
+    BASE_SHA="$b" PATH="$d.bin:$PATH"
+
   # A profile that sets its variables but defines no status hook. Without this check the
   # engine would silently reuse the previous profile's hook, since load_profile unsets the
   # optional hooks between profiles but a required one cannot be defaulted away.
