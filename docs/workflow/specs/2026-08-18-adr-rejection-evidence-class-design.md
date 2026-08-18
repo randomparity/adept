@@ -30,7 +30,7 @@ belief rather than the claim's load.
 | R3b | The `$spellcraft` text states the non-exemption rule to the **writer**: the tag classes the ground and does not exempt a factual premise sitting inside it, so a `judgment:` resting on an unrun behaviour claim is the same defect wearing the other label. | ADR 0019 Decision; without it R4 finds against a writer for a rule their instructions never carried |
 | R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it. | #137 acceptance criterion 2, proposal step 2 |
 | R5 | `skills/tome-of-lore/SKILL.md`'s ADR template states the same requirement, so the two statements of the contract cannot drift. | dispatch brief criterion 4 |
-| R6 | The existing size discipline holds: the `$spellcraft` guidance carries one inline example bullet showing a tag in place of reasoning prose. R6 is met when that example is present; it is not a claim about record length. | #137 acceptance criterion 4 |
+| R6 | The existing size discipline holds: the `$spellcraft` guidance carries one one-line example bullet per tag — a `verified:` one and a `judgment:` one — showing the tag in place of reasoning prose. R6 is met when both are present; it is not a claim about record length. | #137 acceptance criterion 4 |
 | R7 | `just verify` passes. | `CLAUDE.md`, *Verifying a change* |
 
 ## Non-requirements
@@ -106,6 +106,15 @@ covering R4, and it is passed to `$trial-loop` exactly as the rest of that focus
 is. No gate, no script, no test — `CLAUDE.md` anatomy rule 4 forbids one, and the gate in
 `$tome-of-lore` already documents that it cannot see substance.
 
+The added clause must also qualify the size clause already in that focus ("a record
+arguing for its decision at greater length than the decision governs is a finding, and its
+remedy is cutting rather than more text"). Otherwise one focus string supports both "this
+rejection carries no evidence — add the command" and "this record is too long — cut", with
+the evidence lines the obvious thing to cut. The reviewer runs in file-list mode against
+the ADR with only the focus string, so the reconciliation has to be in the focus, not in
+the writer-facing guidance: a `verified:` ground's command and result are the ground, not
+argument, and are not what the size clause cuts.
+
 ## Testing
 
 The change is skill prose. It is verified by:
@@ -113,8 +122,8 @@ The change is skill prose. It is verified by:
 - `just verify` — the repository guardrail suite, which covers skill shape, link
   resolution, public safety, and record form (R7).
 - Reading the two edits back against the table above, requirement by requirement. R6 is
-  the one with a concrete artifact: the `$spellcraft` text carries an inline example
-  bullet, or it does not.
+  the one with a concrete artifact: the `$spellcraft` text carries a one-line `verified:`
+  example and a one-line `judgment:` example, or it does not.
 - ADR 0019 itself, whose `Considered & rejected` section is written to the new contract.
   It is the first record under the rule and the worked example of it; a rule its own
   founding record cannot follow is the wrong rule.
