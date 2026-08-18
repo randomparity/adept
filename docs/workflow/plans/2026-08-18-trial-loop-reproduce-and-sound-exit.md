@@ -199,7 +199,14 @@ File: `skills/quest/SKILL.md`. Two edits:
   proceed now, not wait" — add the new exit alongside `approve`;
 - step 6, after "Address every defensible finding and commit after each accepted fix" —
   add that *sound with record notes* is a non-blocking outcome whose notes go into the
-  review summary, and therefore into `WORK:REVIEW` and the pull request.
+  review summary, and therefore into `WORK:REVIEW` and the pull request;
+- `skills/quest/SKILL.md:429-430`, "an unresolved defensible finding at the budget still
+  blocks per the loop's stop conditions" — qualify it as a **consequential** defensible
+  finding. After this change the sentence is false as written: the new exit sits before the
+  final-budgeted-iteration bullet, so a confirming pass on the last iteration that names its
+  reproduced claims and returns only consequence-free findings exits sound rather than
+  blocked. This is the same stale-restatement failure Step 2.1a guards against inside
+  `$trial-loop`, in a file this task already edits.
 
 ### Step 3.3 — verify and commit
 

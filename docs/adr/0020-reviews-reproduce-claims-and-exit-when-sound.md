@@ -39,6 +39,13 @@ its `summary` by naming those claims with claim versus observation, the command 
 the environment. It lives in Method because a rule the loop keys an exit on cannot be
 advisory, and focus text is (see the rejections below).
 
+That placement binds **every** `$gauntlet` invocation, not only `$trial-loop`'s — `$saga`
+dispatches it on a PRD draft (`skills/saga/SKILL.md:42`), `$campaign` on a close-candidate
+(`skills/campaign/SKILL.md:179`), and `$quest` names it bare as a fallback. The reach is
+intended and unavoidable: Method is the only place the obligation binds, and Method has no
+per-caller scope. The cost on those paths is bounded, since a target asserting nothing
+reproducible is answered in one sentence.
+
 **`$trial-loop` appends the same instruction to the focus it transmits**, on every pass and
 whichever reviewer is selected, naming `$gauntlet`'s Method as its authority. It rides
 *inside* `focus`, so `skills/trial-loop/SKILL.md:291`'s "and nothing else" and its
@@ -127,9 +134,12 @@ leaves those two as they were; the gap is filed as issue #141 rather than fixed 
 
 A third residual follows from the transmission being delivery rather than obligation: under
 `--reviewer detect-evil`, or a vendored `$gauntlet` predating this record, condition 1 is
-not reliable and such a run can still reach the cap on a finished target. Making focus bind
-is not available, so this is accepted rather than fixed; `$detect-evil`'s scan is unchanged
-either way.
+not reliable and such a run can still reach the cap on a finished target. `$detect-evil`'s
+Method is its own — it borrows `$gauntlet`'s argument parsing, schema, and ADR handling,
+not its Method — so the fix is to mirror the obligation there, which `skills/detect-evil/SKILL.md`
+being outside this change's surface puts beyond this run. Filed as issue #142; the vendored
+case has no fix short of the copy being updated. `$detect-evil`'s scan is unchanged either
+way.
 
 The rule now sits in two files: `$gauntlet`'s Method holds the obligation and
 `$trial-loop`'s dispatch transmits it, with nothing detecting divergence between them. That
