@@ -43,8 +43,13 @@ What this costs, going forward.
 
 ## Considered & rejected
 
-Alternatives, and why each was not chosen.
+Alternatives, and why each was not chosen. Each ground opens with `verified:` — the
+command run, what it produced, and the environment where that matters — or `judgment:`
+for complexity, fit, taste, or cost.
 ```
+
+`$spellcraft` owns those two tags and states the rule in full; it is the authority if the
+two ever disagree.
 
 `## Status` reads `Proposed`, `Deferred`, or `Accepted` / `Rejected` / `Superseded`
 followed by `(YYYY-MM-DD)`. Supersede a merged ADR by adding a banner beneath its
