@@ -246,13 +246,13 @@ grep -qF 'git reported no local env vars' "$SCRATCH/child.out" ||
 # caller to keep it clear -- closing here is the only way to guarantee the
 # caller's stream survives the call, whoever the caller turns out to be.
 #
-# `just test` was once such a caller: before commit 6b16f603, the recipe fed
-# the discovered suite list to a `while read` loop on stdin, and an unclosed
-# script(1) here would have drained it, truncating the run to a suite subset
-# reported as a full pass. The recipe now closes each suite's own stdin at the
-# call site (`"./$suite" </dev/null` in the Justfile), so that particular
-# route to the hazard is gone -- but the closing above does not depend on it
-# and holds regardless of what the next caller's stdin turns out to be.
+# `just test` is the caller this once guarded against: the recipe runs each
+# discovered suite from inside a `while read` loop over the suite list, and an
+# unclosed script(1) call here would drain whatever of that list the loop
+# still had queued. The recipe closes that route itself now -- each suite's
+# own stdin is closed at the call site (`"./$suite" </dev/null` in the
+# Justfile) -- but the closing above does not depend on it and holds
+# regardless of what the next caller's stdin turns out to be.
 pty_marker=$SCRATCH/pty-probe-marker
 pty_probe=$SCRATCH/pty-probe.sh
 cat >"$pty_probe" <<PROBE
