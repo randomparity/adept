@@ -196,7 +196,12 @@ governing ADRs and respect them — without letting that silence genuine new ris
 
 ### Method
 
-Actively try to disprove the change. Look for violated invariants, missing guards, unhandled failure paths, and assumptions that stop being true under stress. Trace how bad inputs, retries, concurrent actions, or partially completed operations move through the system (or the plan). If focus text was supplied, weight it heavily — but still report any other material issue you can defend.
+**Reproduce before you evaluate.** Before arguing with the target's reasoning, identify its
+load-bearing factual claims — the ones whose falsity would change its conclusion — and attempt to reproduce each. Lead your `summary` by naming those claims, with claim versus observation for each, the command you ran, and the environment you ran it in. A claim you cannot reproduce is a finding like any other: cite the claim's own lines, and put the claim, what you observed, the command, and the environment in the body. A command you cannot run here is reported as that observation, never as a confirmation. Reproduction is read-only under *Hard constraints*: anything that would write into the target's working tree is reported rather than run. A target that asserts nothing reproducible gets one sentence saying so — that is an answer, not a gap.
+
+This is an obligation, not a preference: a caller may restate it in focus text, but focus only weights, and the loops downstream of you key their exits on whether a pass actually reproduced anything.
+
+Then actively try to disprove the change. Look for violated invariants, missing guards, unhandled failure paths, and assumptions that stop being true under stress. Trace how bad inputs, retries, concurrent actions, or partially completed operations move through the system (or the plan). If focus text was supplied, weight it heavily — but still report any other material issue you can defend.
 
 ### Finding bar
 
