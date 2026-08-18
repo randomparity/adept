@@ -26,9 +26,9 @@ deferrals* keys on findings already disposed of this run (`skills/trial-loop/SKI
 and *converged on own surface* keys on findings citing lines the run's own fixes wrote
 (`:547`).
 
-The constraint that shapes the exit comes from the same evidence. A branch review's top
-finding was about ADR *prose* — text that would have led a future maintainer to delete a
-load-bearing line. The useful axis is consequence, not subject matter.
+The same evidence constrains the exit: that run's branch review had a top finding about ADR
+*prose* — text that would have led a future maintainer to delete a load-bearing line. The
+useful axis is consequence, not subject matter.
 
 ## Decision
 
@@ -36,32 +36,27 @@ load-bearing line. The useful axis is consequence, not subject matter.
 evaluating a target's argument, the reviewer identifies its load-bearing factual claims —
 the ones whose falsity would change its conclusion — attempts to reproduce each, and leads
 its `summary` by naming those claims with claim versus observation, the command run, and
-the environment. It must live there because focus text cannot oblige: `$gauntlet` weights
-focus heavily but "still report[s] any other material issue" (`skills/gauntlet/SKILL.md:199`)
-and focus only reorders attack surfaces (`:226-228`). A rule the loop needs to key an exit
-on cannot be advisory.
+the environment. It lives in Method because a rule the loop keys an exit on cannot be
+advisory, and focus text is (see the rejections below).
 
 **`$trial-loop` appends the same instruction to the focus it transmits**, on every pass and
-whichever reviewer is selected, and names `$gauntlet`'s Method as its authority. Focus is
-the only slot that exists — the `CHARTER` block is fixed at eight fields plus focus
-(`skills/trial-loop/SKILL.md:213`) — and the transmission is what carries the obligation to
-`--reviewer detect-evil` and to a vendored reviewer whose Method predates it. No caller
-repeats it.
+whichever reviewer is selected, naming `$gauntlet`'s Method as its authority. That
+transmission is what carries the obligation to `--reviewer detect-evil` and to a vendored
+reviewer whose Method predates it. No caller repeats it.
 
 **Reproduction stays read-only.** `skills/trial-loop/SKILL.md:301` and
 `skills/gauntlet/SKILL.md:344` make the reviewer read-only with respect to the target and
-git state, with `--out` the sole write exception, and this decision creates no second one.
-Reproduction is inspection plus commands that write nothing into the target's working tree;
-anything that would write is reported as the observation — "could not run here" — never as
-a confirmation. In working-tree mode `$gauntlet` resolves its target from `git status` and
-the self-collision baseline is a `git stash create` snapshot, so a reviewer's build
-artifacts would otherwise become the next pass's target.
+git state, with `--out` the sole write exception; this decision creates no second one.
+Anything that would write into the target's working tree is reported as the observation —
+"could not run here" — never as a confirmation. In working-tree mode `$gauntlet` resolves
+its target from `git status` and the self-collision baseline is a `git stash create`
+snapshot, so a reviewer's build artifacts would otherwise become the next pass's target.
 
 **A claim the reviewer cannot reproduce is a finding**, under `$gauntlet`'s existing schema
 with no new fields: `file`, `line_start`, and `line_end` cite the claim; `body` carries the
 claim, the observation, the command, and the environment. The report rides in `summary` and
-the failures ride in `findings`, so the compact object is unchanged and step 2 reads the
-block from the artifact it already opens on every iteration.
+the failures in `findings`, so the compact object is unchanged and step 2 reads the block
+from the artifact it already opens on every iteration.
 
 **A verified-sound target exits as *sound with record notes*.** The condition fires when
 all three hold:
@@ -85,8 +80,8 @@ the finding consequential and cancels the exit. The test is applied to what the 
 a finding about ADR prose, whose consequence was a maintainer deleting a load-bearing line.
 It answers yes on the third question, so this exit must not fire on it.
 
-**The exit is an ordinary run-ending exit.** It inherits *Stop conditions*' on-every-exit
-obligations in full — working-tree guardrails and commit, suppression disclosure, deferral
+**The exit is an ordinary run-ending exit**, inheriting *Stop conditions*' on-every-exit
+obligations in full: working-tree guardrails and commit, suppression disclosure, deferral
 disclosure. Every "all four exits" count in that section becomes "every exit" in the same
 change; a line-anchored search finds only two of the three, so the change is made by
 reading the section, not by grep.
@@ -95,9 +90,8 @@ reading the section, not by grep.
 self-collision exits outrank this one, because they carry obligations it does not — charter
 authority, and one confirming pass. Where this and *converged with deferrals* both apply,
 report this one: it says everything that exit says and adds which claims were confirmed.
-
-**Cap exhaustion is unchanged.** The final budgeted iteration still stops as `blocked`
-whenever a standing finding is consequential.
+Cap exhaustion is unchanged: the final budgeted iteration still stops as `blocked` whenever
+a standing finding is consequential.
 
 **`$quest` and `$spellcraft` recognise the new exit as non-blocking** and carry its notes
 into their own reporting. `skills/trial-loop/SKILL.md` is the authority for the loop's
