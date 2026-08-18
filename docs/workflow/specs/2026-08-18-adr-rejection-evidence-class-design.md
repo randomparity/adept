@@ -28,9 +28,11 @@ belief rather than the claim's load.
 | R2 | A **factual** ground carries the command run and what it produced, plus the environment wherever the result could depend on it, named durably. Where the ground is factual but no command settles it, `verified:` carries the source that does. | #137 proposal step 1, as settled by ADR 0019 |
 | R3 | A **judgment** ground says so with the token `judgment:`, and is legitimate without a command. Naming which class it is — complexity, fit, taste, cost — is optional colour, not the obligation. | #137 acceptance criterion 3; ADR 0019, "naming the class is the whole obligation" |
 | R3b | The `$spellcraft` text states the non-exemption rule to the **writer**: the tag classes the ground and does not exempt a factual premise sitting inside it, so a `judgment:` resting on an unrun behaviour claim is the same defect wearing the other label. | ADR 0019 Decision; without it R4 finds against a writer for a rule their instructions never carried |
+| R3c | Where a ground is both factual and judgment, the `$spellcraft` text says the bullet leads with `verified:`. | necessary consequence of R2 + R3: one tag opens the ground, and the factual half is the half that owes evidence |
 | R4 | The ADR-review focus names as a finding a rejection stated as fact but carrying no evidence, and a rejected-alternative behaviour claim that cannot be reproduced from what the bullet states — whichever tag precedes it. | #137 acceptance criterion 2, proposal step 2 |
+| R4b | The added focus clause states that a `verified:` ground's command and result are the ground rather than argument, so the focus's existing size clause does not read as an instruction to cut them. | necessary consequence of R4: the ADR reviewer sees only the focus string |
 | R5 | `skills/tome-of-lore/SKILL.md`'s ADR template states the same requirement, so the two statements of the contract cannot drift. | dispatch brief criterion 4 |
-| R6 | The existing size discipline holds: the `$spellcraft` guidance carries one one-line example bullet per tag — a `verified:` one and a `judgment:` one — showing the tag in place of reasoning prose. R6 is met when both are present; it is not a claim about record length. | #137 acceptance criterion 4 |
+| R6 | The existing size discipline holds. The `$spellcraft` text says what the tag displaces — the paragraph of justification behind the ground, never the sentence or two that states the ground — and carries one one-line example bullet per tag, a `verified:` one and a `judgment:` one. R6 is met when the displacement sentence and both examples are present; it is not a claim about record length. | #137 acceptance criterion 4 |
 | R7 | `just verify` passes. | `CLAUDE.md`, *Verifying a change* |
 
 ## Non-requirements
@@ -64,7 +66,7 @@ The tag classes the ground, so it does not exempt a factual premise sitting insi
 ground (R3b): a `judgment:` resting on an unrun behaviour claim is the same defect wearing
 the other label, and R4's reproduction clause bites on it. Where an alternative is sunk by
 both a measured fact and a judgment, the bullet leads with `verified:` and states the
-judgment after it — the factual half is the half that needs evidence.
+judgment after it (R3c) — the factual half is the half that owes evidence.
 
 R6's "replaces rather than appends" governs what the tag displaces: the paragraph of
 justification behind the ground, never the sentence or two that states the ground itself —
