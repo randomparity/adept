@@ -596,41 +596,32 @@ most damage.
   and every standing finding is **consequence-free** → exit as *sound with record notes*,
   listing the notes.
 
-  Named claims, not a verdict about claims. A pass answering "this target asserts nothing
-  reproducible" has satisfied the reproduction instruction but not this condition — the
-  reviewer picks which claims are load-bearing, so a verdict alone makes the condition free.
-  A target with nothing to reproduce leaves through `approve`, *converged with deferrals*,
-  or the cap, as it does today.
-
-  *Accounted for* means each named claim is either confirmed, or explicitly reported as not
-  checkable in the reviewer's environment. A claim reproduced out of four named does not
-  satisfy this condition; neither does a claim silently dropped. A not-checkable claim is
-  not automatically a finding — the reviewer files one only where the inability to check is
-  itself material — but where it *is* a finding, it clears the consequence test on its own
+  ***Accounted for*** means each named claim is confirmed, or explicitly reported as not
+  checkable in the reviewer's environment. Named claims, not a verdict about claims: the
+  reviewer picks which claims are load-bearing, so "this target asserts nothing
+  reproducible" satisfies the reproduction instruction and not this condition, and one claim
+  reproduced out of four named satisfies neither. A target with nothing to reproduce leaves
+  through `approve`, *converged with deferrals*, or the cap, as it does today. A
+  not-checkable claim is not automatically a finding — the reviewer files one only where the
+  inability to check is itself material — but where it is one it clears the consequence test
   like any other, and usually will not, since a load-bearing claim nobody can check is what
   a future maintainer acts on differently.
 
-  **Record the claim list as you go.** Step 2 already opens `<findings-path>` on every
-  iteration; take the claims block out of that artifact's `summary` and write it into the
-  transcript beside step 3's audit line — the named claims, and confirmed or not-checkable
-  for each. Nothing else in the loop preserves it, and both this condition and the exit's
-  note list read it back, so a run that does not record it cannot satisfy this condition
-  however well the pass reproduced.
-
-  The scoping is per **cycle**, not per run: a confirmation made before a rescope widened
-  the charter does not carry into the new cycle, because the claims that matter changed with
-  it.
+  **Record the claim list as you go**, beside step 3's audit line, from the `summary` in the
+  artifact step 2 already opens. Nothing else in the loop preserves it and this condition
+  reads it back, so a run that does not record it cannot satisfy the condition however well
+  the pass reproduced. The scoping is per **cycle**: a confirmation made before a rescope
+  widened the charter does not carry into the new one, because the claims that matter
+  changed with it.
 
   **Apply the consequence test to each standing finding.** If it is never addressed: does
   the decision the target records change? does any behaviour change? would a future
   maintainer, acting on the target as it stands, do something different? One yes makes the
-  finding consequential, cancels this exit, and returns the loop to its ordinary course.
-
-  One case needs no test: a finding that a **later pass could not reproduce a claim
-  condition 1 relies on** is consequential by definition. A load-bearing claim is one whose
-  falsity changes the target's conclusion, so a pass refuting one refutes the confirmation
-  the exit rests on. It cancels this exit whatever else stands — the "nothing you changed
-  since" clause guards against your own edits, not against later evidence.
+  finding consequential, cancels this exit, and returns the loop to its ordinary course. One
+  case needs no test — a finding that a later pass could not reproduce a claim condition 1
+  relies on is consequential by definition, since a load-bearing claim is one whose falsity
+  changes the conclusion. The "nothing you changed since" clause guards against your own
+  edits, not against later evidence.
 
   **The test is on consequence, never on subject matter.** "It is only about wording" is not
   the trigger and never was. The run that motivated this exit also produced the
@@ -642,24 +633,21 @@ most damage.
 
   The exit also requires that you can dispose of the pass's findings **without editing the
   target**, for the reason *converged with deferrals* requires an unchanged target: if the
-  pass that applies a fix is the pass that exits, the fix ships unreviewed. An edit means
-  another pass, and that pass is the earliest this exit can fire.
+  pass that applies a fix is the pass that exits, the fix ships unreviewed. So an edit means
+  another pass, and that pass is the earliest this exit can fire. Each outstanding note
+  still takes a step 6 disposition, and it is `rejected-with-evidence` with the consequence
+  test as the evidence — `accepted-fixed` and `deferred-tracked` both edit the target, which
+  this exit forbids on the exiting pass.
 
-  Each outstanding note still gets a step 6 disposition, and it is `rejected-with-evidence`
-  — the consequence test is the evidence. The finding is real and the reviewer defended it;
-  what the disposition records is that leaving it changes nothing for the decision, the
-  behaviour, or a future maintainer. It is not `accepted-fixed` or `deferred-tracked`,
-  because both of those edit the target and this exit forbids that on the exiting pass.
-
-  This is an ordinary run-ending exit: the on-every-exit obligations above apply to it in
-  full. Report it distinctly — it is not `approve`, and it is not the cap — and list every
-  outstanding note with the finding it came from, plus every claim a pass accounted for,
-  each marked confirmed or not-checkable-here with the pass that accounted for it. A
-  not-checkable claim that reaches the report is the thing a reader most needs to see, so
-  it must not be lost to a report shape that only names confirmations. Where this and *converged with deferrals*
-  both apply, report *converged with deferrals*: its no-change half covers the whole target,
-  where this exit's first condition covers only what the confirmed claims assert. The
-  rescope and self-collision exits outrank this one too — they carry obligations it does not.
+  This is an ordinary run-ending exit: the on-every-exit obligations above apply in full.
+  Report it distinctly — it is not `approve`, and it is not the cap — listing every
+  outstanding note with the finding it came from, and every claim a pass accounted for,
+  marked confirmed or not-checkable-here with the pass that accounted for it. A
+  not-checkable claim is the part a reader most needs, so it must not be lost to a report
+  shape that names only confirmations. Where this and *converged with deferrals* both apply,
+  report *converged with deferrals*: its no-change half covers the whole target, where this
+  exit's first condition covers only what the confirmed claims assert. The rescope and
+  self-collision exits outrank this one too — they carry obligations it does not.
 - Final budgeted iteration of a cycle (the 5th by default, or the caller's
   `iteration_budget`) still returns `needs-attention` → stop as blocked and
   summarize the remaining findings. Do not continue to the next workflow step
