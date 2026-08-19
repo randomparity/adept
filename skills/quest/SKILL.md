@@ -430,24 +430,27 @@ condition each one fires on and reports the exit by name, so route on the name i
 reported rather than on conditions re-derived here. Proceed on any of the three.
 
 Carry every deferral from any `$trial-loop` run on this branch — each entry with
-its owning record path — into the `WORK:REVIEW` comment and the PR body, on every
-exit and `approve` included. The loop discloses its deferrals however it ended, so
-an `exit: none` run carries a list exactly as a named exit does, and a second run
-after a security round trip does not erase the first run's records. On a *sound
-with record notes* exit carry the outstanding notes and the confirmed claim list
-too. Those lists are the part a reader cannot reconstruct, and they are the only
-thing holding the orchestrator's own consequence judgment to account.
+its owning record path or tracker issue — into the `WORK:REVIEW` comment and the
+PR body, on every exit and `approve` included. The loop discloses its deferrals
+however it ended, so an `exit: none` run carries a list exactly as a named exit
+does, and a second run after a security round trip does not erase the first run's
+records. On a *sound with record notes* exit carry the outstanding notes and the
+confirmed claim list the same way. Those lists are the part a reader cannot
+reconstruct, and they are the only thing holding the orchestrator's own
+consequence judgment to account.
 
-The review summary below names the exit in its own `exit:` field: write
-`converged-with-deferrals`, `sound-with-record-notes`, or
-`converged-on-own-surface` there, under the exit's own name. `verdict:` still
-takes the loop's last reviewer verdict, which on these exits is ordinarily
-`needs-attention` — *converged on own surface* is the one that may end on
-`approve`, when its confirming pass returns nothing. The two fields are different
-facts, and the exit is what says the run was not blocked, so do not read
-`verdict:` alone and park a finished branch. The lists still go to `WORK:REVIEW`
-and the PR body, because the summary's members are single-line fields and no list
-is one. ADR 0021 is the contract.
+Two things that list needs and nothing else on the branch supplies. **A carrier
+across the phase seams**: write it down with the resume facts, because it spans up
+to two loop runs and a `$dispel` pass and a compaction between the last run and
+step 8 would shorten it invisibly. **A destination that can hold it**: today only
+the PR body can. `WORK:REVIEW`'s sole writer composes the comment from the summary
+and the forge review with no slot for a list — issue #159 — so until that closes
+the annotation carries the six-field summary and the list rides in the PR body
+alone.
+
+Step 8's review summary names the exit in its own `exit:` field and defines which
+value each ending writes; nothing here repeats that. Route on the exit name rather
+than on the verdict, and write the value where the summary contract defines it.
 
 Pass the loop an iteration budget derived from the step 1 classification: a
 trivial bugfix or a revalidated governed small change passes

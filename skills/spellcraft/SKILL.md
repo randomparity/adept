@@ -370,7 +370,7 @@ Both are terminal non-blocking exits, so continue to the spec review on either.
 does not re-derive them. Route on that name rather than on the last verdict, which on a
 named exit is ordinarily `needs-attention` and never by itself means the ADR is unhardened.
 
-Carry the run's deferral list — each entry with its owning record path — into the design
+Carry the run's deferral list — each entry with its owning record path or tracker issue — into the design
 record whichever way the run ended, `approve` included: the loop discloses its deferrals
 on every exit, and the design record is where a later implementer reads them.
 
