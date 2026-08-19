@@ -113,6 +113,7 @@ denied_patterns=(
 # not the ADR 0005 shape. Choosing the enumeration's source is issue #150, and
 # issue #147 is a second route to the same empty result. Both predate this
 # change and reproduce identically on the pre-fix gate.
+
 # The scratch file is created at the first directory scan path rather than up
 # front, for the reason the git guard below gives: a regular-file scan needs no
 # listing, so a temp directory it never writes to must not be able to fail it.
