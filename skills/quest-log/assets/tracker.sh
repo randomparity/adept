@@ -50,12 +50,71 @@ available_profiles() {
 # variable participates: ambient per-shell state surviving into a resumed
 # session would route a write to the wrong tracker silently, which the tracker
 # abstraction record forbids.
+#
+# `git rev-parse --show-toplevel` exits 128 for "there is no repository at or
+# above here" and for every refusal alike: a dubious-ownership refusal under a
+# bind mount, a sudo run or a container UID mismatch, a bare repository, a
+# GIT_DIR pointing at nothing, a working directory git cannot read. Returning
+# `github` on all of them converted a probe that could not answer into a
+# resolution and then wrote against it -- the collapse ADR 0005 decision 1
+# forbids and the rg calls below already close. Neither the status nor
+# `--is-inside-work-tree` separates the causes; both answer 128 in every case
+# above. Two probes do, and neither reads git's prose, which is localized:
+#
+#   * `pwd -P` fails exactly when getcwd does, which is the fault git reports
+#     as "Unable to read current working directory". Nothing was searched, so
+#     nothing was established.
+#   * 128 is the status git exits with when it ran and declined, including for
+#     an option it does not know. Any other status -- 127 for no git on PATH --
+#     is a probe that never ran and is never evidence about a repository.
+#   * `-c safe.directory='*'` suppresses the ownership check and nothing else --
+#     safe.directory is honoured in protected configuration, which includes the
+#     -c command scope. A retry that succeeds where the plain probe failed
+#     therefore isolates the ownership refusal: the repository is there and git
+#     declined it. Its root names the remedy and never resolves a tracker; a
+#     repository git refuses to trust is not one to read a declaration out of.
+#     The retry is a `rev-parse --show-toplevel`, which reads that repository's
+#     config but runs no hook, alias, pager, editor or fsmonitor -- the vectors
+#     the ownership check exists for.
+#
+# The remedy is reconstructed rather than relayed. verify-push.sh and
+# check-records.sh leave git's own line standing because their channel is plain
+# text; here stderr carries one JSON error object a caller parses, and git's
+# line would corrupt it.
+#
+# What stays in the fallback is git's own negative discovery answer: no
+# repository, and the unreadable or damaged .git that git reports identically
+# ("not a git repository"). Separating those two means reimplementing
+# repository discovery, so the second remains a silent fallback -- stated here
+# rather than claimed closed.
 resolve_tracker() {
 	local root agents matches loose_status count_status=0
-	root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+	local root_status=0 refused_root refused_status=0
+	root=$(git rev-parse --show-toplevel 2>/dev/null) || root_status=$?
+	if ((root_status != 0)); then
+		if ! pwd -P >/dev/null 2>&1; then
+			die "$EXIT_USAGE" usage \
+				"could not resolve the repository root: the working directory could not be read (git rev-parse --show-toplevel exit $root_status)"
+		fi
+		if ((root_status != 128)); then
+			die "$EXIT_USAGE" usage \
+				"could not resolve the repository root: the probe did not run (git rev-parse --show-toplevel exit $root_status)"
+		fi
+		refused_root=$(git -c safe.directory='*' rev-parse --show-toplevel 2>/dev/null) ||
+			refused_status=$?
+		if ((refused_status == 0)); then
+			die "$EXIT_USAGE" usage \
+				"could not resolve the repository root: git refused $refused_root as dubiously owned (git rev-parse --show-toplevel exit $root_status); remedy: git config --global --add safe.directory $refused_root"
+		fi
 		printf 'github\n'
 		return 0
-	}
+	fi
+	# Exit 0 with empty output is the same unresolved root wearing a success
+	# status: `$root/AGENTS.md` becomes `/AGENTS.md`, so the read below leaves
+	# this repository entirely. No real rev-parse was found to answer this way,
+	# so this guards a substituted or future git rather than a demonstrated path.
+	[[ -n $root ]] || die "$EXIT_USAGE" usage \
+		'could not resolve the repository root: git reported an empty repository root (git rev-parse --show-toplevel exit 0)'
 	# The invoking repo's declaration, never --target's. --target selects an
 	# object within the resolved tracker and never reaches a second one.
 	agents="$root/AGENTS.md"
