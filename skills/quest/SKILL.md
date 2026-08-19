@@ -37,8 +37,8 @@ those exits exist to remove.
 > `BASE_BRANCH`, guardrail commands, current step, open findings, and every
 > deferral a `$trial-loop` run disposed of somewhere
 > durable (the plan, the campaign manifest, a scratch note). The deferrals are
-> not open findings and step 6 has to publish them, so a resume that keeps only
-> the open ones loses exactly the list nothing else on the branch records. They are the only
+> not open findings, so a resume that keeps only the open ones loses exactly the
+> list nothing else on the branch records. They are the only
 > recovery path if auto-compaction fires. Don't compact proactively; if the
 > operator compacts, suggest focus text that keeps those facts and drops
 > resolved review iterations and tool output.
@@ -445,8 +445,7 @@ confirmed claim list the same way. Those lists are the part a reader cannot
 reconstruct, and they are the only thing holding the orchestrator's own
 consequence judgment to account.
 
-Neither destination has a writer that can take a multi-line payload today: the
-annotation's sole writer composes the comment from the summary and the forge
+`WORK:REVIEW`'s sole writer composes the comment from the summary and the forge
 review, with no slot for a list, and nothing edits the PR body for this purpose
 after `$deliver` composes it. Issue #159 owns both halves and this change does not
 close either. Until it does, keep the list with the resume facts — a compaction
