@@ -113,16 +113,37 @@ assert_contains 'github' "$sandbox/out"
 # refusal drives the case; a build that ignores the switch leaves an ordinary
 # working repository, which would redden this case for a reason that is not the
 # engine's, so the case checks the switch first and says so when it skips.
+#
+# The switch alone does not stage the refusal. `safe.directory` is honoured in
+# protected configuration, so an entry covering this fixture -- `*` in a global
+# or system config file, which is what a CI runner image ships -- leaves git
+# trusting the repository and the switch with nothing to do: the probe below
+# succeeds and the case skips having proved nothing, on every runner. That is
+# the whole of the coverage gap. clear_git_env above clears GIT_CONFIG,
+# GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT but not the global and system
+# config files, and the two variables below are how git is told to read neither
+# (documented since 2.32; /dev/null is git's own spelling for "no such file").
+# Measured on git 2.50.1 with a permissive global config in scope: the probe
+# exits 0 without them and 128 with them.
+#
+# Probe and case share one list so they can never stage different conditions --
+# a probe that measured a condition the case did not reproduce is how this
+# skipped everywhere while reading as deliberate.
+ownership_env=(
+	GIT_CONFIG_GLOBAL=/dev/null
+	GIT_CONFIG_SYSTEM=/dev/null
+	GIT_TEST_ASSUME_DIFFERENT_OWNER=1
+)
 mkdir -p "$sandbox/dubiousrepo"
 git -C "$sandbox/dubiousrepo" init -q
 printf 'issue-tracker: fixture\n' >"$sandbox/dubiousrepo/AGENTS.md"
 if (cd "$sandbox/dubiousrepo" &&
-	GIT_TEST_ASSUME_DIFFERENT_OWNER=1 git rev-parse --show-toplevel) >/dev/null 2>&1; then
+	env "${ownership_env[@]}" git rev-parse --show-toplevel) >/dev/null 2>&1; then
 	printf 'tracker-test: skip dubious ownership; this git ignores GIT_TEST_ASSUME_DIFFERENT_OWNER\n'
 else
 	status=0
 	(cd "$sandbox/dubiousrepo" &&
-		GIT_TEST_ASSUME_DIFFERENT_OWNER=1 "$tracker" resolve) \
+		env "${ownership_env[@]}" "$tracker" resolve) \
 		>"$sandbox/out" 2>"$sandbox/err" || status=$?
 	assert_exit 1 "$status" 'resolve when git refuses the repository as dubiously owned'
 	assert_error "$sandbox/err" usage 'dubious ownership'

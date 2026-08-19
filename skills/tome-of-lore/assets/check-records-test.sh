@@ -2004,14 +2004,33 @@ STUB
   # GIT_TEST_ASSUME_DIFFERENT_OWNER is git's own switch for it; a build that does not honour
   # it leaves the fixture a working repository, which would redden this case for a reason that
   # is not the gate's, so the case checks the switch first and says so when it skips.
+  #
+  # The switch alone does not stage the refusal. `safe.directory` is honoured in protected
+  # configuration, so an entry covering this fixture — `*` in a global or system config file,
+  # which is what a CI runner image ships — leaves git trusting the repository and the switch
+  # with nothing to do: the probe succeeds and the case skips having proved nothing, wherever
+  # that config is in scope. The clearing at the top of this suite covers GIT_CONFIG,
+  # GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT but not the global and system config files, and
+  # the two variables below are how git is told to read neither (documented since 2.32;
+  # /dev/null is git's own spelling for "no such file"). Measured on git 2.50.1 with a
+  # permissive global config in scope: the probe exits 0 without them and 128 with them.
+  #
+  # Probe and case share one list so they can never stage different conditions — a probe that
+  # measured a condition the case did not reproduce is how this skipped everywhere while
+  # reading as deliberate.
+  ownership_env=(
+    GIT_CONFIG_GLOBAL=/dev/null
+    GIT_CONFIG_SYSTEM=/dev/null
+    GIT_TEST_ASSUME_DIFFERENT_OWNER=1
+  )
   d=$(case_dir dubious_ownership)
-  if (cd "$d" && GIT_TEST_ASSUME_DIFFERENT_OWNER=1 git rev-parse --show-toplevel) \
+  if (cd "$d" && env "${ownership_env[@]}" git rev-parse --show-toplevel) \
     >/dev/null 2>&1; then
     printf '  skip %-44s this git ignores GIT_TEST_ASSUME_DIFFERENT_OWNER\n' \
       "root probe fails inside a repository"
   else
     run_case "root probe fails inside a repository" 1 E-ROOT-UNRESOLVED "$d" \
-      BASE_SHA= GIT_TEST_ASSUME_DIFFERENT_OWNER=1
+      BASE_SHA= "${ownership_env[@]}"
     printf '  %-4s %-44s ' "" "the safe.directory remedy survives"
     expect_match "$d/.err" "remedy line reached the operator" \
       "remedy line was discarded" -F 'safe.directory'
