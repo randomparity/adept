@@ -59,7 +59,8 @@ available_profiles() {
 # resolution and then wrote against it -- the collapse ADR 0005 decision 1
 # forbids and the rg calls below already close. Neither the status nor
 # `--is-inside-work-tree` separates the causes; both answer 128 in every case
-# above. Two probes do, and neither reads git's prose, which is localized:
+# above. Three probes do, and none of them reads git's prose, which is git's to
+# reword and, on a build with NLS, to translate:
 #
 #   * `pwd -P` fails exactly when getcwd does, which is the fault git reports
 #     as "Unable to read current working directory". Nothing was searched, so

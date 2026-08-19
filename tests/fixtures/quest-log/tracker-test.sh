@@ -128,7 +128,7 @@ else
 	assert_error "$sandbox/err" usage 'dubious ownership'
 	# The remedy is reconstructed rather than relayed: git's own line names the
 	# path too, but it would land on the stderr a caller parses as one JSON
-	# error object, and it is localized.
+	# error object, and its wording is git's to change.
 	assert_contains 'safe.directory' "$sandbox/err"
 	assert_contains "$sandbox/dubiousrepo" "$sandbox/err"
 fi
