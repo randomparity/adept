@@ -362,7 +362,7 @@ loop reports blocked — including cap exhaustion at 5 iterations — stop as bl
 per `$trial-loop`'s stop contract; do not run the spec review against an unhardened
 ADR. A *sound with record notes* exit is **not** that case — a pass confirmed every
 load-bearing claim it named in the ADR, and the standing findings carry no consequence —
-so continue to the spec review and carry the outstanding notes into the design record.
+so continue to the spec review and carry the outstanding notes into the spec.
 
 *converged with deferrals* and *converged on own surface* are **not** that case either.
 Both are terminal non-blocking exits, so continue to the spec review on either.
@@ -370,9 +370,11 @@ Both are terminal non-blocking exits, so continue to the spec review on either.
 does not re-derive them. Route on that name rather than on the last verdict, which on a
 named exit is ordinarily `needs-attention` and never by itself means the ADR is unhardened.
 
-Carry the run's deferral list — each entry with its owning record path or tracker issue — into the design
-record whichever way the run ended, `approve` included: the loop discloses its deferrals
-on every exit, and the design record is where a later implementer reads them.
+Carry the run's deferral list — each entry with its owning record path or tracker issue —
+into the spec whichever way the run ended, `approve` included: the loop discloses its
+deferrals on every exit, and the spec is what step 4's plan is derived from, so that is
+where a later implementer meets them. Not the ADR — it merges append-only, and an entry
+there cannot be struck when its tracker closes.
 
 ## 3. Adversarial-review the spec
 

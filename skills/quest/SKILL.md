@@ -442,11 +442,12 @@ consequence judgment to account.
 Two things that list needs and nothing else on the branch supplies. **A carrier
 across the phase seams**: write it down with the resume facts, because it spans up
 to two loop runs and a `$dispel` pass and a compaction between the last run and
-step 8 would shorten it invisibly. **A destination that can hold it**: today only
-the PR body can. `WORK:REVIEW`'s sole writer composes the comment from the summary
-and the forge review with no slot for a list — issue #159 — so until that closes
-the annotation carries the six-field summary and the list rides in the PR body
-alone.
+step 8 would shorten it invisibly. **A write moment**: neither destination has a
+step of its own, so both are yours at step 8 — the list goes into the body you give
+`$deliver` at PR creation, since nothing edits that body afterwards. `WORK:REVIEW`
+cannot take it at all today: its sole writer composes the comment from the summary
+and the forge review with no slot for a list. Both halves of that gap are issue
+#159; until it closes the annotation carries the six-field summary alone.
 
 Step 8's review summary names the exit in its own `exit:` field and defines which
 value each ending writes; nothing here repeats that. Route on the exit name rather
