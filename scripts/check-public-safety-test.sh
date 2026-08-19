@@ -7,6 +7,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ROOT="$(cd "$script_dir/.." && pwd)"
 CHECKER="$ROOT/scripts/check-public-safety.sh"
+# Two cases below shadow git on PATH to make one subcommand answer badly. Each
+# stub execs the real binary for every other call, so it has to be resolved here,
+# before any of them is on PATH to be found instead.
+GIT_REAL=$(command -v git)
 
 # The cases below hand the gate a hostile RIPGREP_CONFIG_PATH one invocation at
 # a time. Unsetting it here keeps the value this suite inherited from steering
@@ -331,6 +335,131 @@ for ignore_file in .gitignore .ignore; do
 	fi
 done
 
+# `-C` chooses a directory to run in, not a repository: git reads its
+# repository-local environment selectors ahead of directory discovery, so with
+# them exported the enumeration answers about the ambient repository at exit 0,
+# names paths that are not under the scan path, and the gate falls back to the
+# ignore-respecting walk that cannot see a `git add -f`'d ignored file. On the
+# pre-fix gate that was exit 0, silently, over a token the same tree reports on
+# in a clean environment.
+selector_target="$SCRATCH/ambient-selectors"
+mkdir -p "$selector_target/sub"
+git init -q -b main "$selector_target"
+git -C "$selector_target" config user.name 'Fixture Developer'
+git -C "$selector_target" config user.email fixture@example.invalid
+printf '%s\n' "$hidden_secret" >"$selector_target/sub/leak.txt"
+printf 'sub/leak.txt\n' >"$selector_target/.gitignore"
+git -C "$selector_target" add -f sub/leak.txt .gitignore
+git -C "$selector_target" commit -qm 'tracked but ignored'
+
+# The repository the exported selectors point at. It is clean, so a gate that
+# answers about it instead of the target reports nothing.
+ambient="$SCRATCH/ambient-repository"
+mkdir -p "$ambient"
+git init -q -b main "$ambient"
+git -C "$ambient" config user.name 'Fixture Developer'
+git -C "$ambient" config user.email fixture@example.invalid
+printf 'public content\n' >"$ambient/README.md"
+git -C "$ambient" add README.md
+git -C "$ambient" commit -qm 'public seed'
+
+# The premise: pointed at the ambient repository, the listing names that
+# repository's file rather than the target's. If this stops holding the cases
+# below prove nothing.
+if [ "$(GIT_DIR="$ambient/.git" GIT_WORK_TREE="$ambient" \
+	git -C "$selector_target" ls-files)" != README.md ]; then
+	printf 'public-safety-test: selectors no longer redirect the listing, cases are void\n' >&2
+	exit 1
+fi
+
+# One selector at a time, each carrying the value its own shape takes. The
+# suite cleared this set at the top, so `env` with a single assignment is the
+# whole environment difference between these runs and the clean one above.
+#
+# GIT_INDEX_FILE is exercised on its own deliberately. Clearing it decides which
+# index the gate enumerates -- under `git commit --only <paths>` a hook's
+# GIT_INDEX_FILE names a temporary index rather than the repository's -- and
+# this case pins the answer: the repository's own, never the caller's.
+while IFS=' ' read -r selector value; do
+	selector_status=0
+	env "$selector=$value" "$CHECKER" "$selector_target" \
+		>"$SCRATCH/output" 2>&1 || selector_status=$?
+	if [ "$selector_status" -ne 1 ]; then
+		printf 'public-safety-test: %s redirected the listing and hid a secret, got %s\n' \
+			"$selector" "$selector_status" >&2
+		cat "$SCRATCH/output" >&2
+		exit 1
+	fi
+done <<SELECTORS
+GIT_DIR $ambient/.git
+GIT_INDEX_FILE $ambient/.git/index
+SELECTORS
+
+# All of them at once, the shape the issue reproduced.
+selector_status=0
+GIT_DIR="$ambient/.git" GIT_COMMON_DIR="$ambient/.git" GIT_WORK_TREE="$ambient" \
+	GIT_INDEX_FILE="$ambient/.git/index" \
+	"$CHECKER" "$selector_target" >"$SCRATCH/output" 2>&1 || selector_status=$?
+if [ "$selector_status" -ne 1 ]; then
+	printf 'public-safety-test: exported git selectors hid a secret, got %s\n' \
+		"$selector_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+if ! grep -qF 'denied pattern matched' "$SCRATCH/output"; then
+	printf 'public-safety-test: the secret must still be reported\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The other side of the same rule: clearing must not invent a finding or a
+# fault. A clean target under the same exported selectors stays green.
+if ! GIT_DIR="$ambient/.git" GIT_COMMON_DIR="$ambient/.git" GIT_WORK_TREE="$ambient" \
+	GIT_INDEX_FILE="$ambient/.git/index" \
+	"$CHECKER" "$ambient" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: a clean tree must stay green under exported selectors\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The clearing has the two failure modes clear_git_env and verify-push.sh name,
+# and neither may fall through to an enumeration that still addresses the
+# ambient repository: a rev-parse that could not answer, and one that answered
+# nothing at exit 0. Both are stubbed, because a real git produces neither --
+# `--local-env-vars` is a fixed list git has always begun with GIT_DIR.
+ENVSTUB_BIN="$SCRATCH/envstub-bin"
+mkdir -p "$ENVSTUB_BIN"
+while IFS='|' read -r label action expected_fragment; do
+	cat >"$ENVSTUB_BIN/git" <<EOF
+#!/usr/bin/env bash
+for argument in "\$@"; do
+	if [ "\$argument" = --local-env-vars ]; then
+		$action
+	fi
+done
+exec "$GIT_REAL" "\$@"
+EOF
+	chmod +x "$ENVSTUB_BIN/git"
+	envstub_status=0
+	PATH="$ENVSTUB_BIN:$PATH" "$CHECKER" "$selector_target" \
+		>"$SCRATCH/output" 2>&1 || envstub_status=$?
+	if [ "$envstub_status" -ne 2 ]; then
+		printf 'public-safety-test: %s must fault, got %s\n' \
+			"$label" "$envstub_status" >&2
+		cat "$SCRATCH/output" >&2
+		exit 1
+	fi
+	if ! grep -qF "$expected_fragment" "$SCRATCH/output"; then
+		printf 'public-safety-test: the fault should name what could not be cleared: %s\n' \
+			"$label" >&2
+		cat "$SCRATCH/output" >&2
+		exit 1
+	fi
+done <<'ENVSTUBS'
+a local-env-vars read that died|exit 128|cannot read git local env vars
+a local-env-vars read that named nothing|exit 0|git reported no local env vars
+ENVSTUBS
+
 # ripgrep exits 2 when it cannot open a path it was given explicitly, and it does
 # so even when it also found matches. `git ls-files` reports the index, so a
 # tracked file deleted from the worktree and not staged names a path with nothing
@@ -482,7 +611,6 @@ fi
 # truncated set the pre-fix gate scanned never contained it and that gate
 # exited 0 over content it had not listed -- the ADR 0005 defect itself, rather
 # than the exit 1 it would have returned had the stub named the secret.
-GIT_REAL=$(command -v git)
 STUB_BIN="$SCRATCH/stub-bin"
 mkdir -p "$STUB_BIN"
 cat >"$STUB_BIN/git" <<EOF
