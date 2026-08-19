@@ -88,6 +88,37 @@ denied_patterns=(
 # inside a git worktree" part of the contract, which is what the gate is for:
 # the tracked set is the set that ships.
 #
+# `-C` chooses a directory to run in; it does not choose a repository. Git's
+# repository-local environment selectors -- the set `git rev-parse
+# --local-env-vars` names, GIT_DIR and GIT_WORK_TREE and GIT_INDEX_FILE among
+# them -- are read ahead of directory discovery, so with any of them exported
+# this listing answers about the *ambient* repository at exit 0 and names paths
+# that are not under the scan path. The `-f` filter below then drops every one,
+# scan_targets collapses to the walk alone, and the gate reports a pass over
+# exactly the tracked-and-ignored content the enumeration was added to catch.
+# Reproduced on macOS with git 2.50.1: GIT_DIR alone and GIT_INDEX_FILE alone
+# each suffice, on a force-added ignored token the clean-environment run
+# reports (issue #147). Clearing the set is the same fix at the same call as
+# clear_git_env in scripts/test-fixture-helpers.sh and the block in
+# scripts/verify-push.sh, which says why it is there: "Hooks export selectors
+# for their source worktree." The copy is deliberate; a production gate
+# sourcing a file named test-fixture-helpers.sh is worse layering than the
+# duplication it removes, which is the call that file already records for
+# cleanup.
+#
+# Clearing GIT_INDEX_FILE decides a question the other two do not raise, so it
+# is pinned here rather than inherited: the gate enumerates the repository's own
+# index, never the caller's. Under `git commit --only <paths>` a hook's
+# GIT_INDEX_FILE names a temporary index built from HEAD plus the named paths,
+# and `--only` refuses a path git does not already know, so that index can name
+# nothing the repository's own index and HEAD do not already carry between them
+# -- honouring it can only narrow the scan, which is the wrong direction for a
+# gate whose subject is content someone may be trying to get past it. The
+# scanned bytes come from the worktree either way; the index is consulted only
+# for which paths ship. And a gate whose verdict depends on who invoked it is
+# the defect class this clearing closes, so the same tree has to answer the
+# same under `just verify`, under prek, and in CI.
+#
 # A scan path that is not a directory is not asked. A regular file -- the shape
 # skills/quest/scripts/publish-forge-review passes -- already names itself on
 # the command line, so ripgrep opens it whatever the ignore rules say and there
@@ -110,9 +141,10 @@ denied_patterns=(
 # empty at exit 0 while HEAD still carries the content, and the gate then falls
 # back to the ignore-respecting walk that cannot see a `git add -f`'d ignored
 # file. No status check reaches that: git ran and answered truthfully, so it is
-# not the ADR 0005 shape. Choosing the enumeration's source is issue #150, and
-# issue #147 is a second route to the same empty result. Both predate this
-# change and reproduce identically on the pre-fix gate.
+# not the ADR 0005 shape. Choosing the enumeration's source is issue #150 and
+# stays open. The exported-selector route to the same empty result was issue
+# #147, closed by the clearing above; what remains is a repository whose own
+# index disagrees with its own HEAD.
 
 # The scratch file is created at the first directory scan path rather than up
 # front, for the reason the git guard below gives: a regular-file scan needs no
@@ -146,6 +178,32 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Captured rather than read from a process substitution, which reports the
+# loop's status and never rev-parse's: a rev-parse that could not answer leaves
+# the loop reading nothing, nothing unset, and the enumeration below still
+# addressing the ambient repository -- a scan that could not run read as one
+# that found nothing (ADR 0005).
+#
+# Empty output is the same failure wearing a zero exit status: git has always
+# named at least GIT_DIR here, so nothing to clear means the answer did not
+# arrive rather than that there was nothing to do.
+clear_local_git_env() {
+	local variable variables
+	variables=$(git rev-parse --local-env-vars) || {
+		echo "public-safety: cannot read git local env vars" >&2
+		exit 2
+	}
+	[ -n "$variables" ] || {
+		echo "public-safety: git reported no local env vars" >&2
+		exit 2
+	}
+	while IFS= read -r variable; do
+		[ -n "$variable" ] || continue
+		unset "$variable"
+	done <<<"$variables"
+}
+
+git_env_cleared=0
 scan_targets=("${scan_paths[@]}")
 for scan_path in "${scan_paths[@]}"; do
 	[[ -d "$scan_path" ]] || continue
@@ -159,6 +217,14 @@ for scan_path in "${scan_paths[@]}"; do
 	if ! command -v git >/dev/null 2>&1; then
 		echo "public-safety: git is required to scan a directory" >&2
 		exit 2
+	fi
+	# Cleared here rather than at the top of the file, and once rather than per
+	# path, for the reason the git preflight above gives: reading the variable
+	# list needs git, and a regular-file scan target never runs git at all, so a
+	# host without it must still scan a file.
+	if [ "$git_env_cleared" -eq 0 ]; then
+		clear_local_git_env
+		git_env_cleared=1
 	fi
 	if [ -z "$tracked_listing" ]; then
 		tracked_listing=$(mktemp) || {
