@@ -370,11 +370,12 @@ Both are terminal non-blocking exits, so continue to the spec review on either.
 does not re-derive them. Route on that name rather than on the last verdict, which on a
 named exit is ordinarily `needs-attention` and never by itself means the ADR is unhardened.
 
-Carry the run's deferral list — each entry with its owning record path or tracker issue —
-into the spec whichever way the run ended, `approve` included: the loop discloses its
-deferrals on every exit, and the spec is what step 4's plan is derived from, so that is
-where a later implementer meets them. Not the ADR — it merges append-only, and an entry
-there cannot be struck when its tracker closes.
+Carry every deferral from every run in this ADR set — each entry with its owning record
+path or tracker issue — into the spec whichever way each run ended, `approve` included.
+The set can hold more than one path, so a later run must not erase an earlier one's
+entries. The loop discloses its deferrals on every exit, and the spec is what step 4's
+plan is derived from, so that is where a later implementer meets them. Not the ADR — it
+merges append-only, and an entry there cannot be struck when its tracker closes.
 
 ## 3. Adversarial-review the spec
 

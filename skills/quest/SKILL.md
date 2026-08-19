@@ -12,8 +12,11 @@ specific cause and the correction follows from that evidence. Familiarity, a pla
 stale evidence from another failure is not enough; without current causal evidence, run
 `$detect-curse` before proposing a correction. If the same artifact recurs after the same
 evidence-backed correction with no new evidence, stop instead of repeating the diagnose-fix cycle.
-Don't advance past a red guardrail, an unresolved `$gauntlet` finding, a dirty-tree surprise, or an
-ambiguous user-facing design decision.
+Don't advance past a red guardrail, an undispositioned `$gauntlet` finding, a dirty-tree surprise,
+or an ambiguous user-facing design decision. A finding a `$trial-loop` exit disposed of — as
+`deferred-tracked` with an owner, or `rejected-with-evidence` — is dispositioned; all three named
+exits fire while such findings stand, and treating them as advancement blockers is the reading
+those exits exist to remove.
 
 > **One continuous task.** Preflight through hand-off -- or through cleanup on
 > the authorized merge path -- is a single turn, and the checkpoints inside
@@ -31,8 +34,11 @@ ambiguous user-facing design decision.
 > transcripts, `$gauntlet` payloads, TDD output -- is droppable once the spec,
 > plan, and findings files hold the decisions. The resume facts are not: at
 > each phase seam (design -> build -> review -> ship), write the branch name,
-> `BASE_BRANCH`, guardrail commands, current step, and open findings somewhere
-> durable (the plan, the campaign manifest, a scratch note). They are the only
+> `BASE_BRANCH`, guardrail commands, current step, open findings, and every
+> deferral a `$trial-loop` run disposed of somewhere
+> durable (the plan, the campaign manifest, a scratch note). The deferrals are
+> not open findings and step 6 has to publish them, so a resume that keeps only
+> the open ones loses exactly the list nothing else on the branch records. They are the only
 > recovery path if auto-compaction fires. Don't compact proactively; if the
 > operator compacts, suggest focus text that keeps those facts and drops
 > resolved review iterations and tool output.
@@ -439,15 +445,14 @@ confirmed claim list the same way. Those lists are the part a reader cannot
 reconstruct, and they are the only thing holding the orchestrator's own
 consequence judgment to account.
 
-Two things that list needs and nothing else on the branch supplies. **A carrier
-across the phase seams**: write it down with the resume facts, because it spans up
-to two loop runs and a `$dispel` pass and a compaction between the last run and
-step 8 would shorten it invisibly. **A write moment**: neither destination has a
-step of its own, so both are yours at step 8 — the list goes into the body you give
-`$deliver` at PR creation, since nothing edits that body afterwards. `WORK:REVIEW`
-cannot take it at all today: its sole writer composes the comment from the summary
-and the forge review with no slot for a list. Both halves of that gap are issue
-#159; until it closes the annotation carries the six-field summary alone.
+Neither destination has a writer that can take a multi-line payload today: the
+annotation's sole writer composes the comment from the summary and the forge
+review, with no slot for a list, and nothing edits the PR body for this purpose
+after `$deliver` composes it. Issue #159 owns both halves and this change does not
+close either. Until it does, keep the list with the resume facts — a compaction
+between the last loop run and step 8 would otherwise shorten it invisibly — and
+report it to whoever receives this run, so the concerns have an owner on the record
+even when the published artifacts cannot hold the list.
 
 Step 8's review summary names the exit in its own `exit:` field and defines which
 value each ending writes; nothing here repeats that. Route on the exit name rather
@@ -610,8 +615,8 @@ exits as non-blocking outcomes that advance the workflow, so each of them reache
 this field under its own name.
 
 ADR 0021 is the authority for the field set and these values; the exits
-themselves belong to `$trial-loop`. A run's payload — deferral records
-with their owning paths, outstanding notes, the confirmed claim list — stays in
+themselves belong to `$trial-loop`. A run's payload — deferrals with their owning
+paths or tracker issues, outstanding notes, the confirmed claim list — stays in
 `WORK:REVIEW` and the PR body, which is where `$trial-loop`'s own report
 obligation sends it.
 
