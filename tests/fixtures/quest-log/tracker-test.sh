@@ -155,6 +155,21 @@ else
 	assert_contains 'the working directory could not be read' "$sandbox/err"
 fi
 
+# git was told where the repository is and could not use it. The header on
+# resolve_tracker forbids an environment variable steering resolution; a GIT_DIR
+# naming nothing steered it to the default all the same, because it fails the
+# probe with the same 128 an absent repository does.
+mkdir -p "$sandbox/gitdirrepo"
+git -C "$sandbox/gitdirrepo" init -q
+printf 'issue-tracker: fixture\n' >"$sandbox/gitdirrepo/AGENTS.md"
+status=0
+(cd "$sandbox/gitdirrepo" &&
+	GIT_DIR="$sandbox/gitdirrepo/no-such-git-dir" "$tracker" resolve) \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'resolve when GIT_DIR names a repository git cannot use'
+assert_error "$sandbox/err" usage 'GIT_DIR names nothing'
+assert_contains 'GIT_DIR' "$sandbox/err"
+
 # 128 is git's own "I ran and declined". Any other status is a probe that never
 # ran -- 127 when there is no git on PATH is the reachable one -- and a probe
 # that never ran establishes nothing about a repository.

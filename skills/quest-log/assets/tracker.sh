@@ -54,13 +54,17 @@ available_profiles() {
 # `git rev-parse --show-toplevel` exits 128 for "there is no repository at or
 # above here" and for every refusal alike: a dubious-ownership refusal under a
 # bind mount, a sudo run or a container UID mismatch, a bare repository, a
-# GIT_DIR pointing at nothing, a working directory git cannot read. Returning
-# `github` on all of them converted a probe that could not answer into a
-# resolution and then wrote against it -- the collapse ADR 0005 decision 1
-# forbids and the rg calls below already close. Neither the status nor
-# `--is-inside-work-tree` separates the causes; both answer 128 in every case
-# above. Three probes do, and none of them reads git's prose, which is git's to
-# reword and, on a build with NLS, to translate:
+# GIT_DIR pointing at nothing, a .git git cannot read or whose pointer it cannot
+# follow, a working directory git cannot read. Returning `github` on all of them
+# converted a probe that could not answer into a resolution and then wrote
+# against it -- the collapse ADR 0005 decision 1 forbids and the rg calls below
+# already close.
+#
+# The status does not separate the causes, and neither does
+# `--is-inside-work-tree`: measured across that whole set it answers 128 for
+# every case but the bare repository, where it prints `false` at exit 0. Four
+# probes do separate them, and none reads git's prose, which is git's to reword
+# and, on a build with NLS, to translate:
 #
 #   * `pwd -P` fails exactly when getcwd does, which is the fault git reports
 #     as "Unable to read current working directory". Nothing was searched, so
@@ -77,17 +81,24 @@ available_profiles() {
 #     The retry is a `rev-parse --show-toplevel`, which reads that repository's
 #     config but runs no hook, alias, pager, editor or fsmonitor -- the vectors
 #     the ownership check exists for.
+#   * GIT_DIR or GIT_WORK_TREE set means git was told where the repository is.
+#     A probe that failed anyway says that named repository is unusable, never
+#     that none exists. This is the one place ambient state is read, and it
+#     decides a fault rather than a resolution -- the header's rule intact.
 #
 # The remedy is reconstructed rather than relayed. verify-push.sh and
 # check-records.sh leave git's own line standing because their channel is plain
 # text; here stderr carries one JSON error object a caller parses, and git's
 # line would corrupt it.
 #
-# What stays in the fallback is git's own negative discovery answer: no
-# repository, and the unreadable or damaged .git that git reports identically
-# ("not a git repository"). Separating those two means reimplementing
-# repository discovery, so the second remains a silent fallback -- stated here
-# rather than claimed closed.
+# What still reaches the fallback is git's own negative discovery answer -- no
+# repository -- and the two cases it reports identically as "not a git
+# repository": a .git it cannot read, and a .git whose pointer it cannot follow.
+# Both leave a readable worktree whose declaration is then missed. Separating
+# them from a true absence means reimplementing repository discovery, so they
+# remain a silent fallback -- stated here rather than claimed closed. A bare
+# repository lands here too, and correctly: it has no worktree, so no AGENTS.md
+# and nothing to declare.
 resolve_tracker() {
 	local root agents matches loose_status count_status=0
 	local root_status=0 refused_root refused_status=0
@@ -106,6 +117,10 @@ resolve_tracker() {
 		if ((refused_status == 0)); then
 			die "$EXIT_USAGE" usage \
 				"could not resolve the repository root: git refused $refused_root as dubiously owned (git rev-parse --show-toplevel exit $root_status); remedy: git config --global --add safe.directory $refused_root"
+		fi
+		if [[ -n ${GIT_DIR:-} || -n ${GIT_WORK_TREE:-} ]]; then
+			die "$EXIT_USAGE" usage \
+				"could not resolve the repository root: GIT_DIR or GIT_WORK_TREE names a repository git could not use (git rev-parse --show-toplevel exit $root_status)"
 		fi
 		printf 'github\n'
 		return 0

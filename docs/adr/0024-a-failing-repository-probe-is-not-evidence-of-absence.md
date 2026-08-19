@@ -53,7 +53,7 @@ lose.
 
 **2. Where a probe cannot separate absence from refusal, the separation is established by a
 further probe whose answer is positive, never by reading a diagnostic string.** For the
-repository probe that is three probes, none of which parses git's prose:
+repository probe that is four probes, none of which parses git's prose:
 
 - `pwd -P` fails exactly when `getcwd` does, which is the fault git reports as being unable
   to read the current working directory. Nothing was searched, so nothing was established.
@@ -63,15 +63,27 @@ repository probe that is three probes, none of which parses git's prose:
 - `git -c safe.directory='*' rev-parse --show-toplevel` suppresses the ownership check and
   nothing else. A retry that succeeds where the plain probe failed therefore isolates the
   ownership refusal: the repository is there and git declined it.
+- `GIT_DIR` or `GIT_WORK_TREE` set means git was told where the repository is. A probe that
+  failed anyway says that named repository is unusable, never that none exists.
 
 The retry's root names the remedy and never resolves a tracker. A repository git refuses to
 trust is not one to read a declaration out of.
 
+The `GIT_DIR` probe is the one place `resolve_tracker` reads ambient state, and the function
+header forbids exactly that. The rule is intact because the read decides a *fault*, never a
+resolution: it can only turn a silent default into an error. A `GIT_DIR` naming nothing was
+already steering the outcome before this record — to `github`, silently, which is the
+header's stated failure mode.
+
 **3. A residual that cannot be closed is named where the fallback is taken, not left
-implicit.** What still reaches the default tracker is git's own negative discovery answer:
-no repository, and the unreadable or damaged `.git` that git reports identically as "not a
-git repository". Separating those two means reimplementing repository discovery. The
-comment on `resolve_tracker` says so in those terms.
+implicit.** What still reaches the default tracker is git's own negative discovery answer —
+no repository — and the two cases it reports identically as "not a git repository": a `.git`
+it cannot read, and a `.git` whose pointer it cannot follow. Both leave a readable worktree
+whose declaration is then missed. Separating them from a true absence means reimplementing
+repository discovery. The comment on `resolve_tracker` says so in those terms.
+
+A bare repository also reaches the fallback, and correctly: it has no worktree, so no
+`AGENTS.md` and nothing to declare.
 
 ## Consequences
 
@@ -93,8 +105,9 @@ three probes above have ruled out the causes they can rule out.
 One fault is reachable that this record does not close, and one caller-visible contract is
 not what it looks like:
 
-- A `.git` that git cannot read is reported by git as no repository, and still falls back
-  silently. Decision 3 names it in the code; nothing detects it.
+- A `.git` that git cannot read, or whose pointer it cannot follow, is reported by git as no
+  repository and still falls back silently. Decision 3 names it in the code; nothing
+  detects it.
 - The unreadable-working-directory case cannot produce a single JSON object on stderr
   whatever `tracker.sh` does, because bash writes its own `shell-init` line before the
   script gets control. The suite asserts that case by message rather than by parsing the
