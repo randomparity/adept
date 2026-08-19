@@ -36,8 +36,10 @@ Codex CLI:
 
     codex plugin marketplace upgrade randomparity
 
-Start a new Codex session after updating. Manifests carry no `version` field:
-updates track the git SHA, so every merge to `main` is an update.
+Start a new Codex session after updating. `.claude-plugin/plugin.json` declares a
+`version`, and every change to this repository bumps it, so every merge to `main`
+is still an update — a gate in CI refuses a change that leaves the version alone.
+See [ADR 0022](docs/adr/0022-versioned-manifest-and-bump-gate.md).
 
 ## What ships
 

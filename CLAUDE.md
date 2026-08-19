@@ -49,9 +49,13 @@ just verify
 
 Run gates bare — no pipes that swallow an exit code, no `|| true`. A gate's exit status is the verdict.
 
-`just plugin-check` runs `claude plugin validate ./`, which passes at exit 0. Exactly one warning is expected and accepted — `plugins[0] plugin.json → version: No version specified`. Manifests carry no `version` field on purpose: updates track the git SHA, so every push to `main` is an update and there is no version-bump ritual. Do not add `--strict`; it promotes that warning to an error and the two cannot both hold.
+`just plugin-check` runs `claude plugin validate ./ --strict`, which passes at exit 0 with no warnings. Any warning is a defect.
 
-Any other warning is a defect.
+`just version-check` runs `scripts/check-plugin-version.sh`. `.claude-plugin/plugin.json` declares a `version`, and **every change bumps it** — see [ADR 0022](docs/adr/0022-versioned-manifest-and-bump-gate.md). The field pins the plugin: the harness skips an update when the installed version matches the declared one, so a version left alone is a change that never reaches an installed copy, silently. The gate's three rules are that the version exists, that it is `MAJOR.MINOR.PATCH` with no prerelease or build suffix, and that it is strictly greater than the base ref's whenever the tree differs from `BASE_SHA` at all.
+
+Bump `MAJOR` when a skill is removed or renamed or an invocation's contract breaks, `MINOR` when a skill or reference is added or gains a capability, `PATCH` otherwise. The version lives in `.claude-plugin/plugin.json` only; `plugin.json` outranks the marketplace entry in the harness's resolution order, so a second copy could only disagree with the first.
+
+The bump rule needs `BASE_SHA`, which CI sets and a local run does not. `just verify` on a workstation therefore checks the first two rules only and says so; the forgotten bump is caught by the required check in CI.
 
 `just records` enables only the `adr` profile. A record profile fails when its directory exists at neither the base ref nor the tree, and `docs/debt/` cannot be created empty — the debt profile exempts no `README.md` the way the adr profile does. Add `debt` to the profile list in the same commit as the first deferral record.
 

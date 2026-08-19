@@ -45,10 +45,10 @@ jobs:
       # needs a Claude CLI, and it reads files rather than calling the API.
       #
       # zizmor's adhoc-packages audit wants installs to come from a lockfile.
-      # There is no lockfile for a global CLI, and pinning a version here would
-      # reintroduce the version-bump ritual this repo exists to remove — the
-      # gate's job is to validate the manifests against the harness people
-      # actually run, which is the current one.
+      # There is no lockfile for a global CLI, and the gate's job is to validate
+      # the manifests against the harness people actually run, which is the
+      # current one — a pinned CLI here would validate against a harness nobody
+      # has.
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code # zizmor: ignore[adhoc-packages]
       - name: Verify

@@ -96,6 +96,7 @@ suites=(
 	skills/tome-of-lore/assets/check-records-test.sh
 	scripts/check-ripgrep-config-test.sh
 	scripts/check-public-safety-test.sh
+	scripts/check-plugin-version-test.sh
 	scripts/list-shell-sources-test.sh
 )
 
