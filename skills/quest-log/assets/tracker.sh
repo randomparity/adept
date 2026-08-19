@@ -120,7 +120,7 @@ resolve_tracker() {
 			die "$EXIT_USAGE" usage \
 				"could not resolve the repository root: the probe did not run (git rev-parse --show-toplevel exit $root_status)"
 		fi
-		refused_root=$(git -c safe.directory='*' rev-parse --show-toplevel 2>/dev/null) ||
+		refused_root=$(git rev-parse --show-toplevel 2>/dev/null) ||
 			refused_status=$?
 		if ((refused_status == 0)); then
 			die "$EXIT_USAGE" usage \
