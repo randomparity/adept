@@ -62,10 +62,40 @@ denied_patterns=(
 # say, so this covers every ignore mechanism rather than .gitignore alone. On a
 # tree with nothing hidden it is the same set the walk already covers.
 #
-# `git ls-files` reports the index, so a tracked file deleted from the worktree
-# and not yet staged names a path with nothing behind it. There is no content to
-# scan there, and the status check below would otherwise turn every such tree
-# into a fault, so those paths are dropped before the scan rather than after.
+# What ships is the union of two sets, and the gate enumerates both. `git
+# ls-files` reports the *index*, which is a local cache: removing it is the
+# documented recovery for a stuck index.lock and the residue of an interrupted
+# operation, and with it gone that listing exits 0 with no output while HEAD
+# still carries every tracked-and-ignored path. The enumeration then degrades
+# silently to the ignore-respecting walk it was added to supplement and the gate
+# greens over a `git add -f`'d secret that ships to everyone who clones. `git
+# ls-tree -r HEAD` reports the commit and answers that case directly.
+#
+# Neither set replaces the other. A path staged but not yet committed -- `git
+# add -f secret` in the tree the pre-commit hook is about to gate -- is in the
+# index and not in HEAD, so dropping the index half would open a hole at the one
+# moment this gate runs on every commit, and a repository before its first
+# commit has an index and no HEAD at all. Scanning both and letting the finding
+# de-duplication below absorb the overlap is the only reading that covers each
+# (issue #150). The overlap is the ordinary case, so this roughly doubles the
+# path count handed to ripgrep. The cost is a longer argument list, and an
+# argument list that will not fit reaches the scan below as a status that is
+# neither 0 nor 1 -- a fault that stops the run, never a quiet under-scan.
+#
+# HEAD is resolved before it is listed rather than after. `git ls-tree HEAD` in
+# a repository with no commits is a fatal at exit 128, which is the status a
+# repository git could not read returns too, and its diagnostic would reach
+# every caller working in a tree before its first commit. `git rev-parse
+# --verify --quiet HEAD` separates them without printing anything in the
+# legitimate case: 0 names a commit, 1 is an unborn HEAD and nothing is
+# committed yet, anything else is a fault.
+#
+# Both listings name paths, not content: a tracked file deleted from the
+# worktree and not yet staged is still in the index, and a committed file whose
+# deletion is staged is still in HEAD. Either names a path with nothing behind
+# it. There is no content to scan there, and the status check below would
+# otherwise turn every such tree into a fault, so those paths are dropped before
+# the scan rather than after.
 #
 # The test is -f, not -e: the walk only ever opened regular files, and naming a
 # path explicitly makes ripgrep open whatever is there. A tracked path replaced
@@ -86,7 +116,8 @@ denied_patterns=(
 # can tell them apart, and stopping is the only reading that cannot go green
 # over content it never listed. That makes "a directory handed to this gate is
 # inside a git worktree" part of the contract, which is what the gate is for:
-# the tracked set is the set that ships.
+# the tracked set is the set that ships. The same rule governs the HEAD half,
+# with the one exception the rev-parse probe above carves out by name.
 #
 # `-C` chooses a directory to run in; it does not choose a repository. Git's
 # repository-local environment selectors -- the set `git rev-parse
@@ -125,26 +156,20 @@ denied_patterns=(
 # is nothing to enumerate; `git -C` on it could only ever fail. A path that is
 # not there at all reaches ripgrep, which faults on it below.
 #
-# An empty listing under a zero status is a legitimate answer, not a fault.
+# An empty enumeration under a zero status is a legitimate answer, not a fault.
 # Unlike `git rev-parse --local-env-vars`, which always names at least GIT_DIR,
-# this listing has a real empty case: a checkout subdirectory with nothing
-# tracked under it, and a repository before its first `git add`. The walk still
-# covers the tree in both. There is no count floor to fall back on either --
-# the gate takes arbitrary scan paths, so unlike list-shell-sources.sh, which
+# this one has a real empty case: a checkout subdirectory with nothing tracked
+# or committed under it, and a repository before its first `git add`. The walk
+# still covers the tree in both. There is no count floor to fall back on either
+# -- the gate takes arbitrary scan paths, so unlike list-shell-sources.sh, which
 # runs only at this repository's root and can therefore treat an empty subset
 # as broken discovery, this site has no scope over which a floor would hold.
 #
-# What that decision does not establish, stated rather than implied: an empty
-# listing means the *index* has no entries under the path, and the index is not
-# what ships. A worktree whose index was removed -- the documented recovery for
-# a stuck index.lock, and the residue of an interrupted operation -- answers
-# empty at exit 0 while HEAD still carries the content, and the gate then falls
-# back to the ignore-respecting walk that cannot see a `git add -f`'d ignored
-# file. No status check reaches that: git ran and answered truthfully, so it is
-# not the ADR 0005 shape. Choosing the enumeration's source is issue #150 and
-# stays open. The exported-selector route to the same empty result was issue
-# #147, closed by the clearing above; what remains is a repository whose own
-# index disagrees with its own HEAD.
+# That reading is only safe because both sources are asked. A single-source
+# empty answer could mean the source disagreed with what ships rather than that
+# nothing is there, and neither disagreement is an ADR 0005 shape any status
+# check reaches: git ran and answered truthfully both times. Asking the index
+# and HEAD together is what makes empty mean empty here.
 
 # The scratch file is created at the first directory scan path rather than up
 # front, for the reason the git guard below gives: a regular-file scan needs no
@@ -243,6 +268,34 @@ for scan_path in "${scan_paths[@]}"; do
 		[[ -f "$scan_path/$tracked" ]] || continue
 		scan_targets+=("$scan_path/$tracked")
 	done <"$tracked_listing"
+	# The scratch file is reused rather than doubled: the index listing above has
+	# been read to its end by the time the commit listing overwrites it.
+	head_status=0
+	git -C "$scan_path" rev-parse --verify --quiet HEAD >/dev/null || head_status=$?
+	case $head_status in
+	0)
+		committed_status=0
+		git -C "$scan_path" ls-tree -r -z --name-only HEAD >"$tracked_listing" ||
+			committed_status=$?
+		if [ "$committed_status" -ne 0 ]; then
+			printf 'public-safety: could not list the committed files under %s (git ls-tree exit %s)\n' \
+				"$scan_path" "$committed_status" >&2
+			exit 2
+		fi
+		while IFS= read -r -d '' committed; do
+			[[ -f "$scan_path/$committed" ]] || continue
+			scan_targets+=("$scan_path/$committed")
+		done <"$tracked_listing"
+		;;
+	# An unborn HEAD: nothing is committed, so the index half is the whole
+	# answer, and it already covers a `git add -f` made before the first commit.
+	1) ;;
+	*)
+		printf 'public-safety: could not resolve HEAD under %s (git rev-parse exit %s)\n' \
+			"$scan_path" "$head_status" >&2
+		exit 2
+		;;
+	esac
 done
 
 # Two names under /home are not people. GitHub's runner images publish
