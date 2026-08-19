@@ -369,6 +369,50 @@ PATH="$sandbox/bin:$PATH" "$tracker" target-url --profile github \
 	>"$sandbox/out" 2>"$sandbox/err" || status=$?
 assert_exit 1 "$status" 'target-url without --target'
 
+# --- the scratch file the profile captures gh's stderr into ------------------
+# Both halves used to land on exit 1 -- EXIT_USAGE, the class that tells a
+# caller its arguments were wrong. An unguarded assignment left the path empty,
+# so the `2>` failed and a scratch file this host could not create was reported
+# as a gh call that failed; an unguarded removal inside the EXIT trap returned
+# rm's status and turned a clean read into a usage error. Neither is a thing the
+# caller did.
+mkdir -p "$sandbox/mktemp-bin"
+cat >"$sandbox/mktemp-bin/mktemp" <<'STUB'
+#!/usr/bin/env bash
+printf 'mktemp-stub: no usable temp directory\n' >&2
+exit 1
+STUB
+chmod +x "$sandbox/mktemp-bin/mktemp"
+status=0
+GH_CALL_LOG="$sandbox/calls" PATH="$sandbox/mktemp-bin:$sandbox/bin:$PATH" \
+	"$tracker" view --profile github --target example/repo 101 \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'view with no allocatable scratch file'
+# Transport rather than partial: the call never reached the tracker, so nothing
+# was written and nothing may be claimed to have been. The shim is chatty on
+# purpose -- the real mktemp is too -- so parsing the payload is also what pins
+# that its line is kept off the stderr a caller reads as one JSON object.
+assert_error "$sandbox/err" transport 'view with no allocatable scratch file'
+
+# The removal. The read succeeded and its payload is on stdout, so the status
+# must stay 0 -- and the shim is silent because stderr here is the single JSON
+# error object callers parse, which is also why the profile cannot name the path
+# it retained the way the gate scripts do.
+mkdir -p "$sandbox/rm-bin"
+cat >"$sandbox/rm-bin/rm" <<STUB
+#!/usr/bin/env bash
+$(command -v rm) "\$@" || :
+exit 1
+STUB
+chmod +x "$sandbox/rm-bin/rm"
+status=0
+GH_CALL_LOG="$sandbox/calls" PATH="$sandbox/rm-bin:$sandbox/bin:$PATH" \
+	"$tracker" view --profile github --target example/repo 101 \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 0 "$status" 'view whose scratch file could not be removed'
+jq -e '.id == "101"' >/dev/null <"$sandbox/out" ||
+	fail 'a failed scratch removal cost the read its payload'
+
 # --- GitHub profile: writes ------------------------------------------------
 # label-edit is atomic: adds and removes travel in one invocation. Splitting
 # them leaves an issue with two status labels or none, and the pipeline reads

@@ -294,4 +294,75 @@ assert_contains 'https://github.com/example/repo/issues/102' "$SCRATCH/decompose
 expected='title: expected "Confirmed title", observed "Observed title"'
 assert_contains "$expected" "$SCRATCH/decompose-report"
 
+# --- the read-back scratch file ----------------------------------------------
+# Everything past the URL check has already created a live issue, so an exit
+# that says nothing is the one outcome this script exists to prevent: the
+# caller's remedy for a silent failure is the re-run that files a duplicate.
+# Both halves of the scratch file could produce one -- an unguarded `mktemp`
+# exiting on its own status, and an unguarded EXIT trap returning rm's -- and
+# they end differently on purpose, which is what these two cases pin.
+#
+# The mktemp shim keys off the call log rather than a call count: tracker.sh
+# allocates its own scratch file before every `gh` invocation, so a shim that
+# simply failed would stop the run at the repository lookup and never reach the
+# line under test. `issue create` in the log is the fixture's own marker that
+# the write has happened and the next allocation is the helper's.
+mkdir -p "$SCRATCH/mktemp-bin"
+cat >"$SCRATCH/mktemp-bin/mktemp" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+if rg -q '^issue create ' "\$GH_CALL_LOG"; then
+	printf 'mktemp-stub: no usable temp directory\n' >&2
+	exit 1
+fi
+exec $(command -v mktemp) "\$@"
+STUB
+chmod +x "$SCRATCH/mktemp-bin/mktemp"
+
+: >"$SCRATCH/calls"
+if GH_SCENARIO=success GH_CALL_LOG="$SCRATCH/calls" \
+	PATH="$SCRATCH/mktemp-bin:$SCRATCH/bin:$PATH" \
+	"$helper" --repo example/repo --title 'Confirmed title' --body-file "$body_file" \
+	--label bug --label status:ready --parent 42 \
+	>"$SCRATCH/stdout" 2>"$SCRATCH/stderr"; then
+	fail 'an unallocatable read-back scratch file unexpectedly passed'
+fi
+# The issue number is what proves the run got past creation: a diagnostic
+# without it would mean the shim stopped the run somewhere harmless instead.
+assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stderr"
+assert_contains 'read-back could not be attempted' "$SCRATCH/stderr"
+assert_contains 'creation was not retried' "$SCRATCH/stderr"
+assert_count 1 '^issue create ' "$SCRATCH/calls"
+assert_count 0 '^issue view ' "$SCRATCH/calls"
+
+# The other half. The issue was created and every field verified, so a scratch
+# file that will not go away has broken nothing -- and reporting it as a failure
+# would invite the duplicate-creating re-run to reclaim a temp file. The path is
+# named and the status stays 0. The shim removes the file for real before
+# reporting failure, so a suite run leaks nothing into the per-user temp
+# directory that a bare `mktemp` resolves through on macOS whatever TMPDIR says.
+#
+# It is also silent: the shim covers every rm in the run, including the tracker
+# engine's own cleanup, and the repository lookup on line 83 captures that
+# subprocess with `2>&1`, so a chatty shim would land its line inside the URL
+# and stop the run before the case begins. The removal's status is the whole
+# stimulus here.
+mkdir -p "$SCRATCH/rm-bin"
+cat >"$SCRATCH/rm-bin/rm" <<STUB
+#!/usr/bin/env bash
+$(command -v rm) "\$@" || :
+exit 1
+STUB
+chmod +x "$SCRATCH/rm-bin/rm"
+
+: >"$SCRATCH/calls"
+GH_SCENARIO=success GH_CALL_LOG="$SCRATCH/calls" \
+	PATH="$SCRATCH/rm-bin:$SCRATCH/bin:$PATH" \
+	"$helper" --repo example/repo --title 'Confirmed title' --body-file "$body_file" \
+	--label bug --label status:ready --parent 42 \
+	>"$SCRATCH/stdout" 2>"$SCRATCH/stderr" ||
+	fail 'a failed scratch removal turned a verified creation into a failure'
+assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stdout"
+assert_contains 'retained scratch path' "$SCRATCH/stderr"
+
 printf 'create-verified-issue-test: ok\n'

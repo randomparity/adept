@@ -41,14 +41,39 @@ claim_list:implemented"
 # gh writes non-fatal material to stderr while exiting 0, so merging the streams
 # turns a release-update notice into the payload. GH_OUT is the value; GH_ERR is
 # read only to build a failure message.
+#
+# An unguarded `github_err_file=$(mktemp)` did not stop anything: it left the
+# variable empty, and the `2>` below then failed on the empty path and reported
+# a scratch file this host could not create as a gh call that failed -- a local
+# fault wearing the tracker's taxonomy. It dies as transport instead, which is
+# the class that says the call never reached the tracker and nothing was
+# written. mktemp's own diagnostic is discarded rather than relayed, because
+# stderr here is the single JSON error object callers parse and a bare line
+# beside it breaks that parse; the object below carries the reason instead.
+#
+# The removal is guarded for the reason every EXIT trap in this repository now
+# is: under the engine's `set -e` a trap's non-zero return becomes the process's
+# exit status, so an unremovable scratch file turned any clean operation into
+# exit 1 -- EXIT_USAGE, which tells the caller it passed bad arguments. Unlike
+# the gate scripts, this one cannot name the path it retained: tracker.sh's
+# stderr is a single JSON error object that callers parse, and a plain line
+# beside it would break the parse on a run that otherwise succeeded. The status
+# the run earned is the thing worth protecting here, so the removal is allowed
+# to fail quietly and nothing else changes.
 github_err_file=''
 GH_OUT=''
 GH_ERR=''
+# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
+github_cleanup() {
+	rm -f -- "$github_err_file" || :
+}
 github_run() { # gh-args...
 	local status=0
 	[[ -n $github_err_file ]] || {
-		github_err_file=$(mktemp)
-		trap 'rm -f -- "$github_err_file"' EXIT
+		github_err_file=$(mktemp 2>/dev/null) ||
+			die "$EXIT_TRANSPORT" transport \
+				'could not create a scratch file for the tracker command'
+		trap github_cleanup EXIT
 	}
 	GH_OUT=$(gh "$@" 2>"$github_err_file") || status=$?
 	GH_ERR=$(cat "$github_err_file")
@@ -488,7 +513,15 @@ profile_link_blocks() {
 	fi
 	body="$body
 Blocked by #$blocker"
-	tmp=$(mktemp)
+	# Guarded for the reason github_run's is, and dying before the edit rather
+	# than after it: an unguarded assignment exits on mktemp's own status, which
+	# is EXIT_USAGE here and would tell the caller its ids were malformed. The
+	# write has not happened yet, so transport -- the call never reached the
+	# tracker -- is the truthful class, and partial would wrongly claim it might
+	# have landed.
+	tmp=$(mktemp 2>/dev/null) ||
+		die "$EXIT_TRANSPORT" transport \
+			'could not create a scratch file for the dependency edit'
 	printf '%s\n' "$body" >"$tmp"
 	github_run issue edit "$blocked" --repo "$TRACKER_TARGET" --body-file "$tmp" ||
 		status=$?
