@@ -172,9 +172,17 @@ assert_no_ci 'non-branch ref'
 
 new_repo
 assert_fails 'malformed input' 'only three fields\n' 'malformed ref update'
-assert_fails 'invalid object' \
+# The two causes the object witness may legitimately reject a push for. Both
+# reach `git rev-parse --verify --quiet` at exit 1 -- the status that says git
+# answered and the answer was no -- and must be told apart from the exit 2 the
+# stubbed-fault case below asserts.
+assert_fails 'absent object' \
 	'refs/heads/main deadbeef refs/heads/main 0000000000000000000000000000000000000000\n' \
-	'invalid branch object'
+	'branch object is not a commit in this repository'
+BLOB=$(git -C "$REPO" rev-parse HEAD:marker)
+assert_fails 'non-commit object' \
+	"refs/heads/main $BLOB refs/heads/main 0000000000000000000000000000000000000000\n" \
+	'branch object is not a commit in this repository'
 
 new_repo
 printf 'second\n' >"$REPO/marker"
@@ -319,6 +327,36 @@ set -e
 [[ $root_empty_status -eq 2 && $root_empty_output == *'reported no worktree root'* ]] ||
 	fail "an empty worktree root should stop the run: $root_empty_output"
 assert_no_ci 'empty worktree root'
+
+# The branch-object witness is the third read in this file that must separate a
+# push it rejected from a check it could not run. `git cat-file -e` could not:
+# it exits 128 for an absent oid, a non-commit oid, a GIT_DIR pointing at
+# nothing and an unreadable object store alike, so a repository git could not
+# read was reported as a bad push. Under `git rev-parse --verify --quiet` a
+# witness that could not answer exits 128, and the verifier must report that as
+# a check that could not run -- exit 2, naming the command and its status --
+# and keep git's own line, which is all the operator gets from a pre-push hook.
+cat >"$FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == rev-parse && \${2:-} == --verify ]]; then
+  printf 'stub git: not a git repository\n' >&2
+  exit 128
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$FAIL_BIN/git"
+new_repo
+set +e
+object_fault_output=$(run_verifier_with_git \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\\n" "$FAIL_BIN" 2>&1)
+object_fault_status=$?
+set -e
+[[ $object_fault_status -eq 2 &&
+	$object_fault_output == *"could not verify the branch object $OBJECT"* &&
+	$object_fault_output == *'git rev-parse --verify exit 128'* &&
+	$object_fault_output == *'stub git: not a git repository'* ]] ||
+	fail "an unverifiable branch object should stop the run and keep git's line: $object_fault_output"
+assert_no_ci 'unverifiable branch object'
 
 HOOK_REPO="$SCRATCH/hook-repo"
 HOOK_BIN="$SCRATCH/hook-bin"
