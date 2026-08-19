@@ -128,10 +128,17 @@ public-safety:
 ripgrep-config-check:
   ./scripts/check-ripgrep-config.sh
 
+version-check:
+  ./scripts/check-plugin-version.sh
+
 plugin-check:
   #!/usr/bin/env bash
   set -euo pipefail
-  claude plugin validate ./
+  # --strict promotes every warning to an error. It is usable because the
+  # manifest now declares a version (ADR 0022); the one warning this repo used
+  # to accept was that field's absence, and "any other warning is a defect" was
+  # already the rule for the rest.
+  claude plugin validate ./ --strict
   # The validator reads the Claude manifests only. It passes green with
   # .mcp.json and .codex-plugin/plugin.json both unparseable, so without these
   # a typo in either ships and surfaces the next time someone runs Codex or
@@ -155,7 +162,7 @@ commit-check: lint format-check public-safety
 push-check:
   ./scripts/verify-push.sh
 
-verify: records commit-check shape-check ripgrep-config-check plugin-check test actions-check
+verify: records commit-check shape-check ripgrep-config-check plugin-check version-check test actions-check
   prek run --all-files --stage pre-commit --dry-run
 
 ci:

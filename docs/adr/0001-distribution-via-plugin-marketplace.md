@@ -103,6 +103,10 @@ which is a mechanism built for the job by people who own the file formats.
   and branch switches live inside a running agent.
 - **Give the manifests a `version` and bump it per release.** Rejected as the ritual named in
   the Decision. Worth revisiting only if adept gains external consumers who need to pin.
+  Reversed by [0022](0022-versioned-manifest-and-bump-gate.md) (2026-08-19), on a ground this
+  bullet did not have: the field takes over the update trigger from the SHA, so it is adopted
+  with a gate that refuses a change leaving it alone. That record replaces the
+  `Manifests carry no version field` paragraph of the Decision above and nothing else here.
 - **Do nothing and keep patching.** Rejected on the trend rather than on any single defect:
   the two issues that report the overlay rule as wrong in principle are not answerable by a
   fix, and the time spent on installer corner cases had displaced the work the skills exist
