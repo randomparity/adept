@@ -22,6 +22,13 @@ ready_state=$SCRATCH/ready
 fake_mode=normal
 
 gh() {
+	# gh writes non-fatal material to stderr while exiting 0, and a
+	# release-update notice is the common one. Every mode below can carry it,
+	# because the defect it reproduces is not in any one call: it is in reading a
+	# capture whose stdout is a value with the streams merged.
+	if [[ $fake_mode == chatty ]]; then
+		printf 'A new release of gh is available: 2.63.0 -> 2.65.0\n' >&2
+	fi
 	if [[ $1 == api ]]; then
 		if [[ $fake_mode == api-fail ]]; then
 			printf 'API \033[31mdenied\n' >&2
@@ -160,6 +167,58 @@ edit=$(<"$gh_log")
 [[ $edit == *'--remove-label status:in-progress'* ]] || fail 'second status was not removed'
 [[ $edit == *'--add-label status:ready'* ]] || fail 'ready label was not added'
 [[ $(wc -l <"$gh_log") -eq 1 ]] || fail 'status swap used more than one edit call'
+
+# --- a non-fatal notice beside a value ---------------------------------------
+# The four captures whose stdout is a value take stdout alone. While they merged
+# the streams, a notice joined the value: a closed blocker read as open, and the
+# corrupted word was cached, so one notice retained every dependent of that
+# blocker for the rest of the run. The two payload captures and the listing fed
+# the notice to jq, which then blamed a race that had not happened. All four
+# sites are covered below.
+fake_mode=chatty
+reset_cleared_dependency_cache
+cleared_dependency_body_verdict owner/repo 10 'Blocked by #1' ||
+	fail "a notice beside a blocker state retained #10: $cleared_dependency_reason"
+# Assigned by the sourced canonical recipe.
+# shellcheck disable=SC2154
+[[ ${cleared_dependency_blocker_states[0]} == CLOSED ]] ||
+	fail "the blocker cache kept a notice: ${cleared_dependency_blocker_states[0]}"
+
+reset_cleared_dependency_cache
+set +e
+chatty_plan=$(reconcile_cleared_dependencies plan owner/repo 2>"$SCRATCH/chatty-plan")
+chatty_status=$?
+set -e
+[[ $chatty_status -eq 1 ]] || fail 'a notice changed plan mode partial-failure status'
+[[ $chatty_plan == $'ready #101\nready #106' ]] ||
+	fail "a notice on the issue listing changed the plan: $chatty_plan"
+if rg -q 'cannot parse open dependents' "$SCRATCH/chatty-plan"; then
+	fail 'a notice reached the issue-listing payload'
+fi
+
+reset_cleared_dependency_cache
+rm -f "$ready_state"
+: >"$gh_log"
+apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/chatty-apply" ||
+	fail "a notice on a dependent payload cancelled the transition: $(<"$SCRATCH/chatty-apply")"
+rg -q -- '--add-label status:ready' "$gh_log" ||
+	fail 'the chatty apply path did not ready the dependent'
+
+# A host that cannot allocate the scratch file reports through the same
+# diagnostic as a gh call that did not answer: the lookup did not happen, and
+# nothing has been written at any of the four sites. Shimmed as a function
+# because the recipe is sourced into this shell rather than run as a subprocess.
+fake_mode=normal
+reset_cleared_dependency_cache
+# shellcheck disable=SC2329 # called by the sourced recipe, not from this file
+mktemp() { return 1; }
+if cleared_dependency_body_verdict owner/repo 10 'Blocked by #1'; then
+	fail 'an unallocatable scratch file cleared a dependent'
+fi
+unset -f mktemp
+[[ $cleared_dependency_reason == *'no scratch file'* ]] ||
+	fail "unallocatable scratch was not named: $cleared_dependency_reason"
+reset_cleared_dependency_cache
 
 fake_mode=stale
 rm -f "$ready_state"
