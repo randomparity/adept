@@ -120,11 +120,30 @@ denied_patterns=(
 # per-user temp directory and ignores TMPDIR -- and live on Linux, where mktemp
 # honours TMPDIR and fails when it is missing or read-only. That is the CI leg.
 tracked_listing=''
-# An `if` rather than `[ -n ... ] && rm`: these scripts run under `set -e`,
-# where an EXIT trap's non-zero return becomes the exit status, so the
-# short-circuit form would redden every clean run that never made the file. A
-# failed removal still reddens, which is the existing behaviour.
-trap 'if [ -n "$tracked_listing" ]; then rm -f "$tracked_listing"; fi' EXIT
+# Modelled on check-skill-shape.sh's cleanup, and for its reason. Under the
+# `set -e` above, an EXIT trap's non-zero return becomes the shell's exit
+# status, and this gate reports 0 clean, 1 a finding, anything else a fault --
+# so a trap that just returned rm's status would turn a failed removal into a
+# phantom finding: exit 1, nothing printed, on the gate whose findings name a
+# file, a line and a pattern. Capture the run's status first; let a cleanup
+# failure take the fault status only when the run was otherwise clean, so a
+# real finding keeps its own. Issue #77 tracks this shape at two other gates.
+#
+# -f so a file already gone is not reported as left behind. An empty
+# tracked_listing means no directory scan path ever needed one.
+#
+# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
+cleanup() {
+	local exit_status=$?
+	if [ -n "$tracked_listing" ] && ! rm -f -- "$tracked_listing"; then
+		printf 'public-safety: retained scratch path: %s\n' "$tracked_listing" >&2
+		if [ "$exit_status" -eq 0 ]; then
+			exit 2
+		fi
+	fi
+	exit "$exit_status"
+}
+trap cleanup EXIT
 
 scan_targets=("${scan_paths[@]}")
 for scan_path in "${scan_paths[@]}"; do

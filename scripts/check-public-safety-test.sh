@@ -613,4 +613,120 @@ if [ "$file_status" -ne 1 ]; then
 	exit 1
 fi
 
+# A failed scratch removal must not read as a finding. The EXIT trap runs under
+# `set -e`, where its return becomes the exit status, and 1 is this gate's
+# finding status -- so an unguarded trap reports a public-safety violation
+# naming no file, no line and no pattern.
+RMFAIL_BIN="$SCRATCH/rmfail-bin"
+mkdir -p "$RMFAIL_BIN"
+cat >"$RMFAIL_BIN/rm" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "$RMFAIL_BIN/rm"
+
+cleanup_clean_status=0
+PATH="$RMFAIL_BIN:$PATH" "$CHECKER" "$untracked" >"$SCRATCH/output" 2>&1 ||
+	cleanup_clean_status=$?
+if [ "$cleanup_clean_status" -ne 2 ]; then
+	printf 'public-safety-test: a failed cleanup on a clean run must fault, got %s\n' \
+		"$cleanup_clean_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+if ! grep -qF 'retained scratch path' "$SCRATCH/output"; then
+	printf 'public-safety-test: a failed cleanup should name the retained path\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The other half: a run that already found a secret keeps its finding status, so
+# the fault cannot mask a real report.
+cleanup_finding_status=0
+PATH="$RMFAIL_BIN:$PATH" "$CHECKER" "$duplicate" >"$SCRATCH/output" 2>&1 ||
+	cleanup_finding_status=$?
+if [ "$cleanup_finding_status" -ne 1 ]; then
+	printf 'public-safety-test: a finding must survive a failed cleanup, got %s\n' \
+		"$cleanup_finding_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The scratch file is a directory-scan cost, so a mktemp that cannot answer is a
+# fault for a directory and must not fall through to a walk.
+MKTEMPFAIL_BIN="$SCRATCH/mktempfail-bin"
+mkdir -p "$MKTEMPFAIL_BIN"
+cat >"$MKTEMPFAIL_BIN/mktemp" <<'EOF'
+#!/usr/bin/env bash
+printf 'stub mktemp: no usable temp directory\n' >&2
+exit 1
+EOF
+chmod +x "$MKTEMPFAIL_BIN/mktemp"
+scratch_fault_status=0
+PATH="$MKTEMPFAIL_BIN:$PATH" "$CHECKER" "$empty_listing" >"$SCRATCH/output" 2>&1 ||
+	scratch_fault_status=$?
+if [ "$scratch_fault_status" -ne 2 ]; then
+	printf 'public-safety-test: an unusable scratch file must fault, got %s\n' \
+		"$scratch_fault_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+if ! grep -qF 'could not create a scratch file' "$SCRATCH/output"; then
+	printf 'public-safety-test: the fault should name the scratch file\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The claim the git preflight's placement rests on: a host without git can still
+# scan a regular file, and only a directory faults. The PATH is rebuilt from
+# scratch with everything the gate needs except git, because shadowing git would
+# leave `command -v git` succeeding.
+NOGIT_BIN="$SCRATCH/nogit-bin"
+mkdir -p "$NOGIT_BIN"
+nogit_ready=1
+for required in bash dirname rg jq mktemp rm awk; do
+	if required_path=$(command -v "$required"); then
+		ln -sf "$required_path" "$NOGIT_BIN/$required"
+	else
+		nogit_ready=0
+		break
+	fi
+done
+if [ "$nogit_ready" -eq 1 ]; then
+	nogit_dir_status=0
+	PATH="$NOGIT_BIN" "$CHECKER" "$empty_listing" >"$SCRATCH/output" 2>&1 ||
+		nogit_dir_status=$?
+	if [ "$nogit_dir_status" -ne 2 ]; then
+		printf 'public-safety-test: a directory scan without git must fault, got %s\n' \
+			"$nogit_dir_status" >&2
+		cat "$SCRATCH/output" >&2
+		exit 1
+	fi
+	if ! grep -qF 'git is required to scan a directory' "$SCRATCH/output"; then
+		printf 'public-safety-test: the fault should name the missing tool\n' >&2
+		cat "$SCRATCH/output" >&2
+		exit 1
+	fi
+
+	printf 'public content\n' >"$file_target"
+	if ! PATH="$NOGIT_BIN" "$CHECKER" "$file_target" >"$SCRATCH/output" 2>&1; then
+		printf 'public-safety-test: a file scan without git must stay green\n' >&2
+		cat "$SCRATCH/output" >&2
+		exit 1
+	fi
+	printf '%s\n' "$hidden_secret" >"$file_target"
+	nogit_file_status=0
+	PATH="$NOGIT_BIN" "$CHECKER" "$file_target" >"$SCRATCH/output" 2>&1 ||
+		nogit_file_status=$?
+	if [ "$nogit_file_status" -ne 1 ]; then
+		printf 'public-safety-test: a file scan without git must still report, got %s\n' \
+			"$nogit_file_status" >&2
+		cat "$SCRATCH/output" >&2
+		exit 1
+	fi
+else
+	printf 'public-safety-test: SKIP git-absent cases: could not assemble a git-free PATH.\n'
+	printf 'public-safety-test: This run did not check them.\n'
+fi
+
 printf 'public-safety-test: ok\n'
