@@ -35,10 +35,10 @@ those exits exist to remove.
 > plan, and findings files hold the decisions. The resume facts are not: at
 > each phase seam (design -> build -> review -> ship), write the branch name,
 > `BASE_BRANCH`, guardrail commands, current step, open findings, and every
-> deferral a `$trial-loop` run disposed of somewhere
-> durable (the plan, the campaign manifest, a scratch note). The deferrals are
-> not open findings, so a resume that keeps only the open ones loses exactly the
-> list nothing else on the branch records. They are the only
+> deferral a `$trial-loop` run disposed of, somewhere durable (the plan, the
+> campaign manifest, a scratch note). The deferrals are not open findings, so a
+> resume that keeps only the open ones loses exactly the list nothing else on
+> the branch records. They are the only
 > recovery path if auto-compaction fires. Don't compact proactively; if the
 > operator compacts, suggest focus text that keeps those facts and drops
 > resolved review iterations and tool output.
@@ -455,7 +455,7 @@ even when the published artifacts cannot hold the list.
 
 Step 8's review summary names the exit in its own `exit:` field and defines which
 value each ending writes; nothing here repeats that. Route on the exit name rather
-than on the verdict, and write the value where the summary contract defines it.
+than on the verdict.
 
 Pass the loop an iteration budget derived from the step 1 classification: a
 trivial bugfix or a revalidated governed small change passes
