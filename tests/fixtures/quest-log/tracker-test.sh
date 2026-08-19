@@ -47,6 +47,15 @@ assert_contains() {
 	rg -F -- "$needle" "$file" >/dev/null || fail "missing '$needle' in $file"
 }
 
+# The error payload contract: assert exit codes by value and parse the object,
+# because a substring match would pass on any non-zero exit, which is how a
+# wrong class stays invisible.
+assert_error() { # file expected-class label
+	local file=$1 class=$2 label=$3
+	jq -e --arg c "$class" '.error == $c' >/dev/null <"$file" ||
+		fail "$label: error class is not '$class' (payload: $(cat "$file"))"
+}
+
 # Two grammars below are ASCII bracket expressions, and bash takes a bracket
 # range from the locale's collation -- so the property worth asserting is that
 # they bite under the locale a developer actually runs, not under whichever one
@@ -91,6 +100,121 @@ status=0
 	status=$?
 assert_exit 0 "$status" 'resolve with AGENTS.md lacking a declaration'
 assert_contains 'github' "$sandbox/out"
+
+# --- the root probe --------------------------------------------------------
+# Case (a) above is the only failing root probe that may reach the default.
+# `git rev-parse --show-toplevel` exits 128 for "there is no repository here"
+# and for every refusal alike, so a non-zero status on its own is not evidence
+# of absence. Each repository below declares `fixture`, so a run that reports
+# `github` is the wrong-tracker write, not a harmless default.
+
+# Dubious ownership under a bind mount, a sudo run, or a container UID
+# mismatch: git found the repository and declined it. Git's own switch for that
+# refusal drives the case; a build that ignores the switch leaves an ordinary
+# working repository, which would redden this case for a reason that is not the
+# engine's, so the case checks the switch first and says so when it skips.
+mkdir -p "$sandbox/dubiousrepo"
+git -C "$sandbox/dubiousrepo" init -q
+printf 'issue-tracker: fixture\n' >"$sandbox/dubiousrepo/AGENTS.md"
+if (cd "$sandbox/dubiousrepo" &&
+	GIT_TEST_ASSUME_DIFFERENT_OWNER=1 git rev-parse --show-toplevel) >/dev/null 2>&1; then
+	printf 'tracker-test: skip dubious ownership; this git ignores GIT_TEST_ASSUME_DIFFERENT_OWNER\n'
+else
+	status=0
+	(cd "$sandbox/dubiousrepo" &&
+		GIT_TEST_ASSUME_DIFFERENT_OWNER=1 "$tracker" resolve) \
+		>"$sandbox/out" 2>"$sandbox/err" || status=$?
+	assert_exit 1 "$status" 'resolve when git refuses the repository as dubiously owned'
+	assert_error "$sandbox/err" usage 'dubious ownership'
+	# The remedy is reconstructed rather than relayed: git's own line names the
+	# path too, but it would land on the stderr a caller parses as one JSON
+	# error object, and its wording is git's to change.
+	assert_contains 'safe.directory' "$sandbox/err"
+	assert_contains "$sandbox/dubiousrepo" "$sandbox/err"
+fi
+
+# The other 128 that is not an absence: git never reached a repository to have
+# an opinion about, because it could not read the working directory it was
+# started in. The same fixture reaches that fault by a different route on each
+# platform -- on macOS getcwd walks the tree and fails outright, so `pwd -P`
+# reports it; on glibc getcwd answers from the kernel and succeeds, and it is
+# git's stat of that path that hits the unreadable parent. The engine probes
+# both, so this one case pins both. chmod 000 does not stop root, so it would
+# prove nothing there rather than asserting something the environment cannot
+# produce.
+if [[ $(id -u) -eq 0 ]]; then
+	printf 'tracker-test: skip unreadable working directory; running as root, which chmod 000 does not deny\n'
+else
+	mkdir -p "$sandbox/unreadablecwd/inner"
+	git -C "$sandbox/unreadablecwd" init -q
+	printf 'issue-tracker: fixture\n' >"$sandbox/unreadablecwd/AGENTS.md"
+	status=0
+	(cd "$sandbox/unreadablecwd/inner" && chmod 000 "$sandbox/unreadablecwd" &&
+		"$tracker" resolve) >"$sandbox/out" 2>"$sandbox/err" || status=$?
+	chmod 755 "$sandbox/unreadablecwd"
+	assert_exit 1 "$status" 'resolve with an unreadable working directory'
+	# Asserted by message rather than with assert_error: bash writes its own
+	# `shell-init: error retrieving current directory` line to stderr before the
+	# engine gets control, so this is the one fault where stderr cannot be a
+	# single JSON object whatever the engine does.
+	assert_contains 'the working directory could not be read' "$sandbox/err"
+fi
+
+# git was told where the repository is and could not use it. The header on
+# resolve_tracker forbids an environment variable steering resolution; a GIT_DIR
+# naming nothing steered it to the default all the same, because it fails the
+# probe with the same 128 an absent repository does.
+mkdir -p "$sandbox/gitdirrepo"
+git -C "$sandbox/gitdirrepo" init -q
+printf 'issue-tracker: fixture\n' >"$sandbox/gitdirrepo/AGENTS.md"
+status=0
+(cd "$sandbox/gitdirrepo" &&
+	GIT_DIR="$sandbox/gitdirrepo/no-such-git-dir" "$tracker" resolve) \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'resolve when GIT_DIR names a repository git cannot use'
+assert_error "$sandbox/err" usage 'GIT_DIR names nothing'
+assert_contains 'GIT_DIR' "$sandbox/err"
+
+# 128 is git's own "I ran and declined". Any other status is a probe that never
+# ran -- 127 when there is no git on PATH is the reachable one -- and a probe
+# that never ran establishes nothing about a repository.
+mkdir -p "$sandbox/nogitrepo" "$sandbox/nogitbin"
+git -C "$sandbox/nogitrepo" init -q
+printf 'issue-tracker: fixture\n' >"$sandbox/nogitrepo/AGENTS.md"
+cat >"$sandbox/nogitbin/git" <<'STUB'
+#!/usr/bin/env bash
+printf 'bash: git: command not found\n' >&2
+exit 127
+STUB
+chmod +x "$sandbox/nogitbin/git"
+status=0
+(cd "$sandbox/nogitrepo" && PATH="$sandbox/nogitbin:$PATH" "$tracker" resolve) \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'resolve when the root probe could not run at all'
+assert_contains 'exit 127' "$sandbox/err"
+
+# Exit 0 with empty output is the same unresolved root wearing a success
+# status. `$root/AGENTS.md` would become `/AGENTS.md`, so the engine would read
+# a declaration from the filesystem root or, finding none there, report the
+# default having read nothing of this repository. No real rev-parse was found
+# to answer this way, so a stub drives it.
+mkdir -p "$sandbox/emptyrootrepo" "$sandbox/emptyrootbin"
+git -C "$sandbox/emptyrootrepo" init -q
+printf 'issue-tracker: fixture\n' >"$sandbox/emptyrootrepo/AGENTS.md"
+real_git=$(command -v git)
+cat >"$sandbox/emptyrootbin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = rev-parse ] && [ "\$2" = --show-toplevel ]; then
+	exit 0
+fi
+exec "$real_git" "\$@"
+STUB
+chmod +x "$sandbox/emptyrootbin/git"
+status=0
+(cd "$sandbox/emptyrootrepo" && PATH="$sandbox/emptyrootbin:$PATH" "$tracker" resolve) \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'resolve when the root probe answers empty at exit 0'
+assert_error "$sandbox/err" usage 'empty repository root'
 
 # A malformed declaration is an error, not an absence: silently treating a typo
 # as "no declaration" is a wrong-tracker write by another route.
@@ -377,15 +501,6 @@ declared=$("$tracker" declares --profile fixture label-history)
 observed=$("$tracker" label-history --profile fixture 1 label)
 [[ $observed == "${declared#degraded=}" ]] ||
 	fail "fixture label-history returned '$observed', declared '${declared#degraded=}'"
-
-# --- error payload contract -------------------------------------------------
-# Assert exit codes by value and parse the object: a substring match would pass
-# on any non-zero exit, which is how a wrong class stays invisible.
-assert_error() { # file expected-class label
-	local file=$1 class=$2 label=$3
-	jq -e --arg c "$class" '.error == $c' >/dev/null <"$file" ||
-		fail "$label: error class is not '$class' (payload: $(cat "$file"))"
-}
 
 cat >"$sandbox/bin/gh" <<'FAKE_GH'
 #!/usr/bin/env bash

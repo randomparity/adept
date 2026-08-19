@@ -50,12 +50,95 @@ available_profiles() {
 # variable participates: ambient per-shell state surviving into a resumed
 # session would route a write to the wrong tracker silently, which the tracker
 # abstraction record forbids.
+#
+# `git rev-parse --show-toplevel` exits 128 for "there is no repository at or
+# above here" and for every refusal alike: a dubious-ownership refusal under a
+# bind mount, a sudo run or a container UID mismatch, a bare repository, a
+# GIT_DIR pointing at nothing, a .git git cannot read or whose pointer it cannot
+# follow, a working directory git cannot read. Returning `github` on all of them
+# converted a probe that could not answer into a resolution and then wrote
+# against it -- the collapse ADR 0005 decision 1 forbids and the rg calls below
+# already close.
+#
+# The status does not separate the causes, and neither does
+# `--is-inside-work-tree`: measured across that whole set it answers 128 for
+# every case but the bare repository, where it prints `false` at exit 0. Four
+# probes do separate them, and none reads git's prose, which is git's to reword
+# and, on a build with NLS, to translate:
+#
+#   * git resolves where it is before it looks for a repository, and it fails
+#     there in two ways that differ by platform. On macOS getcwd walks the tree
+#     and needs read permission on every parent, so an unreadable parent makes
+#     getcwd itself fail and git reports "Unable to read current working
+#     directory". On glibc getcwd answers from the kernel and succeeds, and the
+#     stat git does next is what hits the unreadable parent: "failed to stat".
+#     Both are "nothing was searched", so both are probed -- ask for the name,
+#     then ask whether the name can be reached. Neither `pwd -P` alone nor the
+#     reachability test alone covers both platforms; measured on macOS 15.6 and
+#     on Ubuntu 24.04 with git 2.43.0.
+#   * 128 is the status git exits with when it ran and declined, including for
+#     an option it does not know. Any other status -- 127 for no git on PATH --
+#     is a probe that never ran and is never evidence about a repository.
+#   * `-c safe.directory='*'` suppresses the ownership check and nothing else --
+#     safe.directory is honoured in protected configuration, which includes the
+#     -c command scope. A retry that succeeds where the plain probe failed
+#     therefore isolates the ownership refusal: the repository is there and git
+#     declined it. Its root names the remedy and never resolves a tracker; a
+#     repository git refuses to trust is not one to read a declaration out of.
+#     The retry is a `rev-parse --show-toplevel`, which reads that repository's
+#     config but runs no hook, alias, pager, editor or fsmonitor -- the vectors
+#     the ownership check exists for.
+#   * GIT_DIR or GIT_WORK_TREE set means git was told where the repository is.
+#     A probe that failed anyway says that named repository is unusable, never
+#     that none exists. This is the one place ambient state is read, and it
+#     decides a fault rather than a resolution -- the header's rule intact.
+#
+# The remedy is reconstructed rather than relayed. verify-push.sh and
+# check-records.sh leave git's own line standing because their channel is plain
+# text; here stderr carries one JSON error object a caller parses, and git's
+# line would corrupt it.
+#
+# What still reaches the fallback is git's own negative discovery answer -- no
+# repository -- and the two cases it reports identically as "not a git
+# repository": a .git it cannot read, and a .git whose pointer it cannot follow.
+# Both leave a readable worktree whose declaration is then missed. Separating
+# them from a true absence means reimplementing repository discovery, so they
+# remain a silent fallback -- stated here rather than claimed closed. A bare
+# repository lands here too, and correctly: it has no worktree, so no AGENTS.md
+# and nothing to declare.
 resolve_tracker() {
 	local root agents matches loose_status count_status=0
-	root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+	local root_status=0 refused_root refused_status=0 cwd
+	root=$(git rev-parse --show-toplevel 2>/dev/null) || root_status=$?
+	if ((root_status != 0)); then
+		cwd=$(pwd -P 2>/dev/null) || cwd=
+		if [[ -z $cwd || ! -d $cwd ]]; then
+			die "$EXIT_USAGE" usage \
+				"could not resolve the repository root: the working directory could not be read (git rev-parse --show-toplevel exit $root_status)"
+		fi
+		if ((root_status != 128)); then
+			die "$EXIT_USAGE" usage \
+				"could not resolve the repository root: the probe did not run (git rev-parse --show-toplevel exit $root_status)"
+		fi
+		refused_root=$(git -c safe.directory='*' rev-parse --show-toplevel 2>/dev/null) ||
+			refused_status=$?
+		if ((refused_status == 0)); then
+			die "$EXIT_USAGE" usage \
+				"could not resolve the repository root: git refused $refused_root as dubiously owned (git rev-parse --show-toplevel exit $root_status); remedy: git config --global --add safe.directory $refused_root"
+		fi
+		if [[ -n ${GIT_DIR:-} || -n ${GIT_WORK_TREE:-} ]]; then
+			die "$EXIT_USAGE" usage \
+				"could not resolve the repository root: GIT_DIR or GIT_WORK_TREE names a repository git could not use (git rev-parse --show-toplevel exit $root_status)"
+		fi
 		printf 'github\n'
 		return 0
-	}
+	fi
+	# Exit 0 with empty output is the same unresolved root wearing a success
+	# status: `$root/AGENTS.md` becomes `/AGENTS.md`, so the read below leaves
+	# this repository entirely. No real rev-parse was found to answer this way,
+	# so this guards a substituted or future git rather than a demonstrated path.
+	[[ -n $root ]] || die "$EXIT_USAGE" usage \
+		'could not resolve the repository root: git reported an empty repository root (git rev-parse --show-toplevel exit 0)'
 	# The invoking repo's declaration, never --target's. --target selects an
 	# object within the resolved tracker and never reaches a second one.
 	agents="$root/AGENTS.md"
