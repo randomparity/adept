@@ -482,7 +482,8 @@ dispatch exists to avoid. Two properties make it safe:
 - **Open the artifact when `findings_count > 0` *or* `suppressed_count > 0`.**
   A non-zero `suppressed_count` on `approve` means an accepted ADR silenced a
   security finding -- the one case the verdict cannot show. Record any
-  suppression in the review summary whatever the verdict.
+  suppression in `WORK:REVIEW` and the PR body whatever the verdict; the
+  summary's fields are single-line and none of them holds a suppression.
 
 Judge security-relevance by reading the changed files, not the issue's
 description of itself. The diff qualifies when it:
@@ -512,8 +513,8 @@ ships. If closing a security finding changes behavior, re-run `$trial-loop` on
 the result (its review did not cover the fix) and then run `$detect-evil` once
 more: at most one `$detect-evil` -> `$trial-loop` -> `$detect-evil` round trip.
 If a second round trip would be needed, do not re-enter and do not park --
-carry on to step 7 and record the unresolved findings as open in the review
-summary, so they reach `WORK:REVIEW` and the PR. The cap is a reporting
+carry on to step 7 and record the unresolved findings as open in
+`WORK:REVIEW` and the PR body, beside the summary. The cap is a reporting
 boundary, not a blocker.
 
 Record the verdict in the review summary either way, including
@@ -542,7 +543,7 @@ artifact parks the quest before `$deliver`.
 
 Run `$deliver <issue-number>` to push the branch, create the PR, and drive it
 to green CI and mergeable state. Keep a compact public review summary — the
-fields below, and only those — as
+fields below — as
 an ignored private mode-0600 file beside the forge ledger; do not put outer
 annotation markers or forge-review payload in it. `REVIEW_SUMMARY` is the exact
 `review-summary:` path in the parsed handoff, not an ad-hoc filename. The
@@ -584,6 +585,12 @@ ended:
 - `blocked-at-budget` — a run stopped as blocked at the iteration budget that a
   human explicitly approved continuing. Not writable until issue #151 documents
   that resume path; until then such a run parks and publishes no summary.
+
+Every other stop parks the quest before `$deliver` and publishes no summary at
+all, a cycle ended for rescoping without new authority included, so there is no
+run that reaches this field with nothing to write. Step 6 does not yet route
+*converged with deferrals* or *converged on own surface* — that is issue #141 —
+and their values are fixed here so that change has them to use.
 
 ADR 0021 is the authority for the field set and these values; the exits
 themselves belong to `$trial-loop`. A named exit's payload — deferral records
