@@ -554,7 +554,7 @@ returns `approve` with a fresh artifact and a matching `run_id`. That is the lea
 supervised path in the whole loop.
 
 Then disclose every suppression (concern + ADR),
-every `deferred-tracked` concern (concern + owning record path), and every
+every `deferred-tracked` concern (concern + owning record path or tracker issue), and every
 `rejected-with-evidence` finding taken on the **consequence-free** ground (concern + the
 pass that raised it) recorded anywhere in the **run**, across all cycles — not just the
 current one. The third is there because the consequence test is a judgment you apply to
@@ -745,10 +745,12 @@ count, and for every charter change what changed and who authorized it — other
 rescopes read as three short clean cycles rather than the up-to-fifteen adversarial
 passes they were. Name the selected reviewer. Then report the final verdict, the fixes made, the
 verification performed, every unresolved finding, and every `deferred-tracked` concern from any
-cycle with its owning record path. When the run exited as *sound with record notes*, say so by
-that name, list the outstanding notes, and name every load-bearing claim a pass reported —
-confirmed, refuted, or not checkable here, with the pass that reported it. The caller routes
-on the name and cannot reconstruct either list. References, not payloads: cite `<findings-path>` rather
+cycle with its owning record path or tracker issue. When the run took a named exit — *converged
+with deferrals*, *sound with record notes*, or *converged on own surface* — say so by that
+name; the caller routes on it and has nothing else that distinguishes a finished run from a
+blocked one. On *sound with record notes* also list the outstanding notes and name every
+load-bearing claim a pass reported — confirmed, refuted, or not checkable here, with the pass
+that reported it. The caller cannot reconstruct either list. References, not payloads: cite `<findings-path>` rather
 than pasting findings into the caller's context. The deferral list is the part a
 caller cannot reconstruct: it is the difference between "this branch is clean" and
 "this branch is clean and three known defects now have owners."
@@ -761,7 +763,21 @@ are almost always one step inside a larger workflow. After the loop exits:
 - An `approve` verdict means the caller advances to the next phase.
 - A *sound with record notes* exit means the same — it is not blocked — and the caller
   carries the outstanding notes into its own report.
+- A *converged with deferrals* or *converged on own surface* exit means the same again —
+  neither is blocked, both are terminal, and the caller advances carrying the run's
+  deferral list, each entry with its owning record path or tracker issue, into its own
+  report.
+- **Route on the exit name, not on the verdict alone.** Every named exit above fires while
+  findings still stand that no reviewer cleared, so the last verdict on all three is
+  ordinarily `needs-attention` — *converged on own surface* is the one that may end on
+  `approve`, when its confirming pass returns nothing. Reading "not `approve`, therefore
+  blocked" is the failure these exits exist to prevent: it reports a finished target as
+  stuck. The bullet below applies to a `needs-attention` verdict on a pass that took **no**
+  named exit and has not reached the iteration budget.
 - A `needs-attention` verdict means you fix findings and re-enter the loop.
+- A run stopped as blocked at the iteration budget does not re-enter the loop, and the
+  caller does not advance without explicit human approval. A cycle ended for rescoping
+  that nobody granted new authority for ends the run the same way.
 - Only treat the loop as a stopping point when you have no caller — i.e. a
   human explicitly asked for a one-shot review loop with nothing queued after
   it.

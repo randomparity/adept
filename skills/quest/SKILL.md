@@ -12,8 +12,11 @@ specific cause and the correction follows from that evidence. Familiarity, a pla
 stale evidence from another failure is not enough; without current causal evidence, run
 `$detect-curse` before proposing a correction. If the same artifact recurs after the same
 evidence-backed correction with no new evidence, stop instead of repeating the diagnose-fix cycle.
-Don't advance past a red guardrail, an unresolved `$gauntlet` finding, a dirty-tree surprise, or an
-ambiguous user-facing design decision.
+Don't advance past a red guardrail, an undispositioned `$gauntlet` finding, a dirty-tree surprise,
+or an ambiguous user-facing design decision. A finding a `$trial-loop` exit disposed of — as
+`deferred-tracked` with an owner, or `rejected-with-evidence` — is dispositioned; all three named
+exits fire while such findings stand, and treating them as advancement blockers is the reading
+those exits exist to remove.
 
 > **One continuous task.** Preflight through hand-off -- or through cleanup on
 > the authorized merge path -- is a single turn, and the checkpoints inside
@@ -23,15 +26,19 @@ ambiguous user-facing design decision.
 > the finished merge and cleanup, if the operator authorized merging; or a
 > blocker you have parked per *On a Blocker* -- naming it in chat is not
 > enough, the issue must carry the state. As a background worker, an
-> `approve` from the review loop — or a *sound with record notes* exit — means
-> proceed now, not wait.
+> `approve` from the review loop — or a *converged with deferrals*, *sound with
+> record notes*, or *converged on own surface* exit — means proceed now, not
+> wait.
 
 > **Keep the durable facts durable.** Raw phase context -- brainstorm
 > transcripts, `$gauntlet` payloads, TDD output -- is droppable once the spec,
 > plan, and findings files hold the decisions. The resume facts are not: at
 > each phase seam (design -> build -> review -> ship), write the branch name,
-> `BASE_BRANCH`, guardrail commands, current step, and open findings somewhere
-> durable (the plan, the campaign manifest, a scratch note). They are the only
+> `BASE_BRANCH`, guardrail commands, current step, open findings, and every
+> deferral a `$trial-loop` run disposed of, somewhere durable (the plan, the
+> campaign manifest, a scratch note). The deferrals are not open findings, so a
+> resume that keeps only the open ones loses exactly the list nothing else on
+> the branch records. They are the only
 > recovery path if auto-compaction fires. Don't compact proactively; if the
 > operator compacts, suggest focus text that keeps those facts and drops
 > resolved review iterations and tool output.
@@ -421,20 +428,34 @@ dependencies, compatibility, migrations, observability, and whether the chosen
 approach is simpler or safer than viable alternatives.` Address every
 defensible finding and commit after each accepted fix.
 
-A *sound with record notes* exit is a non-blocking outcome: a pass confirmed
-every load-bearing claim it named on the branch, and the standing findings carry
-no consequence for the decision, the behaviour, or a future maintainer's actions.
-Proceed, and carry the outstanding notes and the confirmed claim list into the
-`WORK:REVIEW` comment and the PR body — they are the part a reader cannot
+The loop has three named non-blocking exits — *converged with deferrals*, *sound
+with record notes*, and *converged on own surface* — and **each advances this
+workflow**. None of them is blocked and none of them is the `approve` exit; the
+exit name, not the verdict, is what says the run finished. `$trial-loop` owns the
+condition each one fires on and reports the exit by name, so route on the name it
+reported rather than on conditions re-derived here. Proceed on any of the three.
+
+Carry every deferral from any `$trial-loop` run on this branch — each entry with
+its owning record path or tracker issue — into the `WORK:REVIEW` comment and the
+PR body, on every exit and `approve` included. The loop discloses its deferrals
+however it ended, so an `exit: none` run carries a list exactly as a named exit
+does, and a second run after a security round trip does not erase the first run's
+records. On a *sound with record notes* exit carry the outstanding notes and the
+confirmed claim list the same way. Those lists are the part a reader cannot
 reconstruct, and they are the only thing holding the orchestrator's own
 consequence judgment to account.
 
-The review summary below names the exit in its own `exit:` field: write
-`sound-with-record-notes` there. `verdict:` still takes the loop's last reviewer
-verdict, which on this exit is ordinarily `needs-attention` — the two fields are
-different facts, and the exit is what says the run was not blocked. The two lists
-still go to `WORK:REVIEW` and the PR body, because the summary's members are
-single-line fields and neither list is one. ADR 0021 is the contract.
+`WORK:REVIEW`'s sole writer composes the comment from the summary and the forge
+review, with no slot for a list, and nothing edits the PR body for this purpose
+after `$deliver` composes it. Issue #159 owns both halves and this change does not
+close either. Until it does, keep the list with the resume facts — a compaction
+between the last loop run and step 8 would otherwise shorten it invisibly — and
+report it to whoever receives this run, so the concerns have an owner on the record
+even when the published artifacts cannot hold the list.
+
+Step 8's review summary names the exit in its own `exit:` field and defines which
+value each ending writes; nothing here repeats that. Route on the exit name rather
+than on the verdict.
 
 Pass the loop an iteration budget derived from the step 1 classification: a
 trivial bugfix or a revalidated governed small change passes
@@ -588,13 +609,13 @@ ended:
 
 Every other stop parks the quest before `$deliver` and publishes no summary at
 all, a cycle ended for rescoping without new authority included, so there is no
-run that reaches this field with nothing to write. Step 6 does not yet route
-*converged with deferrals* or *converged on own surface* — that is issue #141 —
-and their values are fixed here so that change has them to use.
+run that reaches this field with nothing to write. Step 6 routes all three named
+exits as non-blocking outcomes that advance the workflow, so each of them reaches
+this field under its own name.
 
 ADR 0021 is the authority for the field set and these values; the exits
-themselves belong to `$trial-loop`. A named exit's payload — deferral records
-with their owning paths, outstanding notes, the confirmed claim list — stays in
+themselves belong to `$trial-loop`. A run's payload — deferrals with their owning
+paths or tracker issues, outstanding notes, the confirmed claim list — stays in
 `WORK:REVIEW` and the PR body, which is where `$trial-loop`'s own report
 obligation sends it.
 
