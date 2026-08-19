@@ -761,6 +761,16 @@ are almost always one step inside a larger workflow. After the loop exits:
 - An `approve` verdict means the caller advances to the next phase.
 - A *sound with record notes* exit means the same — it is not blocked — and the caller
   carries the outstanding notes into its own report.
+- A *converged with deferrals* or *converged on own surface* exit means the same again —
+  neither is blocked, both are terminal, and the caller advances carrying the run's
+  deferral list, each entry with its owning record path, into its own report.
+- **Route on the exit name, not on the verdict alone.** Every named exit above fires while
+  findings still stand that no reviewer cleared, so the last verdict on all three is
+  ordinarily `needs-attention` — *converged on own surface* is the one that may end on
+  `approve`, when its confirming pass returns nothing. Reading "not `approve`, therefore
+  blocked" is the failure these exits exist to prevent: it reports a finished target as
+  stuck. The bullet below applies to a `needs-attention` verdict on a pass that took **no**
+  named exit.
 - A `needs-attention` verdict means you fix findings and re-enter the loop.
 - Only treat the loop as a stopping point when you have no caller — i.e. a
   human explicitly asked for a one-shot review loop with nothing queued after

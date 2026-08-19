@@ -364,6 +364,15 @@ ADR. A *sound with record notes* exit is **not** that case — a pass confirmed 
 load-bearing claim it named in the ADR, and the standing findings carry no consequence —
 so continue to the spec review and carry the outstanding notes into the design record.
 
+*converged with deferrals* and *converged on own surface* are **not** that case either.
+The first means a pass returned nothing both new and off the run's own surface against an
+ADR you did not touch since the previous pass; the second means every standing finding sat
+in surface this run itself added, and one confirming pass agreed. Both are terminal
+non-blocking exits, so continue to the spec review on either, and carry the run's deferral
+list — each entry with its owning record path — into the design record beside any notes.
+Route on the exit name: none of the three is `approve`, so the last verdict is ordinarily
+`needs-attention`, and reading that alone as blocked reports a hardened ADR as unhardened.
+
 ## 3. Adversarial-review the spec
 
 Run `$trial-loop` with:

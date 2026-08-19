@@ -23,8 +23,9 @@ ambiguous user-facing design decision.
 > the finished merge and cleanup, if the operator authorized merging; or a
 > blocker you have parked per *On a Blocker* -- naming it in chat is not
 > enough, the issue must carry the state. As a background worker, an
-> `approve` from the review loop — or a *sound with record notes* exit — means
-> proceed now, not wait.
+> `approve` from the review loop — or a *converged with deferrals*, *sound with
+> record notes*, or *converged on own surface* exit — means proceed now, not
+> wait.
 
 > **Keep the durable facts durable.** Raw phase context -- brainstorm
 > transcripts, `$gauntlet` payloads, TDD output -- is droppable once the spec,
@@ -421,20 +422,36 @@ dependencies, compatibility, migrations, observability, and whether the chosen
 approach is simpler or safer than viable alternatives.` Address every
 defensible finding and commit after each accepted fix.
 
-A *sound with record notes* exit is a non-blocking outcome: a pass confirmed
-every load-bearing claim it named on the branch, and the standing findings carry
-no consequence for the decision, the behaviour, or a future maintainer's actions.
-Proceed, and carry the outstanding notes and the confirmed claim list into the
-`WORK:REVIEW` comment and the PR body — they are the part a reader cannot
-reconstruct, and they are the only thing holding the orchestrator's own
-consequence judgment to account.
+The loop has three named non-blocking exits, and **each advances this workflow**.
+None of them is `approve` and none of them is blocked; the exit name, not the
+verdict, is what says the run finished. Proceed on any of the three:
+
+- *converged with deferrals* — a pass returned nothing both new and off the run's
+  own surface, against a branch the loop did not touch since the previous pass.
+  This is where a finished branch with owned adjacent defects lands.
+- *sound with record notes* — a pass confirmed every load-bearing claim it named
+  on the branch, and the standing findings carry no consequence for the decision,
+  the behaviour, or a future maintainer's actions.
+- *converged on own surface* — every standing finding across two passes sat in
+  test or verification surface this run itself added, no finding cited production
+  lines, and one confirming pass agreed.
+
+Carry the run's deferral list — each entry with its owning record path — into the
+`WORK:REVIEW` comment and the PR body on every one of the three, and on a *sound
+with record notes* exit the outstanding notes and the confirmed claim list too.
+Those lists are the part a reader cannot reconstruct, and they are the only thing
+holding the orchestrator's own consequence judgment to account.
 
 The review summary below names the exit in its own `exit:` field: write
-`sound-with-record-notes` there. `verdict:` still takes the loop's last reviewer
-verdict, which on this exit is ordinarily `needs-attention` — the two fields are
-different facts, and the exit is what says the run was not blocked. The two lists
-still go to `WORK:REVIEW` and the PR body, because the summary's members are
-single-line fields and neither list is one. ADR 0021 is the contract.
+`converged-with-deferrals`, `sound-with-record-notes`, or
+`converged-on-own-surface` there, under the exit's own name. `verdict:` still
+takes the loop's last reviewer verdict, which on these exits is ordinarily
+`needs-attention` — *converged on own surface* is the one that may end on
+`approve`, when its confirming pass returns nothing. The two fields are different
+facts, and the exit is what says the run was not blocked, so do not read
+`verdict:` alone and park a finished branch. The lists still go to `WORK:REVIEW`
+and the PR body, because the summary's members are single-line fields and no list
+is one. ADR 0021 is the contract.
 
 Pass the loop an iteration budget derived from the step 1 classification: a
 trivial bugfix or a revalidated governed small change passes
@@ -588,9 +605,9 @@ ended:
 
 Every other stop parks the quest before `$deliver` and publishes no summary at
 all, a cycle ended for rescoping without new authority included, so there is no
-run that reaches this field with nothing to write. Step 6 does not yet route
-*converged with deferrals* or *converged on own surface* — that is issue #141 —
-and their values are fixed here so that change has them to use.
+run that reaches this field with nothing to write. Step 6 routes all three named
+exits as non-blocking outcomes that advance the workflow, so each of them reaches
+this field under its own name.
 
 ADR 0021 is the authority for the field set and these values; the exits
 themselves belong to `$trial-loop`. A named exit's payload — deferral records
