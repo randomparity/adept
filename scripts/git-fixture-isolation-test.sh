@@ -104,4 +104,70 @@ for suite in "${suites[@]}"; do
 	run_suite "$suite"
 done
 
+# The cases above prove each suite clears the selectors when git answers. These prove the
+# two that cannot use clear_git_env stop when it does not. Every other suite above sources
+# the helper, whose two failure shapes are pinned in test-fixture-helpers-test.sh; the
+# check-records-test.sh pair carries its own copy of the same clearing, because `just
+# records` compares .github/scripts/ against skills/tome-of-lore/assets/ byte for byte and
+# the two sit at different depths, so no single relative source path resolves from both. A git
+# that cannot answer has to stop them rather than leave them building fixtures with the
+# ambient GIT_DIR still set.
+twins=(
+	.github/scripts/check-records-test.sh
+	skills/tome-of-lore/assets/check-records-test.sh
+)
+
+stub_bin=$SCRATCH/stub-bin
+mkdir -p "$stub_bin"
+
+# Each stub answers the one call under test and refuses everything after it. That refusal is
+# what keeps a reverted fix cheap to detect: a suite that read the answer through a process
+# substitution and carried on reddens at its next git call instead of building seven
+# thousand fixtures on its way to the same verdict.
+assert_twins_stop() { # <diagnostic> -- $stub_bin/git is already written
+	local suite status output
+	for suite in "${twins[@]}"; do
+		output=$SCRATCH/twin.output
+		status=0
+		PATH="$stub_bin:$PATH" "$repo_root/$suite" >"$output" 2>&1 || status=$?
+		if [ "$status" -eq 0 ]; then
+			cat "$output" >&2
+			fail "$suite continued after a git that could not answer"
+		fi
+		if ! grep -qF "$1" "$output"; then
+			cat "$output" >&2
+			fail "$suite: expected the diagnostic '$1'"
+		fi
+		if grep -qF 'unexpected call' "$output"; then
+			cat "$output" >&2
+			fail "$suite ran a further git command after the failed read"
+		fi
+		printf '  ok   %s stops on %s\n' "$suite" "$1"
+	done
+}
+
+cat >"$stub_bin/git" <<'STUB'
+#!/usr/bin/env bash
+if [ "${1:-}" = rev-parse ] && [ "${2:-}" = --local-env-vars ]; then
+	printf 'stub git: cannot report the local env vars\n' >&2
+	exit 128
+fi
+printf 'stub git: unexpected call: %s\n' "$*" >&2
+exit 127
+STUB
+chmod +x "$stub_bin/git"
+assert_twins_stop 'cannot read git local env vars'
+
+# The same failure wearing a zero exit status.
+cat >"$stub_bin/git" <<'STUB'
+#!/usr/bin/env bash
+if [ "${1:-}" = rev-parse ] && [ "${2:-}" = --local-env-vars ]; then
+	exit 0
+fi
+printf 'stub git: unexpected call: %s\n' "$*" >&2
+exit 127
+STUB
+chmod +x "$stub_bin/git"
+assert_twins_stop 'git reported no local env vars'
+
 printf 'git-fixture-isolation-test: all %s suites passed\n' "${#suites[@]}"
