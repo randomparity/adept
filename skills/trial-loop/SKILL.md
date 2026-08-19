@@ -770,8 +770,10 @@ are almost always one step inside a larger workflow. After the loop exits:
   `approve`, when its confirming pass returns nothing. Reading "not `approve`, therefore
   blocked" is the failure these exits exist to prevent: it reports a finished target as
   stuck. The bullet below applies to a `needs-attention` verdict on a pass that took **no**
-  named exit.
+  named exit and has not reached the iteration budget.
 - A `needs-attention` verdict means you fix findings and re-enter the loop.
+- A run stopped as blocked at the iteration budget is the one blocked ending. It does not
+  re-enter the loop, and the caller does not advance without explicit human approval.
 - Only treat the loop as a stopping point when you have no caller — i.e. a
   human explicitly asked for a one-shot review loop with nothing queued after
   it.

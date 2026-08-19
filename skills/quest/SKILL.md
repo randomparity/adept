@@ -436,11 +436,14 @@ verdict, is what says the run finished. Proceed on any of the three:
   test or verification surface this run itself added, no finding cited production
   lines, and one confirming pass agreed.
 
-Carry the run's deferral list — each entry with its owning record path — into the
-`WORK:REVIEW` comment and the PR body on every one of the three, and on a *sound
-with record notes* exit the outstanding notes and the confirmed claim list too.
-Those lists are the part a reader cannot reconstruct, and they are the only thing
-holding the orchestrator's own consequence judgment to account.
+Carry every deferral from any `$trial-loop` run on this branch — each entry with
+its owning record path — into the `WORK:REVIEW` comment and the PR body, on every
+exit and `approve` included. The loop discloses its deferrals however it ended, so
+an `exit: none` run carries a list exactly as a named exit does, and a second run
+after a security round trip does not erase the first run's records. On a *sound
+with record notes* exit carry the outstanding notes and the confirmed claim list
+too. Those lists are the part a reader cannot reconstruct, and they are the only
+thing holding the orchestrator's own consequence judgment to account.
 
 The review summary below names the exit in its own `exit:` field: write
 `converged-with-deferrals`, `sound-with-record-notes`, or
@@ -610,7 +613,7 @@ exits as non-blocking outcomes that advance the workflow, so each of them reache
 this field under its own name.
 
 ADR 0021 is the authority for the field set and these values; the exits
-themselves belong to `$trial-loop`. A named exit's payload — deferral records
+themselves belong to `$trial-loop`. A run's payload — deferral records
 with their owning paths, outstanding notes, the confirmed claim list — stays in
 `WORK:REVIEW` and the PR body, which is where `$trial-loop`'s own report
 obligation sends it.
