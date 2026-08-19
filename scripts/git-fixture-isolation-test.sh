@@ -170,4 +170,50 @@ STUB
 chmod +x "$stub_bin/git"
 assert_twins_stop 'git reported no local env vars'
 
+# The other ambient channel: the global and system config *files*. clear_git_env clears
+# GIT_CONFIG, GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT, so the cases above cover the
+# selectors -- but a `safe.directory` entry covering a fixture reaches git through neither,
+# and it is honoured in protected configuration. That entry neutralizes
+# GIT_TEST_ASSUME_DIFFERENT_OWNER, which is how tracker-test.sh's dubious-ownership case
+# skipped on both CI runners for as long as it existed: the runner images ship a permissive
+# global config, so the one arm of the fix that matters operationally was never exercised.
+# The config below is that runner-shaped condition, and the property is that the suite runs
+# the case under it rather than announcing a skip.
+#
+# Asserted only where this git honours the switch at all, probed the way the case stages it.
+# On a build that ignores it the case skips for its own stated reason and there is nothing
+# here to pin.
+#
+# tracker-test.sh alone stands for all three sites. The check-records-test.sh twins carry
+# the identical isolation, and a run of either builds roughly seven thousand files; `just
+# records` compares the two byte for byte, so a copy drifting from the other is already
+# caught, and the CI log shows whether their case ran.
+permissive_config=$SCRATCH/permissive.gitconfig
+cat >"$permissive_config" <<'CONFIG'
+[safe]
+	directory = *
+CONFIG
+ownership_probe=$SCRATCH/ownership-probe
+git init -q "$ownership_probe"
+if (cd "$ownership_probe" &&
+	env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+		GIT_TEST_ASSUME_DIFFERENT_OWNER=1 git rev-parse --show-toplevel) >/dev/null 2>&1; then
+	printf '  skip ownership case under a permissive config; this git ignores GIT_TEST_ASSUME_DIFFERENT_OWNER\n'
+else
+	ownership_output=$SCRATCH/ownership.output
+	ownership_status=0
+	env GIT_CONFIG_GLOBAL="$permissive_config" GIT_CONFIG_SYSTEM="$permissive_config" \
+		"$repo_root/tests/fixtures/quest-log/tracker-test.sh" \
+		>"$ownership_output" 2>&1 || ownership_status=$?
+	if [ "$ownership_status" -ne 0 ]; then
+		cat "$ownership_output" >&2
+		fail "tracker-test.sh exited $ownership_status under a permissive git config"
+	fi
+	if grep -qF 'skip dubious ownership' "$ownership_output"; then
+		cat "$ownership_output" >&2
+		fail 'tracker-test.sh skipped the ownership case under a permissive git config'
+	fi
+	printf '  ok   tracker-test.sh runs the ownership case under a permissive git config\n'
+fi
+
 printf 'git-fixture-isolation-test: all %s suites passed\n' "${#suites[@]}"
