@@ -121,7 +121,7 @@ the same exposure the other five already carry.
 `$bards-tale` is the one machine consumer that carries a summary field forward. Its step 3d
 (`skills/bards-tale/SKILL.md:202-213`) reads the latest complete `WORK:REVIEW` block for the
 iteration count and carries the verdict into its narrative, so until it reads `exit:` too a
-retrospective still narrates a named exit as blocked. Filed as issue #149;
+retrospective still narrates a named exit as `needs-attention` alone. Filed as issue #149;
 `skills/bards-tale/SKILL.md` is outside this change's surface. That issue also owns the reading
 of the summaries already published, which carry five fields and no `exit:` line: absence is not
 `none` — such a summary says nothing about how its run ended. Nothing rewrites a published
@@ -154,7 +154,7 @@ depends on when it carries the verdict forward. A second field costs one line an
 values canonical.
 
 **Write the exit name into `verdict:`, replacing the reviewer's verdict.** verified against
-`skills/trial-loop/SKILL.md:746-748`, the report obligation: the run reports "the final verdict"
+`skills/trial-loop/SKILL.md:746-749`, the report obligation: the run reports "the final verdict"
 and, for *sound with record notes*, also says so "by that name" — the exit accompanies the
 verdict rather than replacing it. Collapsing them destroys the only field saying
 whether a reviewer ever returned `approve`, and leaves ADR 0011's canonical verdict unwritten.

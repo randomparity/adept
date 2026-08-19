@@ -112,7 +112,7 @@ change what that section describes.
 - `$trial-loop`'s exits and report obligations — unchanged.
 - The `WORK:REVIEW` annotation's outer payload shape — ADR 0016.
 - Teaching `$bards-tale` step 3d to read `exit:` — issue #149, filed during this change's ADR
-  review. Until then a retrospective narrates a named exit as blocked.
+  review. Until then a retrospective narrates a named exit as `needs-attention` alone.
 
 ## Verification
 
