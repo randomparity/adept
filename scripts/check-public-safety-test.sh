@@ -535,11 +535,20 @@ fi
 # diagnostic before dying, a real non-repository emits nothing -- so softening
 # the contract by special-casing an empty-output non-zero as benign would keep
 # the stub case red and reopen the walk-only path for every such directory.
+#
+# GIT_CEILING_DIRECTORIES stops git's upward discovery at the scratch root, so
+# the case does not rest on where TMPDIR points. It is the only fixture here
+# whose premise is a *negative* property of its ancestry -- every other one
+# creates the repository it needs -- and `TMPDIR=$PWD/tmp` inside a checkout is
+# a real habit, under which git finds that checkout and the gate exits 0.
+# clear_git_env cannot interfere: the name is not one
+# `git rev-parse --local-env-vars` reports.
 outside_worktree="$SCRATCH/outside-worktree"
 mkdir -p "$outside_worktree"
 printf 'public content\n' >"$outside_worktree/README.md"
 outside_status=0
-"$CHECKER" "$outside_worktree" >"$SCRATCH/output" 2>&1 || outside_status=$?
+GIT_CEILING_DIRECTORIES="$SCRATCH" "$CHECKER" "$outside_worktree" \
+	>"$SCRATCH/output" 2>&1 || outside_status=$?
 if [ "$outside_status" -ne 2 ]; then
 	printf 'public-safety-test: a directory outside a worktree must fault, got %s\n' \
 		"$outside_status" >&2
