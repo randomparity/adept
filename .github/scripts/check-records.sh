@@ -1129,7 +1129,7 @@ gate_paths() {
 # command that ran and the status it returned, with git's line left standing in front of it.
 require_repo_root() {
   local root root_status=0
-  root=$(git rev-parse --show-toplevel 2>/dev/null) || root_status=$?
+  root=$(git rev-parse --show-toplevel) || root_status=$?
   if [ "$root_status" -ne 0 ]; then
     err "E-ROOT-UNRESOLVED: could not resolve the repository root (git rev-parse --show-toplevel exit $root_status)"
     return 1
