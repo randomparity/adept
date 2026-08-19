@@ -138,8 +138,33 @@ if [[ $issue_url != "$canonical_url/issues/$issue_number" ]]; then
 	exit 1
 fi
 
-view_err=$(mktemp)
-trap 'rm -f -- "$view_err"' EXIT
+# Past this point the issue exists and its URL has been checked, so every exit
+# here has to say so: a bare non-zero from an unguarded `mktemp` or from an
+# unguarded removal inside the EXIT trap is the silent failure lines 109-111
+# describe, and the caller's remedy for a silent failure is the re-run that
+# creates a duplicate live issue.
+#
+# The two halves therefore end differently. A scratch file that cannot be
+# created leaves the read-back unperformed, which is a real failure and reports
+# as one -- naming the issue so nobody retries the write. A scratch file that
+# cannot be removed after a run that verified everything has broken nothing;
+# reporting it as a failure would invite exactly that re-run to reclaim a temp
+# file. So cleanup names the retained path and leaves the status alone, which is
+# where this diverges from the gate scripts, whose exit 1 means something else.
+view_err=$(mktemp) || {
+	printf '%s: read-back could not be attempted (no scratch file);' "$issue_url" >&2
+	printf ' creation was not retried\n' >&2
+	exit 1
+}
+# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
+cleanup() {
+	local exit_status=$?
+	if ! rm -f -- "$view_err"; then
+		printf '%s: retained scratch path: %s\n' "$issue_url" "$view_err" >&2
+	fi
+	exit "$exit_status"
+}
+trap cleanup EXIT
 view_status=0
 issue_json=$("$tracker" view --target "$repo" "$issue_number" 2>"$view_err") ||
 	view_status=$?
