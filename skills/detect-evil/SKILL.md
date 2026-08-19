@@ -67,8 +67,59 @@ point where data or control crosses a change in trust level:
   channel, with what retention.
 
 State the inventory explicitly in the summary, even when it is empty. An empty inventory is
-a legitimate and common result — say so, and return `approve`. A scan that reports findings
-without ever naming a boundary has skipped the method.
+a legitimate and common result — say so. The verdict still follows the rule in *Output*:
+`approve` requires no defensible finding, including one raised by the claims below or by a
+standing category. A scan that reports findings without ever naming a boundary has skipped
+the method.
+
+### Reproduce the claims the target rests on
+
+**A claim the target leans on is checked, not accepted.** A diff argues for its own safety
+in prose: a comment saying the caller already validated this, a commit message saying the
+path is unreachable, a spec saying a guardrail covers the category, a review note saying the
+check happens one layer up. Each such claim, if true, keeps a crossing out of the inventory
+or answers a step 2 question without a check in the code.
+Identify the target's load-bearing factual claims — the ones whose falsity would change its
+conclusion — and attempt to reproduce each before you call the inventory complete. The ones
+that bite hardest here are the claims that keep a crossing off the list or reopen one, so
+take those first; they are where this scan's judgment turns, not the whole of what the
+target rests on. This binds the scan rather than informing it: a caller may restate it in
+focus text, but focus weights and does not oblige, and a calling loop may key its exits on
+whether a pass actually reproduced anything.
+
+Reproduction is bounded by *Hard constraints* and adds no exception to them. Re-read the
+code the claim points at, search for the sibling check the claim says exists, run the
+guardrail the claim credits — that last only where running it writes nothing into the
+working tree, changes no git state, and executes no code the diff touched. All three, not
+any: a guardrail that leaves build output, refreshes a lockfile, or fixes in place lands its
+artifacts in the working tree the next pass resolves its target from, and one that runs the
+changed code — whether the diff added the guardrail or merely gave it new input — is the
+execution *Hard constraints* forbids. Any failure routes the claim to not checkable here,
+naming the rule that stopped you, as does a claim whose only proof would be an exploit or a
+probe against a live host.
+
+Every claim you name ends in exactly one of three states, and none may be left unstated:
+
+- **confirmed** — you read the code or ran the guardrail and the claim holds. Name what you
+  read or ran; a claim recorded as confirmed on inspection alone says that in those words.
+- **refuted** — you checked and it does not hold. This is a finding under the existing
+  *Finding bar*, carried in the existing schema with no new field: it names the boundary or
+  category the claim was standing in for — or, where it stands for neither, says so and
+  stands on the claim itself — cites the claim's own file and lines, and puts the claim, what
+  you observed, the command, and the environment in the `body`. A refuted
+  load-bearing claim is a defensible finding, so `verdict` is `needs-attention` like any
+  other.
+- **not checkable here** — the tool, network, platform, or access it needs is absent, the
+  command would write into the working tree, change git state, or run the diff's code, or
+  *Hard constraints* forbids it outright. This state is a property of the environment, never
+  of how much room you had left. Report it as that observation, never as a confirmation. It
+  is a finding only where not being able to check it is itself material to the crossing — a
+  crossing whose only safety evidence is a gate nobody here could run is often where it is.
+  The bar is materiality, not runnability: a scan that filed every un-runnable claim would
+  return `needs-attention` on most diffs and teach a reader to skim the ones that matter.
+
+A diff that rests on no such claim gets one sentence saying so, exactly as an empty
+inventory does. That is an answer, not a gap.
 
 ### Reconcile against the spec's threat model, when the branch wrote one
 
@@ -164,11 +215,22 @@ is the honest outcome for most diffs.
 
 Exactly `$gauntlet`'s schema, severity vocabulary (`critical | high | medium | low`), and
 markdown/JSON forms, so a caller can consume either command's artifact without branching.
-Two differences in how the fields are filled:
+Three differences in how the fields are filled:
 
 - **`summary` opens with the boundary inventory from step 1** — the surface you enumerated,
   before any verdict. That is what a reader needs to judge whether the scan looked in the
   right places, and it is the field a later reviewer checks the scan against.
+- **The claims block follows the inventory immediately**, still ahead of any verdict-bearing
+  prose: each load-bearing claim you named, claim versus observation, the command you ran,
+  and the environment you ran it in. Open it by naming what it covers: the target's
+  load-bearing claims, with the ones the inventory rests on first. That is the set a calling
+  loop reads back when it keys an exit on the list, so name it as the rule it is rather than
+  as a note on this scan's reach. The order is fixed: the inventory leads because a claim
+  qualifies a boundary and cannot be read before the surface it qualifies, and the claims
+  block stays labelled as its own so a loop can lift it back out. A caller may tell you the
+  claims lead the `summary` — `$trial-loop` appends exactly that to the focus it transmits on
+  every pass, quoting `$gauntlet`'s Method. Here the inventory leads and the claims block
+  follows it, and this rule wins over focus.
 - **`suppressions` carries governing-ADR re-litigation only**, on the same terms as
   `$gauntlet`: a decision an accepted ADR settled is not re-argued here either.
   A security finding that cites a fact outside that record is new risk, not re-litigation —
