@@ -269,6 +269,79 @@ case_failed_write_leaves_no_residue() {
 	fi
 }
 
+# --- the scratch file the ignore write goes through --------------------------
+# Both cases drive a PATH shim rather than a permission bit, so neither has to
+# be skipped as root.
+
+case_unallocatable_staging_reports() {
+	local name='a staging file that cannot be created is reported, not bare'
+	local repo got=0 out bin
+	repo=$(new_repo)
+	bin=$SCRATCH/mktemp-fail-bin
+	mkdir -p "$bin"
+	cat >"$bin/mktemp" <<'STUB'
+#!/usr/bin/env bash
+printf 'mktemp-stub: no usable temp directory\n' >&2
+exit 1
+STUB
+	chmod +x "$bin/mktemp"
+
+	out=$(cd "$repo" && PATH="$bin:$PATH" "$SCRIPT" 2>&1) || got=$?
+	if [ "$got" != 1 ]; then
+		fail "$name" "exited $got, wanted 1"
+		return
+	fi
+	# Both callers read this script's stdout for the workspace path, so an exit
+	# carrying only mktemp's own line leaves neither side anything to report.
+	case "$out" in
+	*'sdd-workspace: cannot create a staging file'*) ok "$name" ;;
+	*) fail "$name" "no diagnostic under the script's own prefix: $out" ;;
+	esac
+}
+
+case_retained_staging_keeps_the_earned_status() {
+	local name='a staging file that cannot be removed is named and changes no status'
+	local repo got=0 out bin residue
+	repo=$(new_repo)
+	bin=$SCRATCH/mv-rm-fail-bin
+	mkdir -p "$bin"
+	# A distinctive status from mv, because the point is that the trap stops
+	# overwriting it. Before the guard the trap returned rm's 1 and this case
+	# could not tell the two apart.
+	cat >"$bin/mv" <<'STUB'
+#!/usr/bin/env bash
+printf 'mv-stub: simulated rename failure\n' >&2
+exit 4
+STUB
+	cat >"$bin/rm" <<'STUB'
+#!/usr/bin/env bash
+printf 'rm-stub: simulated removal failure\n' >&2
+exit 1
+STUB
+	chmod +x "$bin/mv" "$bin/rm"
+
+	out=$(cd "$repo" && PATH="$bin:$PATH" "$SCRIPT" 2>&1) || got=$?
+	if [ "$got" != 4 ]; then
+		fail "$name" "exited $got, wanted the 4 the run earned"
+		return
+	fi
+	case "$out" in
+	*'sdd-workspace: retained staging file'*) ;;
+	*)
+		fail "$name" "the stranded staging file was not named: $out"
+		return
+		;;
+	esac
+	# The message has to be true: nothing else ignores that file, so a case that
+	# passed while the file was in fact gone would pin a lie.
+	residue=$(find "$repo/.agent" -maxdepth 1 -name '.gitignore.*' | wc -l | tr -d ' ')
+	if [ "$residue" = 0 ]; then
+		fail "$name" 'the message named a staging file that was not retained'
+	else
+		ok "$name"
+	fi
+}
+
 printf 'sdd-workspace\n\n'
 case_untracked_repo
 case_workspace_is_private
@@ -277,6 +350,8 @@ case_idempotent_no_residue
 case_tracked_and_covering_succeeds
 case_tracked_and_exposing_refuses
 case_outside_a_repository_stops
+case_unallocatable_staging_reports
+case_retained_staging_keeps_the_earned_status
 # Both remaining cases make a path unreadable or unwritable to reach their
 # branch, and root ignores those bits -- they would pass while proving nothing,
 # so skip them loudly rather than bank a false green (ADR 0023).

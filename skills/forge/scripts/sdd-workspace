@@ -60,8 +60,27 @@ case "$state" in
 	# and never the gap. The trap earns its place as much as the rename does:
 	# without it an interrupted run strands a .gitignore.XXXXXX and leaves nothing
 	# ignoring it, which is the exposure this branch exists to avoid.
-	staging=$(mktemp "$top/.agent/.gitignore.XXXXXX")
-	trap 'rm -f "$staging"' EXIT
+	#
+	# Both halves are guarded because both callers read this script's stdout for
+	# the path and have only the diagnostic to go on: an unguarded assignment
+	# exits on mktemp's own status having printed nothing under this prefix, and
+	# an unguarded removal inside the trap returns rm's status in place of the
+	# one the run earned -- and drops the only mention of the .gitignore.XXXXXX
+	# it just stranded, which is the exposure the trap is here for.
+	staging=$(mktemp "$top/.agent/.gitignore.XXXXXX") || {
+		printf 'sdd-workspace: cannot create a staging file beside %s\n' "$ignore" >&2
+		exit 1
+	}
+	# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
+	stop_staging() {
+		local exit_status=$?
+		if ! rm -f -- "$staging"; then
+			printf 'sdd-workspace: retained staging file, nothing ignores it: %s\n' \
+				"$staging" >&2
+		fi
+		exit "$exit_status"
+	}
+	trap stop_staging EXIT
 	printf '*\n' >"$staging"
 	# mktemp hands back 0600. Nothing here is secret, and git has to be able to
 	# read it whatever umask the calling skill left behind.
