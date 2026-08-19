@@ -1120,10 +1120,18 @@ gate_paths() {
   done | sort -u
 }
 
+# `git rev-parse --show-toplevel` exits non-zero for more than "you are not inside a git
+# repository": dubious ownership under a bind mount or a container UID mismatch, an unreadable
+# or damaged .git, an unreadable parent directory. E-NOT-REPO named the first of those and
+# `2>/dev/null` threw away git's own line — which for dubious ownership carries the exact
+# `git config --global --add safe.directory <path>` remedy, the only line that gets the
+# operator moving. Report what the probe established instead, as ADR 0005 decision 1 asks: the
+# command that ran and the status it returned, with git's line left standing in front of it.
 require_repo_root() {
-  local root
-  if ! root=$(git rev-parse --show-toplevel 2>/dev/null); then
-    err "E-NOT-REPO: not inside a git repository — run this from the repository root"
+  local root root_status=0
+  root=$(git rev-parse --show-toplevel) || root_status=$?
+  if [ "$root_status" -ne 0 ]; then
+    err "E-ROOT-UNRESOLVED: could not resolve the repository root (git rev-parse --show-toplevel exit $root_status)"
     return 1
   fi
   cd "$root"
@@ -1362,7 +1370,7 @@ run_profile() {
 # The order is load-bearing: `outside_tree` copies the engine (with its profiles sibling)
 # outside this repository and still asserts E-GATE-UNLOCATABLE, which it reaches only
 # because the gate check runs before profile resolution, not because of any unknown-profile
-# interaction; `not_a_repo` requires E-NOT-REPO to win.
+# interaction; `not_a_repo` requires E-ROOT-UNRESOLVED to win.
 #
 # Without a base ref there is nothing to compare against, so the base-ref and gate phases do
 # not apply — exactly as today, where they live inside a function that only runs when BASE_SHA

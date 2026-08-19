@@ -1991,7 +1991,31 @@ STUB
   cp "$CHECKER" "$d/.github/scripts/check-records.sh"
   mkdir -p "$d/.github/scripts/profiles"
   cp "$SCRIPT_DIR/profiles/debt.sh" "$d/.github/scripts/profiles/"
-  run_case "run outside any git repository" 1 E-NOT-REPO "$d" BASE_SHA=
+  run_case "run outside any git repository" 1 E-ROOT-UNRESOLVED "$d" BASE_SHA=
+  # The probe's own line, kept rather than sent to /dev/null. Asserted as "a line the gate
+  # did not write" instead of against git's wording, which is git's to change.
+  printf '  %-4s %-44s ' "" "git's line survives the root probe"
+  expect_match "$d/.err" "git's diagnostic reached the operator" \
+    "git's diagnostic was discarded" -v '^::'
+
+  # The reason the diagnostic no longer names a cause: `--show-toplevel` fails from inside a
+  # perfectly ordinary repository too, and this is the shape whose discarded line was the one
+  # that mattered — it carries the exact `safe.directory` remedy and nothing else does.
+  # GIT_TEST_ASSUME_DIFFERENT_OWNER is git's own switch for it; a build that does not honour
+  # it leaves the fixture a working repository, which would redden this case for a reason that
+  # is not the gate's, so the case checks the switch first and says so when it skips.
+  d=$(case_dir dubious_ownership)
+  if (cd "$d" && GIT_TEST_ASSUME_DIFFERENT_OWNER=1 git rev-parse --show-toplevel) \
+    >/dev/null 2>&1; then
+    printf '  skip %-44s this git ignores GIT_TEST_ASSUME_DIFFERENT_OWNER\n' \
+      "root probe fails inside a repository"
+  else
+    run_case "root probe fails inside a repository" 1 E-ROOT-UNRESOLVED "$d" \
+      BASE_SHA= GIT_TEST_ASSUME_DIFFERENT_OWNER=1
+    printf '  %-4s %-44s ' "" "the safe.directory remedy survives"
+    expect_match "$d/.err" "remedy line reached the operator" \
+      "remedy line was discarded" -F 'safe.directory'
+  fi
 
   # chmod 000 does not stop root, so this case would fail in a container running as root —
   # a spurious red gate for an adopter, not a defect in the checker. Skip it there and say
@@ -2986,6 +3010,34 @@ STUB
 
   d=$(migrator_dir migrate_no_profiles)
   MIGRATE_PROFILES='' run_migrator "no profile named" 1 E-PROFILE-NONE "$d" --write
+
+  # The migrator carries the checker's two git probes, so it gets the checker's two cases.
+  # The fixture here is a directory rather than a repository, so nothing can fail ahead of
+  # the root probe.
+  d="$SCRATCH/migrate_not_a_repo"
+  mkdir -p "$d/.github/scripts/profiles" "$d/docs/debt"
+  cp "$CHECKER" "$d/.github/scripts/check-records.sh"
+  cp "$SCRIPT_DIR/migrate-records.sh" "$d/.github/scripts/migrate-records.sh"
+  chmod +x "$d/.github/scripts/migrate-records.sh"
+  cp "$SCRIPT_DIR/profiles/debt.sh" "$d/.github/scripts/profiles/debt.sh"
+  run_migrator "migrator run outside any git repository" 1 E-ROOT-UNRESOLVED "$d"
+  printf '  %-4s %-44s ' "" "git's line survives the root probe"
+  expect_match "$d.merr" "git's diagnostic reached the operator" \
+    "git's diagnostic was discarded" -v '^error: '
+
+  # And the clean-worktree read, which fails from inside a repository whose root resolved
+  # fine — an unreadable index is enough. E-NOT-REPO used to be the code for it, on a run
+  # that had already proved it was in a repository. Same root skip as the checker's
+  # unreadable-directory cases: chmod 000 does not deny root.
+  if [ "$(id -u)" -eq 0 ]; then
+    printf '  skip %-44s running as root; chmod 000 does not deny access\n' \
+      "worktree read faults, not read as absent"
+  else
+    d=$(migrator_dir migrate_index_unreadable)
+    chmod 000 "$d/.git/index"
+    run_migrator "worktree read faults, not read as absent" 1 E-WORKTREE-SCAN "$d" --write
+    chmod 644 "$d/.git/index"
+  fi
 
   printf -- "-- the suite's own scans --\n"
   # The two scans in case_why gate every verdict above, and run_migrator's gates every
