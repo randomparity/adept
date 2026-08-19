@@ -72,12 +72,111 @@ denied_patterns=(
 # by a FIFO blocks the scan forever with no writer, which is a burned CI timeout
 # rather than a wrong answer, but the walk-only shape never had it. -f drops a
 # dangling symlink and a directory substitution in the same breath.
+#
+# The listing is captured to a file rather than read from a process
+# substitution. `while ... done < <(git ls-files -z)` reports the loop's status
+# and never git's, so a listing that emitted some paths and then died left this
+# gate scanning a short set and reporting a pass -- and the `2>/dev/null` that
+# call carried removed the one thing on stderr that would have said why. Both
+# halves are what ADR 0005 rules out; list-shell-sources.sh captures its own
+# walk for the same reason.
+#
+# Any non-zero status is a fault. `git ls-files` exits 128 both for a directory
+# that is no repository and for a repository it could not read, so no branch
+# can tell them apart, and stopping is the only reading that cannot go green
+# over content it never listed. That makes "a directory handed to this gate is
+# inside a git worktree" part of the contract, which is what the gate is for:
+# the tracked set is the set that ships.
+#
+# A scan path that is not a directory is not asked. A regular file -- the shape
+# skills/quest/scripts/publish-forge-review passes -- already names itself on
+# the command line, so ripgrep opens it whatever the ignore rules say and there
+# is nothing to enumerate; `git -C` on it could only ever fail. A path that is
+# not there at all reaches ripgrep, which faults on it below.
+#
+# An empty listing under a zero status is a legitimate answer, not a fault.
+# Unlike `git rev-parse --local-env-vars`, which always names at least GIT_DIR,
+# this listing has a real empty case: a checkout subdirectory with nothing
+# tracked under it, and a repository before its first `git add`. The walk still
+# covers the tree in both. There is no count floor to fall back on either --
+# the gate takes arbitrary scan paths, so unlike list-shell-sources.sh, which
+# runs only at this repository's root and can therefore treat an empty subset
+# as broken discovery, this site has no scope over which a floor would hold.
+#
+# What that decision does not establish, stated rather than implied: an empty
+# listing means the *index* has no entries under the path, and the index is not
+# what ships. A worktree whose index was removed -- the documented recovery for
+# a stuck index.lock, and the residue of an interrupted operation -- answers
+# empty at exit 0 while HEAD still carries the content, and the gate then falls
+# back to the ignore-respecting walk that cannot see a `git add -f`'d ignored
+# file. No status check reaches that: git ran and answered truthfully, so it is
+# not the ADR 0005 shape. Choosing the enumeration's source is issue #150, and
+# issue #147 is a second route to the same empty result. Both predate this
+# change and reproduce identically on the pre-fix gate.
+
+# The scratch file is created at the first directory scan path rather than up
+# front, for the reason the git guard below gives: a regular-file scan needs no
+# listing, so a temp directory it never writes to must not be able to fail it.
+# The distinction is invisible here -- bare mktemp on macOS resolves through the
+# per-user temp directory and ignores TMPDIR -- and live on Linux, where mktemp
+# honours TMPDIR and fails when it is missing or read-only. That is the CI leg.
+tracked_listing=''
+# Modelled on check-skill-shape.sh's cleanup, and for its reason. Under the
+# `set -e` above, an EXIT trap's non-zero return becomes the shell's exit
+# status, and this gate reports 0 clean, 1 a finding, anything else a fault --
+# so a trap that just returned rm's status would turn a failed removal into a
+# phantom finding: exit 1, nothing printed, on the gate whose findings name a
+# file, a line and a pattern. Capture the run's status first; let a cleanup
+# failure take the fault status only when the run was otherwise clean, so a
+# real finding keeps its own. Issue #77 tracks this shape at two other gates.
+#
+# -f so a file already gone is not reported as left behind. An empty
+# tracked_listing means no directory scan path ever needed one.
+#
+# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
+cleanup() {
+	local exit_status=$?
+	if [ -n "$tracked_listing" ] && ! rm -f -- "$tracked_listing"; then
+		printf 'public-safety: retained scratch path: %s\n' "$tracked_listing" >&2
+		if [ "$exit_status" -eq 0 ]; then
+			exit 2
+		fi
+	fi
+	exit "$exit_status"
+}
+trap cleanup EXIT
+
 scan_targets=("${scan_paths[@]}")
 for scan_path in "${scan_paths[@]}"; do
+	[[ -d "$scan_path" ]] || continue
+	# git is required to enumerate a directory, and only a directory. The test
+	# sits here rather than beside the rg and jq preflights because a
+	# regular-file target is never enumerated and genuinely does not need git:
+	# skills/quest/scripts/publish-forge-review scans one, discards stderr and
+	# reports every non-zero status as a leaking body, so an unconditional
+	# preflight would tell that operator their publication leaked content when
+	# the real answer is a host missing a tool that scan never used.
+	if ! command -v git >/dev/null 2>&1; then
+		echo "public-safety: git is required to scan a directory" >&2
+		exit 2
+	fi
+	if [ -z "$tracked_listing" ]; then
+		tracked_listing=$(mktemp) || {
+			echo "public-safety: could not create a scratch file for the tracked listing" >&2
+			exit 2
+		}
+	fi
+	listing_status=0
+	git -C "$scan_path" ls-files -z >"$tracked_listing" || listing_status=$?
+	if [ "$listing_status" -ne 0 ]; then
+		printf 'public-safety: could not list the tracked files under %s (git ls-files exit %s)\n' \
+			"$scan_path" "$listing_status" >&2
+		exit 2
+	fi
 	while IFS= read -r -d '' tracked; do
 		[[ -f "$scan_path/$tracked" ]] || continue
 		scan_targets+=("$scan_path/$tracked")
-	done < <(git -C "$scan_path" ls-files -z 2>/dev/null)
+	done <"$tracked_listing"
 done
 
 # Two names under /home are not people. GitHub's runner images publish
