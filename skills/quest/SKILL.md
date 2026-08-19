@@ -429,11 +429,12 @@ Proceed, and carry the outstanding notes and the confirmed claim list into the
 reconstruct, and they are the only thing holding the orchestrator's own
 consequence judgment to account.
 
-The review summary below is a five-field, single-line contract that has no member
-for either list and asks for a `<trial-loop verdict>` this exit is not, so it is
-not where they go. Write the loop's last reviewer verdict in that field as the
-contract says, and name the exit in `WORK:REVIEW` and the PR body instead;
-widening the summary is tracked in issue #143.
+The review summary below names the exit in its own `exit:` field: write
+`sound-with-record-notes` there. `verdict:` still takes the loop's last reviewer
+verdict, which on this exit is ordinarily `needs-attention` — the two fields are
+different facts, and the exit is what says the run was not blocked. The two lists
+still go to `WORK:REVIEW` and the PR body, because the summary's members are
+single-line fields and neither list is one. ADR 0021 is the contract.
 
 Pass the loop an iteration budget derived from the step 1 classification: a
 trivial bugfix or a revalidated governed small change passes
@@ -481,7 +482,8 @@ dispatch exists to avoid. Two properties make it safe:
 - **Open the artifact when `findings_count > 0` *or* `suppressed_count > 0`.**
   A non-zero `suppressed_count` on `approve` means an accepted ADR silenced a
   security finding -- the one case the verdict cannot show. Record any
-  suppression in the review summary whatever the verdict.
+  suppression in `WORK:REVIEW` and the PR body whatever the verdict; the
+  summary's fields are single-line and none of them holds a suppression.
 
 Judge security-relevance by reading the changed files, not the issue's
 description of itself. The diff qualifies when it:
@@ -511,8 +513,8 @@ ships. If closing a security finding changes behavior, re-run `$trial-loop` on
 the result (its review did not cover the fix) and then run `$detect-evil` once
 more: at most one `$detect-evil` -> `$trial-loop` -> `$detect-evil` round trip.
 If a second round trip would be needed, do not re-enter and do not park --
-carry on to step 7 and record the unresolved findings as open in the review
-summary, so they reach `WORK:REVIEW` and the PR. The cap is a reporting
+carry on to step 7 and record the unresolved findings as open in
+`WORK:REVIEW` and the PR body, beside the summary. The cap is a reporting
 boundary, not a blocker.
 
 Record the verdict in the review summary either way, including
@@ -540,8 +542,8 @@ In `build-complete`, re-read the build-to-review handoff before delivery. Only `
 artifact parks the quest before `$deliver`.
 
 Run `$deliver <issue-number>` to push the branch, create the PR, and drive it
-to green CI and mergeable state. Keep a compact public review summary (verdict,
-findings count, iterations, `$detect-evil` verdict, full delivered HEAD SHA) as
+to green CI and mergeable state. Keep a compact public review summary — the
+fields below — as
 an ignored private mode-0600 file beside the forge ledger; do not put outer
 annotation markers or forge-review payload in it. `REVIEW_SUMMARY` is the exact
 `review-summary:` path in the parsed handoff, not an ad-hoc filename. The
@@ -560,12 +562,41 @@ the ledger and atomically rename it only after writing these exact, non-empty
 single-line fields in order:
 
 ```text
-verdict: <trial-loop verdict>
+verdict: <trial-loop reviewer verdict>
+exit: <trial-loop run outcome, or none>
 findings: <count>
 iterations: <count>
 security: <$detect-evil verdict or not triggered>
 delivered-head-sha: <full exact delivered PR head SHA>
 ```
+
+`verdict:` and `exit:` are two facts about the same run — the last `$trial-loop`
+run on the branch, the one `findings:` and `iterations:` already count.
+`verdict:` is the verdict the selected reviewer actually returned on the last
+pass, never derived from the exit. `exit:` is one of five values, by how that run
+ended:
+
+- `none` — the reviewer returned `approve` and the run took no named exit.
+- `converged-with-deferrals`, `sound-with-record-notes`, or
+  `converged-on-own-surface` — the loop's three named non-blocking exits, each
+  written under its own name. A named exit outranks `none` wherever a run matches
+  both, so `none` is only for a run that reached `approve` having taken none of
+  them.
+- `blocked-at-budget` — a run stopped as blocked at the iteration budget that a
+  human explicitly approved continuing. Not writable until issue #151 documents
+  that resume path; until then such a run parks and publishes no summary.
+
+Every other stop parks the quest before `$deliver` and publishes no summary at
+all, a cycle ended for rescoping without new authority included, so there is no
+run that reaches this field with nothing to write. Step 6 does not yet route
+*converged with deferrals* or *converged on own surface* — that is issue #141 —
+and their values are fixed here so that change has them to use.
+
+ADR 0021 is the authority for the field set and these values; the exits
+themselves belong to `$trial-loop`. A named exit's payload — deferral records
+with their owning paths, outstanding notes, the confirmed claim list — stays in
+`WORK:REVIEW` and the PR body, which is where `$trial-loop`'s own report
+obligation sends it.
 
 Reject carriage return, NUL, outer markers, or any failed byte-for-byte
 readback before rename; the temporary and installed summary both stay mode 0600.
