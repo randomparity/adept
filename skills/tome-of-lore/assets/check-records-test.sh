@@ -30,10 +30,34 @@ set -euo pipefail
 # Hook runners can export repository-local Git variables such as GIT_DIR and
 # GIT_WORK_TREE. Clear them before creating fixtures so each `git -C` command
 # targets the disposable repository named by the suite.
+#
+# The list is captured rather than read through a process substitution: that loop reports
+# its own status and never rev-parse's, so a git that could not answer would leave the loop
+# reading nothing, nothing unset, and every case below building fixtures with the ambient
+# GIT_DIR still set — a scan that could not run read as one that found nothing (ADR 0005).
+# clear_git_env in scripts/test-fixture-helpers.sh is the same fix at the same call; this
+# suite cannot source it, because `just records` compares .github/scripts/ against
+# skills/tome-of-lore/assets/ byte for byte and the two sit at different depths, so no one
+# relative source path resolves from both.
+#
+# Exit 2, for the reason require_assets exits 2: a git that cannot answer is a statement
+# about the environment, not a finding about the records, and 1 is this suite's code for
+# cases that failed.
+local_env_vars=$(git rev-parse --local-env-vars) || {
+  printf 'check-records-test: cannot read git local env vars\n' >&2
+  exit 2
+}
+# Empty output is the same failure wearing a zero exit status: git has always named at least
+# GIT_DIR here, so nothing to clear means the answer did not arrive rather than that there
+# was nothing to do.
+[ -n "$local_env_vars" ] || {
+  printf 'check-records-test: git reported no local env vars\n' >&2
+  exit 2
+}
 while IFS= read -r variable; do
   [ -n "$variable" ] || continue
   unset "$variable"
-done < <(git rev-parse --local-env-vars)
+done <<<"$local_env_vars"
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CHECKER="$SCRIPT_DIR/check-records.sh"
