@@ -66,15 +66,17 @@ the run `findings:` and `iterations:` already count.
 
 **Five permitted `exit:` values**, one per way a run can reach step 8:
 
-| run ending | `exit:` | `verdict:` observed |
-|---|---|---|
-| reviewer returned `approve` | `none` | `approve` |
-| *converged with deferrals* | `converged-with-deferrals` | `needs-attention` |
-| *sound with record notes* | `sound-with-record-notes` | `needs-attention` |
-| *converged on own surface* | `converged-on-own-surface` | `needs-attention` or `approve` |
-| blocked at the iteration budget, continued on explicit human approval | `blocked-at-budget` | `needs-attention` |
+| run ending | `exit:` | `verdict:` observed | blocked |
+|---|---|---|---|
+| reviewer returned `approve`, no named exit | `none` | `approve` | no |
+| *converged with deferrals* | `converged-with-deferrals` | `needs-attention` | no |
+| *sound with record notes* | `sound-with-record-notes` | `needs-attention` | no |
+| *converged on own surface* | `converged-on-own-surface` | `needs-attention`, or `approve` on a clean confirming pass | no |
+| blocked at the iteration budget, continued on explicit human approval | `blocked-at-budget` | `needs-attention` | yes |
 
-Only the `exit:` column is prescribed; `verdict:` is whatever the reviewer actually returned.
+A named exit outranks `none` wherever both rows match. `blocked-at-budget` may not be written
+until `$quest` documents the resume path (issue #151); until then such a run parks and publishes
+nothing. Only the `exit:` column is prescribed; `verdict:` is whatever the reviewer returned.
 Every other stop parks the issue before `$deliver` rather than publishing. The run described is
 the last `$trial-loop` run on the branch — the one `verdict:`, `findings:` and `iterations:`
 already describe; a step 7 `$gauntlet`-only re-review is not a loop run and changes none of them.

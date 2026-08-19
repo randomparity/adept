@@ -22,9 +22,10 @@ head of the published `WORK:REVIEW` annotation, above the indented forge review
 on own surface* (`:697-705`) are each required to be reported distinctly. Each fires while
 findings still stand that the reviewer did not clear — that is what each exit is for, and `:594`
 states the mechanism: the reviewer "cannot return `approve` while a defensible finding stands".
-So the last reviewer verdict on all three is ordinarily `needs-attention`, and a run that ended
-in a distinct non-blocking exit publishes `verdict: needs-attention` and nothing else, which
-reads as the opposite of what happened.
+So all three carry `needs-attention`, bar one case — *converged on own surface* ends on a
+confirming pass that may return none — and a run that ended in a distinct non-blocking exit
+publishes `verdict: needs-attention` and nothing else, which reads as the opposite of what
+happened.
 
 Nothing catches it. `validate_content` in `skills/quest/scripts/publish-forge-review:151-181`
 checks the summary's file mode, size, UTF-8 validity, NUL and CR bytes, and outer annotation
@@ -59,24 +60,28 @@ would erase the only record of whether a reviewer ever cleared the branch.
 
 **`exit:` takes exactly one of five values**, one per way a `$trial-loop` run can reach step 8:
 
-| `$trial-loop` run ending | `exit:` | run was blocked |
-|---|---|---|
-| the reviewer returned `approve` | `none` | no |
-| *converged with deferrals* | `converged-with-deferrals` | no |
-| *sound with record notes* | `sound-with-record-notes` | no |
-| *converged on own surface* | `converged-on-own-surface` | no |
-| stopped as blocked at the iteration budget, then continued on explicit human approval | `blocked-at-budget` | yes |
+| `$trial-loop` run ending | `exit:` | `verdict:` observed | run was blocked |
+|---|---|---|---|
+| the reviewer returned `approve`, having taken no named exit | `none` | `approve` | no |
+| *converged with deferrals* | `converged-with-deferrals` | `needs-attention` | no |
+| *sound with record notes* | `sound-with-record-notes` | `needs-attention` | no |
+| *converged on own surface* | `converged-on-own-surface` | `needs-attention`, or `approve` when its confirming pass returns none | no |
+| stopped as blocked at the iteration budget, then continued on explicit human approval | `blocked-at-budget` | `needs-attention` | yes |
 
-`none` rather than `approve` in the first row: the field answers "did the run take a named
-exit", and repeating the verdict there would make the two fields look like one fact stated
-twice.
+**A named exit outranks `none`** wherever a run matches both rows. The overlap is real: a
+*converged on own surface* run ends on a confirming pass that may return `approve`
+(`skills/trial-loop/SKILL.md:697-701`), and writing `none` there would discard the fact that the
+loop reached the exit by reviewing its own output. So `none` is written only for a run that
+ended on the approve bullet having taken no named exit, and that row is the only one where
+`exit:` and `verdict:` carry the same news.
 
 The fifth row is the only path by which a blocked run reaches this contract: cap exhaustion
-stops the workflow, but only "without explicit user approval"
-(`skills/trial-loop/SKILL.md:654-657`). `$quest` documents no such resume today — issue #151 —
-so the value is written here in advance, precisely so that the change adding the path has a
-value to use rather than inventing one. Every other stop parks the issue instead of publishing,
-rescoping without new authority included (`:665-667`, `:713-716`).
+stops the workflow, but only "without explicit user approval" (`:654-657`). `$quest` documents
+no such resume today — issue #151 — so **`blocked-at-budget` may not be written until it does**,
+and until then a run stopped at the budget parks and publishes no summary at all. The value is
+fixed here so the change that adds the path has one to use rather than minting its own. Every
+other stop ends the run without publishing, rescoping without new authority included
+(`:665-667`, `:713-716`).
 
 **The run `exit:` describes is the last `$trial-loop` run on the branch** — the same run
 `verdict:`, `findings:` and `iterations:` describe. A `$gauntlet`-only re-review, which step 7
@@ -87,11 +92,12 @@ full loop run replaces all four fields together, `none` included.
 **ADR 0011 governs this vocabulary, and this is its discharge.** That record permits a domain
 enum only where its contract states an explicit one-way conversion to the canonical vocabulary
 and says the domain value is neither a finding severity nor a review verdict. The table's third
-column is that conversion, one row per member and one way only: `exit:` governs whether the run
-was blocked, `verdict:` states what the reviewer returned on the last pass and is read rather
-than derived from `exit:`. An `exit:` value is neither a finding severity nor a review verdict.
-`blocked-at-budget` is written qualified rather than as a bare `blocked` for the same record's
-reason.
+column is that conversion, one row per member and one way only, into the `approve |
+needs-attention` vocabulary 0011 names; `verdict:` carries that value directly, so a consumer
+reads it rather than deriving it, and the fourth column is the separate routing fact 0011's
+`blocked` reservation clause governs. An `exit:` value is neither a finding severity nor a
+review verdict, and `blocked-at-budget` is qualified rather than a bare `blocked` for that same
+clause's reason.
 
 **The exits' payloads stay out of the summary.** Deferral records with their owning paths,
 outstanding notes with the finding each came from, and the claim list marked confirmed, refuted
@@ -122,9 +128,7 @@ of the summaries already published, which carry five fields and no `exit:` line:
 annotation.
 
 Adding a second field to a fixed-shape contract sets the precedent that the summary grows one
-scalar at a time. The bound this record leaves for the next such request is the one it applied
-to itself: a field earns a place here when it is a single token that changes how a reader routes,
-and it does not when it is a list or a per-exit quantity.
+scalar at a time. This record accepted that cost for one field.
 
 `$quest` step 6 still routes only on `approve`, *sound with record notes*, and blocked. This
 record fixes what a caller writes in `exit:` for *converged with deferrals* and *converged on own
@@ -150,9 +154,9 @@ depends on when it carries the verdict forward. A second field costs one line an
 values canonical.
 
 **Write the exit name into `verdict:`, replacing the reviewer's verdict.** verified against
-`skills/trial-loop/SKILL.md:746-750`, the report obligation: the run reports "the final verdict"
-and, when it exited as a named exit, says so "by that name" — the exit accompanies the verdict
-rather than replacing it. Collapsing them destroys the only field saying
+`skills/trial-loop/SKILL.md:746-748`, the report obligation: the run reports "the final verdict"
+and, for *sound with record notes*, also says so "by that name" — the exit accompanies the
+verdict rather than replacing it. Collapsing them destroys the only field saying
 whether a reviewer ever returned `approve`, and leaves ADR 0011's canonical verdict unwritten.
 
 **Add per-exit payload counts — a notes count, a claims count, a deferral-record count.**
