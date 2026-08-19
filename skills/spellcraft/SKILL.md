@@ -365,12 +365,14 @@ load-bearing claim it named in the ADR, and the standing findings carry no conse
 so continue to the spec review and carry the outstanding notes into the design record.
 
 *converged with deferrals* and *converged on own surface* are **not** that case either.
-Both are terminal non-blocking exits, so continue to the spec review on either, and carry
-the run's deferral list — each entry with its owning record path — into the design record
-beside any notes. `$trial-loop` reports the exit by name and owns the conditions each one
-fires on; this step does not re-derive them. Route on that name rather than on the last
-verdict, which on a named exit is ordinarily `needs-attention` and never by itself means
-the ADR is unhardened.
+Both are terminal non-blocking exits, so continue to the spec review on either.
+`$trial-loop` reports the exit by name and owns the condition each one fires on; this step
+does not re-derive them. Route on that name rather than on the last verdict, which on a
+named exit is ordinarily `needs-attention` and never by itself means the ADR is unhardened.
+
+Carry the run's deferral list — each entry with its owning record path — into the design
+record whichever way the run ended, `approve` included: the loop discloses its deferrals
+on every exit, and the design record is where a later implementer reads them.
 
 ## 3. Adversarial-review the spec
 

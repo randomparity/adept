@@ -422,19 +422,12 @@ dependencies, compatibility, migrations, observability, and whether the chosen
 approach is simpler or safer than viable alternatives.` Address every
 defensible finding and commit after each accepted fix.
 
-The loop has three named non-blocking exits, and **each advances this workflow**.
-None of them is `approve` and none of them is blocked; the exit name, not the
-verdict, is what says the run finished. Proceed on any of the three:
-
-- *converged with deferrals* — a pass returned nothing both new and off the run's
-  own surface, against a branch the loop did not touch since the previous pass.
-  This is where a finished branch with owned adjacent defects lands.
-- *sound with record notes* — a pass confirmed every load-bearing claim it named
-  on the branch, and the standing findings carry no consequence for the decision,
-  the behaviour, or a future maintainer's actions.
-- *converged on own surface* — every standing finding across two passes sat in
-  test or verification surface this run itself added, no finding cited production
-  lines, and one confirming pass agreed.
+The loop has three named non-blocking exits — *converged with deferrals*, *sound
+with record notes*, and *converged on own surface* — and **each advances this
+workflow**. None of them is blocked and none of them is the `approve` exit; the
+exit name, not the verdict, is what says the run finished. `$trial-loop` owns the
+condition each one fires on and reports the exit by name, so route on the name it
+reported rather than on conditions re-derived here. Proceed on any of the three.
 
 Carry every deferral from any `$trial-loop` run on this branch — each entry with
 its owning record path — into the `WORK:REVIEW` comment and the PR body, on every
