@@ -80,7 +80,38 @@ while IFS=' ' read -r local_ref local_oid remote_ref remote_oid extra; do
 		[[ $local_oid == "$ZERO_OID" ]] || die 'invalid branch deletion object'
 		continue
 	fi
-	git cat-file -e "$local_oid^{commit}" 2>/dev/null || die 'invalid branch object'
+	# ADR 0005 decision 2 rules `git cat-file -e` inadmissible as a witness,
+	# and this was the last site still using it as one. It exits 128 for an oid
+	# this repository does not have, for an oid that is not a commit, for a
+	# GIT_DIR pointing at nothing, and for an object store it could not read;
+	# `2>/dev/null` then discarded the only line separating those, leaving the
+	# operator a cause -- "invalid branch object" -- the script had not
+	# established.
+	#
+	# `git rev-parse --verify` alone does not fix that: it too exits 128 in all
+	# four cases. `--quiet` is what makes it admissible, because it demotes the
+	# verify failure to exit 1 and leaves 128 for the errors that stop git
+	# before it can open the repository at all. So 1 is a verdict about the
+	# push and 2 reports a check that could not run, matching the worktree-root
+	# probe above. `dir_in_ref` in the record gate witnesses a ref the same way.
+	#
+	# Only 0 passes, so the one documented part of that contract -- "exit with
+	# non-zero status silently" -- carries the whole guard; a git that answered
+	# a bad revision with some status other than 1 would be reported as a check
+	# that could not run rather than let a push through. stderr stays open
+	# either way: at 128 git's own fatal line is the only clue an operator
+	# gets, and this runs from a pre-push hook.
+	object_status=0
+	git rev-parse --verify --quiet "$local_oid^{commit}" >/dev/null || object_status=$?
+	case $object_status in
+	0) ;;
+	1) die "branch object is not a commit in this repository: $local_oid" ;;
+	*)
+		printf 'verify-push: could not verify the branch object %s (git rev-parse --verify exit %s)\n' \
+			"$local_oid" "$object_status" >&2
+		exit 2
+		;;
+	esac
 	add_object "$local_oid"
 done
 
