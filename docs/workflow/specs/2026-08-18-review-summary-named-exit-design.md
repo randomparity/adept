@@ -75,7 +75,9 @@ the run `findings:` and `iterations:` already count.
 | blocked at the iteration budget, continued on explicit human approval | `blocked-at-budget` | `needs-attention` |
 
 Only the `exit:` column is prescribed; `verdict:` is whatever the reviewer actually returned.
-Every other stop parks the issue before `$deliver` rather than publishing.
+Every other stop parks the issue before `$deliver` rather than publishing. The run described is
+the last `$trial-loop` run on the branch — the one `verdict:`, `findings:` and `iterations:`
+already describe; a step 7 `$gauntlet`-only re-review is not a loop run and changes none of them.
 
 **Payloads stay out.** Deferral records with owning paths, outstanding notes with their
 findings, and the confirmed/refuted/not-checkable claim list continue to the `WORK:REVIEW` body
@@ -96,7 +98,7 @@ change what that section describes.
 | file | change |
 |---|---|
 | `docs/adr/0021-review-summary-names-the-trial-loop-exit.md` | new — the decision |
-| `skills/quest/SKILL.md` | *Ship It*: the six-field block and the `exit:` value list; step 6: replace the workaround paragraph |
+| `skills/quest/SKILL.md` | *Ship It*: the six-field block, the `exit:` value list, and `:543-544`'s prose enumeration of the members (stops enumerating, points at the block); step 6: replace the workaround paragraph |
 | `docs/workflow/specs/2026-08-18-review-summary-named-exit-design.md` | this file |
 | `docs/workflow/plans/2026-08-18-review-summary-named-exit.md` | the implementation plan |
 

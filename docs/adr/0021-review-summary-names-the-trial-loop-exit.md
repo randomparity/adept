@@ -71,22 +71,30 @@ would erase the only record of whether a reviewer ever cleared the branch.
 exit", and repeating the verdict there would make the two fields look like one fact stated
 twice.
 
-The fifth row is the one path by which a blocked run reaches this contract. Cap exhaustion stops
-the workflow, but only "without explicit user approval" (`skills/trial-loop/SKILL.md:654-657`),
-so an approved continuation is a run that must be able to say what it is. `$quest` documents no
-such resume today — its blocker path (`skills/quest/SKILL.md:626-642`) takes an unresolvable
-finding to `status:needs-human` and stops — so the value exists so that an interactively
-approved continuation has an honest thing to write rather than `none`. Every other stop parks
-the issue instead of publishing, rescoping without new authority included
-(`skills/trial-loop/SKILL.md:665-667`, `:713-716`).
+The fifth row is the one path by which a blocked run reaches this contract, and the one value
+that says the run *was* blocked. Cap exhaustion stops the workflow, but only "without explicit
+user approval" (`skills/trial-loop/SKILL.md:654-657`), so an approved continuation is a
+permitted outcome that must be able to say what it is. `$quest` documents no such resume today —
+its blocker path (`skills/quest/SKILL.md:626-642`) takes an unresolvable finding to
+`status:needs-human` and stops — which is issue #151; the value exists so that when that path is
+written, an approved continuation has an honest thing to write rather than `none`. Every other
+stop parks the issue instead of publishing, rescoping without new authority included
+(`:665-667`, `:713-716`).
+
+**The run `exit:` describes is the last `$trial-loop` run on the branch** — the same run
+`verdict:`, `findings:` and `iterations:` describe. A `$gauntlet`-only re-review, which step 7
+permits after simplification (`skills/quest/SKILL.md:524-531`), is not a loop run: it produces
+no exit and leaves `exit:` as the last loop run set it. A step 6 or step 7 re-entry that *is* a
+full loop run replaces all four fields together, `none` included.
 
 **ADR 0011 governs this vocabulary, and this is its discharge.** That record permits a domain
 enum only where its contract states an explicit one-way conversion to the canonical vocabulary
-and says the domain value is neither a finding severity nor a review verdict. The conversion
-here is the simplest one available: the canonical verdict is already a field of its own, always
-written, so a consumer converts by *reading* `verdict:` and never by deriving it from `exit:`.
-An `exit:` value is neither a finding severity nor a review verdict. `blocked-at-budget` is
-written qualified rather than as a bare `blocked` for the same record's reason.
+and says the domain value is neither a finding severity nor a review verdict. The conversion is
+a routing rule over the two fields: `verdict:` states only what the reviewer returned on the
+last pass and is read, never derived from `exit:`; and where `exit:` names one of the three
+non-blocking exits, that name — not the verdict — governs whether the run was blocked. An
+`exit:` value is neither a finding severity nor a review verdict. `blocked-at-budget` is written
+qualified rather than as a bare `blocked` for the same record's reason.
 
 **The exits' payloads stay out of the summary.** Deferral records with their owning paths,
 outstanding notes with the finding each came from, and the claim list marked confirmed, refuted
@@ -138,11 +146,11 @@ surface*, so issue #141 can add the step 6 routing for those two without reopeni
 
 **Do nothing — keep the five-field contract and leave the exit name to the annotation prose.**
 This is #138's workaround, recorded at `skills/quest/SKILL.md:432-436`.
-verified: the summary is read by field, not only as prose. `$bards-tale` step 3d extracts named
-fields straight out of the block and never reads the text beside them
-(`skills/bards-tale/SKILL.md:202-213`), so under do-nothing the one machine consumer of the
-summary records every named exit as `needs-attention` indefinitely — a wrong retrospective, not
-a missing one. Annotation prose cannot repair a reader that never reads it.
+verified: the summary is consumed field by field, not only as prose. `$bards-tale` step 3d
+extracts the iteration count and the verdict out of the block by name
+(`skills/bards-tale/SKILL.md:202-213`), so an exit named only in the prose beside the summary is
+not where a field-reading consumer looks. Do-nothing leaves that consumer nothing to read for
+the one fact the exit exists to carry.
 
 **Qualify `verdict:` instead — write `needs-attention (sound with record notes)`.** This is the
 smallest change that fits the reported problem and needs no new field.
@@ -171,8 +179,11 @@ the file — so this means teaching it to parse a format it otherwise only copie
 that new branch needs. Anatomy rule 2 permits a script only where a model cannot do the thing
 reliably inline, and writing six named lines from a contract read two steps earlier is not that.
 It would also put the field list in a second place, to be kept in step with this record and with
-`skills/quest/SKILL.md` — the drift the repo removes elsewhere. Declined; the check the helper
-does own is whether the bytes are safe to publish, which is a different question.
+`skills/quest/SKILL.md` — the drift the repo removes elsewhere. That argument binds this record
+too: `skills/quest/SKILL.md:543-544` enumerates the five members again in prose, and the
+implementation stops it enumerating rather than adding `exit:` to it, so the contract block stays
+the one place. Declined; the check the helper does own is whether the bytes are safe to publish,
+which is a different question.
 
 **Allow `exit:` to be omitted when the run ended on `approve`.** verified:
 `skills/quest/SKILL.md:558-560` requires "these exact, non-empty single-line fields in order",
