@@ -194,6 +194,10 @@ require_assets() {
 # reads — they answer "is there anything there", which is the question rather than a proxy
 # for it. migrator_why is where that distinction matters: absent and empty are different
 # answers there, so it asks both rather than letting the first fall into the second.
+#
+# The list covers the scans that decide a verdict. Everything else that reads a file here —
+# the `sed`/`head`/`cat` command substitutions that build a diagnostic — runs after the
+# verdict is settled and aborts the run under `set -e` rather than quietly changing one.
 
 # The FAIL a scan fault takes in place of the verdict it never reached. The bespoke cases
 # have already printed their name column by the time they scan, so this prints the reason
@@ -353,8 +357,9 @@ case_why() {
 }
 
 # migrator_why <expected-exit> <got-exit> <expected-code|-> <stderr-file> — the same for
-# run_migrator, hoisted for the same reason. Its no-code arm tests the capture's size
-# rather than scanning it, so only the code arm has a scan to branch on.
+# run_migrator, hoisted for the same reason. Its no-code arm tests the capture's presence
+# and size rather than scanning it, but it still reads a line to report, and that read gets
+# its own status: an unreadable capture must not arrive as an error the migrator emitted.
 migrator_why() {
   local expected=$1 got=$2 code=$3 err=$4 status=0
   if [ "$got" != "$expected" ]; then
@@ -372,9 +377,16 @@ migrator_why() {
   fi
   if [ ! -e "$err" ]; then
     printf 'could not read %s (capture missing)' "$err"
-  elif [ -s "$err" ]; then
-    printf 'unexpected error: %s' "$(head -1 "$err")"
+    return 0
   fi
+  [ -s "$err" ] || return 0
+  local first=""
+  first=$(head -1 "$err") || status=$?
+  if [ "$status" -ne 0 ]; then
+    printf 'could not read %s (head exit %s)' "$err" "$status"
+    return 0
+  fi
+  printf 'unexpected error: %s' "$first"
 }
 
 # run_case <name> <expected-exit> <expected-code|-> <repo-dir> [env assignments...]
@@ -3073,6 +3085,44 @@ STUB
     failed=$((failed - 2))
   else
     notes="$notes expect-helpers-did-not-count"
+  fi
+
+  # expect_unchanged reports the one outcome in this file that is data loss rather than a
+  # wrong verdict, so both of its unexercised arms are pinned: a record the run removed,
+  # and a comparison that could not be made. A directory stands in for the second — cmp
+  # reads it as a file it cannot compare, which is the status under test, and unlike a
+  # chmod it needs no root guard. expect_error_code's fault arm goes with them.
+  before=$failed
+  was_passed=$passed
+  expect_unchanged "$missing" "$missing" 'unreachable' 'unreachable' \
+    >"$SCRATCH/expect-helpers.out" 2>/dev/null
+  reported=$(cat "$SCRATCH/expect-helpers.out")
+  case $reported in
+  *"removed $missing"*) ;;
+  *) notes="$notes deletion-arm=[$reported]" ;;
+  esac
+  expect_unchanged "$missing" "$SCRATCH" 'unreachable' 'unreachable' \
+    >"$SCRATCH/expect-helpers.out" 2>/dev/null
+  reported=$(cat "$SCRATCH/expect-helpers.out")
+  case $reported in
+  *"$missing vs $SCRATCH"*) ;;
+  *) notes="$notes compare-arm-paths=[$reported]" ;;
+  esac
+  case $reported in
+  *'cmp exit '*) ;;
+  *) notes="$notes compare-arm-tool=[$reported]" ;;
+  esac
+  expect_error_code "$missing" E-UNREACHABLE >"$SCRATCH/expect-helpers.out" 2>/dev/null
+  reported=$(cat "$SCRATCH/expect-helpers.out")
+  case $reported in
+  *"could not scan $missing"*) ;;
+  *) notes="$notes error-code-arm=[$reported]" ;;
+  esac
+  [ "$passed" -eq "$was_passed" ] || notes="$notes late-helper-scored-a-pass"
+  if [ "$failed" -eq $((before + 3)) ]; then
+    failed=$((failed - 3))
+  else
+    notes="$notes late-helpers-did-not-count"
   fi
   if [ -z "$notes" ]; then
     passed=$((passed + 1))
