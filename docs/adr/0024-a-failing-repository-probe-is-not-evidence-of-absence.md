@@ -24,6 +24,13 @@ naming a path that does not exist; `GIT_DIR` set to a path that does not exist; 
 working directory whose parent has been made unreadable. `git rev-parse
 --is-inside-work-tree` and `git rev-parse --git-dir` return 128 across the same set.
 
+One of those cases is a platform fact rather than a git fact, and was re-measured on Ubuntu
+24.04 with git 2.43.0 after a macOS-only reading of it produced a fix that passed locally
+and failed in CI. Under an unreadable parent directory, macOS `getcwd` walks the tree and
+fails, so git reports being unable to read the working directory; glibc `getcwd` answers
+from the kernel and succeeds, and git gets as far as a `stat` and reports "failed to stat".
+Same fault, same 128, two different things to probe for.
+
 So the probe does not test for absence. It returns one status for absence and for refusal
 alike, and `resolve_tracker` answered `github` to all of them. A repository whose
 `AGENTS.md` declares another tracker, reached by an operator whose git declines it as
@@ -55,8 +62,13 @@ lose.
 further probe whose answer is positive, never by reading a diagnostic string.** For the
 repository probe that is four probes, none of which parses git's prose:
 
-- `pwd -P` fails exactly when `getcwd` does, which is the fault git reports as being unable
-  to read the current working directory. Nothing was searched, so nothing was established.
+- git resolves where it is before it looks for a repository, so a working directory it
+  cannot establish means nothing was searched. Ask for the name and then whether the name
+  can be reached: `cwd=$(pwd -P)` and `[ -d "$cwd" ]`. Both halves are needed, and which one
+  fires is a platform fact — on macOS `getcwd` walks the tree and fails outright under an
+  unreadable parent; on glibc it answers from the kernel and succeeds, and git's subsequent
+  `stat` is what fails ("failed to stat", measured on Ubuntu 24.04 with git 2.43.0). Either
+  probe alone leaves the other platform's fault falling through to the default.
 - 128 is the status git exits with when it ran and declined, including for an option it does
   not recognise. Any other status is a probe that never ran; 127, for no git on `PATH`, is
   the reachable one.
@@ -112,6 +124,11 @@ not what it looks like:
   whatever `tracker.sh` does, because bash writes its own `shell-init` line before the
   script gets control. The suite asserts that case by message rather than by parsing the
   payload, and says why.
+- The ownership case cannot be staged everywhere. It skips loudly on a git that ignores
+  `GIT_TEST_ASSUME_DIFFERENT_OWNER`, and on a host whose `safe.directory` is already
+  permissive the staged refusal never fires — which is what happens on the Ubuntu CI
+  runner, where the case skips. It was run and shown to bite on macOS and in an Ubuntu
+  24.04 container with git 2.43.0. A skip is announced, never banked as a pass.
 
 `resolve_tracker` grows from 60 to about 90 lines, most of it the comment carrying this
 record's reasoning to the site. Nothing enforces this decision; like 0005, it shapes fixes

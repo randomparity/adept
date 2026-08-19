@@ -135,8 +135,13 @@ fi
 
 # The other 128 that is not an absence: git never reached a repository to have
 # an opinion about, because it could not read the working directory it was
-# started in. chmod 000 does not stop root, so this case would prove nothing
-# there rather than asserting something the environment cannot produce.
+# started in. The same fixture reaches that fault by a different route on each
+# platform -- on macOS getcwd walks the tree and fails outright, so `pwd -P`
+# reports it; on glibc getcwd answers from the kernel and succeeds, and it is
+# git's stat of that path that hits the unreadable parent. The engine probes
+# both, so this one case pins both. chmod 000 does not stop root, so it would
+# prove nothing there rather than asserting something the environment cannot
+# produce.
 if [[ $(id -u) -eq 0 ]]; then
 	printf 'tracker-test: skip unreadable working directory; running as root, which chmod 000 does not deny\n'
 else

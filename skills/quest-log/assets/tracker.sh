@@ -66,9 +66,16 @@ available_profiles() {
 # probes do separate them, and none reads git's prose, which is git's to reword
 # and, on a build with NLS, to translate:
 #
-#   * `pwd -P` fails exactly when getcwd does, which is the fault git reports
-#     as "Unable to read current working directory". Nothing was searched, so
-#     nothing was established.
+#   * git resolves where it is before it looks for a repository, and it fails
+#     there in two ways that differ by platform. On macOS getcwd walks the tree
+#     and needs read permission on every parent, so an unreadable parent makes
+#     getcwd itself fail and git reports "Unable to read current working
+#     directory". On glibc getcwd answers from the kernel and succeeds, and the
+#     stat git does next is what hits the unreadable parent: "failed to stat".
+#     Both are "nothing was searched", so both are probed -- ask for the name,
+#     then ask whether the name can be reached. Neither `pwd -P` alone nor the
+#     reachability test alone covers both platforms; measured on macOS 15.6 and
+#     on Ubuntu 24.04 with git 2.43.0.
 #   * 128 is the status git exits with when it ran and declined, including for
 #     an option it does not know. Any other status -- 127 for no git on PATH --
 #     is a probe that never ran and is never evidence about a repository.
@@ -101,10 +108,11 @@ available_profiles() {
 # and nothing to declare.
 resolve_tracker() {
 	local root agents matches loose_status count_status=0
-	local root_status=0 refused_root refused_status=0
+	local root_status=0 refused_root refused_status=0 cwd
 	root=$(git rev-parse --show-toplevel 2>/dev/null) || root_status=$?
 	if ((root_status != 0)); then
-		if ! pwd -P >/dev/null 2>&1; then
+		cwd=$(pwd -P 2>/dev/null) || cwd=
+		if [[ -z $cwd || ! -d $cwd ]]; then
 			die "$EXIT_USAGE" usage \
 				"could not resolve the repository root: the working directory could not be read (git rev-parse --show-toplevel exit $root_status)"
 		fi
