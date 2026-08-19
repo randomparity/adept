@@ -335,6 +335,108 @@ for ignore_file in .gitignore .ignore; do
 	fi
 done
 
+# The index is a local cache; what ships is HEAD. Removing `.git/index` is the
+# documented recovery for a stuck index.lock and the residue of an interrupted
+# operation, and it leaves `git ls-files` exiting 0 with no output while HEAD
+# still carries the `git add -f`'d ignored path -- git ran and answered
+# truthfully, so no status check reaches it. Before the gate enumerated HEAD as
+# well, that emptiness degraded the scan to the ignore-respecting walk and this
+# fixture exited 0 over a token the same tree reports on with its index in place
+# (issue #150).
+missing_index="$SCRATCH/missing-index"
+mkdir -p "$missing_index/sub"
+git init -q -b main "$missing_index"
+git -C "$missing_index" config user.name 'Fixture Developer'
+git -C "$missing_index" config user.email fixture@example.invalid
+printf '%s\n' "$hidden_secret" >"$missing_index/sub/leak.txt"
+printf 'sub/leak.txt\n' >"$missing_index/.gitignore"
+git -C "$missing_index" add -f sub/leak.txt .gitignore
+git -C "$missing_index" commit -qm 'tracked but ignored'
+rm "$missing_index/.git/index"
+
+# Both premises. If either stops holding the case proves nothing: the index has
+# to answer empty, and HEAD has to still carry the secret.
+if [ -n "$(git -C "$missing_index" ls-files)" ]; then
+	printf 'public-safety-test: the index still lists files, case is void\n' >&2
+	exit 1
+fi
+if ! git -C "$missing_index" ls-tree -r --name-only HEAD | grep -qF sub/leak.txt; then
+	printf 'public-safety-test: HEAD no longer carries the secret, case is void\n' >&2
+	exit 1
+fi
+
+missing_index_status=0
+"$CHECKER" "$missing_index" >"$SCRATCH/output" 2>&1 || missing_index_status=$?
+if [ "$missing_index_status" -ne 1 ]; then
+	printf 'public-safety-test: a removed index hid a committed secret, got %s\n' \
+		"$missing_index_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+if ! grep -qF 'denied pattern matched' "$SCRATCH/output"; then
+	printf 'public-safety-test: the secret must still be reported\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The other direction, and why HEAD does not simply replace the index: a path
+# staged and not yet committed is in the index and in no tree. This is the
+# moment the pre-commit hook runs the gate, so enumerating HEAD alone would
+# green on the commit that introduces the secret.
+staged_only="$SCRATCH/staged-only"
+mkdir -p "$staged_only/sub"
+git init -q -b main "$staged_only"
+git -C "$staged_only" config user.name 'Fixture Developer'
+git -C "$staged_only" config user.email fixture@example.invalid
+printf 'public content\n' >"$staged_only/README.md"
+printf 'sub/leak.txt\n' >"$staged_only/.gitignore"
+git -C "$staged_only" add README.md .gitignore
+git -C "$staged_only" commit -qm 'public seed'
+printf '%s\n' "$hidden_secret" >"$staged_only/sub/leak.txt"
+git -C "$staged_only" add -f sub/leak.txt
+
+# The premise: HEAD does not carry it, only the index does.
+if git -C "$staged_only" ls-tree -r --name-only HEAD | grep -qF sub/leak.txt; then
+	printf 'public-safety-test: HEAD already carries the secret, case is void\n' >&2
+	exit 1
+fi
+
+staged_only_status=0
+"$CHECKER" "$staged_only" >"$SCRATCH/output" 2>&1 || staged_only_status=$?
+if [ "$staged_only_status" -ne 1 ]; then
+	printf 'public-safety-test: a staged-only secret must fail the gate, got %s\n' \
+		"$staged_only_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The same claim before the first commit, where there is no HEAD to enumerate at
+# all: an unborn HEAD is a legitimate answer the gate reads as "nothing is
+# committed", never as a fault, and it must not disarm the index half.
+unborn="$SCRATCH/unborn-head"
+mkdir -p "$unborn/sub"
+git init -q -b main "$unborn"
+git -C "$unborn" config user.name 'Fixture Developer'
+git -C "$unborn" config user.email fixture@example.invalid
+printf 'public content\n' >"$unborn/README.md"
+printf 'sub/leak.txt\n' >"$unborn/.gitignore"
+git -C "$unborn" add README.md .gitignore
+if ! "$CHECKER" "$unborn" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: a repository with no commits must not fault\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+printf '%s\n' "$hidden_secret" >"$unborn/sub/leak.txt"
+git -C "$unborn" add -f sub/leak.txt
+unborn_status=0
+"$CHECKER" "$unborn" >"$SCRATCH/output" 2>&1 || unborn_status=$?
+if [ "$unborn_status" -ne 1 ]; then
+	printf 'public-safety-test: an unborn HEAD must not disarm the index, got %s\n' \
+		"$unborn_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
 # `-C` chooses a directory to run in, not a repository: git reads its
 # repository-local environment selectors ahead of directory discovery, so with
 # them exported the enumeration answers about the ambient repository at exit 0,
@@ -557,9 +659,9 @@ if [ "$fifo_status" -ne 1 ]; then
 	exit 1
 fi
 
-# A tracked file no ignore rule hides is reached by the walk and by its explicit
-# path, so the same match arrives twice. A real leak is the worst moment to
-# double the output.
+# A committed file no ignore rule hides is reached three ways -- by the walk, by
+# the index listing and by the commit listing -- so the same match arrives three
+# times. A real leak is the worst moment to multiply the output.
 duplicate="$SCRATCH/duplicate-report"
 mkdir -p "$duplicate"
 git init -q -b main "$duplicate"
@@ -652,6 +754,77 @@ fi
 # The diagnostic git itself printed has to survive: discarding it is what left
 # a short scan with nothing on stderr to explain it.
 if ! grep -qF 'stub git: the listing stopped partway' "$SCRATCH/output"; then
+	printf "public-safety-test: git's own diagnostic should reach the caller\n" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The HEAD half has the same two fault shapes, and neither may fall through to a
+# walk that cannot see an ignored path. Both are stubbed, because the fixture is
+# a real repository whose HEAD resolves and whose tree reads fine. The keys are
+# `--verify` and `ls-tree` rather than `rev-parse`: the gate issues a second
+# rev-parse for `--local-env-vars`, and a stub keyed on the subcommand alone
+# would fault at that call instead and prove something else.
+HEADSTUB_BIN="$SCRATCH/headstub-bin"
+mkdir -p "$HEADSTUB_BIN"
+cat >"$HEADSTUB_BIN/git" <<EOF
+#!/usr/bin/env bash
+for argument in "\$@"; do
+	if [ "\$argument" = --verify ]; then
+		printf 'stub git: HEAD could not be resolved\n' >&2
+		exit 128
+	fi
+done
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$HEADSTUB_BIN/git"
+headprobe_status=0
+PATH="$HEADSTUB_BIN:$PATH" "$CHECKER" "$selector_target" \
+	>"$SCRATCH/output" 2>&1 || headprobe_status=$?
+if [ "$headprobe_status" -ne 2 ]; then
+	printf 'public-safety-test: a HEAD probe that could not answer must fault, got %s\n' \
+		"$headprobe_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+if ! grep -qF 'could not resolve HEAD' "$SCRATCH/output"; then
+	printf 'public-safety-test: the fault should name what could not be resolved\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+
+# The commit listing itself, in the shape the ls-files stub above uses: a path on
+# stdout, a diagnostic on stderr, a non-zero exit. The path it names is the clean
+# one, so a gate that read the truncated set as complete would exit 0 over the
+# tracked-and-ignored secret it never listed -- the ADR 0005 defect rather than
+# the exit 1 a stub naming the secret would have produced.
+cat >"$HEADSTUB_BIN/git" <<EOF
+#!/usr/bin/env bash
+for argument in "\$@"; do
+	if [ "\$argument" = ls-tree ]; then
+		printf '.gitignore\0'
+		printf 'stub git: the commit listing stopped partway\n' >&2
+		exit 128
+	fi
+done
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$HEADSTUB_BIN/git"
+lstree_status=0
+PATH="$HEADSTUB_BIN:$PATH" "$CHECKER" "$selector_target" \
+	>"$SCRATCH/output" 2>&1 || lstree_status=$?
+if [ "$lstree_status" -ne 2 ]; then
+	printf 'public-safety-test: a commit listing that stopped partway must fault, got %s\n' \
+		"$lstree_status" >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+if ! grep -qF 'could not list the committed files' "$SCRATCH/output"; then
+	printf 'public-safety-test: the fault should name what could not be listed\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+if ! grep -qF 'stub git: the commit listing stopped partway' "$SCRATCH/output"; then
 	printf "public-safety-test: git's own diagnostic should reach the caller\n" >&2
 	cat "$SCRATCH/output" >&2
 	exit 1
