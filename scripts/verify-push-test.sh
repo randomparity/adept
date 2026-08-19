@@ -405,6 +405,35 @@ HOOK_SOURCE_ROOT=$(cd "$HOOK_REPO" && pwd -P)
 [[ $hook_ci_root != "$HOOK_SOURCE_ROOT" && $hook_ci_object == "$HOOK_OBJECT" ]] ||
 	fail 'native pre-push should verify the isolated pushed object'
 
+# The hook resolves the worktree root before anything else can report, so its
+# diagnostic is the only one an operator sees. A non-zero rev-parse must carry
+# git's own line through -- for dubious ownership that line holds the
+# safe.directory remedy -- rather than assert a "not in a worktree" cause the
+# hook did not establish.
+HOOK_FAIL_BIN="$SCRATCH/hook-failing-git"
+mkdir -p "$HOOK_FAIL_BIN"
+cat >"$HOOK_FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == rev-parse && \${2:-} == --show-toplevel ]]; then
+  printf 'stub git: detected dubious ownership in repository\n' >&2
+  exit 128
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$HOOK_FAIL_BIN/git"
+: >"$SCRATCH/hook-ci.log"
+set +e
+hook_root_output=$(printf 'refs/heads/main %s refs/heads/main %s\n' "$HOOK_OBJECT" "$HOOK_OBJECT" | (
+	cd "$HOOK_REPO"
+	PATH="$HOOK_FAIL_BIN:$HOOK_BIN:$PATH" HOOK_CI_LOG="$SCRATCH/hook-ci.log" "$HOOK_PATH"
+) 2>&1)
+hook_root_status=$?
+set -e
+[[ $hook_root_status -eq 2 && $hook_root_output == *'could not resolve the worktree root'* &&
+	$hook_root_output == *'stub git: detected dubious ownership in repository'* ]] ||
+	fail "an unresolvable worktree root should stop the hook and keep git's line: $hook_root_output"
+[[ ! -s $SCRATCH/hook-ci.log ]] || fail 'unresolvable worktree root reached ci'
+
 printf '%s\nold\n' '# adept: managed pre-push hook' >"$HOOK_PATH"
 run_hooks
 cmp -s "$ROOT/scripts/pre-push-hook" "$HOOK_PATH" || fail 'owned hook was not replaced'
