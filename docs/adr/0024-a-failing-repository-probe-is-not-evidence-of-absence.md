@@ -4,6 +4,8 @@
 
 Accepted (2026-08-19)
 
+> **Superseded by [0025](0025-a-skip-reports-the-condition-not-the-cause.md)** (2026-08-19)
+
 ## Context
 
 [ADR 0005](0005-scan-faults-are-reported-not-collapsed.md) decided that a scan reading

@@ -180,9 +180,11 @@ assert_twins_stop 'git reported no local env vars'
 # The config below is that runner-shaped condition, and the property is that the suite runs
 # the case under it rather than announcing a skip.
 #
-# Asserted only where this git honours the switch at all, probed the way the case stages it.
-# On a build that ignores it the case skips for its own stated reason and there is nothing
-# here to pin.
+# Asserted only where the probe reproduces the refusal at all, probed the way the case stages
+# it. Where it does not there is nothing here to pin, and the skip below reports the condition
+# it observed plus the `safe.directory` entries in scope -- the same discrimination the two
+# suites' own skips make, for the same reason: git declining to refuse has two causes and the
+# probe establishes neither.
 #
 # tracker-test.sh alone stands for all three sites. The check-records-test.sh twins carry
 # the identical isolation, and a run of either builds roughly seven thousand files; `just
@@ -194,11 +196,28 @@ cat >"$permissive_config" <<'CONFIG'
 	directory = *
 CONFIG
 ownership_probe=$SCRATCH/ownership-probe
+ownership_env=(
+	GIT_CONFIG_GLOBAL=/dev/null
+	GIT_CONFIG_SYSTEM=/dev/null
+	GIT_TEST_ASSUME_DIFFERENT_OWNER=1
+)
+ownership_safe_directories() { # repo -> the entries in scope under ownership_env
+	local repo=$1 entries status=0
+	entries=$(cd "$repo" && env "${ownership_env[@]}" \
+		git config --show-origin --get-all safe.directory) || status=$?
+	# 1 is git's "no such key", the ordinary answer. Anything above it is a query
+	# that never ran, which must not read as an empty list (ADR 0005).
+	case $status in
+	0) printf '%s' "${entries//$'\n'/; }" ;;
+	1) printf 'none' ;;
+	*) printf 'unknown, git config exited %d' "$status" ;;
+	esac
+}
 git init -q "$ownership_probe"
 if (cd "$ownership_probe" &&
-	env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
-		GIT_TEST_ASSUME_DIFFERENT_OWNER=1 git rev-parse --show-toplevel) >/dev/null 2>&1; then
-	printf '  skip ownership case under a permissive config; this git ignores GIT_TEST_ASSUME_DIFFERENT_OWNER\n'
+	env "${ownership_env[@]}" git rev-parse --show-toplevel) >/dev/null 2>&1; then
+	printf '  skip ownership case; git did not refuse the probe under GIT_TEST_ASSUME_DIFFERENT_OWNER (safe.directory in scope: %s)\n' \
+		"$(ownership_safe_directories "$ownership_probe")"
 else
 	ownership_output=$SCRATCH/ownership.output
 	ownership_status=0

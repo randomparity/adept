@@ -2003,7 +2003,7 @@ STUB
   # that mattered — it carries the exact `safe.directory` remedy and nothing else does.
   # GIT_TEST_ASSUME_DIFFERENT_OWNER is git's own switch for it; a build that does not honour
   # it leaves the fixture a working repository, which would redden this case for a reason that
-  # is not the gate's, so the case checks the switch first and says so when it skips.
+  # is not the gate's, so the case probes for the refusal first and skips when it is absent.
   #
   # The switch alone does not stage the refusal. `safe.directory` is honoured in protected
   # configuration, so an entry covering this fixture — `*` in a global or system config file,
@@ -2023,11 +2023,36 @@ STUB
     GIT_CONFIG_SYSTEM=/dev/null
     GIT_TEST_ASSUME_DIFFERENT_OWNER=1
   )
+
+  # All the probe establishes is that git did not refuse — never why, so the skip reports that
+  # condition and no cause. Two conditions produce it and they call for opposite responses: a
+  # build that ignores the switch, where there is nothing to stage and nothing to fix, and a
+  # `safe.directory` entry still covering the fixture despite the two variables above, where
+  # the case is being neutralized and the entry is the thing to remove. A git older than 2.32
+  # reaches the second by honouring neither variable. What separates them is the entries in
+  # scope, so the skip names them: none listed leaves the switch as the only explanation left
+  # standing, and an entry listed names the file that did the neutralizing. Measured on macOS
+  # 26.6.1 with git 2.50.1 (Apple Git-155) wrapped to drop both variables and a permissive `*`
+  # in the global config: the probe exits 0 and this reports that config file, where isolated
+  # real git exits 128 and the case runs.
+  ownership_safe_directories() { # repo -> the entries in scope under ownership_env
+    local repo=$1 entries status=0
+    entries=$(cd "$repo" && env "${ownership_env[@]}" \
+      git config --show-origin --get-all safe.directory) || status=$?
+    # 1 is git's "no such key", the ordinary answer. Anything above it is a query that never
+    # ran, which must not read as an empty list (ADR 0005).
+    case $status in
+    0) printf '%s' "${entries//$'\n'/; }" ;;
+    1) printf 'none' ;;
+    *) printf 'unknown, git config exited %d' "$status" ;;
+    esac
+  }
+
   d=$(case_dir dubious_ownership)
   if (cd "$d" && env "${ownership_env[@]}" git rev-parse --show-toplevel) \
     >/dev/null 2>&1; then
-    printf '  skip %-44s this git ignores GIT_TEST_ASSUME_DIFFERENT_OWNER\n' \
-      "root probe fails inside a repository"
+    printf '  skip %-44s git did not refuse the fixture; safe.directory in scope: %s\n' \
+      "root probe fails inside a repository" "$(ownership_safe_directories "$d")"
   else
     run_case "root probe fails inside a repository" 1 E-ROOT-UNRESOLVED "$d" \
       BASE_SHA= "${ownership_env[@]}"
