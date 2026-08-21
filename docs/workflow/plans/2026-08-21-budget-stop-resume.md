@@ -64,16 +64,20 @@ terminal. The operator may approve continuing, and this subsection defines the r
   where the approval is recorded, and what it authorized — then swap
   `status:needs-human` → `status:in-review` in a single-active edit. Record before label:
   the same exit-edges discipline the park itself followed.
-- **Resume at step 7** (Simplify). The run does not re-enter the loop — `$trial-loop`'s
-  caller contract forbids a budget-stopped run from re-entering — and the budget stop
-  stands as the run's ending. Before simplification, settle whatever step-6 obligations
+- **Resume at step 7** (Simplify). The approval alone never re-enters the loop —
+  `$trial-loop`'s caller contract forbids a budget-stopped run from re-entering — so the
+  budget stop stands as the run's ending. One exception, already governed: if a settled
+  obligation yields an accepted fix that changes behavior, step 6's round-trip rule runs
+  one more loop pass and ADR 0021's replacement rule rewrites the run fields from that
+  ending. Before simplification, settle whatever step-6 obligations
   the stop cut short: the security pass above all, judged and dispositioned under step 6's
   Security-pass terms (below in that skill), recording `security: not triggered` where its
   trigger does not fire.
 - **Carry the stop's disclosure** into step 8's payload destinations: the three lists this
   step already carries (deferrals with their owning records, outstanding notes, confirmed
-  claims) plus the remaining-findings summary the cap bullet makes the stop produce. The
-  summary then writes `exit: blocked-at-budget`, per step 8 and ADR 0021.
+  claims) plus the remaining-findings summary the cap bullet makes the stop produce. In
+  the ordinary case — no behavior-changing settlement — the summary writes
+  `exit: blocked-at-budget`, per step 8 and ADR 0021.
 ```
 
 **Acceptance:**
@@ -115,7 +119,7 @@ nothing; the trigger names the fourth list; the payload definition references st
 specification.
 
 **Verify:** `just shape-check public-safety` exit 0. Commit:
-`docs(quest): make blocked-at-budget writable and admit the stop's findings summary`.
+`docs(quest): make blocked-at-budget writable, admit findings summary`.
 
 ## Task 3 — `$quest` On a Blocker: the resume pointer
 
@@ -127,7 +131,7 @@ and it is the one park with a defined resume: step 6's approved-continuation pat
 **Acceptance:** the bullet names the resume; no other blocker type claims one.
 
 **Verify:** `just shape-check public-safety` exit 0. Commit:
-`docs(quest): point the needs-human park at the approved-continuation resume`.
+`docs(quest): point the needs-human park at the resume path`.
 
 ## Task 4 — `$trial-loop` caller contract + ADR 0021 amendment
 
@@ -138,7 +142,7 @@ and it is the one park with a defined resume: step 6's approved-continuation pat
    approval.", append: "An approval that advances the caller belongs to the caller's own
    contract — `$quest` documents the approved-continuation resume path in its step 6."
 
-2. In ADR 0021's row-5 paragraph, replace "$quest$ documents no such resume today — issue
+2. In ADR 0021's row-5 paragraph, replace "`$quest` documents no such resume today — issue
    #151 — so **`blocked-at-budget` may not be written until it does**, and until then a
    run stopped at the budget parks and publishes no summary at all." with: "ADR 0029 now
    documents that resume path — the approved continuation this row already describes — so
@@ -164,6 +168,12 @@ bullet names quest's step 6 without restating its semantics.
 **Verify:** `just verify` exit 0 (records gate now covers ADR 0029; plugin-check
 `--strict` passes with the new version). Commit:
 `chore: bump version to 1.2.0 over main's 1.1.1`.
+
+**Cross-reference read-through (spec Verification).** After the last edit lands, read each
+location the new text points at and confirm it matches what the prose claims: quest step 6
+subsection → step 8's exit list and payload trigger; quest *On a Blocker* → step 6's
+subsection; trial-loop caller bullet → quest step 6; ADR 0021's corrected sentence →
+ADR 0029. Any mismatch is fixed before `just verify` runs, not deferred.
 
 ## Rollback
 
