@@ -632,9 +632,10 @@ ended:
   written under its own name. A named exit outranks `none` wherever a run matches
   both, so `none` is only for a run that reached `approve` having taken none of
   them.
-- `blocked-at-budget` — a run stopped as blocked at the iteration budget that a
-  human explicitly approved continuing. Not writable until issue #151 documents
-  that resume path; until then such a run parks and publishes no summary.
+- `blocked-at-budget` — a run stopped as blocked at the iteration budget, then
+  continued through step 6's approved-continuation resume path. `verdict:`,
+  `findings:`, and `iterations:` describe that stopped run; the approval is its
+  aftermath, not a second ending.
 
 Every other stop parks the quest before `$deliver` and publishes no summary at
 all, a cycle ended for rescoping without new authority included, so there is no
@@ -643,13 +644,15 @@ exits as non-blocking outcomes that advance the workflow, so each of them reache
 this field under its own name.
 
 ADR 0021 is the authority for the field set and these values; the exits
-themselves belong to `$trial-loop`. A run's payload — deferrals with their owning
-paths or tracker issues, outstanding notes, the confirmed claim list — stays out of
+themselves belong to `$trial-loop`. A run's payload — the lists step 6 carries:
+deferrals with their owning paths or tracker issues, outstanding notes, the confirmed
+claim list, and a budget stop's remaining-findings summary — stays out of
 the summary and out of every field: ADR 0028 sends it through the helper's payload
 slot into `WORK:REVIEW` and through this step's named write moment into the PR body,
 which is where `$trial-loop`'s own report obligation sends it.
 
-If step 6 carried a deferral list, outstanding notes, or a confirmed claim list, compose
+If step 6 carried any of the lists it specifies — a deferral list, outstanding notes, a
+confirmed claim list, or a budget stop's remaining-findings summary — compose
 the run's payload file once, immediately after the summary: write only the lists step 6
 specifies into a `mktemp` file beside the ledger — no headings; each destination adds
 its own — atomically rename it only after the write, reject carriage return, NUL, and
