@@ -33,6 +33,19 @@ for endpoint in "$from" "$to"; do
 	fi
 done
 
+# An empty range would otherwise write a well-formed package describing
+# nothing and exit 0, which every downstream reader takes as evidence that a
+# diff exists. A task whose BASE and HEAD name no commits in between is a
+# worker that committed nowhere -- exactly the failure an orchestrator must
+# not mistake for a clean task -- so it fails loudly here instead.
+span="$from..$to"
+commits=$(git rev-list --count "$span")
+if [ "$commits" -eq 0 ]; then
+	printf 'review-package: %s contains no commits\n' "$span" >&2
+	printf 'review-package: check both endpoints and their order -- nothing sits between them\n' >&2
+	exit 2
+fi
+
 if [ $# -eq 3 ]; then
 	destination=$3
 else
@@ -41,7 +54,6 @@ else
 	destination="$scratch/review-$abbreviated.diff"
 fi
 
-span="$from..$to"
 {
 	printf '# Review package: %s\n\n' "$span"
 	printf '## Commits\n'
@@ -54,5 +66,5 @@ span="$from..$to"
 
 printf 'review-package: wrote %s (%s commit(s), %s bytes)\n' \
 	"$destination" \
-	"$(git rev-list --count "$span")" \
+	"$commits" \
 	"$(wc -c <"$destination" | tr -d ' ')"
