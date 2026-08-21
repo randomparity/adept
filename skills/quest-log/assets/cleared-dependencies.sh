@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 
+# This file is sourced into the caller's own shell -- quest-log SKILL.md's
+# cleared-dependencies recipe is the one shipped instruction that does so -- and
+# that shell is not always bash. The function bodies below use bash-only forms
+# (`local` on zsh's read-only special parameter `status`, `${!array[@]}`,
+# `BASH_REMATCH`), and under zsh the first of those kills the caller's whole
+# session rather than failing the call. Refuse here instead, before any body is
+# reachable. `return`, never `exit`: an exit inside a sourced file takes down
+# the very session this guard exists to protect, which is the failure mode
+# itself. When bash executes or sources the file, BASH_VERSION is always set
+# and the guard does not fire.
+[ -n "${BASH_VERSION:-}" ] || {
+	printf 'cleared-dependencies.sh requires bash; source it from bash\n' >&2
+	return 1
+}
+
 cleared_dependency_reason=
 cleared_dependency_error=false
 cleared_dependency_max_lookups=500
@@ -53,18 +68,18 @@ cleared_dependency_safe_text() {
 # under `set -e` would otherwise end on a failed rm after a lookup that
 # succeeded.
 cleared_dependency_run() { # gh-args...
-	local scratch status=0
+	local scratch rc=0
 	cleared_dependency_out=
 	cleared_dependency_err=
 	scratch=$(mktemp) || {
 		cleared_dependency_err='no scratch file for the tracker command'
 		return 1
 	}
-	cleared_dependency_out=$(gh "$@" 2>"$scratch") || status=$?
+	cleared_dependency_out=$(gh "$@" 2>"$scratch") || rc=$?
 	cleared_dependency_err=$(<"$scratch")
 	rm -f -- "$scratch" ||
 		printf 'retained scratch path: %s\n' "$scratch" >&2
-	return "$status"
+	return "$rc"
 }
 
 cleared_dependency_blocker_state() { # repo blocker dependent
