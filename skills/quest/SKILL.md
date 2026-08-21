@@ -445,13 +445,11 @@ confirmed claim list the same way. Those lists are the part a reader cannot
 reconstruct, and they are the only thing holding the orchestrator's own
 consequence judgment to account.
 
-`WORK:REVIEW`'s sole writer composes the comment from the summary and the forge
-review, with no slot for a list, and nothing edits the PR body for this purpose
-after `$deliver` composes it. Issue #159 owns both halves and this change does not
-close either. Until it does, keep the list with the resume facts — a compaction
-between the last loop run and step 8 would otherwise shorten it invisibly — and
-report it to whoever receives this run, so the concerns have an owner on the record
-even when the published artifacts cannot hold the list.
+Step 8 publishes these lists through ADR 0028's two writable destinations: the
+publication helper's payload slot puts them in the `WORK:REVIEW` comment, and step 8's
+named write moment appends them to the PR body. Compose nothing here — carry the loop's
+disclosure forward intact as a resume fact until step 8 writes it, because a compaction
+between the last loop run and step 8 would otherwise shorten it invisibly.
 
 Step 8's review summary names the exit in its own `exit:` field and defines which
 value each ending writes; nothing here repeats that. Route on the exit name rather
@@ -615,9 +613,24 @@ this field under its own name.
 
 ADR 0021 is the authority for the field set and these values; the exits
 themselves belong to `$trial-loop`. A run's payload — deferrals with their owning
-paths or tracker issues, outstanding notes, the confirmed claim list — stays in
-`WORK:REVIEW` and the PR body, which is where `$trial-loop`'s own report
-obligation sends it.
+paths or tracker issues, outstanding notes, the confirmed claim list — stays out of
+the summary and out of every field: ADR 0028 sends it through the helper's payload
+slot into `WORK:REVIEW` and through this step's named write moment into the PR body,
+which is where `$trial-loop`'s own report obligation sends it.
+
+If step 6 carried a deferral list, outstanding notes, or a confirmed claim list, compose
+the run's payload file once, immediately after the summary: write the lists step 6
+specifies under a `## Review exit payloads` heading into a `mktemp` file beside the
+ledger, atomically rename it only after the write, reject carriage return, NUL, and
+outer annotation markers, and keep the temporary and installed payload in mode 0600.
+A run with nothing to carry creates no payload file and skips every payload step below.
+Then make the one named PR-body write, ADR 0028's second destination: read the
+delivered PR body, append the payload file's contents under the same heading, write
+the result back with `gh pr edit --body-file`, and require the byte-for-byte readback
+to match. This is the only moment the PR body gains the section — before the
+`publication-in-progress` handoff rewrite, so the write never happens in the terminal
+parked phase and never happens twice — and a failed or unverifiable write parks the
+quest before the helper with the evidence retained.
 
 Reject carriage return, NUL, outer markers, or any failed byte-for-byte
 readback before rename; the temporary and installed summary both stay mode 0600.
@@ -638,11 +651,15 @@ and invoke it exactly once:
 ```sh
 skills/quest/scripts/publish-forge-review \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
-  "$FORGE_LEDGER" "$REVIEW_SUMMARY"
+  "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```
 
-The helper is the sole `WORK:REVIEW` writer. It validates the required review
-or verified not-required reason, posts one complete annotation, reads it back,
+`REVIEW_PAYLOAD` is the payload file's path, empty when this run carries nothing;
+the helper treats an empty seventh argument exactly as absent.
+
+The helper is the sole `WORK:REVIEW` writer. It validates the required review,
+the verified not-required reason, and any carried payload, posts one complete
+annotation, reads it back,
 records verification, and recoverably disposes its owned scratch files. On
 nonzero, do not retry, do not post another `WORK:REVIEW`, and park the quest
 with the helper's retained evidence and failure output; leave the handoff in
@@ -653,7 +670,9 @@ require it to parse for this exact `REPO` and `PR`, and require the exact
 and only its former paths: in `required` mode the exact review,
 `REVIEW_SUMMARY`, and one helper-created `.publish-forge-review.*` body beside
 the ledger; in `not-required` mode the exact `REVIEW_SUMMARY` and that one
-body. The body entry must be in the ledger directory and be the helper's
+body; and, when this run carried a payload, the exact `REVIEW_PAYLOAD` in both
+modes, named last in the record. The body entry must be in the ledger directory
+and be the helper's
 single generated body identity, not an inferred or older path. Only then
 re-resolve the PR and require its repository, number, head branch, base branch,
 and full `headRefOid` to still equal the handoff and summary values. If the head
