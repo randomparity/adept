@@ -302,7 +302,10 @@ An issue-backed quest writes one PR annotation through `$quest`'s publication
 helper. Its existing compact review summary comes first, followed by
 `## Forge whole-branch review` and the complete forge review with every line
 indented four spaces. In verified `not-required` mode, that indented payload is
-the helper's single `forge review: not required (<reason>)` line instead. The
+the helper's single `forge review: not required (<reason>)` line instead. When the
+run carries `$trial-loop` exit payloads, an unindented `## Review exit payloads`
+section follows the forge review, validated against whole-line outer markers before
+composition (ADR 0028). The
 outer `<!-- WORK:REVIEW -->` marker and `<!-- REVIEW:COMPLETE -->` sentinel
 remain unindented and occur exactly once; marker-like lines inside the forge
 payload stay indented data. Whole-line-anchored matching therefore selects only

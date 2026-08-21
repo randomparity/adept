@@ -19,6 +19,7 @@ mode=''
 review_or_reason=''
 ledger=''
 summary=''
+payload=''
 comment_url=''
 platform=''
 ledger_directory=''
@@ -58,13 +59,17 @@ preflight() {
 }
 
 validate_arguments() {
-	[ "$#" -eq 6 ] || fail 'usage: publish-forge-review REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY'
+	case $# in
+	6 | 7) ;;
+	*) fail 'usage: publish-forge-review REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY [PAYLOAD]' ;;
+	esac
 	repo=$1
 	pr=$2
 	mode=$3
 	review_or_reason=$4
 	ledger=$5
 	summary=$6
+	payload=${7-}
 	case $repo in
 	*/*)
 		case $repo in *'/'*'/'* | *[!A-Za-z0-9_.-/'-']*) fail 'repository is invalid' ;; esac
@@ -148,26 +153,33 @@ contains_byte() {
 	esac
 }
 
+require_publishable_source() {
+	local label=$1 path=$2 marker marker_status
+	require_private_file "$label" "$path" true
+	check_size "$label" "$path" "$MAX_SOURCE_BYTES"
+	iconv -f UTF-8 -t UTF-8 "$path" >/dev/null 2>&1 || fail "$label is not UTF-8 text"
+	if contains_byte 00 "$path"; then fail "$label contains NUL"; fi
+	if contains_byte 0d "$path"; then fail "$label contains carriage return"; fi
+	for marker in "$OUTER_MARKER" "$OUTER_SENTINEL"; do
+		marker_status=0
+		grep -qxF "$marker" "$path" >/dev/null 2>&1 || marker_status=$?
+		case $marker_status in
+		0) fail "$label contains an outer annotation marker" ;;
+		1) ;;
+		*) fail "$label marker validation failed" ;;
+		esac
+	done
+}
+
 validate_content() {
-	local marker marker_status
 	ledger_directory=$(dirname "$ledger") || fail 'ledger directory is invalid'
 	require_private_directory "$ledger_directory"
 	require_private_file 'publication ledger' "$ledger" false
 	[ -w "$ledger" ] || fail 'publication ledger is invalid'
-	require_private_file 'summary' "$summary" true
-	check_size 'summary' "$summary" "$MAX_SOURCE_BYTES"
-	iconv -f UTF-8 -t UTF-8 "$summary" >/dev/null 2>&1 || fail 'summary is not UTF-8 text'
-	if contains_byte 00 "$summary"; then fail 'summary contains NUL'; fi
-	if contains_byte 0d "$summary"; then fail 'summary contains carriage return'; fi
-	for marker in "$OUTER_MARKER" "$OUTER_SENTINEL"; do
-		marker_status=0
-		grep -qxF "$marker" "$summary" >/dev/null 2>&1 || marker_status=$?
-		case $marker_status in
-		0) fail 'summary contains an outer annotation marker' ;;
-		1) ;;
-		*) fail 'summary marker validation failed' ;;
-		esac
-	done
+	require_publishable_source 'summary' "$summary"
+	if [ -n "$payload" ]; then
+		require_publishable_source 'payload' "$payload"
+	fi
 	case $mode in
 	required)
 		require_private_file 'required review' "$review_or_reason" true
@@ -200,6 +212,13 @@ compose_body() {
 			sed 's/^/    /' >>"$body" || fail 'cannot compose publication body'
 		;;
 	esac
+	if [ -n "$payload" ]; then
+		printf '\n## Review exit payloads\n' >>"$body" ||
+			fail 'cannot compose publication body'
+		cat "$payload" >>"$body" || fail 'cannot read publication payload'
+		last_byte=$(tail -c 1 "$payload") || fail 'cannot read publication payload'
+		[ -z "$last_byte" ] || printf '\n' >>"$body" || fail 'cannot compose publication body'
+	fi
 	printf '%s\n' "$OUTER_SENTINEL" >>"$body" || fail 'cannot compose publication body'
 	check_size 'publication body' "$body" "$MAX_BODY_BYTES"
 	"$ROOT/scripts/check-public-safety.sh" "$body" >/dev/null 2>&1 ||
@@ -270,9 +289,12 @@ compose_body
 comment_url=$(post_comment)
 read_comment "$comment_url"
 append_ledger "review-publication-verified: $comment_url"
+disposed_paths=("$summary" "$body")
 if [ "$mode" = required ]; then
-	dispose "$review_or_reason" "$summary" "$body"
-else
-	dispose "$summary" "$body"
+	disposed_paths=("$review_or_reason" "${disposed_paths[@]}")
 fi
+if [ -n "$payload" ]; then
+	disposed_paths+=("$payload")
+fi
+dispose "${disposed_paths[@]}"
 printf '%s\n' "$comment_url"
