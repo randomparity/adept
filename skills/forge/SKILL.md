@@ -18,11 +18,17 @@ workspace with **pocket dimension**, then pick an execution mode by what
 **This skill is not the end of the pipeline.** `$trial-loop`,
 `$dispel`, `$deliver` and `$return-to-town` follow and own integration,
 so neither mode presents an integration menu and neither takes a merge, push, or
-discard. That is a property of the run, so the implementer and reviewer
-workers dispatched by **party** inherit it; their prompts say so.
+discard. That is a property of the run, and each dispatched worker learns it
+only from its own prompt: the reviewer templates carry it as their read-only
+contract — the checkout left exactly as found, with the whole-branch reviewer's
+single writable review file as the one exception — and the implementer template
+carries it in its Placement section, beside the worktree-and-branch precondition
+the worker must pass before its first edit. Never assert that a dispatch carries
+an instruction its template does not state.
 
 **Never start implementation on `main` or `master` without explicit consent.**
-This binds both modes and every worker either one dispatches.
+This binds both modes and every worker either one dispatches; the implementer
+template restates it as part of that precondition.
 
 When the caller supplies a governed-small-change classification with its revalidated decision reference, decision kind, accepted status, governed behavior, and acceptance criteria, reject any supplied or auto-discovered plan and write and run the focused failing test as the first executable proof.
 
@@ -244,7 +250,9 @@ worktree state are reconciliation evidence. Do not replace or reclaim a worker o
 
 1. Generate the task brief: `scripts/task-brief PLAN_FILE N` writes it to a
    uniquely named file and prints the path.
-2. Dispatch an implementer with [implementer-prompt.md](implementer-prompt.md).
+2. Dispatch an implementer with [implementer-prompt.md](implementer-prompt.md),
+   carrying the placement contract from *What goes in a dispatch*: the
+   assigned worktree as an absolute path and the exact branch name.
 3. If it asks questions, answer them fully before it proceeds. A question asked
    before the work is the cheapest one there is; hurrying it produces a defect
    instead of an answer.
@@ -252,15 +260,27 @@ worktree state are reconciliation evidence. Do not replace or reclaim a worker o
 5. Generate the review package: `scripts/review-package BASE HEAD`, using the
    BASE you noted **before** the dispatch. `HEAD~1` is wrong and fails quietly:
    where a task produced several commits it shows the reviewer only the final
-   one, and the diff still looks plausible.
-6. Dispatch the task reviewer with
+   one, and the diff still looks plausible. The script must exit 0 and print a
+   non-zero commit count — an empty range now fails the script, and a task
+   whose range is empty has committed nowhere. Stop and reconcile rather than
+   reviewing; an empty diff is not a clean task.
+6. Verify the reported commits landed on the assigned branch before accepting
+   the task. In the assigned worktree, every SHA the implementer reported must
+   satisfy `git merge-base --is-ancestor <sha> <BRANCH_NAME>`, and
+   `<BRANCH_NAME>`'s tip must have moved past BASE. A SHA that fails is a
+   stray commit in some other tree — stop and reconcile before any review,
+   because a worker that got lost is exactly the one whose self-report cannot
+   be trusted.
+7. Dispatch the task reviewer with
    [task-reviewer-prompt.md](task-reviewer-prompt.md) and that path.
    A `CLEANUP_FAILED` return must match the exact three-line reviewer contract;
    reject any mixed verdict/count return and stop with the residual worktree.
-7. On critical, high, or medium findings, dispatch a fix worker, then re-review.
+8. On critical, high, or medium findings, dispatch a fix worker, then re-review.
+   The fix worker carries the same placement contract as the implementer: the
+   assigned worktree path and branch name, verified before its first edit.
    Do not move on with any still open. Record low findings in the ledger; they
    may be dispositioned and advanced, but the review remains `needs-attention`.
-8. Mark the task complete in the todo list and the progress ledger.
+9. Mark the task complete in the todo list and the progress ledger.
 
 After the last task, dispatch the whole-branch review with
 [code-reviewer.md](code-reviewer.md), on the most capable model. The per-task
@@ -415,6 +435,11 @@ party workers.
 
 - the task brief path, introduced as its requirements, with the exact values to
   use verbatim
+- the **placement contract** — the assigned worktree as an absolute path and
+  the exact branch name the worker commits to. A dispatch missing either value
+  is invalid: do not send it, and stop with `NEEDS_CONTEXT` if you receive one.
+  The implementer template turns these two values into a precondition the
+  worker verifies before its first edit, failing closed on a mismatch
 - where this task fits in the wider change
 - the issue requirement and acceptance criteria
 - anything settled by an earlier task — an interface, a chosen approach — that
@@ -461,7 +486,9 @@ dispatches append to the same report file.
 The whole-branch reviewer returns a bounded verdict and a path rather than the
 review itself.
 
-Every fix dispatch carries the implementer contract: re-run the tests covering
+Every fix dispatch carries the implementer contract, placement included: the
+assigned worktree path and branch name, verified before the first edit. Re-run
+the tests covering
 the change and report the command and its output. Name the covering test files —
 a one-line fix does not need the whole suite. Confirm the report has all three
 before re-dispatching the reviewer. One finding cannot take that contract: a
@@ -473,7 +500,8 @@ If the **final** review returns findings, send **one** fix worker and give it
 the review file's path rather than a list — a list is the resident context cost
 the review file exists to remove. Per-finding fixers each rebuild context and
 re-run suites, and one real session's final-review wave cost more than all its
-tasks combined.
+tasks combined. It carries the same placement contract as any implementer: the
+branch's worktree path and branch name, verified before the first edit.
 
 Say in that dispatch what binds it, because a path carries none of the filtering
 a hand-picked list did: critical, high, and medium findings are to be fixed;
