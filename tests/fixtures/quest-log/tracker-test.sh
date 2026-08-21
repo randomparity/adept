@@ -62,7 +62,7 @@ assert_error() { # file expected-class label
 # this suite inherits. Pin a territory UTF-8 locale where the host has one.
 # `C.UTF-8` is deliberately not accepted as a substitute: it does not reproduce
 # the collation behaviour, so a suite that settled for it would pass while the
-# defect was live (ADR 0023). With no such locale the accented candidates are
+# defect was live. With no such locale the accented candidates are
 # rejected whatever the grammar, so the cases still pass -- they stop proving the
 # property, rather than turning a portability check into a host-configuration
 # check.

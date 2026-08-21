@@ -7,7 +7,7 @@
 # not .agent/sdd/, that a tracked ignore file is never modified, that a tracked
 # ignore file which already covers the workspace is not treated as fatal, and
 # that an unanswerable git query stops the run instead of clobbering. Those are
-# what this suite pins (ADR 0027).
+# what this suite pins.
 
 set -euo pipefail
 
@@ -354,7 +354,7 @@ case_unallocatable_staging_reports
 case_retained_staging_keeps_the_earned_status
 # Both remaining cases make a path unreadable or unwritable to reach their
 # branch, and root ignores those bits -- they would pass while proving nothing,
-# so skip them loudly rather than bank a false green (ADR 0023).
+# so skip them loudly rather than bank a false green.
 if [ "$(id -u)" -eq 0 ]; then
 	printf '  skip run as root: the permission-dependent cases prove nothing\n'
 else
