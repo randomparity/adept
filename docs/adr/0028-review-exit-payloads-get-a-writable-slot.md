@@ -1,9 +1,11 @@
-# 0026 — The review exit payloads get a writable slot and a named PR-body write
+# 0028 — The review exit payloads get a writable slot and a named PR-body write
 
 ## Status
 
-Accepted (2026-08-21). Amends [0021](0021-review-summary-names-the-trial-loop-exit.md)'s
-payload-destination ruling and supersedes the not-to-be-edited freeze that
+Accepted (2026-08-21)
+
+Amends [0021](0021-review-summary-names-the-trial-loop-exit.md)'s payload-destination
+ruling and supersedes the not-to-be-edited freeze that
 `docs/workflow/plans/2026-08-18-review-summary-named-exit.md` (anatomy rule 2) places on
 `skills/quest/scripts/publish-forge-review` and
 `tests/fixtures/quest/publish-forge-review-test.sh`.
