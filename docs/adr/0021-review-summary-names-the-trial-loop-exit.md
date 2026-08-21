@@ -4,6 +4,12 @@
 
 Accepted (2026-08-18)
 
+> **Amended by [0029](0029-budget-stops-resume-on-explicit-operator-approval.md)**
+(2026-08-21): the `## Decision` row-5 hold on `blocked-at-budget` — unwritable until
+`$quest` documented a resume — is discharged by that record's approved-continuation
+path. This record's decision sections stand as written at their decision date; where
+this text and 0029 disagree, 0029 governs.
+
 ## Context
 
 **Every `skills/` line citation in this record is at `ea43def`**, the merge-base of the change
