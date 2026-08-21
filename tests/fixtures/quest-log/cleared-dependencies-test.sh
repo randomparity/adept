@@ -271,4 +271,35 @@ if LC_ALL=C rg -q $'\033' "$SCRATCH/api-fail"; then
 	fail 'issue-list error leaked a control character'
 fi
 
+# --- a non-bash interpreter refuses without killing the caller ---------------
+# SKILL.md's cleared-dependencies recipe is the one shipped instruction to
+# source an asset into the agent's own persistent shell, and that shell is not
+# always bash. `cleared_dependency_run` declared `local status=0`, and `status`
+# is a read-only special parameter in zsh: reaching the declaration killed the
+# caller's whole session, swallowing every command queued behind it until the
+# harness timed out. The asset now refuses at the top of the file instead, so
+# the probe below asserts the caller survives the refusal. Skipped with a
+# printed notice where zsh is not installed -- the ubuntu CI leg carries none
+# -- rather than silently passing, which would read as coverage it does not
+# have; the macOS leg and any zsh-equipped workstation run it for real.
+if command -v zsh >/dev/null; then
+	zsh_probe=$SCRATCH/zsh-refusal.sh
+	{
+		printf 'source %q\n' \
+			"$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh"
+		printf 'reconcile_cleared_dependencies plan owner/repo\n'
+		printf 'printf "SENTINEL_REACHED\\n"\n'
+	} >"$zsh_probe"
+	set +e
+	zsh "$zsh_probe" >"$SCRATCH/zsh-refusal.out" 2>"$SCRATCH/zsh-refusal.err"
+	set -e
+	rg -q 'SENTINEL_REACHED' "$SCRATCH/zsh-refusal.out" ||
+		fail 'the zsh refusal killed the caller instead of returning'
+	rg -q 'requires bash' "$SCRATCH/zsh-refusal.err" ||
+		fail 'the zsh refusal did not name bash as the requirement'
+	rg -q 'command not found' "$SCRATCH/zsh-refusal.err" ||
+		fail 'the guard did not stop the recipe from being defined'
+else
+	printf 'cleared-dependencies-test: zsh not installed; interpreter-guard case skipped\n'
+fi
 printf 'cleared-dependencies-test: pass\n'
