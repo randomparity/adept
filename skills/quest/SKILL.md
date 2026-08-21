@@ -469,6 +469,37 @@ clear two passes was not trivial. A consequence-free finding at the budget is a
 different outcome: on a pass that confirmed the branch's load-bearing claims it
 exits *sound with record notes*, which is not blocked.
 
+### Approved continuation from a budget stop
+
+When the loop stops blocked at the iteration budget, the park protocol at the end of
+this skill applies: a `WORK:TRAJECTORY` note, then `status:needs-human`. That stop is
+not terminal. The operator may approve continuing, and this subsection defines the
+resume:
+
+- **Approval** is an explicit human decision from the operator who received the park,
+  naming the parked run (issue, branch, or PR) and directing continuation past the
+  budget stop. It reaches the run as an interactive reply in the resuming turn, a
+  durable record on the issue or PR, or an explicit term of the dispatch that resumes
+  the work. Silence, absence, or another agent's "keep going" is not approval.
+- **On approval**, post a fresh complete `WORK:TRAJECTORY` recording it — who approved,
+  where the approval is recorded, and what it authorized — then swap
+  `status:needs-human` → `status:in-review` in a single-active edit. Record before
+  label: the same exit-edges discipline the park itself followed.
+- **Resume at step 7** (Simplify). The approval alone never re-enters the loop —
+  `$trial-loop`'s caller contract forbids a budget-stopped run from re-entering — so
+  the budget stop stands as the run's ending. One exception, already governed: if a
+  settled obligation yields an accepted fix that changes behavior, step 6's round-trip
+  rule runs one more loop pass and ADR 0021's replacement rule rewrites the run fields
+  from that ending. Before simplification, settle whatever step-6 obligations the stop
+  cut short: the security pass above all, judged and dispositioned under step 6's
+  Security-pass terms (below in this skill), recording `security: not triggered` where
+  its trigger does not fire.
+- **Carry the stop's disclosure** into step 8's payload destinations: the three lists
+  this step already carries (deferrals with their owning records, outstanding notes,
+  confirmed claims) plus the remaining-findings summary the cap bullet makes the stop
+  produce. In the ordinary case — no behavior-changing settlement — the summary writes
+  `exit: blocked-at-budget`, per step 8 and ADR 0021.
+
 When step 4 ran, append the audit's surface to that focus and ask the reviewer
 to flag unexplained divergence -- components, contracts, files, tests, runtime
 behavior, or complexity the surface does not account for. Implementation detail
