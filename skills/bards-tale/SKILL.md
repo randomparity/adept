@@ -209,8 +209,28 @@ latest-complete-wins):
 jq -r '[.comments[].body | select(test("(?m)^<!-- WORK:REVIEW -->$") and test("(?m)^<!-- REVIEW:COMPLETE -->$"))] | last' "$PRJSON"
 ```
 
-Extract the **iteration count** (carry the verdict / security status for the
-narrative). No complete block → iterations `unknown`.
+Extract the **iteration count**, the reviewer **verdict**, the **security** status,
+and the **exit** — how that `$trial-loop` run ended. No complete block → iterations
+`unknown`.
+
+The summary's `exit:` line takes one of five enumerated values (ADR 0021;
+`quest` *Ship It*), and the exit decides how the run narrates:
+
+- **`converged-with-deferrals`, `sound-with-record-notes`,
+  `converged-on-own-surface`** — the three named non-blocking exits. Narrate the
+  loop as finished under its own name: these runs end with defensible findings
+  standing that the reviewer did not clear, but they are completed outcomes,
+  never "stopped on an unresolved finding". (`verdict:` typically reads
+  `needs-attention` on them, but *converged on own surface* may end on a
+  confirming `approve`; narrate whichever verdict the block carries alongside
+  the named exit.)
+- **`blocked-at-budget`** — narrate as blocked at the iteration budget and
+  continued only on explicit human approval.
+- **`none`** — the reviewer returned `approve` and the run took no named exit.
+- **Anything else — `exit:` absent, or a value outside the five.** Absence is
+  not `none`: a summary published before ADR 0021 says nothing about how its
+  run ended, and neither does an unrecognized value. Keep today's verdict-only
+  reading for the narrative in both cases.
 
 ### 3e. Scope estimate vs. actual — `WORK:SCOPE` vs. PR diff
 
