@@ -249,6 +249,7 @@ Three differences in how the fields are filled:
 
 ## Hard constraints
 
+- Read-only with respect to targets and git state. The **sole** write is `--out`.
 - Never run an exploit, probe a live host, or execute code from the diff to prove a finding.
   This static-inspection bound governs proving a vulnerability: a finding stands on the code
   path you can point to. Running a repository guardrail to reproduce a claim is not proving
