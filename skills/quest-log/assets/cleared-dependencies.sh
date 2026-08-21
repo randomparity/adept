@@ -3,13 +3,14 @@
 # This file is sourced into the caller's own shell -- quest-log SKILL.md's
 # cleared-dependencies recipe is the one shipped instruction that does so -- and
 # that shell is not always bash. The function bodies below use bash-only forms
-# (`local` on zsh's read-only special parameter `status`, `${!array[@]}`,
-# `BASH_REMATCH`), and under zsh the first of those kills the caller's whole
-# session rather than failing the call. Refuse here instead, before any body is
-# reachable. `return`, never `exit`: an exit inside a sourced file takes down
-# the very session this guard exists to protect, which is the failure mode
-# itself. When bash executes or sources the file, BASH_VERSION is always set
-# and the guard does not fire.
+# (`${!array[@]}`, `BASH_REMATCH`), and one was worse than a failed call:
+# `cleared_dependency_run` declared `local status=0`, which under zsh assigns
+# the read-only special parameter `status` and killed the caller's whole
+# session. That declaration is `rc` now; the guard is what keeps every body
+# unreachable from a shell that cannot run it. `return`, never `exit`: an exit
+# inside a sourced file takes down the very session this guard exists to
+# protect, which is the failure mode itself. When bash executes or sources the
+# file, BASH_VERSION is always set and the guard does not fire.
 [ -n "${BASH_VERSION:-}" ] || {
 	printf 'cleared-dependencies.sh requires bash; source it from bash\n' >&2
 	return 1

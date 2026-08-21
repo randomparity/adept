@@ -293,13 +293,12 @@ if command -v zsh >/dev/null; then
 	set +e
 	zsh "$zsh_probe" >"$SCRATCH/zsh-refusal.out" 2>"$SCRATCH/zsh-refusal.err"
 	set -e
-	grep -q 'SENTINEL_REACHED' "$SCRATCH/zsh-refusal.out" ||
+	rg -q 'SENTINEL_REACHED' "$SCRATCH/zsh-refusal.out" ||
 		fail 'the zsh refusal killed the caller instead of returning'
-	grep -q 'requires bash' "$SCRATCH/zsh-refusal.err" ||
+	rg -q 'requires bash' "$SCRATCH/zsh-refusal.err" ||
 		fail 'the zsh refusal did not name bash as the requirement'
-	grep -q 'command not found' "$SCRATCH/zsh-refusal.err" ||
+	rg -q 'command not found' "$SCRATCH/zsh-refusal.err" ||
 		fail 'the guard did not stop the recipe from being defined'
-	unset zsh_probe
 else
 	printf 'cleared-dependencies-test: zsh not installed; interpreter-guard case skipped\n'
 fi
