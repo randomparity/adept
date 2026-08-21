@@ -102,9 +102,14 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "${COMPOSE_SOURCE_FAIL:-}" = summary ]; then
-	exit 1
-fi
+case ${COMPOSE_SOURCE_FAIL:-} in
+summary)
+	case "$*" in *summary.md) exit 1 ;; esac
+	;;
+payload)
+	case "$*" in *payload.md) exit 1 ;; esac
+	;;
+esac
 exec "$REAL_CAT" "$@"
 EOF
 	cat >"$bin/iconv" <<'EOF'
@@ -198,6 +203,7 @@ new_case() {
 	REPO=$repo
 	REVIEW="$repo/.agent/sdd/review.md"
 	SUMMARY="$repo/.agent/sdd/summary.md"
+	PAYLOAD=''
 	LEDGER="$repo/.agent/sdd/ledger"
 	STATE="$repo/state"
 	FAKES="$repo/fakes"
@@ -206,11 +212,16 @@ new_case() {
 run_helper() {
 	local mode=$1 source=$2
 	shift 2
+	local -a payload_args=()
+	if [ -n "${PAYLOAD:-}" ]; then
+		payload_args=("$PAYLOAD")
+	fi
 	STATUS=0
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
 		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
 		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
 		"$@" "$SCRIPT" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
+		"${payload_args[@]}" \
 		2>"$REPO/error") || STATUS=$?
 }
 
@@ -335,6 +346,16 @@ case_compose_source_failure_stops_publication() {
 	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" || ! assert_retained "$name" ||
 		grep -q 'review-publication-verified\|review-publication-disposed' "$LEDGER"; then
 		fail "$name" 'summary copy failure reached publication or disposed evidence'
+		return
+	fi
+	new_case
+	PAYLOAD="$REPO/.agent/sdd/payload.md"
+	printf 'deferral: docs/debt/0001-example.md\n' >"$PAYLOAD"
+	chmod 600 "$PAYLOAD"
+	run_helper required "$REVIEW" env GH_MODE=success COMPOSE_SOURCE_FAIL=payload
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" || ! assert_retained "$name" ||
+		grep -q 'review-publication-verified\|review-publication-disposed' "$LEDGER"; then
+		fail "$name" 'payload copy failure reached publication or disposed evidence'
 		return
 	fi
 	if body_mode=$(stat -f %Lp "$(body_file)" 2>/dev/null); then :; else
@@ -598,6 +619,225 @@ case_private_artifacts_and_size_limit() {
 	ok "$name"
 }
 
+case_payload_slot_composes_and_disposes() {
+	local name='PFR-14 payload slot composes into both modes and disposes' expected
+	new_case
+	PAYLOAD="$REPO/.agent/sdd/payload.md"
+	printf 'deferral: docs/debt/0001-example.md\n' >"$PAYLOAD"
+	chmod 600 "$PAYLOAD"
+	expected="$REPO/expected"
+	{
+		printf '%s\n' '<!-- WORK:REVIEW -->'
+		cat "$SUMMARY"
+		printf '\n## Forge whole-branch review\n'
+		sed 's/^/    /' "$REVIEW"
+		printf '\n## Review exit payloads\n'
+		cat "$PAYLOAD"
+		printf '%s\n' '<!-- REVIEW:COMPLETE -->'
+	} >"$expected"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -ne 0 ]; then
+		fail "$name" "exited $STATUS"
+		return
+	fi
+	if ! cmp -s "$expected" "$STATE/comment-body"; then
+		fail "$name" 'payload section was not composed verbatim before the sentinel'
+		return
+	fi
+	case $(grep '^review-publication-disposed: ' "$LEDGER") in
+	"review-publication-disposed: $REVIEW $SUMMARY "*.publish-forge-review.*" $PAYLOAD") ;;
+	*)
+		fail "$name" 'disposal did not own all four inputs'
+		return
+		;;
+	esac
+	[ "$(grep -c '^trash ' "$STATE/events")" = 4 ] || {
+		fail "$name" 'disposal did not trash four inputs'
+		return
+	}
+	new_case
+	PAYLOAD="$REPO/.agent/sdd/payload.md"
+	printf 'note: claim list confirmed\n' >"$PAYLOAD"
+	chmod 600 "$PAYLOAD"
+	run_helper not-required 'review was not required after verified scope' env GH_MODE=success
+	if [ "$STATUS" -ne 0 ]; then
+		fail "$name" 'not-required mode exited nonzero'
+		return
+	fi
+	grep -qxF '## Review exit payloads' "$STATE/comment-body" || {
+		fail "$name" 'not-required mode did not compose the payload section'
+		return
+	}
+	grep -qxF 'note: claim list confirmed' "$STATE/comment-body" || {
+		fail "$name" 'not-required mode did not compose the payload note'
+		return
+	}
+	[ "$(grep -c '^trash ' "$STATE/events")" = 3 ] || {
+		fail "$name" 'not-required mode did not dispose three inputs'
+		return
+	}
+	ok "$name"
+}
+
+case_empty_payload_argument_is_absent() {
+	local name='PFR-15 empty payload argument composes no section' expected status
+	new_case
+	expected="$REPO/expected"
+	{
+		printf '%s\n' '<!-- WORK:REVIEW -->'
+		cat "$SUMMARY"
+		printf '\n## Forge whole-branch review\n'
+		sed 's/^/    /' "$REVIEW"
+		printf '%s\n' '<!-- REVIEW:COMPLETE -->'
+	} >"$expected"
+	status=0
+	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
+		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
+		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
+		"$SCRIPT" acme/widgets 42 required "$REVIEW" "$LEDGER" "$SUMMARY" '' \
+		2>"$REPO/error") || status=$?
+	if [ "$status" -ne 0 ]; then
+		fail "$name" 'empty payload argument failed the helper'
+		return
+	fi
+	if cmp -s "$expected" "$STATE/comment-body"; then :; else
+		fail "$name" 'empty payload argument changed the composition'
+		return
+	fi
+	grep -qF 'Review exit payloads' "$STATE/comment-body" && {
+		fail "$name" 'empty payload argument composed a payload section'
+		return
+	}
+	ok "$name"
+}
+
+case_payload_validation_stops_publication() {
+	local name='PFR-16 invalid payloads never reach publication' marker
+	new_case
+	PAYLOAD="$REPO/.agent/sdd/payload.md"
+	printf 'deferred finding\n' >"$PAYLOAD"
+	chmod 644 "$PAYLOAD"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
+		[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ]; then
+		fail "$name" 'non-private payload reached publication'
+		return
+	fi
+	grep -q 'payload is not private' "$REPO/error" || {
+		fail "$name" 'did not report the non-private payload'
+		return
+	}
+	new_case
+	PAYLOAD="$REPO/.agent/sdd/payload.md"
+	awk 'BEGIN { for (i = 0; i < 4097; i += 1) printf "a" }' >"$PAYLOAD"
+	chmod 600 "$PAYLOAD"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name"; then
+		fail "$name" 'oversize payload reached publication'
+		return
+	fi
+	grep -q 'payload exceeds local size limit' "$REPO/error" || {
+		fail "$name" 'did not report the oversize payload'
+		return
+	}
+	for marker in '<!-- WORK:REVIEW -->' '<!-- REVIEW:COMPLETE -->'; do
+		new_case
+		PAYLOAD="$REPO/.agent/sdd/payload.md"
+		printf '%s\n' 'deferral: docs/debt/0001-example.md' "$marker" >"$PAYLOAD"
+		chmod 600 "$PAYLOAD"
+		run_helper required "$REVIEW" env GH_MODE=success
+		if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name"; then
+			fail "$name" 'payload marker reached publication'
+			return
+		fi
+		grep -q 'payload contains an outer annotation marker' "$REPO/error" || {
+			fail "$name" 'did not report the payload marker'
+			return
+		}
+	done
+	new_case
+	PAYLOAD="$REPO/.agent/sdd/payload.md"
+	printf 'deferral: docs/debt/0001-example.md\r\n' >"$PAYLOAD"
+	chmod 600 "$PAYLOAD"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name"; then
+		fail "$name" 'CRLF payload reached publication'
+		return
+	fi
+	grep -q 'payload contains carriage return' "$REPO/error" || {
+		fail "$name" 'did not report the CRLF payload'
+		return
+	}
+	new_case
+	PAYLOAD="$REPO/.agent/sdd/payload.md"
+	printf 'deferral: a\000b\n' >"$PAYLOAD"
+	chmod 600 "$PAYLOAD"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name"; then
+		fail "$name" 'NUL-bearing payload reached publication'
+		return
+	fi
+	grep -q 'payload contains NUL' "$REPO/error" || {
+		fail "$name" 'did not report the NUL-bearing payload'
+		return
+	}
+	ok "$name"
+}
+
+case_payload_without_final_newline_keeps_sentinel_outer() {
+	local name='PFR-17 payload without final newline keeps sentinel outer'
+	new_case
+	PAYLOAD="$REPO/.agent/sdd/payload.md"
+	printf '%s' 'deferral without trailing newline' >"$PAYLOAD"
+	chmod 600 "$PAYLOAD"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -ne 0 ] ||
+		[ "$(grep -c '^<!-- WORK:REVIEW -->$' "$STATE/comment-body")" != 1 ] ||
+		[ "$(grep -c '^<!-- REVIEW:COMPLETE -->$' "$STATE/comment-body")" != 1 ]; then
+		fail "$name" 'payload joined the outer completion sentinel'
+		return
+	fi
+	grep -qxF 'deferral without trailing newline' "$STATE/comment-body" || {
+		fail "$name" 'payload content did not reach the comment body'
+		return
+	}
+	ok "$name"
+}
+
+case_argument_arity_is_bounded() {
+	local name='PFR-18 argument count stays bounded at six or seven' status
+	new_case
+	status=0
+	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
+		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
+		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
+		"$SCRIPT" acme/widgets 42 required "$REVIEW" "$LEDGER" \
+		2>"$REPO/error") || status=$?
+	if [ "$status" -eq 0 ] || [ -n "$OUTPUT" ]; then
+		fail "$name" 'five arguments did not fail at usage'
+		return
+	fi
+	grep -q 'usage: publish-forge-review' "$REPO/error" || {
+		fail "$name" 'five arguments failed without a usage message'
+		return
+	}
+	status=0
+	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
+		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
+		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
+		"$SCRIPT" acme/widgets 42 required "$REVIEW" "$LEDGER" "$SUMMARY" extra more \
+		2>"$REPO/error") || status=$?
+	if [ "$status" -eq 0 ] || [ -n "$OUTPUT" ]; then
+		fail "$name" 'eight arguments did not fail at usage'
+		return
+	fi
+	grep -q 'usage: publish-forge-review' "$REPO/error" || {
+		fail "$name" 'eight arguments failed without a usage message'
+		return
+	}
+	ok "$name"
+}
+
 printf 'publish-forge-review\n\n'
 case_required_safe_review
 case_public_safety_stops_publication
@@ -612,6 +852,11 @@ case_platform_disposers_are_deterministic
 case_preflight_precedes_content_validation
 case_host_is_pinned_before_publication
 case_private_artifacts_and_size_limit
+case_payload_slot_composes_and_disposes
+case_empty_payload_argument_is_absent
+case_payload_validation_stops_publication
+case_payload_without_final_newline_keeps_sentinel_outer
+case_argument_arity_is_bounded
 
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
