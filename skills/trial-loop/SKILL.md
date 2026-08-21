@@ -4,8 +4,9 @@ description: "Iteratively run an adversarial challenge review, fix or dispositio
 ---
 # Adversarial Review Loop
 
-The coordinating role is the `orchestrator`; dispatched reviewers and fixers
-are `worker` subtypes. `subagent` refers only to the literal dispatch capability.
+The coordinating role is the `orchestrator`; dispatched reviewers are `worker`
+subtypes, and findings are fixed inline by the orchestrator (steps 7-8).
+`subagent` refers only to the literal dispatch capability.
 
 Run the selected reviewer against a target iteratively, fixing or dispositioning findings between
 passes, until it returns `approve` or a bounded stop fires. The reviewer defaults to `$gauntlet`;
@@ -776,7 +777,9 @@ are almost always one step inside a larger workflow. After the loop exits:
   named exit and has not reached the iteration budget.
 - A `needs-attention` verdict means you fix findings and re-enter the loop.
 - A run stopped as blocked at the iteration budget does not re-enter the loop, and the
-  caller does not advance without explicit human approval. A cycle ended for rescoping
+  caller does not advance without explicit human approval. An approval that advances
+  the caller belongs to the caller's own contract — `$quest` documents the
+  approved-continuation resume path in its step 6. A cycle ended for rescoping
   that nobody granted new authority for ends the run the same way.
 - Only treat the loop as a stopping point when you have no caller — i.e. a
   human explicitly asked for a one-shot review loop with nothing queued after

@@ -465,14 +465,21 @@ plan containing one is not finished:
 - a cross-reference used to avoid repeating something — "as in Task 4"
 - a step naming an outcome without the means to reach it
 - a type, function, or signature used but defined by no task
+- a type, function, or signature borrowed from the existing codebase or a
+  dependency, used by tasks without being confirmed to exist there with the
+  signature the plan assumes
 
 **Then self-review the finished plan against the spec, with fresh eyes.** Walk
 each spec requirement and point to the task implementing it; a requirement with
 no task means adding the task. Sweep for the placeholder patterns above. Check
 that the names, signatures, and properties used in later tasks match what
 earlier tasks defined — a function called `clearLayers()` in Task 3 and
-`clearFullLayers()` in Task 7 is a defect the implementer inherits. Fix what you
-find inline.
+`clearFullLayers()` in Task 7 is a defect the implementer inherits. Ground every
+name the plan borrows instead of defines: for each type, function, or signature
+taken from the existing codebase or from a dependency, check the target
+repository — or the dependency's registry and docs — that it exists with the
+signature the plan assumes, and correct the plan inline where a name does not
+resolve. Fix what you find inline.
 
 Run relevant guardrails and commit the plan.
 
@@ -483,9 +490,11 @@ Run `$trial-loop` with:
 - challenge_args: `<path-to-plan.md>`
 - focus: `Focus on phase ordering, missing prerequisites, steps that cannot
   run in the claimed order, rollback and cleanup paths, verification gaps,
-  and tasks that are not self-contained enough for an implementer. Do not
-  reopen choices already settled in linked ADR rejected alternatives unless
-  the plan contradicts them or introduces a new risk.`
+  ungrounded references — a type, function, or signature borrowed from the
+  codebase or a dependency without confirmation it exists with the assumed
+  signature — and tasks that are not self-contained enough for an
+  implementer. Do not reopen choices already settled in linked ADR rejected
+  alternatives unless the plan contradicts them or introduces a new risk.`
 
 ## Context checkpoint
 
