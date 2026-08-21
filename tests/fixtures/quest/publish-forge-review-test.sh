@@ -221,7 +221,7 @@ run_helper() {
 		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
 		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
 		"$@" "$SCRIPT" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
-		"${payload_args[@]}" \
+		${payload_args[@]+"${payload_args[@]}"} \
 		2>"$REPO/error") || STATUS=$?
 }
 
@@ -727,6 +727,14 @@ case_payload_validation_stops_publication() {
 		fail "$name" 'did not report the non-private payload'
 		return
 	}
+	[ -f "$PAYLOAD" ] || {
+		fail "$name" 'validation failure disposed the payload'
+		return
+	}
+	if body_file >/dev/null 2>&1; then
+		fail "$name" 'a publication body existed before composition'
+		return
+	fi
 	new_case
 	PAYLOAD="$REPO/.agent/sdd/payload.md"
 	awk 'BEGIN { for (i = 0; i < 4097; i += 1) printf "a" }' >"$PAYLOAD"
@@ -738,6 +746,19 @@ case_payload_validation_stops_publication() {
 	fi
 	grep -q 'payload exceeds local size limit' "$REPO/error" || {
 		fail "$name" 'did not report the oversize payload'
+		return
+	}
+	new_case
+	PAYLOAD="$REPO/.agent/sdd/payload.md"
+	: >"$PAYLOAD"
+	chmod 600 "$PAYLOAD"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name"; then
+		fail "$name" 'empty payload file reached publication'
+		return
+	fi
+	grep -q 'payload is invalid' "$REPO/error" || {
+		fail "$name" 'did not report the empty payload file'
 		return
 	}
 	for marker in '<!-- WORK:REVIEW -->' '<!-- REVIEW:COMPLETE -->'; do

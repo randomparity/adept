@@ -619,15 +619,15 @@ slot into `WORK:REVIEW` and through this step's named write moment into the PR b
 which is where `$trial-loop`'s own report obligation sends it.
 
 If step 6 carried a deferral list, outstanding notes, or a confirmed claim list, compose
-the run's payload file once, immediately after the summary: write the lists step 6
-specifies under a `## Review exit payloads` heading into a `mktemp` file beside the
-ledger, atomically rename it only after the write, reject carriage return, NUL, and
+the run's payload file once, immediately after the summary: write only the lists step 6
+specifies into a `mktemp` file beside the ledger — no headings; each destination adds
+its own — atomically rename it only after the write, reject carriage return, NUL, and
 outer annotation markers, and keep the temporary and installed payload in mode 0600.
 A run with nothing to carry creates no payload file and skips every payload step below.
 Then make the one named PR-body write, ADR 0028's second destination: read the
-delivered PR body, append the payload file's contents under the same heading, write
-the result back with `gh pr edit --body-file`, and require the byte-for-byte readback
-to match. This is the only moment the PR body gains the section — before the
+delivered PR body, append a blank line, the `## Review exit payloads` heading, and the
+payload file's contents, write the result back with `gh pr edit --body-file`, and
+require the byte-for-byte readback to match. This is the only moment the PR body gains the section — before the
 `publication-in-progress` handoff rewrite, so the write never happens in the terminal
 parked phase and never happens twice — and a failed or unverifiable write parks the
 quest before the helper with the evidence retained.
