@@ -12,10 +12,10 @@ payload-destination ruling without retiring it.
 
 ## Context
 
-`$trial-loop`'s cap bullet (`skills/trial-loop/SKILL.md:654-657`) stops as blocked when the
-final budgeted iteration still returns `needs-attention`, and forbids continuing to the next
-workflow step **without explicit user approval** — so an approved continuation is a
-permitted outcome of the loop. `$quest` step 6 invokes the loop and inherits that contract,
+`$trial-loop`'s cap bullet — "Final budgeted iteration … Do not continue to the next
+workflow step **without explicit user approval**" — stops as blocked when the
+final budgeted iteration still returns `needs-attention`, so an approved continuation
+is a permitted outcome of the loop. `$quest` step 6 invokes the loop and inherits that contract,
 but documents no resume: its park protocol takes an unresolvable review state to
 `status:needs-human` and stops there. Nothing says what an operator's approval does —
 whether the label is swapped back, what the `WORK:TRAJECTORY` note records, or which step
