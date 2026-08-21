@@ -28,7 +28,29 @@ Worker (implementer):
 
     [Scene-setting: where this fits, dependencies, architectural context]
 
-    Work from: [directory]
+    ## Placement — verify before your first edit
+
+    You are assigned exactly one working tree and one branch. Both values below
+    are mandatory; a dispatch that omits either one is invalid — stop and
+    report NEEDS_CONTEXT rather than guessing.
+
+    - **Worktree:** [WORKTREE_PATH] (absolute path)
+    - **Branch:** [BRANCH_NAME]
+
+    Before touching anything, confirm you are where the dispatch placed you:
+
+        git rev-parse --show-toplevel   # must print [WORKTREE_PATH]
+        git branch --show-current       # must print [BRANCH_NAME]
+
+    A mismatch means you are in the wrong tree or on the wrong branch. Stop
+    now and report NEEDS_CONTEXT, having changed nothing. This check runs
+    before the first edit because by commit time the edits are already in the
+    wrong tree, and recovery is a cherry-pick instead of a no-op.
+
+    Never work on `main` or `master` without explicit consent from the
+    dispatch that sent you: if [BRANCH_NAME] is either of those, stop and
+    report NEEDS_CONTEXT. Do not push, merge, rebase onto another branch, or
+    touch any branch other than [BRANCH_NAME].
 
     ## Ask before you start
 
@@ -45,7 +67,7 @@ Worker (implementer):
     1. Build exactly what the task specifies.
     2. Write tests — test-first if the task calls for it.
     3. Confirm the implementation actually works.
-    4. Commit.
+    4. Commit to [BRANCH_NAME] — the branch you verified in Placement.
     5. Review your own work, as set out below.
     6. Report back.
 
@@ -158,6 +180,8 @@ Worker (implementer):
     is in the file:
 
     - **Status:** DONE | DONE_WITH_CONCERNS | CANNOT_COMPLETE | NEEDS_CONTEXT
+    - **Branch:** [BRANCH_NAME] — the branch every commit below landed on;
+      the orchestrator verifies this rather than trusting it
     - the commits you made, short SHA and subject
     - one line on the tests, e.g. "14/14 passing, output pristine" — and name
       any test that flaked, however clean the final run looked

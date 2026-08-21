@@ -242,6 +242,31 @@ case_bad_base_writes_nothing() {
 	ok "$name"
 }
 
+case_empty_range_exits_nonzero() {
+	local name='an empty range exits nonzero'
+	local repo
+	repo=$(new_repo)
+	# Both endpoints the same revision: zero commits between them.
+	expect_error "$name" "$repo" 2 HEAD~1 HEAD~1 "$repo/out.diff" && ok "$name"
+}
+
+case_empty_range_writes_nothing() {
+	local name='an empty range writes no package'
+	local repo out status=0
+	repo=$(new_repo)
+	out="$repo/out.diff"
+	(cd "$repo" && "$SCRIPT" HEAD HEAD "$out" >/dev/null 2>&1) || status=$?
+	if [ "$status" -eq 0 ]; then
+		fail "$name" 'exited 0 on an empty range'
+		return
+	fi
+	if [ -e "$out" ]; then
+		fail "$name" 'a package was written for an empty range'
+		return
+	fi
+	ok "$name"
+}
+
 printf 'review-package\n\n'
 case_writes_named_outfile
 case_package_carries_its_sections
@@ -253,5 +278,7 @@ case_unresolvable_base
 case_unresolvable_head
 case_bad_base_writes_nothing
 
+case_empty_range_exits_nonzero
+case_empty_range_writes_nothing
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
