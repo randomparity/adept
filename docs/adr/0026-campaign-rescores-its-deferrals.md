@@ -25,16 +25,20 @@ Three questions had to be answered together:
 
 ## Decision
 
-Campaign keeps a **deferral ledger**: one manifest section listing every issue it filed but
-did not fix — step 7 declines and step 4 `closed-not-planned` closures alike — with its kind,
-priority at filing, and rescore outcome. The ledger is not a Queue section: a declined issue
-is never enqueued, quested, or fixed, and decline semantics are unchanged.
+Campaign keeps a **deferral ledger**: one manifest section listing every issue it filed and
+the operator declined at step 7, with its priority at filing and rescore outcome. The ledger
+is not a Queue section: a declined issue is never enqueued, quested, or fixed, and decline
+semantics are unchanged. Issues closed not planned at step 4 stay out of it — closure plus
+the annotation's reconsideration condition already owns the world-changed case for a closed
+issue, and a rescore could only ever classify it `not-open`.
 
 After the enqueue decision resolves — and again after any later merges — campaign runs a
 **rescore pass** over ledger rows still pending. It reads each deferred issue's current labels
 and the code it cites at merged `HEAD`, triage-style, then classifies the finding: unchanged,
-satisfied by the batch, or promoted by the batch. When the run merged nothing, every row is
-marked `not-required` without further work.
+satisfied by the batch, or promoted by the batch. Scores go stale: any row whose recorded date
+precedes the newest dated merge entry in the Outcomes log resets to `pending`, so every later
+merge re-opens the pass. When no merge entry postdates a row's filing, it is marked
+`not-required` without further work.
 
 **Scope** is the campaign's own deferrals. An issue satisfied by the batch but filed outside
 the campaign stays out of scope: the campaign cannot enumerate foreign deferrals without an
@@ -62,7 +66,7 @@ unreconciled state, never silently reporting drained past it.
 - Every applied re-score carries its reasoning in the issue's comment history; months later
   the label flip is auditable.
 - Deferred issues gain one orchestrator turn per rescore pass. This is bounded by the ledger:
-  only campaign-filed deferrals, only when the run merged something, only rows still pending.
+  only campaign-declined filings, only rows a merge has left stale or unscored.
 - The manifest grows one small table with a recognized outcome vocabulary, validated like the
   occurrence table it mirrors.
 - Foreign deferrals — issues another run or reporter filed that this batch happened to satisfy
@@ -73,8 +77,13 @@ unreconciled state, never silently reporting drained past it.
 
 **Rescore only issues traceable to this batch, step 7's existing test.** verified: the
 observed run's satisfied P0 was satisfied by a wave other than the one that filed it, so the
-filing run's own traceability test would have skipped it. Scope is every deferral this
-campaign filed, whatever its source inside the run.
+filing run's own traceability test would have skipped it. Scope is every issue this campaign
+filed and had declined.
+
+**Ledger closed-not-planned closures too.** rejected: a verified closure means the rescore can
+only ever classify the row `not-open`, so the rows would be write-only state; the
+`WORK:CLOSE-NOT-PLANNED` annotation's reconsideration condition is the durable record that
+covers a batch changing a closed issue's cost/benefit picture.
 
 **Rescore every not-planned issue in the tracker, not just this campaign's filings.** rejected:
 enumerating foreign deferrals needs an unbounded all-state sweep per campaign, and mutating
