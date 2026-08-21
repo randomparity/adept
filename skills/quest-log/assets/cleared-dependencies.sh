@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
-# This file is sourced into the caller's own shell -- quest-log SKILL.md's
-# cleared-dependencies recipe is the one shipped instruction that does so -- and
-# that shell is not always bash. The function bodies below use bash-only forms
-# (`${!array[@]}`, `BASH_REMATCH`), and one was worse than a failed call:
+# Executed, this file is the canonical cleared-dependency recipe: the main
+# guard at the foot of the file dispatches to reconcile_cleared_dependencies,
+# so one command's exit status is the verdict and nothing lands in the caller's
+# shell. Sourced, it stays a library -- the behaviour suite takes the function
+# bodies from it that way -- and a sourcing caller's shell is not always bash.
+# The function bodies below use bash-only forms (`${!array[@]}`,
+# `BASH_REMATCH`), and one was worse than a failed call:
 # `cleared_dependency_run` declared `local status=0`, which under zsh assigns
 # the read-only special parameter `status` and killed the caller's whole
 # session. That declaration is `rc` now; the guard is what keeps every body
@@ -317,3 +320,12 @@ reconcile_cleared_dependencies() { # plan|apply owner/name
 	done < <(jq -c '.[]' <<<"$issues")
 	return "$failures"
 }
+
+# Executed rather than sourced, this file is the command the quest-log,
+# resurrection, and return-to-town recipes invoke; the dispatch makes the
+# command's exit status the verdict (0 clean, 1 degraded or partial, 2 usage).
+# Without the guard, executing a functions-only library was a silent no-op --
+# the shape issue #199 records.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+	reconcile_cleared_dependencies "$@"
+fi

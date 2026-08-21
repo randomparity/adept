@@ -430,9 +430,15 @@ Start the plan with a header carrying the goal in a sentence, the architecture
 in two or three, the tech stack, and a **Global Constraints** section holding
 whatever binds the project as a whole: the lowest supported versions, what may
 be depended on, the rules governing names and wording, the platforms that must
-work — **transcribed from the spec exactly, values and all**. A paraphrased version floor is a wrong version floor. Every task's
-requirements implicitly include that section, so it is written once instead of
-re-derived per task.
+work — **transcribed from the spec exactly, values and all**. A paraphrased
+version floor is a wrong version floor. A version the plan introduces or
+raises — a dependency, a CI action, a tool — is resolved against its registry
+at authoring time, never asserted from memory; transcription then governs
+carrying the resolved value forward unchanged. Pins are also checked
+together: two dependencies whose versions do not resolve against each other
+are a plan defect, and a lookup scoped to one package never catches it.
+Every task's requirements implicitly include that section, so it is written
+once instead of re-derived per task.
 
 Give each task:
 
