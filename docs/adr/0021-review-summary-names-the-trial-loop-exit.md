@@ -76,10 +76,12 @@ ended on the approve bullet having taken no named exit, and that row is the only
 `exit:` and `verdict:` carry the same news.
 
 The fifth row is the only path by which a blocked run reaches this contract: cap exhaustion
-stops the workflow, but only "without explicit user approval" (`:654-657`). `$quest` documents
-no such resume today — issue #151 — so **`blocked-at-budget` may not be written until it does**,
-and until then a run stopped at the budget parks and publishes no summary at all. The value is
-fixed here so the change that adds the path has one to use rather than minting its own. Every
+stops the workflow, but only "without explicit user approval" (`:654-657`). ADR 0029 now
+documents that resume path — the approved continuation this row already describes — so
+**`blocked-at-budget` is writable for exactly such a run**, published once at step 8
+like every other value; before it landed, a run stopped at the budget parked and
+published no summary at all. The value is fixed here so the change that adds the path
+has one to use rather than minting its own. Every
 other stop ends the run without publishing, rescoping without new authority included
 (`:665-667`, `:713-716`).
 
