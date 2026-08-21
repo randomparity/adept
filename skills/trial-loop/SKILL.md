@@ -4,8 +4,9 @@ description: "Iteratively run an adversarial challenge review, fix or dispositio
 ---
 # Adversarial Review Loop
 
-The coordinating role is the `orchestrator`; dispatched reviewers and fixers
-are `worker` subtypes. `subagent` refers only to the literal dispatch capability.
+The coordinating role is the `orchestrator`; dispatched reviewers are `worker`
+subtypes, and findings are fixed inline by the orchestrator (steps 7-8).
+`subagent` refers only to the literal dispatch capability.
 
 Run the selected reviewer against a target iteratively, fixing or dispositioning findings between
 passes, until it returns `approve` or a bounded stop fires. The reviewer defaults to `$gauntlet`;

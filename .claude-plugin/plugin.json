@@ -1,6 +1,6 @@
 {
   "name": "adept",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Development-workflow skills: design, TDD, adversarial review, shipping, and campaign orchestration for Claude Code and Codex.",
   "author": { "name": "David Christensen" }
 }
