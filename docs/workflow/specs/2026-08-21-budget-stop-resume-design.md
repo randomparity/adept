@@ -25,8 +25,9 @@ continued run (PR #160, issue #141) publishes no summary at all.
    own terms — notably the security pass, which a budget-stopped branch never reached; no
    loop re-entry; carry the stopped run's disclosure forward as resume facts into the
    existing payload destinations: the three carry-contract lists plus the stop's
-   remaining-findings summary, which the new step-6 subsection adds to the carry list.
-   *(criterion 3)*
+   remaining-findings summary, which the new step-6 subsection adds to the carry list and
+   whose admission requires widening step 8's payload-composition trigger (today an
+   exhaustive three-list if-clause) to the lists step 6 specifies. *(criterion 3)*
 4. **Exit mapping**: the run writes `exit: blocked-at-budget`; `verdict:` / `findings:` /
    `iterations:` describe that same stopped run. The approval is aftermath, not a second
    ending. A granted rescope is a different continuation governed by `$trial-loop`'s own
@@ -51,7 +52,7 @@ continued run (PR #160, issue #141) publishes no summary at all.
 
 | File | Change |
 |---|---|
-| `skills/quest/SKILL.md` | step 6: approved-continuation subsection after the budget paragraph; step 8: rewrite `blocked-at-budget` bullet without the hold clause |
+| `skills/quest/SKILL.md` | step 6: approved-continuation subsection after the budget paragraph; step 8: rewrite `blocked-at-budget` bullet without the hold clause, and widen the payload-composition trigger's three-list enumeration to the lists step 6 specifies |
 | `skills/quest/SKILL.md` | *On a Blocker*: one-line pointer to the step 6 resume under `status:needs-human` |
 | `skills/trial-loop/SKILL.md` | caller-contract budget-stop bullet: one pointer sentence to `$quest`'s documented path |
 | `docs/adr/0029-….md` | new record (this decision) |

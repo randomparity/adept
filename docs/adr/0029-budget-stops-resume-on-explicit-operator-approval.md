@@ -68,8 +68,11 @@ fire, before simplification begins. The stopped run's final disclosure then trav
 resume facts into the payload destinations step 6 and ADR 0028 already define: the three
 lists the carry contract names (deferrals with their owning records, outstanding notes,
 confirmed claims) **plus the remaining-findings summary the cap bullet makes the stop
-produce**, which the new step-6 subsection adds to the carry list so step 8's "write only
-the lists step 6 specifies" admits it. An operator who instead wants more review passes
+produce**. Admitting the fourth list is part of this change on both ends: the new step-6
+subsection adds it to the carry instruction, and step 8's payload-composition trigger —
+which today enumerates the three lists exhaustively and would compose no payload for a
+run carrying only the stop's findings summary — is widened to the lists step 6 specifies.
+An operator who instead wants more review passes
 grants new authority to the loop itself (a new cycle under `$trial-loop`'s own rescoping
 rules); that is a different continuation with a different ending, covered by ADR 0021's
 replacement rule, not by this path.
