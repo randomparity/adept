@@ -271,10 +271,65 @@ if LC_ALL=C rg -q $'\033' "$SCRATCH/api-fail"; then
 	fail 'issue-list error leaked a control character'
 fi
 
+# --- direct execution mirrors the sourced contract ----------------------------
+# The asset was a functions-only library, so executing it was a silent no-op and
+# every documented caller had to source it into its own shell -- the shape that
+# produced #198. The main guard at the foot of the file dispatches to
+# reconcile_cleared_dependencies when bash executes the file instead of sources
+# it, so one command's exit status is the verdict. The cases below run the file
+# as a subprocess against the same fake gh -- exported with its variables and
+# reached through a PATH shim -- and hold it to the same output and statuses as
+# the sourced cases above.
+fake_bin=$SCRATCH/direct-bin
+mkdir -p "$fake_bin"
+printf '#!/usr/bin/env bash\ngh "$@"\n' >"$fake_bin/gh"
+chmod +x "$fake_bin/gh"
+export -f gh fail
+export SCRATCH FIXTURE_LABEL fake_mode gh_log ready_state blocker_log
+
+direct_out=$SCRATCH/direct-plan.out
+direct_err=$SCRATCH/direct-plan.err
+fake_mode=normal
+set +e
+PATH="$fake_bin:$PATH" \
+	bash "$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh" \
+	plan owner/repo >"$direct_out" 2>"$direct_err"
+direct_status=$?
+set -e
+[[ $direct_status -eq 1 ]] || fail 'direct execution lost the partial-failure status'
+[[ $(cat "$direct_out") == $'ready #101\nready #106' ]] ||
+	fail "direct plan mode selected the wrong dependents: $(cat "$direct_out")"
+rg -q --no-config 'open blocker #2 retains #102' "$direct_err" ||
+	fail 'direct execution did not report the open blocker'
+rg -q --no-config 'malformed reference on #103' "$direct_err" ||
+	fail 'direct execution did not report the malformed line'
+
+direct_ok_out=$SCRATCH/direct-plan-target.out
+set +e
+PATH="$fake_bin:$PATH" \
+	bash "$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh" \
+	plan owner/repo 101 >"$direct_ok_out" 2>/dev/null
+direct_ok_status=$?
+set -e
+[[ $direct_ok_status -eq 0 ]] || fail 'a clean targeted direct plan must exit 0'
+[[ $(cat "$direct_ok_out") == 'ready #101' ]] ||
+	fail "targeted direct plan selected the wrong dependents: $(cat "$direct_ok_out")"
+
+direct_usage_err=$SCRATCH/direct-usage.err
+set +e
+PATH="$fake_bin:$PATH" \
+	bash "$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh" \
+	>"$SCRATCH/direct-usage.out" 2>"$direct_usage_err"
+direct_usage_status=$?
+set -e
+[[ $direct_usage_status -eq 2 ]] || fail 'a direct usage error must exit 2'
+rg -q --no-config '^usage:' "$direct_usage_err" ||
+	fail 'the direct usage error printed no usage line'
+
 # --- a non-bash interpreter refuses without killing the caller ---------------
-# SKILL.md's cleared-dependencies recipe is the one shipped instruction to
-# source an asset into the agent's own persistent shell, and that shell is not
-# always bash. `cleared_dependency_run` declared `local status=0`, and `status`
+# The recipes no longer instruct anyone to source this asset, but sourcing
+# stays supported and a sourcing caller's shell is not always bash.
+# `cleared_dependency_run` declared `local status=0`, and `status`
 # is a read-only special parameter in zsh: reaching the declaration killed the
 # caller's whole session, swallowing every command queued behind it until the
 # harness timed out. The asset now refuses at the top of the file instead, so

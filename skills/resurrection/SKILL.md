@@ -43,8 +43,8 @@ actively working the same repo. Read → plan → one confirmation → apply.
        skill's timeline recipe. **Empty timeline result = stale-unknown → do NOT reset;
        surface for a human.** Fail closed, never clobber.
 4. **Reconcile blocked dependencies; hold other parked work.** Run the
-   `quest-log` recipe in Bash and call
-   `reconcile_cleared_dependencies plan <owner/name>`. Add every returned issue to the
+   `quest-log` recipe in Bash:
+   `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>`. Add every returned issue to the
    reconciliation table as `status:blocked → status:ready (all canonical blockers closed)`.
    This is the repair owner for a primary return-to-town edge that was interrupted or omitted.
    List all other `blocked`/`needs-human` issues as *held* with their parked-phase note (from
@@ -63,7 +63,7 @@ actively working the same repo. Read → plan → one confirmation → apply.
 6. **Plan → confirm → apply.** Present the full reconciliation table (`#issue → action`).
    List any branch before touching it. After one explicit confirmation, apply per issue;
    pass all and only the confirmed cleared-dependency issue numbers to
-   `reconcile_cleared_dependencies apply <owner/name> <number>...`, then verify every
+   `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name> <number>...`, then verify every
    reported transition. Re-evaluation may retain an issue whose state changed after
    planning. A per-issue failure does not abort the sweep.
 
