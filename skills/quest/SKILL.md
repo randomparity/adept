@@ -745,7 +745,9 @@ records it, in this order:
      turn.
    - **`status:needs-human`** -- the pipeline itself cannot proceed: a guardrail
      that cannot be made green, a `$trial-loop` finding you cannot resolve or
-     reject, a design question only the operator can settle.
+     reject, a design question only the operator can settle. A `$trial-loop`
+     budget stop parks here too, and it is the one park with a defined resume:
+     step 6's approved-continuation path.
 
 Do not count on `$resurrection` to catch an unlabeled park: its reset
 requires no PR *and* no matching branch, and a parked run almost always left a
