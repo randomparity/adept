@@ -123,6 +123,31 @@ leak_body="$(cat "$leak")"
 	fail 'HOST_TOOL_STEERING leaked GH_HOSTs value'
 printf '  ok   steering records names only\n'
 
+# --- Off-grammar names never reach the record ----------------------------
+#
+# An exported name is usually an identifier, but nothing forces one. Word
+# splitting already cuts a tab or newline in a name into fragments, so what
+# must not survive is anything off the identifier grammar: glob
+# metacharacters (which would otherwise expand against the working directory)
+# or record-breaking whitespace. Every surviving token must be a bare name,
+# and the well-formed name must still be recorded.
+grammar="$SCRATCH/grammar"
+env -i PATH="$PATH" 'GH_OK_NAME=1' $'GH_BAD\tNAME=1' 'GH_GLOB*=1' \
+	/bin/bash "$DETECTOR" >"$grammar" 2>/dev/null
+grammar_steering="$(read_record "$grammar" HOST_TOOL_STEERING)"
+case " $grammar_steering " in
+*" GH_OK_NAME "*) ;;
+*) fail "identifier-grammar GH name dropped: $grammar_steering" ;;
+esac
+metachars='[*?\[\t\n]'
+steering_value_re='^(none|[A-Z][A-Z0-9_]*( [A-Z][A-Z0-9_]*)*)$'
+[[ "$grammar_steering" =~ $steering_value_re ]] ||
+	fail "record broke the names-only grammar: $grammar_steering"
+if [[ "$grammar_steering" =~ $metachars ]]; then
+	fail "off-grammar text survived into the record: $grammar_steering"
+fi
+printf '  ok   off-grammar text never reaches the record\n'
+
 # --- Fail-open: observation tools missing, architecture fine -------------
 
 # Only uname is on PATH, so ps and sed are unreachable: both observable

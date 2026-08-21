@@ -92,8 +92,17 @@ observe_host_tool_steering() {
 		fi
 	done
 	# `${!prefix@}` is pure builtin, so enumeration survives a stripped PATH.
+	# The unquoted expansion word-splits, but a name may still carry glob
+	# metacharacters (which then expand against the working directory) or a
+	# newline (which IFS keeps), so only identifier-grammar names are recorded
+	# -- anything else would smuggle off-grammar or forged-record text into a
+	# value this skill documents as bare variable names. A name odd enough to
+	# fail the grammar is skipped, not fatal: the record fails open.
+	local name_re='^[A-Za-z_][A-Za-z0-9_]*$'
 	for name in ${!GH_@}; do
-		steering+=("$name")
+		if [[ $name =~ $name_re ]]; then
+			steering+=("$name")
+		fi
 	done
 	if ((${#steering[@]} > 0)); then
 		HOST_TOOL_STEERING="${steering[*]}"
