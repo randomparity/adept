@@ -112,6 +112,11 @@ self-enforcing on the writing side: the only writer that may produce `blocked-at
 is a run whose park was recorded and then approved, because the path requires the
 `WORK:TRAJECTORY` park record to exist first.
 
+ADR 0028 needs no amendment to carry the fourth list: its payload slot is
+content-agnostic machinery validated for byte safety, and it defers what flows through to
+step 6's own specification — "write only the lists step 6 specifies" — which this change
+widens at both ends.
+
 Nothing validates the approval beyond the run's own record of it. A session that
 misreads a comment as approval writes a summary claiming an approval nobody gave — the
 same exposure every free-text field in the summary carries, bounded by the fact that the
