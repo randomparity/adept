@@ -23,8 +23,7 @@ Decision: `docs/adr/0026-campaign-rescores-its-deferrals.md`; design:
 
 | file | change |
 |---|---|
-| `skills/campaign/SKILL.md` | (1) manifest schema gains `## Deferrals` with validation; (2) step 4 close-not-planned path appends a ledger row; (3) step 7 records declines in the ledger and runs the rescore pass before handing to step 8, defining the `WORK:RESCORE` annotation; (4) step 8's drained definition and final report gain the rescore conjunct and actions |
-| `.claude-plugin/plugin.json` | version bump |
+| `skills/campaign/SKILL.md` | (1) manifest schema gains `## Deferrals` with validation and dated Outcomes entries; (2) step 7 records declines in the ledger and runs the rescore pass — stale-score reset against dated merge entries, per-issue source reads at merged `HEAD`, operator-gated `WORK:RESCORE` comment then label flip — before handing to step 8; (3) step 8's drained definition and final report gain the rescore conjunct and outcomes |
 
 ## Verification
 
