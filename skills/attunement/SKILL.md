@@ -104,6 +104,37 @@ calls. Record a `coupled` / `not coupled` verdict beside the commands, and repor
 it to the orchestrator under `$campaign`. Step 7, `$spellcraft`, and `$campaign`
 step 7 all branch on that coupling verdict.
 
+Beside each command, record three facts the command line alone does not carry:
+
+**Cost.** Record the approximate wall-clock time as an **observed duration**
+— measured from an actual run of the command during this preflight or its
+caller's work — or an explicit `unknown` when the command has never run. Do
+not record a recommended timeout instead: a timeout budget is caller policy
+layered on top of a measurement, and an unrun command supports neither claim.
+`unknown` tells the reader to bound the first run generously; a duration tells
+them what every later run costs. Update the entry when a later run replaces
+an `unknown`.
+
+**Prerequisites.** Everything the command needs that a default checkout does
+not supply: installed tools with version floors, one-time setup targets such
+as a hooks installer, credentials or services CI provides but a workstation
+does not. Unrecorded, each of these is re-diagnosed per session.
+
+**Known landmines.** Behaviors that look like failures but are not. A managed
+pre-push hook that re-runs the whole check suite in an isolated worktree can
+outlast a two-minute default tool timeout — that is slowness, not a hang, and
+re-invoking after an apparent timeout restarts the suite instead of ending
+it. Repo instruction files often name such hazards; carry them into the
+record so a reader of the task plan does not have to find them there.
+
+Before the first build, check prior art for exactly these facts. Search
+`docs/solutions/` for tooling-involved records (`rg -li '<tooling keyword>'
+docs/solutions/`, then scan the hits' frontmatter tags) — `$grimoire` fills
+that directory, and its record format carries a tooling slot in `tags` for
+precisely this read. This is the compounding loop `$detect-curse` runs before
+investigating a failure, applied before anything goes red. No hit is a normal
+result and costs one command — as is no `docs/solutions/` at all.
+
 ## 6. Confirm gh authentication
 
 Confirm `gh` is authenticated enough to read the issue and later create a PR.
