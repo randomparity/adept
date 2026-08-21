@@ -67,8 +67,9 @@ terminal. The operator may approve continuing, and this subsection defines the r
 - **Resume at step 7** (Simplify). The run does not re-enter the loop — `$trial-loop`'s
   caller contract forbids a budget-stopped run from re-entering — and the budget stop
   stands as the run's ending. Before simplification, settle whatever step-6 obligations
-  the stop cut short: the security pass above all, judged and dispositioned on the same
-  terms as above, recording `security: not triggered` where its trigger does not fire.
+  the stop cut short: the security pass above all, judged and dispositioned under step 6's
+  Security-pass terms (below in that skill), recording `security: not triggered` where its
+  trigger does not fire.
 - **Carry the stop's disclosure** into step 8's payload destinations: the three lists this
   step already carries (deferrals with their owning records, outstanding notes, confirmed
   claims) plus the remaining-findings summary the cap bullet makes the stop produce. The

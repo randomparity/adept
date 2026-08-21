@@ -60,11 +60,16 @@ follows: an issue never sits in a flight state without a record of how it got th
 **3. The run re-enters at step 7 (Simplify), after discharging what the stop cut
 short.** The cap bullet authorizes continuing *to the next workflow step*; the loop ended
 at its stop, and `$trial-loop`'s caller contract already forbids a budget-stopped run from
-re-entering the loop. A budget stop can leave step-6 obligations unrun — the security pass
-above all, since `$detect-evil` runs after the loop's fixes and a stopped run has had no
-fixes-pass boundary to trigger it — so the resumed run settles those obligations on step
+re-entering the loop. A budget stop can leave step-6 obligations unrun — the security
+pass above all in the common case, where `$detect-evil` never ran because no
+post-fix scan point was reached — so the resumed run settles those obligations on step
 6's own terms, recording `security: not triggered` where the trigger genuinely does not
-fire, before simplification begins. The stopped run's final disclosure then travels as
+fire and repeating nothing the stop already discharged, before simplification begins.
+One conflict needs naming: if a settled obligation produces an accepted fix that changes
+behavior, step 6's existing round-trip rule governs — one `$trial-loop` re-run of the
+changed branch — and ADR 0021's replacement rule then rewrites all four run-derived
+fields from that run's ending. The approval alone never authorizes loop re-entry; only
+that separate, already-governing rule does. The stopped run's final disclosure then travels as
 resume facts into the payload destinations step 6 and ADR 0028 already define: the three
 lists the carry contract names (deferrals with their owning records, outstanding notes,
 confirmed claims) **plus the remaining-findings summary the cap bullet makes the stop

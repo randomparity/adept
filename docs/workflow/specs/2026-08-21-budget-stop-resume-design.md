@@ -39,7 +39,10 @@ continued run (PR #160, issue #141) publishes no summary at all.
 
 - G1: Only a run whose park was recorded (`WORK:TRAJECTORY`) and then explicitly approved
   may write `blocked-at-budget`. (necessary consequence of decisions 1–2 + criterion 4)
-- G2: The resume never re-enters the loop. (`$trial-loop` caller contract, already normative)
+- G2: The approval alone never re-enters the loop. (`$trial-loop` caller contract, already
+  normative) A settled obligation producing a behavior-changing accepted fix is a separate,
+  already-governing authority: step 6's round-trip rule runs the loop once more, and
+  ADR 0021's replacement rule rewrites the run-derived fields from that ending.
 - G3: Exactly one summary exists per run, published at step 8 via the sole-writer helper.
   (ADR 0028 sequence unchanged)
 - G4: The park protocol's ordering rule (record before label) applies to the resume edge
@@ -68,9 +71,13 @@ Docs-only change: no runtime tests exist or are added. Guardrails carry correctn
 `just verify` (records gate over the new ADR, shape-check, public-safety scan,
 plugin-check `--strict`, version-check) and `just commit-check` per commit. Adversarial
 coverage comes from the spellcraft reviews of ADR and spec, the oathbind scope audit, and
-the branch `$trial-loop`. Behavioral proof is textual consistency: every cross-reference
-between quest, trial-loop, 0021, and 0029 must resolve against current line content, not
-stale citations — checked by reading each cited location after the edits land.
+the branch `$trial-loop`. Behavioral proof is textual consistency, scoped to what this
+change creates or modifies: every cross-reference the new text makes — quest step 6
+subsection to step 8 and *On a Blocker*, trial-loop caller bullet to quest's step 6,
+0021's corrected sentence, 0029 throughout — must resolve against the post-edit content,
+checked by reading each cited location after the edits land. Pre-existing line-number
+citations inside ADR 0021 are outside this claim: that record pins its citations to commit
+`ea43def` by its own Context paragraph and expects later HEADs to drift.
 
 ## Failure modes considered
 
