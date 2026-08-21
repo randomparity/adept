@@ -59,7 +59,7 @@ continued run (PR #160, issue #141) publishes no summary at all.
 | `skills/quest/SKILL.md` | *On a Blocker*: one-line pointer to the step 6 resume under `status:needs-human` |
 | `skills/trial-loop/SKILL.md` | caller-contract budget-stop bullet: one pointer sentence to `$quest`'s documented path |
 | `docs/adr/0029-….md` | new record (this decision) |
-| `docs/adr/0021-….md` | amend the hold sentence in the row-5 paragraph only |
+| `docs/adr/0021-….md` | append an amendment note to `## Status` only — the records gate makes merged decision sections append-only |
 | `.claude-plugin/plugin.json` | version bump (MINOR: skill gains a capability) |
 
 Exclusions honored: no helper or fixture changes (ADR 0028 owns them); no bards-tale edit
@@ -74,7 +74,7 @@ coverage comes from the spellcraft reviews of ADR and spec, the oathbind scope a
 the branch `$trial-loop`. Behavioral proof is textual consistency, scoped to what this
 change creates or modifies: every cross-reference the new text makes — quest step 6
 subsection to step 8 and *On a Blocker*, trial-loop caller bullet to quest's step 6,
-0021's corrected sentence, 0029 throughout — must resolve against the post-edit content,
+0021's appended Status amendment note, 0029 throughout — must resolve against the post-edit content,
 checked by reading each cited location after the edits land. Pre-existing line-number
 citations inside ADR 0021 are outside this claim: that record pins its citations to commit
 `ea43def` by its own Context paragraph and expects later HEADs to drift.

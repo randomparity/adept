@@ -142,19 +142,27 @@ and it is the one park with a defined resume: step 6's approved-continuation pat
    approval.", append: "An approval that advances the caller belongs to the caller's own
    contract — `$quest` documents the approved-continuation resume path in its step 6."
 
-2. In ADR 0021's row-5 paragraph, replace "`$quest` documents no such resume today — issue
-   #151 — so **`blocked-at-budget` may not be written until it does**, and until then a
-   run stopped at the budget parks and publishes no summary at all." with: "ADR 0029 now
-   documents that resume path — the approved continuation this row already describes — so
-   **`blocked-at-budget` is writable for exactly such a run**, published once at step 8
-   like every other value; before it landed, a run stopped at the budget parked and
-   published no summary at all." Leave the rest of the paragraph, including the
-   "value is fixed here so the change that adds the path has one to use" sentence,
-   verbatim. No Superseded-by banner: 0021 keeps its accepted status (ADR 0028's pattern).
+2. ADR 0021's row-5 hold is discharged by amendment, not rewritten: the records gate
+   (`check-records.sh`, E-REWRITE) makes every merged record's level-2 sections except
+   `## Status` append-only, so leave the `## Decision` paragraph byte-identical to base and
+   append this note to `## Status`, directly under "Accepted (2026-08-18)":
 
-**Acceptance:** `grep -n "may not be written until" docs/adr/0021-….md` finds nothing;
-`grep -n "ADR 0029" docs/adr/0021-….md` finds the corrected sentence; the trial-loop
-bullet names quest's step 6 without restating its semantics.
+```markdown
+> **Amended by [0029](0029-budget-stops-resume-on-explicit-operator-approval.md)**
+(2026-08-21): the `## Decision` row-5 hold on `blocked-at-budget` — unwritable until
+`$quest` documented a resume — is discharged by that record's approved-continuation
+path. This record's decision sections stand as written at their decision date; where
+this text and 0029 disagree, 0029 governs.
+```
+
+   No Superseded-by banner: 0021 keeps its accepted status (ADR 0028's pattern).
+   Verify with `BASE_SHA=<merge-base> RECORD_PROFILES=adr ./.github/scripts/check-records.sh`
+   so the append-only rule actually runs locally instead of degrading.
+
+**Acceptance:** `git diff <merge-base> -- docs/adr/0021-…` shows insertions in `## Status`
+and no removed line in any other section; `grep -n "Amended by \[0029\]" docs/adr/0021-….md`
+finds the appended note; the trial-loop bullet names quest's step 6 without restating its
+semantics.
 
 **Verify:** `just records shape-check` exit 0. Commit:
 `docs(trial-loop): point approved continuations at quest's resume path`.

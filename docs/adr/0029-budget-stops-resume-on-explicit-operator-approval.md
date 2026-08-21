@@ -5,8 +5,9 @@
 Accepted (2026-08-21)
 
 Amends [0021](0021-review-summary-names-the-trial-loop-exit.md)'s hold on
-`blocked-at-budget`: the amendment is stated here and in one corrected sentence of that
-record, which keeps its accepted status — the field-set decision stands in full, exactly as
+`blocked-at-budget`: the amendment is stated here and in one appended note in that
+record's `## Status` section, which keeps its accepted status and whose decision
+sections stay untouched — the field-set decision stands in full, exactly as
 [0028](0028-review-exit-payloads-get-a-writable-slot.md) amended 0021's
 payload-destination ruling without retiring it.
 
@@ -103,16 +104,18 @@ caller boundary name the same contract without either restating the other's sema
 
 0021's paragraph holding the fifth row unwritable ("`$quest` documents no such resume
 today — issue #151 — so **`blocked-at-budget` may not be written until it does**, and until
-then a run stopped at the budget parks and publishes no summary at all") is corrected: the
-path now exists, documented by this record, and the value is writable for exactly the runs
-that take it. The table's fifth row needed no edit — this record implements the row as
+then a run stopped at the budget parks and publishes no summary at all") is discharged by
+this record, not rewritten: the records gate makes a merged record's decision sections
+append-only, so the paragraph stands as written at its decision date and 0021's `## Status`
+section carries an appended note naming this record as the amendment and this path as the
+discharge. A reader of either record reaches the other. The table's fifth row needed no
+edit — this record implements the row as
 written, including its `verdict:` conversion (`needs-attention`) and its `blocked` routing
 fact.
 
 ## Consequences
-
 A budget-stopped, operator-approved run now ships with a machine-readable review header
-naming its honest ending, closing the gap PR #160 demonstrated. The hold's removal is
+naming its honest ending, closing the gap PR #160 demonstrated. The hold's discharge is
 self-enforcing on the writing side: the only writer that may produce `blocked-at-budget`
 is a run whose park was recorded and then approved, because the path requires the
 `WORK:TRAJECTORY` park record to exist first.
