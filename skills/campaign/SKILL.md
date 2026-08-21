@@ -96,7 +96,7 @@ Manifest schema:
 - Campaign identity: <collision-resolved manifest stem>-<run UUID>
 - Completion notes: <text or "none">
 - Public-safe notes: <derived summary or "none">
-- Completion condition: every queued issue closed or merged and pending occurrence dispositions empty
+- Completion condition: every queued issue closed or merged, pending occurrence dispositions empty, and no Deferrals row pending
 - BASE_BRANCH: <filled by step 2>
 - Guardrail commands: <filled by step 2>
 - ADR-index coupling: <filled by step 2>
@@ -113,6 +113,11 @@ Manifest schema:
 | Occurrence | Sweep | State | State reason | Rationale |
 |------------|-------|-------|--------------|-----------|
 | #NNN       | #NNN  | OPEN / CLOSED / UNKNOWN | <GitHub value, NONE, or UNVERIFIED> | <public-safe rationale> |
+
+## Deferrals
+| Issue | Kind | Priority at filing | Rescored |
+|-------|------|--------------------|----------|
+| #NNN  | declined / closed-not-planned | <P-level or —> | pending |
 ```
 
 Status progression: `pending → triaged → in-flight → merged | closed | blocked`
@@ -129,6 +134,14 @@ On every resume, read each occurrence with
 update its normalized state and reason and keep it pending. Normalize a readable null or blank
 `stateReason` to `NONE`; reserve `UNKNOWN`/`UNVERIFIED` for a failed read. Apply the same values to
 worker tuples, pending upserts, validation, and display.
+
+The Deferrals table records issues this campaign filed but did not fix — step 7 declines and
+step 4 `closed-not-planned` closures. It is not a Queue section: a row here never enters the
+queue, is never enqueued or fixed, and decline semantics are unchanged. Validate unique issue
+numbers, a `Kind` of `declined` or `closed-not-planned`, and a recognized `Rescored` outcome —
+`pending`, `not-required`, `not-open`, `unchanged`, `moved`, `declined` — with every
+non-`pending` value dated. Older manifests without the section backfill an empty table, like
+the occurrence table above.
 
 For an `OPEN` occurrence discovered from a valid marker, present the exact close-only recovery
 action, obtain explicit confirmation, and invoke bounty's existing recovery path for that
@@ -218,6 +231,11 @@ append `closed-not-planned` plus its rationale to Outcomes log, and re-read the 
 verify only that row and outcome changed. If the manifest write or readback fails, do not repeat
 the already-verified GitHub close; record that actual closure as a blocker and stop completion
 until the manifest can be reconciled.
+
+In the same write, append a Deferrals row for the issue — Kind `closed-not-planned`, its
+priority at filing from the triage evidence, `Rescored` `pending` — so the step-7 rescore pass
+can find it. The queue row and the ledger row describe the same issue from two sides; only the
+queue row ever carries campaign status.
 
 ## 5. Execute Fixes
 
@@ -334,9 +352,50 @@ same-defect-class consolidation. Include bounty-created occurrences that were li
 sweep and verified closed not planned; they are outcomes to report, not queue entries.
 
 Ask for one explicit operator confirmation before adding any proposed issue to the manifest or
-looping to step 3. A decline leaves already-filed issues outside this campaign, changes no
-manifest row for them, and proceeds to the drained-state check. On confirmation, add the
-approved issues, report each enqueue, and loop to step 3.
+looping to step 3. A decline leaves already-filed issues outside this campaign — no Queue row,
+no enqueue, no fix — appends a Deferrals row for each declined issue (Kind `declined`, its
+priority at filing, `Rescored` `pending`), and proceeds through the rescore pass below to the
+drained-state check. On confirmation, add the approved issues, report each enqueue, and loop
+to step 3.
+
+**Rescore deferrals before any drained check.** The batch changed the tree every deferral was
+scored against, and only a re-read against the result can see a satisfied P0 left standing or
+a corner case the batch promoted to the default condition. After the enqueue decision resolves
+— and again on every later arrival here after further merges — run one rescore pass:
+
+- If the campaign merged no pull requests this run, set every `pending` cell in Deferrals to
+  `not-required` (dated). Nothing this run did can have moved a deferral's world.
+- Otherwise, for each row still `pending`: read the issue's current state and labels with
+  `gh issue view <N> --json state,labels`. An issue no longer open records `not-open` (dated)
+  and writes nothing. An open issue gets a per-issue source read of the code it cites at
+  merged `HEAD`, the way step 3 triage reads code — never a title-level pass; both failure
+  modes are invisible from title and body. Classify the finding: `unchanged`, satisfied by
+  the batch (level moves down), or promoted by the batch (level moves up).
+
+Present one proposal table: issue, filed priority, finding, evidence citations, proposed
+action. Changing anything on GitHub needs one explicit operator confirmation — the same gate
+this step already requires for enqueueing, because these are issues the campaign chose not to
+own. On confirmation, for each moved issue: post one `WORK:RESCORE` annotation comment, then
+flip the priority label. The comment carries the prior level, the new level, the evidence
+citations, and the batch merge that changed the picture:
+
+```markdown
+<!-- WORK:RESCORE -->
+## Rescore — issue #N
+- Filed: P3 (<date>, campaign <identity>)
+- Rescored: P1 against PR #M (<one-line why>)
+- Evidence: <file:line citations>
+<!-- RESCORE:COMPLETE -->
+```
+
+The comment must succeed and be read back before `gh issue edit` flips the label; a posted
+comment whose readback fails leaves the row `pending` as a blocker, and the resume retries by
+posting a fresh complete block — latest-complete-wins — never by editing. The issue body is
+never rewritten. Record `moved` (dated) only after the verified comment and label flip. On
+operator decline, write nothing to GitHub and record `declined` (dated). An unchanged finding
+records `unchanged` (dated) with its evidence and writes nothing. A failed issue read keeps
+the row `pending` and blocks completion like an unreconciled occurrence — it is never drained
+past silently.
 
 Before the drained check—and on every resume—search all issue states for the exact public-safe
 `CAMPAIGN-OCCURRENCE: <campaign-identity>` marker with
@@ -371,9 +430,10 @@ resume reconciliation produces one Outcomes entry and one final-report row.
 
 ## 8. Done
 
-**Drained** means every queue row is `closed`, `merged`, or `blocked` **and** Pending occurrence
-dispositions is empty. End your turn when drained, leaving manifest `active` if any blocked row
-or pending occurrence remains.
+**Drained** means every queue row is `closed`, `merged`, or `blocked`, Pending occurrence
+dispositions is empty, **and** no Deferrals row is `pending` (step 7's rescore pass ran against
+the current merged `HEAD`). End your turn when drained, leaving manifest `active` if any blocked
+row, pending occurrence, or pending deferral rescore remains.
 
 A `merged` row is drained whether or not its branch and worktree have been cleaned (step 6). Deferred cleanup never holds a row, never reopens one, and never keeps the manifest `active` — it is reported, not tracked.
 
@@ -387,13 +447,17 @@ A `merged` row is drained whether or not its branch and worktree have been clean
 
 Ensure manifest row and GitHub state agree before moving on.
 
-Flip manifest to `Status: complete` only when every queue row is `closed` or `merged` and
-Pending occurrence dispositions is empty. Campaigns containing blocked rows or pending
-occurrences stay `active`.
+Flip manifest to `Status: complete` only when every queue row is `closed` or `merged`, Pending
+occurrence dispositions is empty, and no Deferrals row is `pending`. Campaigns containing
+blocked rows, pending occurrences, or pending deferral rescores stay `active`.
 
 Report final table: issue → outcome (`closed-already-fixed` / `closed-not-planned` /
 `closed-not-planned: occurrence of sweep #N` / `merged-PR#` / `blocked: reason`) → notes.
 Every occurrence closure recorded in Outcomes log appears in this table even though it never
 entered a fix wave or remained in the open queue.
+
+A Deferrals row whose rescore moved a priority — or recorded an operator decline of the move —
+appears beside this table with its outcome and date, so the re-scoring is as visible as the
+original filing.
 
 List any deferred cleanup alongside it — per row, the branch and the worktree path still on disk, plus the agent whose end of run was never observed where the run still knows it.
