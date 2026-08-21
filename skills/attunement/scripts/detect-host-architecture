@@ -1,8 +1,129 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Records the host context attunement step 2 records beside HOST_ARCHITECTURE.
+# Stdout's first line is the architecture status contract -- `ok`,
+# `unsupported`, or `detection-failed`, tab-separated from its value, with the
+# exit statuses 0, 2, and 3 below. After that line, on every exit path, the
+# detector emits three ONE-SIDED records in the same tab-separated shape:
+#
+#   HOST_SHELL          family and version of the shell that invoked this
+#                       detector -- the tool-call shell
+#   HOST_USERLAND       gnu or bsd, from the tools' own behaviour
+#   HOST_TOOL_STEERING  names (never values) of the tool-steering variables
+#                       that are set, or `none`
+#
+# One-sided means these are observations with no declared counterpart to be
+# resolved against: unlike the machine architecture they earn no resolver and
+# no precedence table. They fail open -- an unobservable fact records the
+# explicit marker `unknown` (or `none`) and preflight continues, whatever the
+# architecture line does. Policy does not live here: skills branch on these
+# records, this detector never does.
+
+# HOST_SHELL: family and version of the shell that executes tool calls. That
+# shell is neither the login shell ($SHELL) nor this script's shebang
+# interpreter, and the three are routinely conflated because they agree on the
+# host where a bug was diagnosed (#198). The invoking process is this script's
+# parent, so the family comes from the parent's command name. The version
+# comes from the interpreter's own version variable when the families match --
+# the direct-invocation case, and the source the issue prescribes over $SHELL
+# -- and otherwise from `<family> --version`.
+observe_host_shell() {
+	HOST_SHELL=unknown
+	local parent='' family='' version=''
+	if command -v ps >/dev/null 2>&1; then
+		parent=$(ps -o comm= -p "$PPID" 2>/dev/null) || parent=''
+	fi
+	family=${parent##*/} # a full path leaves the command name
+	family=${family#-}   # a login shell names itself with a leading dash
+	case $family in
+	bash | zsh | sh | dash | ksh | fish) ;;
+	*) return 0 ;; # not a recognized shell family: stay at the marker
+	esac
+	# Regexes in variables: bash 3.2 (the floor) mis-parses some quoted regex
+	# literals written inline in [[ =~ ]].
+	local number='[0-9][0-9.]*'
+	if [[ $family == bash && -n ${BASH_VERSION:-} ]]; then
+		[[ $BASH_VERSION =~ $number ]] && version=${BASH_REMATCH[0]}
+	else
+		local banner=''
+		if command -v "$family" >/dev/null 2>&1; then
+			banner=$("$family" --version 2>/dev/null) || banner=''
+			banner=${banner%%$'\n'*}
+			[[ $banner =~ $number ]] && version=${BASH_REMATCH[0]}
+		fi
+	fi
+	if [[ -n $version ]]; then
+		HOST_SHELL="$family $version"
+	else
+		HOST_SHELL="$family version-unknown"
+	fi
+}
+
+# HOST_USERLAND: `gnu` or `bsd`, derived from the userland's tools rather than
+# the OS name the harness already reports. GNU sed answers `--version`; BSD
+# sed rejects the long option outright; anything else (busybox and friends)
+# stays at the marker, corroborated by GNU's `date -d`, which BSD date also
+# rejects -- a non-GNU sed plus a working `date -d` is not evidence of bsd.
+observe_host_userland() {
+	HOST_USERLAND=unknown
+	local out='' status=0
+	command -v sed >/dev/null 2>&1 || return 0
+	out=$(sed --version 2>/dev/null) || status=$?
+	if [[ $out == *GNU* ]]; then
+		HOST_USERLAND=gnu
+	elif ((status != 0)); then
+		if command -v date >/dev/null 2>&1 && ! date -d @0 >/dev/null 2>&1; then
+			HOST_USERLAND=bsd
+		fi
+	fi
+}
+
+# HOST_TOOL_STEERING: which tool-steering variables are set -- names only,
+# never values. Values hold host-private paths and credentials this record
+# must not carry into a task plan; the names are what tell preflight to pass
+# `--no-config` and friends (a personal ripgreprc steered one of this
+# repository's own gates once, which is why the rule exists).
+observe_host_tool_steering() {
+	local steering=() name var
+	for var in RIPGREP_CONFIG_PATH GREP_OPTIONS GIT_CONFIG LC_ALL LANG; do
+		if [[ -n ${!var:-} ]]; then
+			steering+=("$var")
+		fi
+	done
+	# `${!prefix@}` is pure builtin, so enumeration survives a stripped PATH.
+	# The unquoted expansion word-splits, but a name may still carry glob
+	# metacharacters (which then expand against the working directory) or a
+	# newline (which IFS keeps), so only identifier-grammar names are recorded
+	# -- anything else would smuggle off-grammar or forged-record text into a
+	# value this skill documents as bare variable names. A name odd enough to
+	# fail the grammar is skipped, not fatal: the record fails open.
+	local name_re='^[A-Za-z_][A-Za-z0-9_]*$'
+	for name in ${!GH_@}; do
+		if [[ $name =~ $name_re ]]; then
+			steering+=("$name")
+		fi
+	done
+	if ((${#steering[@]} > 0)); then
+		HOST_TOOL_STEERING="${steering[*]}"
+	else
+		HOST_TOOL_STEERING=none
+	fi
+}
+
+emit_one_sided_records() {
+	printf 'HOST_SHELL\t%s\n' "$HOST_SHELL"
+	printf 'HOST_USERLAND\t%s\n' "$HOST_USERLAND"
+	printf 'HOST_TOOL_STEERING\t%s\n' "$HOST_TOOL_STEERING"
+}
+
+observe_host_shell
+observe_host_userland
+observe_host_tool_steering
+
 if ! command -v uname >/dev/null 2>&1; then
 	printf 'detection-failed\tuname-missing\n'
+	emit_one_sided_records
 	printf '%s\n' \
 		'detect-host-architecture: uname is required; install or expose uname in PATH' >&2
 	exit 3
@@ -13,6 +134,7 @@ if machine_output="$(uname -m 2>/dev/null)"; then
 else
 	uname_status=$?
 	printf 'detection-failed\tuname-exit-%s\n' "$uname_status"
+	emit_one_sided_records
 	printf 'detect-host-architecture: uname -m failed with exit %s; ' "$uname_status" >&2
 	printf '%s\n' 'retry after fixing uname' >&2
 	exit 3
@@ -29,6 +151,7 @@ ppc64le | s390x) normalized_architecture="$machine_output" ;;
 		printf -v raw_architecture '%q' "$machine_output"
 	fi
 	printf 'unsupported\t%s\n' "$raw_architecture"
+	emit_one_sided_records
 	printf 'detect-host-architecture: unsupported machine %s; supported: ' \
 		"$raw_architecture" >&2
 	printf '%s' 'x86_64, arm64, ppc64le, s390x' >&2
@@ -39,3 +162,4 @@ ppc64le | s390x) normalized_architecture="$machine_output" ;;
 esac
 
 printf 'ok\t%s\n' "$normalized_architecture"
+emit_one_sided_records

@@ -28,6 +28,42 @@ assert_contains() {
 	rg -Fq -- "$expected" "$file" || fail "$file does not contain: $expected"
 }
 
+# Every detector exit path appends the three one-sided host records after the
+# status line. These cases all run with PATH stripped to the fake uname's
+# directory alone, so every observation tool is missing and both observable
+# records must sit at their explicit markers -- that is the fail-open contract,
+# and it is asserted exactly. HOST_TOOL_STEERING is environment-dependent (the
+# suite's own LANG or GH_* variables are legitimately present), so it is
+# asserted by grammar: names only, or `none`.
+assert_one_sided_records() { # file name
+	local file="$1" name="$2" shell_record='' userland_record='' steering='' count
+	count="$(wc -l <"$file" | tr -d ' ')"
+	[[ "$count" -eq 4 ]] ||
+		fail "$name: expected status line plus three one-sided records, got $count lines"
+	# One shared redirect: separate `{ read; } <file` blocks would each reopen
+	# the file and every record would be the status line.
+	{
+		IFS= read -r count # the status line, already asserted by the caller
+		IFS= read -r shell_record
+		IFS= read -r userland_record
+		IFS= read -r steering
+	} <"$file"
+	[[ "$shell_record" == $'HOST_SHELL\tunknown' ]] ||
+		fail "$name: a stripped PATH must leave HOST_SHELL at its marker: $shell_record"
+	[[ "$userland_record" == $'HOST_USERLAND\tunknown' ]] ||
+		fail "$name: a stripped PATH must leave HOST_USERLAND at its marker: $userland_record"
+	local steering_re=$'^HOST_TOOL_STEERING\t(none|[A-Z][A-Z0-9_]*( [A-Z][A-Z0-9_]*)*)$'
+	[[ "$steering" =~ $steering_re ]] ||
+		fail "$name: HOST_TOOL_STEERING off-contract: $steering"
+}
+
+assert_status_line() { # file name expected-first-line
+	local file="$1" name="$2" expected="$3" actual=''
+	{ IFS= read -r actual; } <"$file"
+	[[ "$actual" == "$expected" ]] ||
+		fail "$name status line: expected '$expected', got '$actual'"
+}
+
 make_fake_uname() {
 	local bin_dir="$1"
 	mkdir -p "$bin_dir"
@@ -61,7 +97,8 @@ run_case() {
 
 	[[ "$status" -eq "$expected_status" ]] ||
 		fail "$name: expected exit $expected_status, got $status"
-	assert_file "$expected_stdout" "$case_dir/stdout" "$name stdout"
+	assert_status_line "$case_dir/stdout" "$name" "$expected_stdout"
+	assert_one_sided_records "$case_dir/stdout" "$name"
 	assert_file "$expected_stderr" "$case_dir/stderr" "$name stderr"
 	printf '  ok   %s\n' "$name"
 }
@@ -71,9 +108,9 @@ run_missing_uname() {
 	mkdir -p "$case_dir/bin"
 	PATH="$case_dir/bin" /bin/bash "$DETECTOR" \
 		>"$case_dir/stdout" 2>"$case_dir/stderr" || status=$?
-	[[ "$status" -eq 3 ]] || fail "missing uname: expected exit 3, got $status"
-	assert_file $'detection-failed\tuname-missing' "$case_dir/stdout" \
-		'missing uname stdout'
+	assert_status_line "$case_dir/stdout" 'missing uname' \
+		$'detection-failed\tuname-missing'
+	assert_one_sided_records "$case_dir/stdout" 'missing uname'
 	assert_file \
 		'detect-host-architecture: uname is required; install or expose uname in PATH' \
 		"$case_dir/stderr" 'missing uname stderr'

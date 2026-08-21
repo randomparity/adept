@@ -28,7 +28,8 @@ supply-chain rules that are no longer inline in `AGENTS.md`.
 
 Run `scripts/detect-host-architecture` from this installed preflight package. Capture its
 stdout and exit status even when it returns 2 or 3; do not merge stderr into the payload
-and do not evaluate the payload as shell code. Accept only these status/payload pairs:
+and do not evaluate the payload as shell code. Accept only these status/payload
+pairs, carried by stdout's first line:
 
 - exit 0 with `ok<TAB><normalized>`;
 - exit 2 with `unsupported<TAB><raw-or-empty>`; or
@@ -41,6 +42,37 @@ output is text; shell variables cannot retain binary NUL bytes. Anything else is
 malformed detector result and stops preflight with the observed status
 and a request to repair the installed preflight package. Render `HOST_ARCHITECTURE` as the
 normalized value, `unsupported (<raw-or-empty>)`, or `detection failed (<reason>)`.
+
+The status line is not the whole payload. After it, on every exit path, the same
+detector emits three one-sided records in the same `KEY<TAB>VALUE` shape:
+
+- `HOST_SHELL` — family and version of the shell that invoked the detector (the
+  tool-call shell), read from the invoking process and the interpreter's own
+  version variable. Never from `$SHELL`: that is the login shell, a third shell
+  distinct from the tool-call shell and from a script's shebang interpreter.
+- `HOST_USERLAND` — `gnu` or `bsd`, derived from the userland's tool behaviour
+  (`sed --version`, corroborated by `date -d`), since the OS name alone is not
+  actionable.
+- `HOST_TOOL_STEERING` — names only, never values, of the tool-steering
+  environment variables that are set (`RIPGREP_CONFIG_PATH`, `GREP_OPTIONS`,
+  `GIT_CONFIG`, `LC_ALL`, `LANG`, and any `GH_*`), or `none` when no such
+  variable is set.
+
+These are one-sided observations: unlike architecture they resolve against no
+declared counterpart, so they earn no resolver and no precedence table — a
+record line each, beside `HOST_ARCHITECTURE` in the task plan. They fail open:
+an unobservable fact records the explicit marker `unknown` (or `none`) and
+preflight continues; only the first line's exit status gates anything, exactly
+as the pairs above define. Values of steering variables are omitted by design —
+they hold host-private paths and credentials.
+
+**Attunement records; skills branch.** Keep policy out of the detector: what a
+record implies belongs to the skill that consumes it. `HOST_USERLAND=bsd` is a
+record here; the rule that follows from it lives in the installed bash language
+reference. `HOST_SHELL=zsh 5.9` is a record here; quest-log's rule that its
+tracker recipes run in Bash, never zsh, binds against that fact there. A
+detector that accumulated every consumer's rules would make this step larger
+than the rest of the skill combined.
 
 Each agent then applies its native applicable-instruction precedence to the project-local
 instruction and policy files read in step 1. Those effective files are authoritative for
