@@ -48,8 +48,7 @@ available_profiles() {
 
 # The repo's tracked AGENTS.md is the only resolution input. No environment
 # variable participates: ambient per-shell state surviving into a resumed
-# session would route a write to the wrong tracker silently, which the tracker
-# abstraction record forbids.
+# session would route a write to the wrong tracker silently.
 #
 # `git rev-parse --show-toplevel` exits 128 for "there is no repository at or
 # above here" and for every refusal alike: a dubious-ownership refusal under a
