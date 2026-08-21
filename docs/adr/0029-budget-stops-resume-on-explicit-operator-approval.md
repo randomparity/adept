@@ -57,14 +57,21 @@ what it authorized — then swap `status:needs-human` → `status:in-review` in 
 edit. Recording before the label swap is the same exit-edges discipline the park itself
 follows: an issue never sits in a flight state without a record of how it got there.
 
-**3. The run re-enters at step 7 (Simplify).** The cap bullet authorizes continuing *to the
-next workflow step*; the loop ended at its stop, and `$trial-loop`'s caller contract
-already forbids a budget-stopped run from re-entering the loop. Steps 7–9 proceed
-ordinarily, carrying the stopped run's final disclosure — remaining findings, deferrals
-with their owning records, outstanding notes — as resume facts into the payload destinations
-step 6 and ADR 0028 already define. An operator who instead wants more review passes grants
-new authority to the loop itself (a new cycle under `$trial-loop`'s own rescoping rules);
-that is a different continuation with a different ending, covered by ADR 0021's
+**3. The run re-enters at step 7 (Simplify), after discharging what the stop cut
+short.** The cap bullet authorizes continuing *to the next workflow step*; the loop ended
+at its stop, and `$trial-loop`'s caller contract already forbids a budget-stopped run from
+re-entering the loop. A budget stop can leave step-6 obligations unrun — the security pass
+above all, since `$detect-evil` runs after the loop's fixes and a stopped run has had no
+fixes-pass boundary to trigger it — so the resumed run settles those obligations on step
+6's own terms, recording `security: not triggered` where the trigger genuinely does not
+fire, before simplification begins. The stopped run's final disclosure then travels as
+resume facts into the payload destinations step 6 and ADR 0028 already define: the three
+lists the carry contract names (deferrals with their owning records, outstanding notes,
+confirmed claims) **plus the remaining-findings summary the cap bullet makes the stop
+produce**, which the new step-6 subsection adds to the carry list so step 8's "write only
+the lists step 6 specifies" admits it. An operator who instead wants more review passes
+grants new authority to the loop itself (a new cycle under `$trial-loop`'s own rescoping
+rules); that is a different continuation with a different ending, covered by ADR 0021's
 replacement rule, not by this path.
 
 **4. One ending owns the field.** `exit:` describes how the last loop run ended, and the

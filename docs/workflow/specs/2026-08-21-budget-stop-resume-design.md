@@ -21,8 +21,12 @@ continued run (PR #160, issue #141) publishes no summary at all.
    *(criteria 1)*
 2. **Transitions**: post a complete `WORK:TRAJECTORY` recording the approval first; then
    single-active swap `status:needs-human` → `status:in-review`. *(criterion 2)*
-3. **Re-entry at step 7** (Simplify); no loop re-entry; carry the stopped run's disclosure
-   forward as resume facts into the existing payload destinations. *(criterion 3)*
+3. **Re-entry at step 7** (Simplify), after settling un-run step-6 obligations on step 6's
+   own terms — notably the security pass, which a budget-stopped branch never reached; no
+   loop re-entry; carry the stopped run's disclosure forward as resume facts into the
+   existing payload destinations: the three carry-contract lists plus the stop's
+   remaining-findings summary, which the new step-6 subsection adds to the carry list.
+   *(criterion 3)*
 4. **Exit mapping**: the run writes `exit: blocked-at-budget`; `verdict:` / `findings:` /
    `iterations:` describe that same stopped run. The approval is aftermath, not a second
    ending. A granted rescope is a different continuation governed by `$trial-loop`'s own
@@ -39,6 +43,9 @@ continued run (PR #160, issue #141) publishes no summary at all.
   (ADR 0028 sequence unchanged)
 - G4: The park protocol's ordering rule (record before label) applies to the resume edge
   symmetrically.
+- G5: A resumed run settles every step-6 obligation the stop cut short — the security
+  pass above all — before step 7, and the stop's remaining-findings summary reaches the
+  payload destinations with the other carry lists. (necessary consequence of decision 3)
 
 ## Change surface
 
