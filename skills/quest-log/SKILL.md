@@ -70,12 +70,18 @@ Rules:
 
 ### Recipe: reconcile cleared dependencies
 
-Source `assets/cleared-dependencies.sh` (deployed with this skill) in Bash, never in zsh;
-the array and regular-expression behavior is intentionally Bash-specific. Then call
-`reconcile_cleared_dependencies plan <owner/name>` to print the repair set without writes,
-or `reconcile_cleared_dependencies apply <owner/name>` to perform the primary post-merge
-edge. Recovery passes the confirmed issue numbers after the repository name so apply mode
-cannot widen the approved plan. GitHub's REST pagination is exhaustive; do not replace it
+Invoke the canonical recipe directly in Bash — never source it into your own shell, and
+never zsh; the array and regular-expression behavior is intentionally Bash-specific:
+
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>
+```
+
+The asset ships deployed with this skill. `plan` prints the repair set without writes;
+`apply <owner/name>` performs the primary post-merge edge; the command's exit status is the
+verdict (0 clean, 1 degraded or partial, 2 usage). Recovery passes the confirmed issue numbers
+after the repository name so apply mode cannot widen the approved plan. GitHub's REST
+pagination is exhaustive; do not replace it
 with the bounded default of `gh issue list`. The apply path re-reads each dependent and its
 blockers immediately before its single status-label edit, then verifies the result. The
 state machine's one-writer-per-edge rule serializes supported workflow writers; the readback
