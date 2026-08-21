@@ -627,7 +627,8 @@ A run with nothing to carry creates no payload file and skips every payload step
 Then make the one named PR-body write, ADR 0028's second destination: read the
 delivered PR body, append a blank line, the `## Review exit payloads` heading, and the
 payload file's contents, write the result back with `gh pr edit --body-file`, and
-require the byte-for-byte readback to match. This is the only moment the PR body gains the section — before the
+require the readback to match the composed body byte-for-byte apart from at most one
+trailing newline, which GitHub's PR-body storage adds. This is the only moment the PR body gains the section — before the
 `publication-in-progress` handoff rewrite, so the write never happens in the terminal
 parked phase and never happens twice — and a failed or unverifiable write parks the
 quest before the helper with the evidence retained.

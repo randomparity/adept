@@ -72,7 +72,8 @@ verifies its identity, composes the payload file once beside the ledger — priv
 0600, `mktemp`, atomic rename after the write, the same byte rejections the helper will
 re-apply — and immediately appends its contents to the PR body under the same
 `## Review exit payloads` heading with `gh pr edit --body-file`, verifying the readback
-byte-for-byte. This is the one moment the body gains the section: before the
+byte-for-byte apart from at most one trailing newline, which GitHub's PR-body storage
+adds — an asymmetry measured against the comment path, whose readback is exact. This is the one moment the body gains the section: before the
 `publication-in-progress` handoff rewrite, so the write never happens in the terminal
 parked phase, and never again afterwards. A failed or unverifiable body write parks the
 quest before the helper with the evidence retained. The same payload file is the seventh
