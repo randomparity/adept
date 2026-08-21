@@ -28,7 +28,8 @@ supply-chain rules that are no longer inline in `AGENTS.md`.
 
 Run `scripts/detect-host-architecture` from this installed preflight package. Capture its
 stdout and exit status even when it returns 2 or 3; do not merge stderr into the payload
-Accept only these status/payload pairs, carried by stdout's first line:
+and do not evaluate the payload as shell code. Accept only these status/payload
+pairs, carried by stdout's first line:
 
 - exit 0 with `ok<TAB><normalized>`;
 - exit 2 with `unsupported<TAB><raw-or-empty>`; or
