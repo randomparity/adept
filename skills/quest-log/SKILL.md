@@ -70,14 +70,18 @@ Rules:
 
 ### Recipe: reconcile cleared dependencies
 
-Invoke the canonical recipe directly in Bash — never source it into your own shell, and
-never zsh; the array and regular-expression behavior is intentionally Bash-specific:
+Resolve the asset path from the installed plugin package before invoking it rather than
+assuming a cache directory: the harness exports `${CLAUDE_PLUGIN_ROOT}` to the plugin's
+install root whenever a skill runs, so
+`"$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh"` names the asset
+from any install location. Invoke it directly in Bash — never zsh; the array and
+regular-expression behavior is intentionally Bash-specific:
 
 ```bash
 bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>
 ```
 
-The asset ships deployed with this skill. `plan` prints the repair set without writes;
+`plan` prints the repair set without writes;
 `apply <owner/name>` performs the primary post-merge edge; the command's exit status is the
 verdict (0 clean, 1 degraded or partial, 2 usage). Recovery passes the confirmed issue numbers
 after the repository name so apply mode cannot widen the approved plan. GitHub's REST
