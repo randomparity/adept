@@ -156,12 +156,13 @@ collection that is never parsed as partial output.
   with instability-gated per-week median cycle. The renderer contract for all
   of these is §3.
 
-- **Movement** — `metrics.movement`, present when a prior sidecar path was
-  passed: the comparison of this run's combined aggregates against the prior
-  run's, per span family, behind the issue's comparability rules (exact
-  selector match, a known prior schema major, neither run truncated). Every
-  refusal is an explicit `omitted`/`incomparable` status with its reason —
-  never a guessed delta. The renderer contract is §3's movement section.
+- **Movement** — `metrics.movement`, always present: the comparison of this
+  run's combined aggregates against a prior run's, per span family, behind
+  the issue's comparability rules (exact selector match, a known prior
+  schema major, neither run truncated). With no prior path passed — and for
+  every refusal — it carries an explicit `omitted`/`incomparable` status
+  with its reason, never a guessed delta. The renderer contract is §3's
+  movement section.
 
 **Empty selection.** When `population.count == 0`, write nothing — no report,
 no sidecar — and state plainly that the selector matched zero issues (`gh

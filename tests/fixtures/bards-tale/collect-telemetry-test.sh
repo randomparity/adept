@@ -925,6 +925,23 @@ prior_case 'a truncated prior poisons the comparison' \
 	'.truncated = true' \
 	'{status:"incomparable", reason:"truncated-prior"}'
 
+prior_case 'a non-object aggregate degrades to an omission' \
+	'.metrics.aggregate = false' \
+	'{status:"omitted", reason:"unreadable-prior"}'
+
+# A family whose counts do not both measure up is absent from the comparison
+# entirely — a count is never defaulted to zero beside a real median.
+jq '.metrics.aggregate.cycle_hours.count = "three"' \
+	"$SCRATCH/prior-comparable.json" >"$SCRATCH/prior-case.json"
+if ! run_collector 'status:movement' "$SCRATCH/prior-case.json"; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'string-count prior scenario unexpectedly failed'
+fi
+assert_doc 'a non-numeric prior count refuses its family' \
+	'.metrics.movement.status == "compared"
+	and (.metrics.movement.families | has("cycle_hours") | not)
+	and (.metrics.movement.families.lead_time_hours.previous_median == 20)'
+
 printf 'not json at all\n' >"$SCRATCH/prior-case.json"
 if ! run_collector 'status:movement' "$SCRATCH/prior-case.json"; then
 	cat "$SCRATCH/stderr" >&2

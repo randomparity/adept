@@ -1096,8 +1096,8 @@ if [[ -n $PRIOR_SIDECAR ]]; then
 			and (.selector | type) == "string"
 			and (.schema_version | type) == "string"
 			and (.truncated | type) == "boolean"
-			and ((.metrics // {}) | type) == "object"
-			and ((.metrics.aggregate // {}) | type) == "object"' \
+			and (.metrics | type) == "object"
+			and (.metrics.aggregate | type) == "object"' \
 		"$PRIOR_SIDECAR" >/dev/null 2>&1; then
 		movement_reason='unreadable-prior'
 	else
@@ -1135,14 +1135,16 @@ if [[ -n $PRIOR_SIDECAR ]]; then
 				reduce $fs[] as $f ({};
 					if ($cur[$f].median | type) == "number"
 						and ($pri[$f].median | type) == "number"
+						and ($cur[$f].count | type) == "number"
+						and ($pri[$f].count | type) == "number"
 					then . + {($f): {
 						previous_median: $pri[$f].median,
 						current_median: $cur[$f].median,
 						delta_median:
 							((($cur[$f].median - $pri[$f].median)
 								* 10 | round) / 10),
-						previous_count: ($pri[$f].count // 0),
-						current_count: ($cur[$f].count // 0)}}
+						previous_count: $pri[$f].count,
+						current_count: $cur[$f].count}}
 					else . end)')
 		fi
 	fi
