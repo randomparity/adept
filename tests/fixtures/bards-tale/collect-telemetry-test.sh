@@ -298,6 +298,9 @@ assert_count 'every gh read is logged' '^gh ' "$SCRATCH/calls" 9
 if rg --no-config -q 'graphql' "$SCRATCH/calls"; then
 	fail 'collector issued a graphql read'
 fi
+if rg --no-config -q 'gh repo view .*--jq' "$SCRATCH/calls"; then
+	fail 'repo read must capture raw JSON: a pre-projected --jq value cannot be re-parsed by the extraction jq'
+fi
 
 # --- scenario: date-range mode -------------------------------------------------
 cat >"$SCRATCH/fake/search.json" <<'JSON'

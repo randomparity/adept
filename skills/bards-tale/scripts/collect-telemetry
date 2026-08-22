@@ -100,7 +100,7 @@ metric_json() { # value
 
 issue_side_repo() { # destination
 	fetch_failed=0
-	if ! gh repo view --json nameWithOwner --jq .nameWithOwner >"$1"; then
+	if ! gh repo view --json nameWithOwner >"$1"; then
 		fetch_failed=1
 	fi
 }
