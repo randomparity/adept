@@ -34,7 +34,7 @@ another issue is a checkpoint or a split, never an in-scope dependency shortcut.
 change depends on or worsens cannot be deferred. Preserve uncertainty in provenance, ownership,
 dependency, and suspected concerns rather than resolving it by assertion.
 
-Use these finding classifications:
+Use these scope classifications, which are evidence and never finding severities:
 
 - `in-scope-required`: the apparent expansion is a necessary direct dependency with explicit
   criterion and provenance support;
@@ -44,7 +44,9 @@ Use these finding classifications:
   owner; and
 - `unsupported`: evidence does not support the suspected concern.
 
-Classification is a recommendation for the caller to verify, not a scope decision.
+Classification is a recommendation for the caller to verify, not a scope decision. Every
+defensible concern also carries an impact-based `critical | high | medium | low` severity from
+`$gauntlet`; `unsupported` is rejection evidence and does not manufacture a finding.
 
 ## Report
 

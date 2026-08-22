@@ -18,7 +18,7 @@ genuine blocker you have named.
 
 ## 1. Read the repo instructions
 
-Read `AGENTS.md`, `AGENTS.md`, and any nested instruction files that apply to
+Read `AGENTS.md`, `CLAUDE.md`, and any nested instruction files that apply to
 the files you will touch. If those instructions name an installed language
 reference for the files' language (Python, TypeScript, Rust, Bash, or GitHub
 Actions), read that reference before writing code — it holds the strictness and
@@ -28,7 +28,8 @@ supply-chain rules that are no longer inline in `AGENTS.md`.
 
 Run `scripts/detect-host-architecture` from this installed preflight package. Capture its
 stdout and exit status even when it returns 2 or 3; do not merge stderr into the payload
-and do not evaluate the payload as shell code. Accept only these status/payload pairs:
+and do not evaluate the payload as shell code. Accept only these status/payload
+pairs, carried by stdout's first line:
 
 - exit 0 with `ok<TAB><normalized>`;
 - exit 2 with `unsupported<TAB><raw-or-empty>`; or
@@ -41,6 +42,37 @@ output is text; shell variables cannot retain binary NUL bytes. Anything else is
 malformed detector result and stops preflight with the observed status
 and a request to repair the installed preflight package. Render `HOST_ARCHITECTURE` as the
 normalized value, `unsupported (<raw-or-empty>)`, or `detection failed (<reason>)`.
+
+The status line is not the whole payload. After it, on every exit path, the same
+detector emits three one-sided records in the same `KEY<TAB>VALUE` shape:
+
+- `HOST_SHELL` — family and version of the shell that invoked the detector (the
+  tool-call shell), read from the invoking process and the interpreter's own
+  version variable. Never from `$SHELL`: that is the login shell, a third shell
+  distinct from the tool-call shell and from a script's shebang interpreter.
+- `HOST_USERLAND` — `gnu` or `bsd`, derived from the userland's tool behaviour
+  (`sed --version`, corroborated by `date -d`), since the OS name alone is not
+  actionable.
+- `HOST_TOOL_STEERING` — names only, never values, of the tool-steering
+  environment variables that are set (`RIPGREP_CONFIG_PATH`, `GREP_OPTIONS`,
+  `GIT_CONFIG`, `LC_ALL`, `LANG`, and any `GH_*`), or `none` when no such
+  variable is set.
+
+These are one-sided observations: unlike architecture they resolve against no
+declared counterpart, so they earn no resolver and no precedence table — a
+record line each, beside `HOST_ARCHITECTURE` in the task plan. They fail open:
+an unobservable fact records the explicit marker `unknown` (or `none`) and
+preflight continues; only the first line's exit status gates anything, exactly
+as the pairs above define. Values of steering variables are omitted by design —
+they hold host-private paths and credentials.
+
+**Attunement records; skills branch.** Keep policy out of the detector: what a
+record implies belongs to the skill that consumes it. `HOST_USERLAND=bsd` is a
+record here; the rule that follows from it lives in the installed bash language
+reference. `HOST_SHELL=zsh 5.9` is a record here; quest-log's rule that its
+tracker recipes run in Bash, never zsh, binds against that fact there. A
+detector that accumulated every consumer's rules would make this step larger
+than the rest of the skill combined.
 
 Each agent then applies its native applicable-instruction precedence to the project-local
 instruction and policy files read in step 1. Those effective files are authoritative for
@@ -101,8 +133,39 @@ Where the repo keeps an ADR index, also determine whether a gated check couples
 the two — an ADR file requiring a matching index row, or the reverse. Read the
 recipe rather than trusting its name; the guard is often a script the recipe
 calls. Record a `coupled` / `not coupled` verdict beside the commands, and report
-it to the orchestrator under `$campaign`. Step 6, `$spellcraft`, and `$campaign`
-step 6 all branch on that coupling verdict.
+it to the orchestrator under `$campaign`. Step 7, `$spellcraft`, and `$campaign`
+step 7 all branch on that coupling verdict.
+
+Beside each command, record three facts the command line alone does not carry:
+
+**Cost.** Record the approximate wall-clock time as an **observed duration**
+— measured from an actual run of the command during this preflight or its
+caller's work — or an explicit `unknown` when the command has never run. Do
+not record a recommended timeout instead: a timeout budget is caller policy
+layered on top of a measurement, and an unrun command supports neither claim.
+`unknown` tells the reader to bound the first run generously; a duration tells
+them what every later run costs. Update the entry when a later run replaces
+an `unknown`.
+
+**Prerequisites.** Everything the command needs that a default checkout does
+not supply: installed tools with version floors, one-time setup targets such
+as a hooks installer, credentials or services CI provides but a workstation
+does not. Unrecorded, each of these is re-diagnosed per session.
+
+**Known landmines.** Behaviors that look like failures but are not. A managed
+pre-push hook that re-runs the whole check suite in an isolated worktree can
+outlast a two-minute default tool timeout — that is slowness, not a hang, and
+re-invoking after an apparent timeout restarts the suite instead of ending
+it. Repo instruction files often name such hazards; carry them into the
+record so a reader of the task plan does not have to find them there.
+
+Before the first build, check prior art for exactly these facts. Search
+`docs/solutions/` for tooling-involved records (`rg -li '<tooling keyword>'
+docs/solutions/`, then scan the hits' frontmatter tags) — `$grimoire` fills
+that directory, and its record format carries a tooling slot in `tags` for
+precisely this read. This is the compounding loop `$detect-curse` runs before
+investigating a failure, applied before anything goes red. No hit is a normal
+result and costs one command — as is no `docs/solutions/` at all.
 
 ## 6. Confirm gh authentication
 

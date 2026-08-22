@@ -34,6 +34,10 @@ require one explicit user confirmation before any GitHub write, branch push, or 
    `--label status:...` filter and silently returns nothing (the `quest-log` skill's
    colon-label gotcha).
 
+   If the returned array contains 500 issues, report that Sweep A is possibly truncated at the
+   limit and that staleness coverage may be partial. Do not infer or act on issues outside the
+   returned population.
+
    **Never touch** an issue carrying an in-flight `status:` value (`in-progress`, `in-review`,
    `awaiting-merge`), `status:blocked`, or `status:needs-human` — a human owns those exit edges
    (`$resurrection` step 4) — nor an `epic` parent, whose quiet means its children are
@@ -84,7 +88,7 @@ require one explicit user confirmation before any GitHub write, branch push, or 
 
    - Action refs in `.github/workflows/*.yml`, unless a `dependabot.yml` covers
      `github-actions`.
-   - Tool versions pinned in scripts — in this repo, `install-tools.sh`'s `TOOLS` inventory.
+   - Tool versions pinned in the target repository's provisioning and workflow files.
    - Container bases in any `Dockerfile` / `compose.yml`.
 
    **Look every current version up at sweep time**; never assert one from memory. Title each
@@ -94,9 +98,11 @@ require one explicit user confirmation before any GitHub write, branch push, or 
    and file one issue per advisory cluster sharing a fix, `priority:` from severity, advisory ID
    in the title so dedup matches next run.
 
-   If `osv-scanner` is absent, report the sweep as **skipped — `osv-scanner` not installed**
-   with the install command (`install-tools.sh` carries it as optional). Never let an absent
-   tool read as a clean sweep.
+   If `osv-scanner` is absent, consult the current official OSV-Scanner installation guidance
+   and report the sweep as **skipped — `osv-scanner` not installed** with an applicable install
+   command. If that guidance is unavailable or has no applicable command, name the missing
+   guidance in the skipped result; never invent a command or let an absent tool read as a clean
+   sweep.
 
 5. **Sweep D — deferral-record staleness.** This sweep emits a **draft PR that edits records
    in place**, not issues: the record is the durable owner, and a tracker issue never appears

@@ -70,12 +70,22 @@ Rules:
 
 ### Recipe: reconcile cleared dependencies
 
-Source `assets/cleared-dependencies.sh` (deployed with this skill) in Bash, never in zsh;
-the array and regular-expression behavior is intentionally Bash-specific. Then call
-`reconcile_cleared_dependencies plan <owner/name>` to print the repair set without writes,
-or `reconcile_cleared_dependencies apply <owner/name>` to perform the primary post-merge
-edge. Recovery passes the confirmed issue numbers after the repository name so apply mode
-cannot widen the approved plan. GitHub's REST pagination is exhaustive; do not replace it
+Resolve the asset path from the installed plugin package before invoking it rather than
+assuming a cache directory: the harness exports `${CLAUDE_PLUGIN_ROOT}` to the plugin's
+install root whenever a skill runs, so
+`"$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh"` names the asset
+from any install location. Invoke it directly in Bash — never zsh; the array and
+regular-expression behavior is intentionally Bash-specific:
+
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>
+```
+
+`plan` prints the repair set without writes;
+`apply <owner/name>` performs the primary post-merge edge; the command's exit status is the
+verdict (0 clean, 1 degraded or partial, 2 usage). Recovery passes the confirmed issue numbers
+after the repository name so apply mode cannot widen the approved plan. GitHub's REST
+pagination is exhaustive; do not replace it
 with the bounded default of `gh issue list`. The apply path re-reads each dependent and its
 blockers immediately before its single status-label edit, then verifies the result. The
 state machine's one-writer-per-edge rule serializes supported workflow writers; the readback
@@ -208,6 +218,60 @@ from the issue text; a proposed `night-watch` states its evidence for reversal b
 `daytime-only` is exempt — it authorizes nothing, so waving one through costs a night's
 throughput and nothing else.
 
+## Claim protocol
+
+A `$quest` run holds **implementation authority** over its issue as a
+*claim*: a repository label named `quest-claim/<N>`, never applied to the
+issue. Acquisition is `gh label create` — the server-side unique-name
+constraint is the exclusive operation, so exactly one of two concurrent
+claimants wins (ADR 0018 carries the probe evidence).
+
+- **Description grammar**: `<token>;<login>;<epoch>` — the scope token
+  (`[A-Za-z0-9-]{1,32}`, minted as `q<N>-<8 hex>`), the claiming account's
+  login, and the claim time as UTC epoch seconds (1–11 digits, not more than
+  a day in the future — the bound keeps age arithmetic inside int64 and
+  defeats hand-crafted future timestamps). A description that fails
+  any grammar check is a *malformed* claim: treated as foreign everywhere,
+  clearable only by `claim-recover --force` or a manual `gh label delete`.
+- **Token binding**: the claim token **is** the `WORK:SCOPE` annotation
+  token. A `WORK:SCOPE` annotation is authoritative only while its token
+  matches the issue's live claim; an annotation whose token matches no live
+  claim is a dead or displaced quest's residue — not liveness evidence, not
+  a scope charter, and never a reason to stop an active quest. Every
+  consumer that reads `WORK:SCOPE` for authority or liveness applies the
+  token match when a claim is present; on an issue with no claim at all the
+  annotation rule stands unchanged.
+- **Liveness**: `CLAIM_GRACE=600` and `CLAIM_TTL=43200` seconds. A claim is
+  *live* when its age < `CLAIM_TTL` **and** (its age < `CLAIM_GRACE` **or**
+  the issue carries an in-flight status: `in-progress`, `in-review`,
+  `awaiting-merge`). Anything else is *stale*, including every claim on a
+  closed issue. The grace window covers the acquire→status-swap gap; a
+  claim that never reaches an in-flight status is recoverable once grace
+  expires, by design. Epochs are self-asserted: the protocol assumes host
+  clock skew ≤ 300 s (half the grace); a host with worse skew misjudges
+  liveness — an environmental invariant, and one that breaks TLS and git
+  first.
+- **Operations** (tracker engine, github profile):
+  `claim-acquire|claim-verify|claim-release|claim-recover|claim-list`.
+  Exit class `EXIT_CONFLICT=6` reports a live foreign claim with a
+  structured holder payload on stderr; `claim-verify` exits 0 held, 2
+  absent, 6 foreign; `claim-recover` requires `--older-than <seconds>` or
+  `--force` (the structural carrier of an operator's recovery decision). A
+  recover that loses a race to another claimant mid-sequence exits
+  `EXIT_PARTIAL` with `{"stage":"create"}`; the caller re-runs
+  `claim-acquire`, whose read-back then reports the winner as an ordinary
+  exit-6 conflict.
+- **Write edges**: `$quest` acquires, verifies, and releases;
+  `claim-recover` runs under the staleness rule or explicit operator
+  authorization; `$resurrection` garbage-collects claims on closed issues
+  and deletes orphaned claims on issues it resets. The one-writer-per-edge
+  rule extends to claim edges with exactly these writers.
+- **Verify gates**: `$quest` verifies immediately after acquiring (before
+  any issue mutation), after the `WORK:SCOPE` readback, before branch
+  creation, and before pushing. Gate outcomes are exhaustive: held →
+  proceed; absent or foreign → halt with no further issue mutation;
+  transport → the ordinary retryable path.
+
 ## Annotation convention
 
 Structured reports posted as ordinary issue/PR comments, wrapped in HTML-comment markers.
@@ -231,10 +295,78 @@ Markdown except the body.
 
 | Type | Posted on | When | Content |
 |---|---|---|---|
-| `WORK:SCOPE` | issue | after scoping, before building | blast radius, risk flags, complexity (S/M/L), decompose verdict |
-| `WORK:REVIEW` | PR | right after the PR is created | verdict, findings count, iterations, security-review status |
+| `WORK:DIVINATION` | issue | after pre-work assessment | authenticated advisory blast radius, change hazards, complexity, and decompose verdict |
+| `WORK:SCOPE` | issue | after scoping, before building | blast radius, change hazards, complexity (S/M/L), decompose verdict |
+| `WORK:REVIEW` | PR | after PR creation | compact summary plus labelled forge-review payload |
 | `WORK:TRAJECTORY` | issue | at the terminal hand-off, and before parking an issue at `blocked`/`needs-human` (exit-edges rule above) | outcome or parked phase, branch/PR #, guardrail status, what a human must decide or supply, surprises worth remembering |
 | `GROOM:STALE` | issue | when `$warding` first marks an issue `stale`, one grace period before it closes it | how long the issue has been quiet, the date the sweep will close it, and how to keep it open |
+
+`WORK:DIVINATION` is advisory evidence owned by `$divination`; it never freezes scope, supplies a
+`WORK:SCOPE` authority field, changes `status:*`, or assigns `risk:*`. Consumers select the latest
+complete block first, before applying trust or content filters. A newer invalid block therefore
+forces local derivation rather than exposing an older block as current.
+
+### `WORK:REVIEW` payload shape
+
+An issue-backed quest writes one PR annotation through `$quest`'s publication
+helper. Its existing compact review summary comes first, followed by
+`## Forge whole-branch review` and the complete forge review with every line
+indented four spaces. In verified `not-required` mode, that indented payload is
+the helper's single `forge review: not required (<reason>)` line instead. When the
+run carries `$trial-loop` exit payloads, an unindented `## Review exit payloads`
+section follows the forge review, validated against whole-line outer markers before
+composition (ADR 0028). The
+outer `<!-- WORK:REVIEW -->` marker and `<!-- REVIEW:COMPLETE -->` sentinel
+remain unindented and occur exactly once; marker-like lines inside the forge
+payload stay indented data. Whole-line-anchored matching therefore selects only
+the outer annotation, never a review line that resembles a marker or summary.
+
+### Recipe: validate a divination assessment
+
+Collect comments with an explicit GraphQL connection, requesting `first: 100`, `pageInfo {
+hasNextPage endCursor }`, and each node's `id`, `author { login }`, and `body`. Pass the cursor as a
+GraphQL variable, never interpolated query text. Read at most five pages. Continue only when a page
+reports `hasNextPage: false`; if page five still reports true, or any page/cursor is malformed or
+unreadable, reject persistence because completeness is unproven. Do not replace this with
+`gh issue view --json comments`, whose projection supplies no completeness signal.
+
+From that one complete captured sequence, select the last comment whose `.body` carries both
+whole-line markers. Do not project comments to bodies before selection or perform a second metadata
+read that can observe different concurrent state. The same selected object's `id` supplies the
+fingerprint exclusion and `author.login` supplies the producer comparison. The complete sequence
+minus that exact id supplies the fingerprint comments, so every other observed comment remains
+evidence. Before changing branches, a consumer may adopt the four assessment fields only as one
+unit:
+
+1. Require an empty `git status --short --untracked-files=all` and exact issue identity.
+2. Resolve the current login with `gh api user --jq .login`; require it to equal both the selected
+   comment author's login and the annotation's `Producer` value. A failed identity read or author
+   association without exact login equality rejects the block.
+3. Recompute the issue-evidence SHA-256 from
+   `{"body":string,"comments":[{"body":string,"id":string}],"labels":[string],"title":string}`.
+   Sort labels bytewise and comments bytewise by `id`; remove only the selected annotation's exact
+   comment id; preserve returned UTF-8 without normalization; serialize with `jq -cS` and no
+   trailing newline. Require the recorded lowercase hash and producer `HEAD` to equal the current
+   values. The fixed vector `{"body":"B","comments":[{"body":"C","id":"IC_1"}],
+   "labels":["bug"],"title":"T"}` hashes to
+   `b67232207bfca8fcd9a4bb5ddcb0b9d69ff3d182acd4bb54d4dc1781355998dd`.
+4. Require each field to be followed by one or more contiguous `Evidence` lines. Accept only
+   `issue:title`, `issue:body`, `issue:comment:<id>`, `tracker:issue:<owner>/<repo>#<number>`,
+   `tracker:pr:<owner>/<repo>#<number>`, and `repo:<full-sha>:<path>`. Parse the repository form at
+   its first two colons, so commas and later colons remain path bytes. The reference occupies the
+   remainder of its line; trailing whitespace, punctuation, or commentary is malformed. Verify
+   every source exists, repository paths resolve at the recorded commit, and the cited sources
+   support their field.
+5. Immediately before adoption, repeat the complete-or-reject issue/comment collection and the
+   repository HEAD/status reads once. Require title, body, sorted labels, the complete ordered
+   comment id/body sequence, latest complete selected id/body/author, HEAD, and clean status to be
+   byte-for-byte unchanged from the validated observation. Any change or incomplete second read
+   rejects the block; do not loop to seek a stable snapshot.
+
+Any failed, missing, malformed, stale, or uncertain check rejects the whole block. A consumer may
+apply stricter checks only by rejecting the whole block; it never partially adopts or reinterprets
+fields. Rejection is an evidence gap, not a workflow blocker: follow the consumer's existing local
+derivation path.
 
 ### Recipe: post an annotation
 

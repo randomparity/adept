@@ -1,0 +1,300 @@
+#!/usr/bin/env bash
+# Publish one complete WORK:REVIEW annotation, verify GitHub's exact copy, then
+# recoverably dispose its local inputs only after recording that verification.
+set -euo pipefail
+
+OUTER_MARKER='<!-- WORK:REVIEW -->'
+OUTER_SENTINEL='<!-- REVIEW:COMPLETE -->'
+MAX_SOURCE_BYTES=4096
+MAX_BODY_BYTES=32768
+SCRIPT_DIR=${BASH_SOURCE[0]%/*}
+[ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR=.
+SCRIPT_DIR=$(cd "$SCRIPT_DIR" && pwd)
+ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
+body=''
+disposer=''
+repo=''
+pr=''
+mode=''
+review_or_reason=''
+ledger=''
+summary=''
+payload=''
+comment_url=''
+platform=''
+ledger_directory=''
+
+finish_body_lifecycle() {
+	local exit_status
+	exit_status=$?
+	# Failures deliberately leave the checked body beside the ledger for recovery.
+	[ "$exit_status" -ne 0 ] && return "$exit_status"
+	if [ -n "$body" ] && [ -e "$body" ]; then
+		printf 'publish-forge-review: successful publication left its body behind\n' >&2
+		return 1
+	fi
+	return 0
+}
+
+trap finish_body_lifecycle EXIT
+
+fail() {
+	printf 'publish-forge-review: %s\n' "$1" >&2
+	exit 1
+}
+
+preflight() {
+	local command
+	for command in gh jq mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc; do
+		command -v "$command" >/dev/null 2>&1 || fail "required command is unavailable"
+	done
+	platform=$(uname -s)
+	case $platform in
+	Darwin) disposer=trash ;;
+	Linux) disposer=gio ;;
+	*) fail 'no supported recoverable-delete command on this platform' ;;
+	esac
+	command -v "$disposer" >/dev/null 2>&1 || fail 'recoverable-delete command is unavailable'
+	[ -x "$ROOT/scripts/check-public-safety.sh" ] || fail 'public-safety check is unavailable'
+}
+
+validate_arguments() {
+	case $# in
+	6 | 7) ;;
+	*) fail 'usage: publish-forge-review REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY [PAYLOAD]' ;;
+	esac
+	repo=$1
+	pr=$2
+	mode=$3
+	review_or_reason=$4
+	ledger=$5
+	summary=$6
+	payload=${7-}
+	case $repo in
+	*/*)
+		case $repo in *'/'*'/'* | *[!A-Za-z0-9_.-/'-']*) fail 'repository is invalid' ;; esac
+		;;
+	*) fail 'repository is invalid' ;;
+	esac
+	case $pr in '' | *[!0-9]* | 0) fail 'pull request is invalid' ;; esac
+	case $mode in required | not-required) ;; *) fail 'publication mode is invalid' ;; esac
+}
+
+mode_of() {
+	local actual_mode
+	actual_mode=$(stat -f %Lp "$1" 2>/dev/null) || actual_mode=''
+	case $actual_mode in
+	[0-7][0-7][0-7] | [0-7][0-7][0-7][0-7])
+		printf '%s\n' "$actual_mode"
+		;;
+	*)
+		stat -c %a "$1"
+		;;
+	esac
+}
+
+require_private_directory() {
+	local path=$1 actual_mode
+	[ -d "$path" ] && [ ! -L "$path" ] || fail 'ledger directory is invalid'
+	actual_mode=$(mode_of "$path") || fail 'ledger directory mode cannot be read'
+	case $actual_mode in
+	700 | 0700) ;;
+	*) fail 'ledger directory is not private' ;;
+	esac
+}
+
+require_private_file() {
+	local label=$1 path=$2 need_content=$3 actual_mode
+	[ -f "$path" ] && [ ! -L "$path" ] && [ -r "$path" ] || fail "$label is invalid"
+	[ "$need_content" = false ] || [ -s "$path" ] || fail "$label is invalid"
+	actual_mode=$(mode_of "$path") || fail "$label mode cannot be read"
+	case $actual_mode in
+	600 | 0600) ;;
+	*) fail "$label is not private" ;;
+	esac
+}
+
+check_size() {
+	local label=$1 path=$2 maximum=$3 byte_count
+	byte_count=$(wc -c <"$path") || fail "$label cannot be read"
+	byte_count=${byte_count//[[:space:]]/}
+	case $byte_count in
+	'' | *[!0-9]*) fail "$label size is invalid" ;;
+	esac
+	[ "$byte_count" -le "$maximum" ] || fail "$label exceeds local size limit"
+}
+
+check_string_size() {
+	local label=$1 value=$2 maximum=$3 byte_count
+	byte_count=$(printf '%s' "$value" | wc -c) || fail "$label cannot be read"
+	byte_count=${byte_count//[[:space:]]/}
+	case $byte_count in
+	'' | *[!0-9]*) fail "$label size is invalid" ;;
+	esac
+	[ "$byte_count" -le "$maximum" ] || fail "$label exceeds local size limit"
+}
+
+contains_byte() {
+	local byte=$1 path=$2 od_status awk_status statuses
+	if LC_ALL=C od -An -v -t x1 "$path" |
+		awk -v byte="$byte" '{ for (i = 1; i <= NF; i += 1) if ($i == byte) found = 1 }
+			END { exit found ? 0 : 1 }'; then
+		statuses=("${PIPESTATUS[@]}")
+	else
+		statuses=("${PIPESTATUS[@]}")
+	fi
+	od_status=${statuses[0]}
+	awk_status=${statuses[1]}
+	[ "$od_status" -eq 0 ] || fail "$path cannot be read"
+	case $awk_status in
+	0) return 0 ;;
+	1) return 1 ;;
+	*) fail "$path byte validation failed" ;;
+	esac
+}
+
+require_publishable_source() {
+	local label=$1 path=$2 marker marker_status
+	require_private_file "$label" "$path" true
+	check_size "$label" "$path" "$MAX_SOURCE_BYTES"
+	iconv -f UTF-8 -t UTF-8 "$path" >/dev/null 2>&1 || fail "$label is not UTF-8 text"
+	if contains_byte 00 "$path"; then fail "$label contains NUL"; fi
+	if contains_byte 0d "$path"; then fail "$label contains carriage return"; fi
+	for marker in "$OUTER_MARKER" "$OUTER_SENTINEL"; do
+		marker_status=0
+		grep -qxF "$marker" "$path" >/dev/null 2>&1 || marker_status=$?
+		case $marker_status in
+		0) fail "$label contains an outer annotation marker" ;;
+		1) ;;
+		*) fail "$label marker validation failed" ;;
+		esac
+	done
+}
+
+validate_content() {
+	ledger_directory=$(dirname "$ledger") || fail 'ledger directory is invalid'
+	require_private_directory "$ledger_directory"
+	require_private_file 'publication ledger' "$ledger" false
+	[ -w "$ledger" ] || fail 'publication ledger is invalid'
+	require_publishable_source 'summary' "$summary"
+	if [ -n "$payload" ]; then
+		require_publishable_source 'payload' "$payload"
+	fi
+	case $mode in
+	required)
+		require_private_file 'required review' "$review_or_reason" true
+		check_size 'required review' "$review_or_reason" "$MAX_SOURCE_BYTES"
+		;;
+	not-required)
+		[ -n "$review_or_reason" ] || fail 'not-required reason is invalid'
+		check_string_size 'not-required reason' "$review_or_reason" "$MAX_SOURCE_BYTES"
+		;;
+	esac
+}
+
+compose_body() {
+	local last_byte
+	body=$(mktemp "$ledger_directory/.publish-forge-review.XXXXXX") ||
+		fail 'cannot create publication body'
+	chmod 600 "$body" || fail 'cannot secure publication body'
+	require_private_file 'publication body' "$body" false
+	printf '%s\n' "$OUTER_MARKER" >"$body" || fail 'cannot compose publication body'
+	cat "$summary" >>"$body" || fail 'cannot read publication summary'
+	printf '\n## Forge whole-branch review\n' >>"$body" || fail 'cannot compose publication body'
+	case $mode in
+	required)
+		sed 's/^/    /' "$review_or_reason" >>"$body" || fail 'cannot read required review'
+		last_byte=$(tail -c 1 "$review_or_reason") || fail 'cannot read required review'
+		[ -z "$last_byte" ] || printf '\n' >>"$body" || fail 'cannot compose publication body'
+		;;
+	not-required)
+		printf '%s\n' "forge review: not required ($review_or_reason)" |
+			sed 's/^/    /' >>"$body" || fail 'cannot compose publication body'
+		;;
+	esac
+	if [ -n "$payload" ]; then
+		printf '\n## Review exit payloads\n' >>"$body" ||
+			fail 'cannot compose publication body'
+		cat "$payload" >>"$body" || fail 'cannot read publication payload'
+		last_byte=$(tail -c 1 "$payload") || fail 'cannot read publication payload'
+		[ -z "$last_byte" ] || printf '\n' >>"$body" || fail 'cannot compose publication body'
+	fi
+	printf '%s\n' "$OUTER_SENTINEL" >>"$body" || fail 'cannot compose publication body'
+	check_size 'publication body' "$body" "$MAX_BODY_BYTES"
+	"$ROOT/scripts/check-public-safety.sh" "$body" >/dev/null 2>&1 ||
+		fail 'publication body did not pass public-safety validation'
+}
+
+post_comment() {
+	local comment_output post_status=0 candidate
+	comment_output=$(gh pr comment "$pr" --repo "github.com/$repo" --body-file "$body") ||
+		post_status=$?
+	[ "$post_status" -eq 0 ] || fail 'comment creation did not complete'
+	candidate=$(printf '%s\n' "$comment_output" |
+		awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }')
+	[ -n "$candidate" ] || fail 'comment creation returned no usable identity'
+	printf '%s\n' "$candidate"
+}
+
+read_comment() {
+	local comment_url=$1 expected_prefix comment_id endpoint response api_status=0
+	expected_prefix="https://github.com/$repo/pull/$pr#issuecomment-"
+	case $comment_url in
+	"$expected_prefix"*) comment_id=${comment_url#"$expected_prefix"} ;;
+	*) fail 'comment creation returned an unexpected identity' ;;
+	esac
+	case $comment_id in '' | *[!0-9]*) fail 'comment creation returned an invalid identity' ;; esac
+	endpoint="/repos/$repo/issues/comments/$comment_id"
+	response=$(gh api --hostname github.com "$endpoint") || api_status=$?
+	[ "$api_status" -eq 0 ] || fail 'comment readback failed'
+	jq -e --rawfile expected "$body" '.body == $expected' <<<"$response" >/dev/null ||
+		fail 'comment readback did not match the checked body'
+}
+
+append_ledger() {
+	local line=$1 readback append_status=0 read_status=0
+	printf '%s\n' "$line" >>"$ledger" || append_status=$?
+	if [ "$append_status" -ne 0 ]; then
+		printf 'publish-forge-review: verified comment retained: %s\n' "$comment_url" >&2
+		fail 'publication ledger append failed'
+	fi
+	readback=$(tail -n 1 "$ledger") || read_status=$?
+	if [ "$read_status" -ne 0 ] || [ "$readback" != "$line" ]; then
+		printf 'publish-forge-review: verified comment retained: %s\n' "$comment_url" >&2
+		fail 'publication ledger readback failed'
+	fi
+}
+
+dispose() {
+	local candidate remaining_candidate remaining=() disposed_line
+	for candidate in "$@"; do
+		case $disposer in
+		trash) trash "$candidate" ;;
+		gio) gio trash "$candidate" ;;
+		esac || {
+			for remaining_candidate in "$@"; do
+				[ -e "$remaining_candidate" ] && remaining[${#remaining[@]}]=$remaining_candidate
+			done
+			fail "recoverable disposal failed; remaining paths: ${remaining[*]}"
+		}
+	done
+	disposed_line="review-publication-disposed: $*"
+	append_ledger "$disposed_line"
+}
+
+validate_arguments "$@"
+preflight
+validate_content
+compose_body
+comment_url=$(post_comment)
+read_comment "$comment_url"
+append_ledger "review-publication-verified: $comment_url"
+disposed_paths=("$summary" "$body")
+if [ "$mode" = required ]; then
+	disposed_paths=("$review_or_reason" "${disposed_paths[@]}")
+fi
+if [ -n "$payload" ]; then
+	disposed_paths+=("$payload")
+fi
+dispose "${disposed_paths[@]}"
+printf '%s\n' "$comment_url"

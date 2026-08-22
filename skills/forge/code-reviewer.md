@@ -8,8 +8,12 @@ defect that only appears once the tasks sit together.
 ordinary engineering standards, while the findings are still cheap to act on.
 
 ```
-Subagent (general-purpose):
+Worker (reviewer):
   description: "Whole-branch review"
+  background: false  # REQUIRED: this wait is serial — nothing proceeds until this
+                     # worker returns, so a backgrounded dispatch buys no parallelism
+                     # and invites the dispatcher to spend turns checking on it.
+  model: [MODEL — REQUIRED: select the most-capable available model]
   prompt: |
     Review this branch the way a senior engineer would — attentive to
     architecture, to the patterns the surrounding code already follows, and to
@@ -49,12 +53,20 @@ Subagent (general-purpose):
     Treat this checkout as read-only with one exception: the review file at
     [REVIEW_FILE] is yours to write. Nothing else moves — not the working tree,
     the index, HEAD or any branch, and not any other file in the directory
-    [REVIEW_FILE] sits in, which holds the controller's own working records.
+    [REVIEW_FILE] sits in, which holds the orchestrator's own working records.
     Reading never mutates anything, so `git show`, `git log` and history
     inspection are unrestricted; that is not licence to re-derive the diff you
     were handed. When you genuinely need another revision's files laid out on
     disk, give that revision a directory of its own rather than moving this
-    one: `git worktree add /tmp/review-[SHA] [SHA]`.
+    one: `git worktree add /tmp/review-[SHA] [SHA]`. You own any temporary
+    worktree you create and must remove it before returning. If removal fails,
+    return exactly the following instead of a verdict or counts:
+
+    ```text
+    CLEANUP_FAILED
+    Worktree: <absolute path>
+    Reason: <one line>
+    ```
 
     ## What to Check
 
@@ -78,11 +90,16 @@ Subagent (general-purpose):
     - Does it sit naturally beside the code around it?
 
     **Testing:**
+    - Trust the implementer's recorded first-run evidence for this exact HEAD by
+      default; do not broadly rerun a suite to duplicate it.
     - Do the tests exercise real behaviour rather than the mocks around it?
     - Are the edge cases covered?
     - Where components have to work together, is that pairing tested?
-    - Is the suite green, and green on the first run? A suite that needed a
-      second attempt is a finding, not a pass.
+    - A reported retry without an intervening code change is nondeterminism and
+      a high finding, not a pass.
+    - If reading raises a named unresolved concern, run at most one focused
+      check for that concern and record both the concern and command. Never run
+      a package-wide suite, repeated loop, or broad substitute.
 
     **Production readiness:**
     - If a schema moved, how does the data already out there get across?
@@ -92,7 +109,7 @@ Subagent (general-purpose):
 
     ## Calibration
 
-    Grade by what is genuinely at stake. Most findings are not Critical, and a
+    Grade by what is genuinely at stake. Most findings are not critical, and a
     reviewer who marks them so teaches the reader to discount the grade.
 
     Lead with what the work got right, concretely. Praise that is accurate is
@@ -118,27 +135,30 @@ Subagent (general-purpose):
 
     ### Issues
 
-    #### Critical (Must Fix)
+    #### critical
     [Behaviour that is broken, data that can be lost or corrupted, a way in]
 
-    #### Important (Should Fix)
+    #### high
     [A requirement unmet, a structural problem, errors going unhandled, a hole
     in the tests]
 
-    #### Minor (Nice to Have)
-    [Naming, polish, a stale comment, an optimisation worth recording]
+    #### medium
+    [A bounded concrete failure, coverage gap, or maintenance defect]
 
     Each entry in the three buckets above gives its `file:line`, the defect, the
     reason it matters, and — where that is not already obvious — the remedy.
 
-    #### Minor triage
-    Triage the Minor findings carried over from earlier tasks, listed in
-    [MINOR_LEDGER], against the merge bar. Where that placeholder is empty, say
-    so in one line rather than omitting this heading — the controller reads it
+    #### low
+    [Naming, polish, or an optional improvement with no concrete failure]
+
+    #### Low triage
+    Triage the low findings carried over from earlier tasks, listed in
+    [LOW_LEDGER], against the merge bar. Where that placeholder is empty, say
+    so in one line rather than omitting this heading — the orchestrator reads it
     by name, and an absent heading is indistinguishable from a skipped triage.
 
     These are carried over, not found by you: they do not count toward
-    `Minor N`, which is your own findings on this branch.
+    `low N`, which is your own findings on this branch.
 
     ### Recommendations
     [Worth doing to the code, the design, or the way this was built; not
@@ -146,25 +166,26 @@ Subagent (general-purpose):
 
     ### Assessment
 
-    **Ready to merge?** [Yes | No | With fixes]
+    **Verdict:** [approve | needs-attention]
 
     **Reasoning:** [one or two sentences, technical]
 
     ## What you send back
 
     Fifteen lines at most. The review is in the file; this message is only what
-    the controller needs to choose its next move:
+    the orchestrator needs to choose its next move:
 
-    - **Ready to merge?** Yes | No | With fixes
-    - the counts: `Critical N, Important N, Minor N, plan-mandated N`. The
+    - **Verdict:** approve | needs-attention
+    - the counts: `critical N, high N, medium N, low N, plan-mandated N`. The
       plan-mandated findings are a subset of the graded ones and not a fourth
-      grade, so `Important 2, plan-mandated 2` describes two findings, not four.
+      grade, so `high 2, plan-mandated 2` describes two findings, not four.
     - where the review file is
 
     Nothing else. No findings, no summary of them, no preamble, no account of
     your method. Whoever acts on a finding reads the file.
 
-    Two things replace the verdict rather than joining it. If you could not
+    Three things replace the verdict rather than joining it. If cleanup failed,
+    use the exact `CLEANUP_FAILED` shape above. If you could not
     write the review file, send back `WRITE_FAILED` as the first line and the
     reason on the second. If the package was not at [DIFF_FILE], send back
     `PACKAGE_MISSING` the same way. Never report a verdict whose evidence you
@@ -178,8 +199,8 @@ Subagent (general-purpose):
     Cite, do not assert: every finding carries a `file:line`, the defect and why
     it matters. "Improve error handling" names nothing and cannot be acted on.
 
-    Grade honestly in both directions — a nitpick filed as Critical costs the
-    same credibility as a real defect filed as Minor. Say what the branch got
+    Grade honestly in both directions — a nitpick filed as critical costs the
+    same credibility as a real defect filed as low. Say what the branch got
     right. Finish on the verdict, stated outright rather than implied.
 
     Never report on code you did not read, and never send back "looks good" as
@@ -193,17 +214,17 @@ Subagent (general-purpose):
   text, or the requirements themselves
 - `[DIFF_FILE]` — REQUIRED. Where the review package was written.
   `scripts/review-package BASE HEAD` prints a path unique to that range, and the
-  package's contents never pass through the controller's own context.
+  package's contents never pass through the orchestrator's own context.
 - `[REVIEW_FILE]` — REQUIRED. Where the reviewer writes the review. The
-  controller clears this path before dispatching and reads it afterwards.
-- `[MINOR_LEDGER]` — the Minor findings accumulated from the task reviews, for
+  orchestrator clears this path before dispatching and reads it afterwards.
+- `[LOW_LEDGER]` — the low findings accumulated from the task reviews, for
   triage against the merge bar. `SKILL.md` already requires this handover; until
   now it had no named slot. Pass an explicit "none" when the ledger carried no
-  Minor findings.
+  low findings.
 - `[BASE_SHA]` — the branch's fork point from the base branch
 - `[HEAD_SHA]` — the commit it ends on
 
-**What comes back:** at most fifteen lines — a merge verdict, the finding counts
+**What comes back:** at most fifteen lines — a canonical verdict, the finding counts
 by grade plus the `plan-mandated` subset, and the review file's path. Or
 `WRITE_FAILED` / `PACKAGE_MISSING` and a reason. The review itself is in
 `[REVIEW_FILE]`.
@@ -218,7 +239,7 @@ by grade plus the `plan-mandated` subset, and the review file's path. Or
 
 ### Issues
 
-#### Important
+#### high
 1. **The backoff ceiling is computed but never applied**
    - File: retry.go:63
    - Issue: the clamped delay lands in a local the sleep call does not read, so a long outage backs off without bound
@@ -229,7 +250,7 @@ by grade plus the `plan-mandated` subset, and the review file's path. Or
    - Issue: the operator sees "invalid duration" with nothing saying which key produced it
    - Fix: include the key and the rejected value in the message
 
-#### Minor
+#### low
 1. **Table tests are named by index**
    - File: retry_test.go:12
    - Issue: a failure prints case 4 rather than what case 4 is
@@ -240,7 +261,7 @@ by grade plus the `plan-mandated` subset, and the review file's path. Or
 
 ### Assessment
 
-**Ready to merge?** With fixes
+**Verdict:** needs-attention
 
 **Reasoning:** The structure is right and the tests are real, but the unapplied ceiling is a live defect on exactly the path this change exists to protect.
 ```
@@ -248,7 +269,7 @@ by grade plus the `plan-mandated` subset, and the review file's path. Or
 ## Example return message
 
 ```
-**Ready to merge?** With fixes
-Critical 0, Important 2, Minor 1, plan-mandated 0
+**Verdict:** needs-attention
+critical 0, high 2, medium 0, low 1, plan-mandated 0
 Review: .agent/sdd/final-review-a1b2c3d..e4f5a6b.md
 ```

@@ -47,13 +47,22 @@ assert_contains() {
 	rg -F -- "$needle" "$file" >/dev/null || fail "missing '$needle' in $file"
 }
 
+# The error payload contract: assert exit codes by value and parse the object,
+# because a substring match would pass on any non-zero exit, which is how a
+# wrong class stays invisible.
+assert_error() { # file expected-class label
+	local file=$1 class=$2 label=$3
+	jq -e --arg c "$class" '.error == $c' >/dev/null <"$file" ||
+		fail "$label: error class is not '$class' (payload: $(cat "$file"))"
+}
+
 # Two grammars below are ASCII bracket expressions, and bash takes a bracket
 # range from the locale's collation -- so the property worth asserting is that
 # they bite under the locale a developer actually runs, not under whichever one
 # this suite inherits. Pin a territory UTF-8 locale where the host has one.
 # `C.UTF-8` is deliberately not accepted as a substitute: it does not reproduce
 # the collation behaviour, so a suite that settled for it would pass while the
-# defect was live (ADR 0023). With no such locale the accented candidates are
+# defect was live. With no such locale the accented candidates are
 # rejected whatever the grammar, so the cases still pass -- they stop proving the
 # property, rather than turning a portability check into a host-configuration
 # check.
@@ -91,6 +100,169 @@ status=0
 	status=$?
 assert_exit 0 "$status" 'resolve with AGENTS.md lacking a declaration'
 assert_contains 'github' "$sandbox/out"
+
+# --- the root probe --------------------------------------------------------
+# Case (a) above is the only failing root probe that may reach the default.
+# `git rev-parse --show-toplevel` exits 128 for "there is no repository here"
+# and for every refusal alike, so a non-zero status on its own is not evidence
+# of absence. Each repository below declares `fixture`, so a run that reports
+# `github` is the wrong-tracker write, not a harmless default.
+
+# Dubious ownership under a bind mount, a sudo run, or a container UID
+# mismatch: git found the repository and declined it. Git's own switch for that
+# refusal drives the case; a build that ignores the switch leaves an ordinary
+# working repository, which would redden this case for a reason that is not the
+# engine's, so the case probes for the refusal first and skips when it is absent.
+#
+# The switch alone does not stage the refusal. `safe.directory` is honoured in
+# protected configuration, so an entry covering this fixture -- `*` in a global
+# or system config file, which is what a CI runner image ships -- leaves git
+# trusting the repository and the switch with nothing to do: the probe below
+# succeeds and the case skips having proved nothing, on every runner. That is
+# the whole of the coverage gap. clear_git_env above clears GIT_CONFIG,
+# GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT but not the global and system
+# config files, and the two variables below are how git is told to read neither
+# (documented since 2.32; /dev/null is git's own spelling for "no such file").
+# Measured on git 2.50.1 with a permissive global config in scope: the probe
+# exits 0 without them and 128 with them.
+#
+# Probe and case share one list so they can never stage different conditions --
+# a probe that measured a condition the case did not reproduce is how this
+# skipped everywhere while reading as deliberate.
+ownership_env=(
+	GIT_CONFIG_GLOBAL=/dev/null
+	GIT_CONFIG_SYSTEM=/dev/null
+	GIT_TEST_ASSUME_DIFFERENT_OWNER=1
+)
+
+# All the probe establishes is that git did not refuse -- never why, so the skip
+# reports that condition and no cause. Two conditions produce it and they call
+# for opposite responses: a build that ignores the switch, where there is nothing
+# to stage and nothing to fix, and a `safe.directory` entry still covering the
+# fixture despite the two variables above, where the case is being neutralized
+# and the entry is the thing to remove. A git older than 2.32 reaches the second
+# by honouring neither variable. What separates them is the entries in scope, so
+# the skip names them: none listed leaves the switch as the only explanation left
+# standing, and an entry listed names the file that did the neutralizing.
+# Measured on macOS 26.6.1 with git 2.50.1 (Apple Git-155) wrapped to drop both
+# variables and a permissive `*` in the global config: the probe exits 0 and this
+# reports that config file, where isolated real git exits 128 and the case runs.
+ownership_safe_directories() { # repo -> the entries in scope under ownership_env
+	local repo=$1 entries status=0
+	entries=$(cd "$repo" && env "${ownership_env[@]}" \
+		git config --show-origin --get-all safe.directory) || status=$?
+	# 1 is git's "no such key", the ordinary answer. Anything above it is a query
+	# that never ran, which must not read as an empty list (ADR 0005).
+	case $status in
+	0) printf '%s' "${entries//$'\n'/; }" ;;
+	1) printf 'none' ;;
+	*) printf 'unknown, git config exited %d' "$status" ;;
+	esac
+}
+
+mkdir -p "$sandbox/dubiousrepo"
+git -C "$sandbox/dubiousrepo" init -q
+printf 'issue-tracker: fixture\n' >"$sandbox/dubiousrepo/AGENTS.md"
+if (cd "$sandbox/dubiousrepo" &&
+	env "${ownership_env[@]}" git rev-parse --show-toplevel) >/dev/null 2>&1; then
+	printf 'tracker-test: skip dubious ownership; git did not refuse the fixture under GIT_TEST_ASSUME_DIFFERENT_OWNER (safe.directory in scope: %s)\n' \
+		"$(ownership_safe_directories "$sandbox/dubiousrepo")"
+else
+	status=0
+	(cd "$sandbox/dubiousrepo" &&
+		env "${ownership_env[@]}" "$tracker" resolve) \
+		>"$sandbox/out" 2>"$sandbox/err" || status=$?
+	assert_exit 1 "$status" 'resolve when git refuses the repository as dubiously owned'
+	assert_error "$sandbox/err" usage 'dubious ownership'
+	# The remedy is reconstructed rather than relayed: git's own line names the
+	# path too, but it would land on the stderr a caller parses as one JSON
+	# error object, and its wording is git's to change.
+	assert_contains 'safe.directory' "$sandbox/err"
+	assert_contains "$sandbox/dubiousrepo" "$sandbox/err"
+fi
+
+# The other 128 that is not an absence: git never reached a repository to have
+# an opinion about, because it could not read the working directory it was
+# started in. The same fixture reaches that fault by a different route on each
+# platform -- on macOS getcwd walks the tree and fails outright, so `pwd -P`
+# reports it; on glibc getcwd answers from the kernel and succeeds, and it is
+# git's stat of that path that hits the unreadable parent. The engine probes
+# both, so this one case pins both. chmod 000 does not stop root, so it would
+# prove nothing there rather than asserting something the environment cannot
+# produce.
+if [[ $(id -u) -eq 0 ]]; then
+	printf 'tracker-test: skip unreadable working directory; running as root, which chmod 000 does not deny\n'
+else
+	mkdir -p "$sandbox/unreadablecwd/inner"
+	git -C "$sandbox/unreadablecwd" init -q
+	printf 'issue-tracker: fixture\n' >"$sandbox/unreadablecwd/AGENTS.md"
+	status=0
+	(cd "$sandbox/unreadablecwd/inner" && chmod 000 "$sandbox/unreadablecwd" &&
+		"$tracker" resolve) >"$sandbox/out" 2>"$sandbox/err" || status=$?
+	chmod 755 "$sandbox/unreadablecwd"
+	assert_exit 1 "$status" 'resolve with an unreadable working directory'
+	# Asserted by message rather than with assert_error: bash writes its own
+	# `shell-init: error retrieving current directory` line to stderr before the
+	# engine gets control, so this is the one fault where stderr cannot be a
+	# single JSON object whatever the engine does.
+	assert_contains 'the working directory could not be read' "$sandbox/err"
+fi
+
+# git was told where the repository is and could not use it. The header on
+# resolve_tracker forbids an environment variable steering resolution; a GIT_DIR
+# naming nothing steered it to the default all the same, because it fails the
+# probe with the same 128 an absent repository does.
+mkdir -p "$sandbox/gitdirrepo"
+git -C "$sandbox/gitdirrepo" init -q
+printf 'issue-tracker: fixture\n' >"$sandbox/gitdirrepo/AGENTS.md"
+status=0
+(cd "$sandbox/gitdirrepo" &&
+	GIT_DIR="$sandbox/gitdirrepo/no-such-git-dir" "$tracker" resolve) \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'resolve when GIT_DIR names a repository git cannot use'
+assert_error "$sandbox/err" usage 'GIT_DIR names nothing'
+assert_contains 'GIT_DIR' "$sandbox/err"
+
+# 128 is git's own "I ran and declined". Any other status is a probe that never
+# ran -- 127 when there is no git on PATH is the reachable one -- and a probe
+# that never ran establishes nothing about a repository.
+mkdir -p "$sandbox/nogitrepo" "$sandbox/nogitbin"
+git -C "$sandbox/nogitrepo" init -q
+printf 'issue-tracker: fixture\n' >"$sandbox/nogitrepo/AGENTS.md"
+cat >"$sandbox/nogitbin/git" <<'STUB'
+#!/usr/bin/env bash
+printf 'bash: git: command not found\n' >&2
+exit 127
+STUB
+chmod +x "$sandbox/nogitbin/git"
+status=0
+(cd "$sandbox/nogitrepo" && PATH="$sandbox/nogitbin:$PATH" "$tracker" resolve) \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'resolve when the root probe could not run at all'
+assert_contains 'exit 127' "$sandbox/err"
+
+# Exit 0 with empty output is the same unresolved root wearing a success
+# status. `$root/AGENTS.md` would become `/AGENTS.md`, so the engine would read
+# a declaration from the filesystem root or, finding none there, report the
+# default having read nothing of this repository. No real rev-parse was found
+# to answer this way, so a stub drives it.
+mkdir -p "$sandbox/emptyrootrepo" "$sandbox/emptyrootbin"
+git -C "$sandbox/emptyrootrepo" init -q
+printf 'issue-tracker: fixture\n' >"$sandbox/emptyrootrepo/AGENTS.md"
+real_git=$(command -v git)
+cat >"$sandbox/emptyrootbin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = rev-parse ] && [ "\$2" = --show-toplevel ]; then
+	exit 0
+fi
+exec "$real_git" "\$@"
+STUB
+chmod +x "$sandbox/emptyrootbin/git"
+status=0
+(cd "$sandbox/emptyrootrepo" && PATH="$sandbox/emptyrootbin:$PATH" "$tracker" resolve) \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'resolve when the root probe answers empty at exit 0'
+assert_error "$sandbox/err" usage 'empty repository root'
 
 # A malformed declaration is an error, not an absence: silently treating a typo
 # as "no declaration" is a wrong-tracker write by another route.
@@ -245,6 +417,50 @@ PATH="$sandbox/bin:$PATH" "$tracker" target-url --profile github \
 	>"$sandbox/out" 2>"$sandbox/err" || status=$?
 assert_exit 1 "$status" 'target-url without --target'
 
+# --- the scratch file the profile captures gh's stderr into ------------------
+# Both halves used to land on exit 1 -- EXIT_USAGE, the class that tells a
+# caller its arguments were wrong. An unguarded assignment left the path empty,
+# so the `2>` failed and a scratch file this host could not create was reported
+# as a gh call that failed; an unguarded removal inside the EXIT trap returned
+# rm's status and turned a clean read into a usage error. Neither is a thing the
+# caller did.
+mkdir -p "$sandbox/mktemp-bin"
+cat >"$sandbox/mktemp-bin/mktemp" <<'STUB'
+#!/usr/bin/env bash
+printf 'mktemp-stub: no usable temp directory\n' >&2
+exit 1
+STUB
+chmod +x "$sandbox/mktemp-bin/mktemp"
+status=0
+GH_CALL_LOG="$sandbox/calls" PATH="$sandbox/mktemp-bin:$sandbox/bin:$PATH" \
+	"$tracker" view --profile github --target example/repo 101 \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'view with no allocatable scratch file'
+# Transport rather than partial: the call never reached the tracker, so nothing
+# was written and nothing may be claimed to have been. The shim is chatty on
+# purpose -- the real mktemp is too -- so parsing the payload is also what pins
+# that its line is kept off the stderr a caller reads as one JSON object.
+assert_error "$sandbox/err" transport 'view with no allocatable scratch file'
+
+# The removal. The read succeeded and its payload is on stdout, so the status
+# must stay 0 -- and the shim is silent because stderr here is the single JSON
+# error object callers parse, which is also why the profile cannot name the path
+# it retained the way the gate scripts do.
+mkdir -p "$sandbox/rm-bin"
+cat >"$sandbox/rm-bin/rm" <<STUB
+#!/usr/bin/env bash
+$(command -v rm) "\$@" || :
+exit 1
+STUB
+chmod +x "$sandbox/rm-bin/rm"
+status=0
+GH_CALL_LOG="$sandbox/calls" PATH="$sandbox/rm-bin:$sandbox/bin:$PATH" \
+	"$tracker" view --profile github --target example/repo 101 \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 0 "$status" 'view whose scratch file could not be removed'
+jq -e '.id == "101"' >/dev/null <"$sandbox/out" ||
+	fail 'a failed scratch removal cost the read its payload'
+
 # --- GitHub profile: writes ------------------------------------------------
 # label-edit is atomic: adds and removes travel in one invocation. Splitting
 # them leaves an issue with two status labels or none, and the pipeline reads
@@ -326,6 +542,10 @@ assert_contains 'degraded=unknown' "$sandbox/out"
 	fail 'declares github view exited non-zero'
 assert_contains 'implemented' "$sandbox/out"
 
+"$tracker" declares --profile github claim-acquire >"$sandbox/out" 2>&1 ||
+	fail 'declares github claim-acquire exited non-zero'
+assert_contains 'implemented' "$sandbox/out"
+
 status=0
 "$tracker" declares --profile fixture undeclared-op >"$sandbox/out" 2>"$sandbox/err" ||
 	status=$?
@@ -373,15 +593,6 @@ declared=$("$tracker" declares --profile fixture label-history)
 observed=$("$tracker" label-history --profile fixture 1 label)
 [[ $observed == "${declared#degraded=}" ]] ||
 	fail "fixture label-history returned '$observed', declared '${declared#degraded=}'"
-
-# --- error payload contract -------------------------------------------------
-# Assert exit codes by value and parse the object: a substring match would pass
-# on any non-zero exit, which is how a wrong class stays invisible.
-assert_error() { # file expected-class label
-	local file=$1 class=$2 label=$3
-	jq -e --arg c "$class" '.error == $c' >/dev/null <"$file" ||
-		fail "$label: error class is not '$class' (payload: $(cat "$file"))"
-}
 
 cat >"$sandbox/bin/gh" <<'FAKE_GH'
 #!/usr/bin/env bash
@@ -678,14 +889,16 @@ assert_error "$sandbox/err" usage 'non-numeric blocker'
 # gate above: an operation added later that takes an issue selector and forgets
 # github_require_id fails here, where a list of today's operations would not.
 # target_url and label_ensure are exempt because their contracts name no issue.
-# search is exempt for a different reason and is not covered: its --parent is an
+# claim_list is exempt for the same reason: it lists the repo's claim labels
+# and takes no selector. search is exempt for a different reason and is not
+# covered: its --parent is an
 # issue selector, deliberately left unguarded because GitHub's parent-issue:
 # qualifier accepts forms this contract does not define. That is open, and this
 # repository's deferral record 0011 owns it.
 # Presence, not arity: an operation taking two selectors that guards one and
 # forgets the other passes here, which is why the per-selector cases below name
 # both of link-parent's.
-guard_exempt='^(target_url|label_ensure|search)$'
+guard_exempt='^(target_url|label_ensure|search|claim_list)$'
 while IFS= read -r op; do
 	[[ -n $op ]] || continue
 	[[ $op =~ $guard_exempt ]] && continue

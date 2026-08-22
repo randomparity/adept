@@ -1,0 +1,115 @@
+# 0008 — Bound campaign follow-up growth
+
+## Status
+
+Accepted (2026-08-12)
+
+## Context
+
+Campaign review can discover real but low-value defects. Its current binary triage sends
+every confirmed defect into a quest, while its re-enqueue step accepts every traceable
+follow-up without an operator boundary. Repeated instances of one governed defect class can
+therefore generate separate issues and quest cycles indefinitely.
+
+The project must preserve confirmed evidence without filling the open queue with work nobody
+intends to schedule. It must also retain the existing rule that issue creation is confirmed by
+the operator.
+
+## Decision
+
+Campaign triage gains `close-not-planned`: a confirmed defect whose trigger likelihood and
+impact do not justify its remediation cost. The verdict records the evidence, cost/benefit
+rationale, and reconsideration condition. Campaign presents it in the batch plan, then closes
+the issue with GitHub's not-planned reason. It is durable evidence, not an open backlog item.
+
+Bounty's existing all-state deduplication owns recurrence discovery. It searches separately
+for the evidenced mechanism or idiom, component or file family, and governing-decision
+reference, then follows links from matched consolidation issues. It presents the candidate
+history and any uncertain matches rather than treating title overlap as a complete inventory.
+It groups only issues whose evidence establishes all applicable identity dimensions; a failed,
+truncated, or inconclusive search stops filing rather than asserting that the threshold was not
+met.
+
+When the proposed instance would be the fourth or later in that class, bounty proposes one
+ordinary consolidated-sweep issue instead of another instance issue. Its Evidence preserves
+the current occurrence's source, trigger, and evidence alongside citations to every verified
+historical instance. The threshold counts distinct underlying occurrences, including the
+current one; a sweep is a routing record, not another occurrence, and links reached both
+directly and through a sweep are deduplicated before counting. Existing issues are never
+mutated by this scan. An already-open sweep is treated as the near-match rather than
+duplicated. After the existing confirmation gate, bounty creates the distinct occurrence issue
+with its evidence and sweep link, then immediately closes it as not planned. A campaign records
+that closure in its outcomes log and final report, so the decision remains visible after the
+issue leaves the open queue. A closed sweep remains historical evidence: bounty proposes a new
+sweep only when current evidence shows the class still exists, citing the prior sweep and new
+occurrence.
+
+Creation and closure are not atomic. If creation succeeds but closure fails, campaign records
+the occurrence's actual open state, does not claim `closed-not-planned`, and stops that
+follow-up for retry or operator intervention. It cannot complete while the low-value occurrence
+remains in the open queue.
+
+Bounty rechecks for an open matching sweep immediately before the confirmed create and never
+knowingly creates a second one. This is not atomic: concurrent bounty runs can still create
+duplicates, which return through the ordinary all-state deduplication flow rather than adding
+locking or classifier state. If the recheck changes the draft kind or target sweep, the earlier
+confirmation is stale: bounty shows the complete replacement draft and requires a new explicit
+confirmation before any write.
+
+Campaign never automatically expands into review-created work. At re-enqueue it presents all
+new traceable issues, their proposed routing, and any consolidation, then requires explicit
+operator confirmation before adding them to the manifest and returning to triage.
+
+## Consequences
+
+- Campaign does not retain its confirmed low-value defects as open backlog items; they remain
+  searchable among closed issues. Other issue-creation paths keep their existing queue policy.
+- Defect-class identity is evidence-based, not title similarity alone. Uncertain matches stay
+  separate rather than silently collapsing unrelated defects, and incomplete discovery stops
+  filing rather than silently undercounting the class.
+- A consolidated sweep is one executable issue. It becomes an epic only if later scoping shows
+  that it genuinely requires several independently mergeable changes.
+- A class may accumulate sequential sweeps when it demonstrably recurs after an earlier sweep
+  closes. The immediate pre-create recheck narrows but cannot eliminate concurrent duplicate
+  sweeps; any duplicate is handled by ordinary deduplication.
+- An occurrence found while its sweep is open creates one short-lived issue and one final-report
+  row. This preserves evidence without restoring a persistent open instance queue.
+- Campaign runs pause at every follow-up expansion. This trades unattended throughput for a
+  hard bound controlled by the operator.
+- The contract remains instruction-only and adds no dependency, script, label family, or
+  persistent classifier state.
+
+## Considered & rejected
+
+**Keep `track-only` issues open with a new disposition label.** Rejected because hundreds of
+confirmed but intentionally unscheduled defects would still dominate the active queue. Closing
+as not planned preserves the evidence without misrepresenting it as planned work.
+
+**Create a defect-class epic and make every instance a sub-issue.** Rejected because sub-issues
+represent independently executable units intended for completion. The purpose here is to avoid
+cycling every instance. An ordinary sweep issue is the work item; historical instances are
+evidence.
+
+**Let campaign infer recurrence only from issues created during its current run.** Rejected
+because closed historical instances are the evidence that establishes recurrence. Bounty
+already searches all states before filing and is the narrowest owner for that discovery.
+
+**Keep bounty's current near-match prompt and let the operator consolidate case by case.**
+Rejected because it recreates the same instance-versus-sweep judgment on every recurrence and
+provides no consistent fourth-plus routing. The confirmation gate still chooses whether to
+file; the class tuple and threshold make what it is choosing consistent.
+
+**Automatically enqueue up to a numeric per-wave cap.** Rejected because any chosen cap allows
+some unapproved scope expansion and becomes arbitrary policy. One explicit confirmation at the
+existing re-enqueue boundary is simpler and gives the operator the complete proposed expansion.
+
+**Do nothing.** Rejected because the observed campaign expanded four requested issues into
+eleven follow-ups, with repeated quest cycles for one governed gate-script defect class.
+
+## Provenance
+
+Decided while designing issue #91, including the operator's decisions to close low-value
+defects as not planned, use an ordinary consolidated issue rather than an epic, make bounty
+discover historical recurrence without mutating old issues, create and close a distinct
+occurrence when its sweep is already open, surface that closure in campaign's final report, and
+invalidate confirmation when the pre-create recheck changes the confirmed draft.

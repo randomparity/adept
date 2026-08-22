@@ -1,0 +1,1198 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Retrospective telemetry collector for the bards-tale skill.
+#
+# Takes the selector (a label-set or date-range string) and emits exactly one
+# JSON document on stdout conforming to the envelope fixed by ADR 0030
+# (docs/adr/0030-retrospective-telemetry-envelope-and-collector-contract.md):
+# schema_version, selector, mode, generated_at, truncated, population, and the
+# per-issue metrics under `metrics`. The document carries no prose; the skill
+# captures stdout wholesale, writes it byte-for-byte as the sidecar, and renders
+# the report from it.
+#
+# Contract points this script owns:
+#
+# - Tri-state discipline: every metric position carries a native value, the
+#   literal string "unknown(<reason>)" for a genuinely absent source, or
+#   "error" for a failed gh read. Never zero-fill; error never folds into
+#   unknown; no field ever carries JSON null.
+# - Durations are elapsed wall-clock hours to one decimal, computed in jq from
+#   ISO timestamps (portable across BSD and GNU hosts); nothing floors to days.
+# - Issues are processed serially. After RATE_LIMIT_STOP consecutive issues
+#   with a failed read, processing stops and the partial document carries an
+#   explicit top-level "rate_limited": true marker; unprocessed issues simply
+#   have no entry under metrics.issues. That marker is an additive envelope
+#   field under ADR 0030's minor-bump clause, hence schema_version 1.1.
+# - Seven GitHub-native timestamp spans (lead time, PR lifespan, full
+#   delivery, merge lag, build-private, CI wall time, reopen count) ride the
+#   same read groups with widened --json lists — no additional round trips.
+#   They are additive per-issue fields under ADR 0030's minor-bump clause,
+#   hence schema_version 1.2.
+# - Five label-anchored queue/rework spans ride the already-fetched issue-side
+#   timeline (triage latency, queue wait, blocked dwell, human response,
+#   rework bounces) plus a label-vs-GitHub drift cross-check pairing the
+#   label-derived review phase against the GitHub-derived PR lifespan. They
+#   are additive per-issue fields under ADR 0030's minor-bump clause, hence
+#   schema_version 1.3.
+#
+# - Three annotation-mining families ride the already-fetched issue-side
+#   comment blob under latest-complete-wins: WORK:TRAJECTORY mining (phase
+#   or outcome, branch, PR, guardrail status, surprises), the
+#   WORK:DIVINATION to WORK:SCOPE to actual-LOC calibration chain, and a
+#   per-issue risk_band feeding cycle-time segmentation by `risk:` band,
+#   gated behind the N < 5 instability rule. They are additive fields under
+#   ADR 0030's minor-bump clause, hence schema_version 1.4.
+#
+# - The report-cohort contract (issue #112): per-issue `closed_at` and
+#   `scope_complete` (a complete WORK:SCOPE block exists under
+#   latest-complete-wins — the cohort boundary, independent of whether its
+#   complexity line parses); new objects `metrics.cohorts` (per-cohort
+#   aggregates over `instrumented` / `legacy`), `metrics.quartiles`
+#   (combined population, nearest-rank p25/p75 gated at N >= 20), and
+#   `metrics.throughput.weeks` (weekly closed counts and per-week median
+#   cycle, instability-gated). The pre-existing flat `metrics.aggregate` is
+#   untouched and becomes the report's combined-context figure. All
+#   additions under ADR 0030's minor-bump clause, hence schema_version 1.5.
+#
+# - Movement against the previous retrospective sidecar (issue #113): an
+#   optional second argument names a prior sidecar file; the collector
+#   compares the two runs' combined aggregates per span family wherever both
+#   sides carry a numeric median, behind the issue's comparability rules --
+#   exact selector match, a known schema major on the prior, neither run
+#   truncated. Everything else degrades to an explicit omitted/incomparable
+#   status inside the additive `metrics.movement` object, under ADR 0030's
+#   minor-bump clause, hence schema_version 1.6.
+# - Every gh read belongs to one of two named groups: issue_side_* (timeline,
+#   issue comments) or pr_side_* (PR candidate search, PR metadata). The groups
+#   do not interleave in one function, so a later migration of the issue-side
+#   group onto the quest-log tracker contract swaps one group.
+#
+# Every gh invocation is a read enumerated by the skill's read-only contract;
+# every scan captures its exit status explicitly rather than collapsing it.
+# Bash 3.2 floor: indexed arrays only, no mapfile, no associative arrays.
+
+RATE_LIMIT_STOP=5
+SCHEMA_VERSION='1.6'
+SEARCH_LIMIT=200
+usage() {
+	printf 'usage: %s SELECTOR [PRIOR_SIDECAR]\n' "${0##*/}" >&2
+	printf '       SELECTOR  a label-set ("status:ready") or a date-range\n' >&2
+	printf '                    ("2026-07-01..2026-07-20")\n' >&2
+	printf "       PRIOR_SIDECAR  optional path to a previous run's telemetry\n" >&2
+	printf '                    sidecar; movement against it lands in\n' >&2
+	printf '                    metrics.movement (issue #113)\n' >&2
+	exit 2
+}
+
+die() {
+	printf '%s: %s\n' "${0##*/}" "$1" >&2
+	exit 1
+}
+
+((($# == 1) || ($# == 2))) || usage
+SELECTOR=$1
+PRIOR_SIDECAR=${2:-}
+
+for tool in gh jq; do
+	command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not installed"
+done
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/collect-telemetry.XXXXXX") || {
+	die 'could not create a scratch directory'
+}
+cleanup() {
+	status=$?
+	if ! rm -R -f -- "$work"; then
+		printf 'retained scratch path: %s\n' "$work" >&2
+	fi
+	exit "$status"
+}
+trap cleanup EXIT
+
+# Elapsed wall-clock hours between two ISO 8601 timestamps, to one decimal:
+# seconds divided by 360 is hours-times-ten, so the rounding lands on the
+# decimal the report shows. Computed in jq because BSD and GNU `date` disagree
+# about parsing; `date` is never used for delta math.
+hours_between() { # from to
+	jq -rn --arg a "$1" --arg b "$2" \
+		'((($b | fromdateiso8601) - ($a | fromdateiso8601)) / 360) | round | . / 10'
+}
+
+hours_since() { # from
+	jq -rn --arg a "$1" '(((now) - ($a | fromdateiso8601)) / 360) | round | . / 10'
+}
+
+# JSON literal for a tri-state metric position: a numeric value passes through
+# bare so consumers see a number; anything else is encoded as the exact string
+# the tri-state rule mandates.
+metric_json() { # value
+	case $1 in
+	'' | *[!0-9.-]*) jq -Rn --arg v "$1" '$v' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+# --- issue-side reads -----------------------------------------------------------
+
+issue_side_repo() { # destination
+	fetch_failed=0
+	if ! gh repo view --json nameWithOwner >"$1"; then
+		fetch_failed=1
+	fi
+}
+
+# Selection: date-range selectors carry ".." and select issues closed in the
+# window; everything else is a label-set selecting issues carrying all named
+# labels. Both go through gh search: it percent-encodes colon labels correctly,
+# where `gh issue list --label` silently matches nothing.
+issue_side_search() { # query destination
+	fetch_failed=0
+	if ! gh search issues --repo "$repo" "$1" \
+		--json number,state,closedAt,createdAt,labels --limit "$SEARCH_LIMIT" >"$2"; then
+		fetch_failed=1
+	fi
+}
+
+# Ordered labeled/closed/commented event stream for one issue, one event object
+# per line so --paginate stays a clean JSONL stream.
+issue_side_timeline() { # number destination
+	fetch_failed=0
+	if ! gh api "repos/${owner}/${name}/issues/$1/timeline" --paginate --jq '.[]' >"$2"; then
+		fetch_failed=1
+	fi
+}
+
+# Issue comments: the source of WORK:SCOPE.
+issue_side_comments() { # number destination
+	fetch_failed=0
+	if ! gh issue view "$1" --repo "$repo" --json comments >"$2"; then
+		fetch_failed=1
+	fi
+}
+
+# --- PR-side reads --------------------------------------------------------------
+
+pr_side_candidates() { # number destination
+	fetch_failed=0
+	if ! gh pr list --repo "$repo" --search "$1 in:body" --state merged \
+		--json number,body >"$2"; then
+		fetch_failed=1
+	fi
+}
+
+pr_side_view() { # pr-number destination
+	fetch_failed=0
+	if ! gh pr view "$1" --repo "$repo" \
+		--json comments,additions,deletions,changedFiles,createdAt,mergedAt,commits,statusCheckRollup >"$2"; then
+		fetch_failed=1
+	fi
+}
+
+# --- extraction helpers ---------------------------------------------------------
+
+# Latest complete WORK:<type> block from a comment blob; a block missing its
+# completion sentinel is absent (latest-complete-wins). Empty output means none.
+latest_complete_block() { # blob-file work-type complete-type
+	jq -r --arg work "$2" --arg done_ "$3" '
+		[.comments[].body |
+			select(test("(?m)^<!-- " + $work + " -->$")
+				and test("(?m)^<!-- " + $done_ + " -->$"))]
+		| (last // "")' "$1"
+}
+
+# Remainder of the first line naming a labelled field ("complexity: M",
+# "- **iterations**: 2"), or empty. Deliberately line-anchored: the annotations
+# are advisory telemetry, and prose that does not parse reports as the data gap
+# it is, never as a guessed value.
+annotation_field() { # block-text field-name
+	jq -rn --arg text "$1" --arg name "$2" '
+		[($text | scan("(?im)^[ \t>*-]*[*]{0,2}" + $name
+			+ "[*]{0,2}(?![A-Za-z])[ \t]*[:=][ \t]*(.*?)[ \t]*$"))]
+		| first // [] | (first // "")'
+}
+
+# Closing-PR tie-break, verbatim from the resolver spec: standalone closing
+# keyword anchored on both sides; one match wins, zero or several stay unknown.
+resolve_closing_pr() { # candidates-file issue-number
+	jq -r --argjson n "$2" '
+		[.[] | select((.body // "") |
+			test("(?i)(?<![a-z])(clos|fix|resolv)[eds]*:? +#" + ($n | tostring) + "(?![0-9])"))]
+		| if length == 1 then (first.number | tostring)
+		elif length == 0 then "unknown(no-closer)"
+		else "unknown(ambiguous)" end' "$1"
+}
+
+# S/M/L from a WORK:SCOPE block; anything the line-anchored read cannot pin is
+# the data gap it honestly is.
+complexity_of() { # block
+	local raw
+	raw=$(annotation_field "$1" complexity)
+	raw=${raw%.}
+	case $raw in
+	[Ss]) printf 'S\n' ;;
+	[Mm]) printf 'M\n' ;;
+	[Ll]) printf 'L\n' ;;
+	*) printf 'unknown\n' ;;
+	esac
+}
+
+numeric_or_unknown() { # raw
+	case $1 in
+	'' | *[!0-9]*) printf 'unknown\n' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+text_or_unknown() { # raw
+	if [[ -z $1 ]]; then
+		printf 'unknown\n'
+	else
+		printf '%s\n' "$1"
+	fi
+}
+
+# First run of decimal digits in a raw field value, or empty — the PR number
+# of an explicitly labelled field, read without guessing at surrounding
+# prose. Prose that only mentions a PR in passing stays the data gap it is.
+first_integer() { # raw
+	jq -rn --arg v "$1" '([$v | scan("[0-9]+")] | first) // ""'
+}
+
+# Remainder of the first line naming any of the given labelled fields, tried
+# in order; writers phrase the same slot as "phase:" or "**Outcome**:", and
+# the miner follows both spellings rather than picking one dialect.
+annotation_field_any() { # block names...
+	local block=$1 raw name
+	shift
+	for name in "$@"; do
+		raw=$(annotation_field "$block" "$name")
+		if [[ -n $raw ]]; then
+			printf '%s\n' "$raw"
+			return
+		fi
+	done
+	printf '\n'
+}
+
+# The skill's heuristic LOC bands: S < 50, M 50-300, L > 300. A value that
+# is not a measured LOC actual has no band.
+loc_band() { # loc-value
+	if [[ $1 =~ ^[0-9]+$ ]]; then
+		if (($1 < 50)); then
+			printf 'S\n'
+		elif (($1 > 300)); then
+			printf 'L\n'
+		else
+			printf 'M\n'
+		fi
+	fi
+}
+
+# Band letter for an already-normalized complexity value; anything else
+# (unknown, error) has none.
+band_of() { # complexity-value
+	case $1 in
+	S | M | L) printf '%s\n' "$1" ;;
+	esac
+}
+
+# Count of reopened events in a captured timeline stream. Zero from a
+# successful read is a genuine value — the never-zero-fill rule bars filling
+# absence with zero, not reporting a measured zero.
+reopen_count_of() { # tl-file
+	jq -rs '[.[] | select(.event == "reopened")] | length' "$1"
+}
+
+# Count of re-entries into status:in-progress after status:in-review — the
+# rework signal the four anchor reads discarded. Zero from a successful read
+# is a genuine value, never a fill.
+rework_bounces_of() { # tl-file
+	jq -rs 'reduce .[] as $e (
+		{seen: false, n: 0};
+		($e.label.name // "") as $ln |
+		if $e.event == "labeled" and $ln == "status:in-review" then .seen = true
+		elif $e.event == "labeled" and $ln == "status:in-progress" and .seen
+		then {seen: false, n: (.n + 1)}
+		else . end) | .n' "$1"
+}
+
+# Total hours spent inside status:blocked / status:needs-human. Each entry
+# into a stuck state pairs with its exit: any other status:* label, the
+# matching unlabeled event, or the close event. An interval with no exit on a
+# captured stream is the data gap it is, never elapsed-so-far.
+blocked_dwell_of() { # tl-file
+	jq -rs 'reduce .[] as $e (
+		{inside: false, enter: "", total: 0};
+		($e.label.name // "") as $ln |
+		if $e.event == "labeled"
+			and ($ln == "status:blocked" or $ln == "status:needs-human")
+		then if .inside
+			then .
+			else {inside: true, enter: ($e.created_at // ""), total: .total} end
+		elif .inside and (
+			($e.event == "unlabeled"
+				and ($ln == "status:blocked" or $ln == "status:needs-human"))
+			or $e.event == "closed"
+			or ($e.event == "labeled" and ($ln | startswith("status:"))
+				and $ln != "status:blocked" and $ln != "status:needs-human"))
+		then {inside: false, enter: "",
+			total: (.total
+				+ (($e.created_at | fromdateiso8601) - (.enter | fromdateiso8601)))}
+		else . end)
+		| if .inside then "unknown(still-blocked)"
+			elif .total < 0 then "error"
+			else (((.total / 360) | round) / 10) end' "$1"
+}
+
+# --- per-issue collection -------------------------------------------------------
+
+# Sets ENTRY (one compact JSON object) and ISSUE_ERRORED (1 when any read for
+# this issue failed). Orchestrates the two read groups; the gh calls themselves
+collect_issue() { # number state created closed risk-band
+	local n=$1 state=$2 created=$3 closed=$4 risk_band=$5
+	local tl="$work/tl-$n.jsonl" blob="$work/issue-$n.json" cand="$work/prlist-$n.json"
+	local cycle inflight=false build review tl_failed
+	local first_ip last_closed in_review awaiting_merge
+	local scope_complete closed_at
+	local lead reopens lifespan full_del lag bprivate ci
+	local pr_created pr_merged commit_span first_commit last_commit
+	local first_ready am_last
+	local triage='error' queue='error' dwell='error' bounces='error'
+	local hr='error' drift='error' hr_open=0 drift_open=0
+	local tblock dblock
+	local traj_phase='error' traj_branch='error' traj_pr='error'
+	local traj_guardrails='error' traj_surprises='error'
+	local div_cx='error' miss='error' db sb ab
+
+	ISSUE_ERRORED=0
+
+	issue_side_timeline "$n" "$tl"
+	tl_failed=$fetch_failed
+	((fetch_failed)) && ISSUE_ERRORED=1
+	issue_side_comments "$n" "$blob"
+	((fetch_failed)) && ISSUE_ERRORED=1
+
+	pr_side_candidates "$n" "$cand"
+	if ((fetch_failed)); then
+		ISSUE_ERRORED=1
+		pr='error'
+		pr_ok=0
+	else
+		pr=$(resolve_closing_pr "$cand" "$n")
+		pr_ok=1
+	fi
+
+	# Cycle time from the timeline; current state governs. A failed fetch is
+	# error; an exit-0 capture without an in-progress anchor is the data gap
+	# it genuinely is.
+	if ((tl_failed)); then
+		cycle='error'
+		build='error'
+		review='error'
+		reopens='error'
+		drift='error'
+	else
+		if ! reopens=$(reopen_count_of "$tl"); then
+			reopens='error'
+		fi
+		first_ip=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:in-progress")] | first | (.created_at // "")' "$tl")
+		last_closed=$(jq -rs '[.[] | select(.event == "closed")] | last | (.created_at // "")' "$tl")
+		in_review=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:in-review")] | first | (.created_at // "")' "$tl")
+		awaiting_merge=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:awaiting-merge")] | first | (.created_at // "")' "$tl")
+		first_ready=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:ready")] | first | (.created_at // "")' "$tl")
+		am_last=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:awaiting-merge")] | last | (.created_at // "")' "$tl")
+		if ! bounces=$(rework_bounces_of "$tl"); then
+			bounces='error'
+		fi
+		if ! dwell=$(blocked_dwell_of "$tl"); then
+			dwell='error'
+		fi
+
+		# Triage latency and queue wait decompose the filed-to-started
+		# interval. A span that runs backwards means out-of-order label
+		# history and reports as the error it is, never a clamped value.
+		if [[ -z $created ]]; then
+			triage='unknown(no-created-at)'
+		elif [[ -z $first_ready ]]; then
+			triage='unknown(never-ready)'
+		elif ! triage=$(hours_between "$created" "$first_ready") || [[ $triage == -* ]]; then
+			triage='error'
+		fi
+		if [[ -z $first_ready ]]; then
+			queue='unknown(no-ready-anchor)'
+		elif [[ -z $first_ip ]]; then
+			queue='unknown(no-in-progress-anchor)'
+		elif ! queue=$(hours_between "$first_ready" "$first_ip") || [[ $queue == -* ]]; then
+			queue='error'
+		fi
+
+		# Human response and the drift cross-check resolve after the PR-side
+		# reads below settle their GitHub-native endpoints.
+		hr=''
+		if [[ -z $am_last ]]; then
+			hr='unknown(never-awaiting-merge)'
+		else
+			hr_open=1
+		fi
+
+		# A computation on a captured-but-malformed anchor is an error at
+		# that metric's position, never an aborted collection.
+		if [[ -z $first_ip ]]; then
+			cycle='unknown(never-in-progress)'
+		elif [[ $state == closed ]]; then
+			if [[ -z $last_closed ]]; then
+				cycle='unknown(no-close-event)'
+			elif ! cycle=$(hours_between "$first_ip" "$last_closed"); then
+				cycle='error'
+			fi
+		elif ! cycle=$(hours_since "$first_ip"); then
+			cycle='error'
+		else
+			inflight=true
+		fi
+
+		# Best-effort phase durations, only when both of their anchors exist.
+		build='unknown(no-events)'
+		review='unknown(no-events)'
+		if [[ -n $first_ip && -n $in_review ]] &&
+			! build=$(hours_between "$first_ip" "$in_review"); then
+			build='error'
+		fi
+		if [[ -n $in_review && -n $awaiting_merge ]] &&
+			! review=$(hours_between "$in_review" "$awaiting_merge"); then
+			review='error'
+		fi
+
+		# The drift cross-check rides the label-derived review phase; a
+		# numeric phase opens a pending resolved against the PR lifespan
+		# after the PR-side reads below.
+		case $review in
+		error) drift='error' ;;
+		unknown*) drift='unknown(no-review-phase)' ;;
+		*) drift_open=1 ;;
+		esac
+	fi
+
+	# Lead time: filed to closed. An open issue has not completed the span,
+	# so elapsed-so-far is never reported for it.
+	if [[ $state != closed ]]; then
+		lead='unknown(not-closed)'
+	elif [[ -z $created ]]; then
+		lead='unknown(no-created-at)'
+	elif [[ -z $closed ]]; then
+		lead='unknown(no-closed-at)'
+	elif ! lead=$(hours_between "$created" "$closed"); then
+		lead='error'
+	fi
+
+	# The raw close instant rides the same search projection as cycle time;
+	# the weekly throughput buckets key on it. Same tri-state reasons as
+	# lead time, whose anchors it shares.
+	if [[ $state != closed ]]; then
+		closed_at='unknown(not-closed)'
+	elif [[ -z $closed ]]; then
+		closed_at='unknown(no-closed-at)'
+	else
+		closed_at=$closed
+	fi
+
+	# Scope estimate from the latest complete WORK:SCOPE on the issue.
+	# scope_complete is the cohort boundary the report splits on: a complete
+	# block exists under latest-complete-wins, whether or not its complexity
+	# line parses into an estimate. A failed blob read is error at both.
+	if [[ -s $blob ]]; then
+		local sblob
+		sblob=$(latest_complete_block "$blob" 'WORK:SCOPE' 'SCOPE:COMPLETE')
+		scope_est=$(complexity_of "$sblob")
+		if [[ -n $sblob ]]; then
+			scope_complete=true
+		else
+			scope_complete=false
+		fi
+	else
+		scope_est='error'
+		scope_complete='error'
+	fi
+
+	# Trajectory and divination mining ride the same captured comment blob
+	# under latest-complete-wins. A failed blob read leaves every position
+	# it feeds at error; an absent or sentinel-less block is the data gap
+	# it is; prose that defeats the line-anchored read stays unknown.
+	if [[ -s $blob ]]; then
+		tblock=$(latest_complete_block "$blob" 'WORK:TRAJECTORY' 'TRAJECTORY:COMPLETE')
+		if [[ -z $tblock ]]; then
+			traj_phase='unknown'
+			traj_branch='unknown'
+			traj_pr='unknown'
+			traj_guardrails='unknown'
+			traj_surprises='unknown'
+		else
+			traj_phase=$(text_or_unknown \
+				"$(annotation_field_any "$tblock" phase outcome)")
+			traj_branch=$(text_or_unknown \
+				"$(annotation_field_any "$tblock" branch branch/pr)")
+			traj_pr=$(numeric_or_unknown \
+				"$(first_integer "$(annotation_field "$tblock" pr)")")
+			traj_guardrails=$(text_or_unknown \
+				"$(annotation_field_any "$tblock" guardrails 'guardrail status')")
+			traj_surprises=$(text_or_unknown \
+				"$(annotation_field_any "$tblock" 'surprises worth remembering' surprises)")
+		fi
+		dblock=$(latest_complete_block "$blob" 'WORK:DIVINATION' 'DIVINATION:COMPLETE')
+		div_cx=$(complexity_of "$dblock")
+	fi
+
+	# PR-derived metrics follow the resolver outcome: unresolved stays unknown
+	# with the resolver's reason; a failed PR read is error; a resolved read
+	# feeds the iteration fields and the LOC actual.
+	if ((pr_ok)) && [[ $pr != unknown* ]]; then
+		local prblob="$work/pr-$pr.json"
+		pr_side_view "$pr" "$prblob"
+		if ((fetch_failed)); then
+			ISSUE_ERRORED=1
+			iters='error'
+			verdict='error'
+			security='error'
+			exit_field='error'
+			loc='error'
+			lifespan='error'
+			full_del='error'
+			lag='error'
+			bprivate='error'
+			ci='error'
+		else
+			rblock=$(latest_complete_block "$prblob" 'WORK:REVIEW' 'REVIEW:COMPLETE')
+			if [[ -z $rblock ]]; then
+				iters='unknown'
+				verdict='unknown'
+				security='unknown'
+				exit_field='unknown'
+			else
+				iters=$(numeric_or_unknown "$(annotation_field "$rblock" iterations)")
+				verdict=$(text_or_unknown "$(annotation_field "$rblock" verdict)")
+				security=$(text_or_unknown "$(annotation_field "$rblock" security)")
+				exit_field=$(text_or_unknown "$(annotation_field "$rblock" exit)")
+			fi
+			# A malformed-but-exit-0 blob must not smuggle a "null" string into a
+			# metric position: absent diffstats are the data gap they are, never a
+			# fake value and never null-as-identity arithmetic.
+			if ! loc=$(jq -r 'if (.additions | type) == "number"
+				and (.deletions | type) == "number"
+				then .additions + .deletions
+				else "unknown(no-diffstats)" end' "$prblob"); then
+				loc='error'
+			fi
+			# GitHub-native PR-side spans, all riding this same read. A
+			# malformed-but-exit-0 blob errors every span it feeds; an
+			# absent anchor is the data gap it is.
+			if ! pr_created=$(jq -r '.createdAt // ""' "$prblob") ||
+				! pr_merged=$(jq -r '.mergedAt // ""' "$prblob") ||
+				! commit_span=$(jq -r '[(.commits // [])[]?.committedDate
+					| select(type == "string")] as $d |
+					if ($d | length) == 0 then ""
+					else "\($d | first) \($d | last)" end' "$prblob"); then
+				lifespan='error'
+				full_del='error'
+				lag='error'
+				bprivate='error'
+			else
+				# First and last computed in jq: committedDate carries no
+				# spaces, so a space-separated pair survives the read whole
+				# for any commit count.
+				read -r first_commit last_commit <<<"$commit_span"
+				if [[ -z $pr_created || -z $pr_merged ]]; then
+					lifespan='unknown(no-pr-timestamps)'
+					full_del='unknown(no-pr-timestamps)'
+					lag='unknown(no-pr-timestamps)'
+					bprivate='unknown(no-pr-timestamps)'
+				else
+					if ! lifespan=$(hours_between "$pr_created" "$pr_merged"); then
+						lifespan='error'
+					fi
+					if [[ -n $created ]]; then
+						if ! full_del=$(hours_between "$created" "$pr_merged"); then
+							full_del='error'
+						fi
+					else
+						full_del='unknown(no-created-at)'
+					fi
+					if [[ -z $last_commit ]]; then
+						lag='unknown(no-commits)'
+						bprivate='unknown(no-commits)'
+					else
+						if ! lag=$(hours_between "$last_commit" "$pr_merged"); then
+							lag='error'
+						fi
+						if ! bprivate=$(hours_between "$first_commit" "$pr_created"); then
+							bprivate='error'
+						fi
+					fi
+				fi
+			fi
+			# CI wall time spans the earliest check start to the latest
+			# completion. CheckRun entries carry both timestamps; entries
+			# without them (StatusContext) are excluded, and a rollup with
+			# none timed is the data gap it is — never a zero fill.
+			if ! ci=$(jq -r '(.statusCheckRollup // []) as $r |
+				[$r[] | select((.startedAt // "") != ""
+					and (.completedAt // "") != "")] as $t |
+				if ($r | length) == 0 then "unknown(no-checks)"
+				elif ($t | length) == 0 then "unknown(no-check-timings)"
+				else (((([$t[].completedAt] | max | fromdateiso8601)
+					- ([$t[].startedAt] | min | fromdateiso8601)) / 360)
+					| round) / 10 end' "$prblob"); then
+				ci='error'
+			fi
+		fi
+	elif [[ $pr == unknown* ]]; then
+		iters=$pr
+		verdict='unknown'
+		security='unknown'
+		exit_field='unknown'
+		loc=$pr
+		lifespan=$pr
+		full_del=$pr
+		lag=$pr
+		bprivate=$pr
+		ci=$pr
+	else
+		iters='error'
+		verdict='error'
+		security='error'
+		exit_field='error'
+		loc='error'
+		lifespan='error'
+		full_del='error'
+		lag='error'
+		bprivate='error'
+		ci='error'
+	fi
+	# The pendings resolve here, where the GitHub-native endpoints above
+	# have settled: human response pairs the last awaiting-merge label with
+	# the PR merge instant; the drift cross-check pairs the label-derived
+	# review phase against the GitHub-derived PR lifespan. Either span's
+	# data gap or error carries to its pairing position.
+	if ((hr_open)); then
+		if [[ $pr == error ]]; then
+			hr='error'
+		elif [[ $pr == unknown* ]]; then
+			hr=$pr
+		elif [[ $lifespan == error ]]; then
+			hr='error'
+		elif [[ -z $pr_merged ]]; then
+			hr='unknown(no-merge-time)'
+		elif ! hr=$(hours_between "$am_last" "$pr_merged") || [[ $hr == -* ]]; then
+			hr='error'
+		fi
+	fi
+	if ((drift_open)); then
+		case $lifespan in
+		error) drift='error' ;;
+		unknown*) drift=$lifespan ;;
+		*)
+			if ! drift=$(jq -rn --arg r "$review" --arg l "$lifespan" \
+				'(((($l | tonumber) - ($r | tonumber)) | if . < 0 then -. else . end)
+					* 10 | round) / 10'); then
+				drift='error'
+			fi
+			;;
+		esac
+	fi
+
+	# Divination-to-scope-to-actual calibration. The heuristic LOC bands turn
+	# each link into a band, and the agreement pattern locates a miss: at the
+	# pre-work assessment, at the freeze, nowhere, or nowhere in particular. A
+	# link that did not resolve names itself and stops the chain — never a
+	# guessed verdict.
+	db=$(band_of "$div_cx")
+	sb=$(band_of "$scope_est")
+	ab=$(loc_band "$loc")
+	if [[ $div_cx == error || $scope_est == error || $loc == error ]]; then
+		miss='error'
+	elif [[ -z $db ]]; then
+		miss='unknown(no-divination)'
+	elif [[ -z $sb ]]; then
+		miss='unknown(no-scope)'
+	elif [[ -z $ab ]]; then
+		miss='unknown(no-loc)'
+	elif [[ $db == "$sb" && $sb == "$ab" ]]; then
+		miss='aligned'
+	elif [[ $db == "$sb" || $sb == "$ab" ]]; then
+		miss='assessment'
+	elif [[ $db == "$ab" ]]; then
+		miss='freeze'
+	else
+		miss='divergent'
+	fi
+	# metric_json quotes anything non-numeric, so the boolean cohort flag
+	# is rendered here: true and false pass raw; a failed blob read is the
+	# one string state it can carry.
+	case $scope_complete in
+	true | false) scope_complete_json=$scope_complete ;;
+	*) scope_complete_json='"error"' ;;
+	esac
+	ENTRY=$(jq -cn \
+		--argjson number "$n" \
+		--arg state "$state" \
+		--argjson cycle_hours "$(metric_json "$cycle")" \
+		--argjson cycle_in_flight "$inflight" \
+		--argjson phase_build_hours "$(metric_json "$build")" \
+		--argjson phase_review_hours "$(metric_json "$review")" \
+		--argjson scope_complete "$scope_complete_json" \
+		--argjson pr "$(metric_json "$pr")" \
+		--argjson review_iterations "$(metric_json "$iters")" \
+		--arg review_verdict "$verdict" \
+		--arg security "$security" \
+		--arg exit_ "$exit_field" \
+		--arg scope_estimate "$scope_est" \
+		--argjson loc_actual "$(metric_json "$loc")" \
+		--argjson closed_at "$(metric_json "$closed_at")" \
+		--argjson lead_time_hours "$(metric_json "$lead")" \
+		--argjson pr_lifespan_hours "$(metric_json "$lifespan")" \
+		--argjson full_delivery_hours "$(metric_json "$full_del")" \
+		--argjson merge_lag_hours "$(metric_json "$lag")" \
+		--argjson build_private_hours "$(metric_json "$bprivate")" \
+		--argjson ci_wall_hours "$(metric_json "$ci")" \
+		--argjson reopen_count "$(metric_json "$reopens")" \
+		--argjson triage_latency_hours "$(metric_json "$triage")" \
+		--argjson queue_wait_hours "$(metric_json "$queue")" \
+		--argjson blocked_dwell_hours "$(metric_json "$dwell")" \
+		--argjson human_response_hours "$(metric_json "$hr")" \
+		--argjson rework_bounces "$(metric_json "$bounces")" \
+		--argjson review_drift_hours "$(metric_json "$drift")" \
+		--arg risk_band "$risk_band" \
+		--arg trajectory_phase "$traj_phase" \
+		--arg trajectory_branch "$traj_branch" \
+		--argjson trajectory_pr "$(metric_json "$traj_pr")" \
+		--arg trajectory_guardrails "$traj_guardrails" \
+		--arg trajectory_surprises "$traj_surprises" \
+		--arg divination_complexity "$div_cx" \
+		--arg scope_miss_location "$miss" \
+		'{number: $number, state: $state,
+		  cycle_hours: $cycle_hours, cycle_in_flight: $cycle_in_flight,
+		  phase_build_hours: $phase_build_hours,
+		  phase_review_hours: $phase_review_hours,
+		  pr: $pr, review_iterations: $review_iterations,
+		  review_verdict: $review_verdict, security: $security, exit: $exit_,
+		  scope_estimate: $scope_estimate, loc_actual: $loc_actual,
+		  scope_complete: $scope_complete, closed_at: $closed_at,
+		  lead_time_hours: $lead_time_hours,
+		  pr_lifespan_hours: $pr_lifespan_hours,
+		  full_delivery_hours: $full_delivery_hours,
+		  merge_lag_hours: $merge_lag_hours,
+		  build_private_hours: $build_private_hours,
+		  ci_wall_hours: $ci_wall_hours, reopen_count: $reopen_count,
+		  triage_latency_hours: $triage_latency_hours,
+		  queue_wait_hours: $queue_wait_hours,
+		  blocked_dwell_hours: $blocked_dwell_hours,
+		  human_response_hours: $human_response_hours,
+		  rework_bounces: $rework_bounces,
+		  review_drift_hours: $review_drift_hours,
+		  risk_band: $risk_band,
+		  trajectory_phase: $trajectory_phase,
+		  trajectory_branch: $trajectory_branch,
+		  trajectory_pr: $trajectory_pr,
+		  trajectory_guardrails: $trajectory_guardrails,
+		  trajectory_surprises: $trajectory_surprises,
+		  divination_complexity: $divination_complexity,
+		  scope_miss_location: $scope_miss_location}')
+	printf '%s\n' "$ENTRY"
+}
+
+# --- selection ------------------------------------------------------------------
+
+issue_side_repo "$work/repo.json"
+((fetch_failed == 0)) || die "repository could not be resolved (gh exit $fetch_failed)"
+repo=$(jq -r '.nameWithOwner' "$work/repo.json")
+owner=${repo%/*}
+name=${repo#*/}
+
+# The selector's mode is decided here; the read itself runs through
+# issue_side_search above.
+if [[ $SELECTOR == *..* ]]; then
+	mode='date-range'
+	query="closed:$SELECTOR"
+else
+	mode='label-set'
+	read -r -a selector_labels <<<"$SELECTOR"
+	((${#selector_labels[@]} > 0)) || usage
+	query=''
+	for label in "${selector_labels[@]}"; do
+		query+="label:$label "
+	done
+	query=${query% }
+fi
+
+issue_side_search "$query" "$work/search.json"
+((fetch_failed == 0)) || die "selection read failed (gh exit $fetch_failed)"
+search_json=$(cat "$work/search.json")
+
+# Epic-labelled issues sit outside the status state machine and are excluded
+# client-side. Truncation is judged on the raw result size: equality with the
+# limit means the population is possibly incomplete even if the epic exclusion
+# shrinks what remains.
+selected_json=$(jq -c '[.[] | select([.labels[].name] | index("epic") | not)]' <<<"$search_json")
+raw_count=$(jq 'length' <<<"$search_json")
+pop_count=$(jq 'length' <<<"$selected_json")
+pop_issues=$(jq -c '[.[].number]' <<<"$selected_json")
+truncated=false
+((raw_count >= SEARCH_LIMIT)) && truncated=true
+
+# --- serial collection ----------------------------------------------------------
+
+entries="$work/issues.jsonl"
+: >"$entries"
+consecutive_errors=0
+rate_limited=false
+
+# The risk band rides the same per-issue projection: most restrictive value
+# wins when several risk: labels are present (quest-log's multi-match rule),
+# and absence is the third state it is everywhere else — unjudged, never
+# night-safe.
+while read -r n; do
+	{
+		read -r issue_state
+		read -r created
+		read -r closed
+		read -r risk_band
+	} <<<"$(jq -r --argjson n "$n" \
+		'([.[] | select(.number == $n)][0])
+			| (.state | ascii_downcase),
+				(.createdAt // ""),
+				(.closedAt // ""),
+				([.labels[].name] as $ls |
+					if ($ls | index("risk:daytime-only")) then "daytime-only"
+					elif ($ls | index("risk:night-watch")) then "night-watch"
+					elif ($ls | index("risk:night-safe")) then "night-safe"
+					else "unjudged" end)' \
+		<<<"$selected_json")"
+	collect_issue "$n" "$issue_state" "$created" "$closed" "$risk_band" >>"$entries"
+	if ((ISSUE_ERRORED)); then
+		consecutive_errors=$((consecutive_errors + 1))
+		if ((consecutive_errors >= RATE_LIMIT_STOP)); then
+			rate_limited=true
+			break
+		fi
+	else
+		consecutive_errors=0
+	fi
+done < <(jq -r '.[].number' <<<"$selected_json")
+
+# --- aggregates ------------------------------------------------------------------
+
+# Median + range over each span family's value-state durations across the
+# whole selection. This is the document's combined figure; the report
+# contract renders it only as explicitly-labelled context beside the
+# per-cohort aggregates in `metrics.cohorts`, never as either cohort's
+# headline — a median over "all issues" mixes a measured cohort with one
+# that was never measured, which is exactly the number the cohort split
+# exists to stop publishing. An empty selection carries the count alone,
+# never null-filled medians of nothing. The shape is unchanged from
+# schema 1.4: re-nesting these families would be a major bump under ADR
+# 0030, and nothing here needs one.
+aggregate=$(jq -s '
+	def agg(f):
+		[.[] | select(.[f] | type == "number") | .[f]] |
+		if length == 0 then {count: 0}
+		else {
+			median: (sort |
+				if length % 2 == 1 then .[length / 2 | floor]
+				else (.[length / 2 - 1] + .[length / 2]) / 2 end),
+			min: min,
+			max: max,
+			count: length
+		} end;
+	{cycle_hours: agg("cycle_hours"),
+	 lead_time_hours: agg("lead_time_hours"),
+	 pr_lifespan_hours: agg("pr_lifespan_hours"),
+	 full_delivery_hours: agg("full_delivery_hours"),
+	 merge_lag_hours: agg("merge_lag_hours"),
+	 build_private_hours: agg("build_private_hours"),
+	 ci_wall_hours: agg("ci_wall_hours"),
+	 reopen_count: agg("reopen_count"),
+	 triage_latency_hours: agg("triage_latency_hours"),
+	 queue_wait_hours: agg("queue_wait_hours"),
+	 blocked_dwell_hours: agg("blocked_dwell_hours"),
+	 human_response_hours: agg("human_response_hours"),
+	 rework_bounces: agg("rework_bounces")}' "$entries")
+
+# Per-cohort aggregates under the minor-bump clause: an issue belongs to
+# the instrumented cohort iff a complete WORK:SCOPE block exists for it
+# (`scope_complete` true); every other entry is legacy.
+cohorts=$(jq -s '
+	def agg(f):
+		[.[] | select(.[f] | type == "number") | .[f]] |
+		if length == 0 then {count: 0}
+		else {
+			median: (sort |
+				if length % 2 == 1 then .[length / 2 | floor]
+				else (.[length / 2 - 1] + .[length / 2]) / 2 end),
+			min: min,
+			max: max,
+			count: length
+		} end;
+	def families:
+		{cycle_hours: agg("cycle_hours"),
+		 lead_time_hours: agg("lead_time_hours"),
+		 pr_lifespan_hours: agg("pr_lifespan_hours"),
+		 full_delivery_hours: agg("full_delivery_hours"),
+		 merge_lag_hours: agg("merge_lag_hours"),
+		 build_private_hours: agg("build_private_hours"),
+		 ci_wall_hours: agg("ci_wall_hours"),
+		 reopen_count: agg("reopen_count"),
+		 triage_latency_hours: agg("triage_latency_hours"),
+		 queue_wait_hours: agg("queue_wait_hours"),
+		 blocked_dwell_hours: agg("blocked_dwell_hours"),
+		 human_response_hours: agg("human_response_hours"),
+		 rework_bounces: agg("rework_bounces")};
+	([.[] | select(.scope_complete == true)] | families) as $instrumented |
+	([.[] | select(.scope_complete != true)] | families) as $legacy |
+	{instrumented: $instrumented, legacy: $legacy}' "$entries")
+
+# Per-metric coverage: how many entries carry a genuine value, so a thin sample
+# is never mistaken for a complete one.
+coverage=$(jq -s '
+	(map(select(.cycle_hours | type == "number")) | length) as $cycle |
+	(map(select(.phase_build_hours | type == "number")) | length) as $build |
+	(map(select(.phase_review_hours | type == "number")) | length) as $review |
+	(map(select(.pr | type == "number")) | length) as $pr |
+	(map(select(.review_iterations | type == "number")) | length) as $iterations |
+	(map(select(.scope_estimate != "unknown" and .scope_estimate != "error")) | length) as $scope |
+	(map(select(.loc_actual | type == "number")) | length) as $loc |
+	(map(select(.lead_time_hours | type == "number")) | length) as $lead |
+	(map(select(.pr_lifespan_hours | type == "number")) | length) as $lifespan |
+	(map(select(.full_delivery_hours | type == "number")) | length) as $delivery |
+	(map(select(.merge_lag_hours | type == "number")) | length) as $lag |
+	(map(select(.build_private_hours | type == "number")) | length) as $bprivate |
+	(map(select(.ci_wall_hours | type == "number")) | length) as $ci |
+	(map(select(.reopen_count | type == "number")) | length) as $reopens |
+	(map(select(.triage_latency_hours | type == "number")) | length) as $triage |
+	(map(select(.queue_wait_hours | type == "number")) | length) as $queue |
+	(map(select(.blocked_dwell_hours | type == "number")) | length) as $dwell |
+	(map(select(.human_response_hours | type == "number")) | length) as $human |
+	(map(select(.rework_bounces | type == "number")) | length) as $bounces |
+	(map(select(.review_drift_hours | type == "number")) | length) as $drift |
+	(map(select(.trajectory_phase != "unknown" and .trajectory_phase != "error")) | length) as $traj |
+	(map(select(.divination_complexity != "unknown"
+		and .divination_complexity != "error")) | length) as $div |
+	(map(select(.scope_miss_location != "error"
+		and (.scope_miss_location | startswith("unknown") | not))) | length) as $miss |
+	{cycle_hours: $cycle, phase_build_hours: $build, phase_review_hours: $review,
+	 pr: $pr, review_iterations: $iterations, scope_estimate: $scope, loc_actual: $loc,
+	 lead_time_hours: $lead, pr_lifespan_hours: $lifespan,
+	 full_delivery_hours: $delivery, merge_lag_hours: $lag,
+	 build_private_hours: $bprivate, ci_wall_hours: $ci, reopen_count: $reopens,
+	 triage_latency_hours: $triage, queue_wait_hours: $queue,
+	 blocked_dwell_hours: $dwell, human_response_hours: $human,
+	 rework_bounces: $bounces, review_drift_hours: $drift,
+	 trajectory_phase: $traj, divination_complexity: $div,
+	 scope_miss_location: $miss}' "$entries")
+
+# Cycle time segmented by risk band. The instability rule gates every
+# segment: below five measured cycles the band reports only its count, with
+# unknown(instability-rule) at each distribution position — a 2-4-point
+# median is exactly the over-trusted number the rule exists to prevent.
+risk_bands=$(jq -s '
+	def seg(b):
+		[.[] | select(.risk_band == b)
+			| select(.cycle_hours | type == "number") | .cycle_hours] as $v |
+		{count: ($v | length),
+		 median: (if ($v | length) >= 5 then
+			($v | sort | if length % 2 == 1 then .[length / 2 | floor]
+				else (.[length / 2 - 1] + .[length / 2]) / 2 end)
+			else "unknown(instability-rule)" end),
+		 min: (if ($v | length) >= 5 then ($v | min)
+			else "unknown(instability-rule)" end),
+	 max: (if ($v | length) >= 5 then ($v | max)
+		else "unknown(instability-rule)" end)};
+	{"night-safe": seg("night-safe"),
+	 "night-watch": seg("night-watch"),
+	 "daytime-only": seg("daytime-only"),
+	 "unjudged": seg("unjudged")}' "$entries")
+
+# Combined-population quartiles, keyed to the report contract: per-cohort
+# quartiles are excluded outright — a dozen points say nothing a median and
+# range do not say better — so quartiles exist only where the whole
+# population is large enough to carry them. A family with fewer than 20
+# measured values reports its count alone; the renderer labels the section
+# "combined population" so the threshold is visible to the reader.
+quartiles=$(jq -s '
+	def quart(f):
+		[.[] | select(.[f] | type == "number") | .[f]] as $v |
+		{count: ($v | length)} +
+		(if ($v | length) >= 20 then
+			{p25: ($v | sort | .[((length * 0.25) | ceil) - 1]),
+			 p75: ($v | sort | .[((length * 0.75) | ceil) - 1])}
+		else {} end);
+	{cycle_hours: quart("cycle_hours"),
+	 lead_time_hours: quart("lead_time_hours"),
+	 pr_lifespan_hours: quart("pr_lifespan_hours"),
+	 full_delivery_hours: quart("full_delivery_hours"),
+	 merge_lag_hours: quart("merge_lag_hours"),
+	 build_private_hours: quart("build_private_hours"),
+	 ci_wall_hours: quart("ci_wall_hours"),
+	 reopen_count: quart("reopen_count"),
+	 triage_latency_hours: quart("triage_latency_hours"),
+	 queue_wait_hours: quart("queue_wait_hours"),
+	 blocked_dwell_hours: quart("blocked_dwell_hours"),
+	 human_response_hours: quart("human_response_hours"),
+	 rework_bounces: quart("rework_bounces")}' "$entries")
+
+# Weekly throughput: closed counts and per-week median cycle, so a
+# date-range retrospective can answer whether the pipeline is changing, not
+# only how fast it was. Weeks are Monday-start UTC keyed by their ISO date
+# and appear only when at least one issue closed in them — no zero-fill
+# between weeks. The per-week median carries the same instability gate as
+# every segmented distribution: below five measured cycles the week reports
+# only its closed count.
+throughput=$(jq -s '
+	def weekof:
+		(fromdateiso8601) as $ts |
+		($ts | gmtime | .[6]) as $weekday |
+		($ts - (($weekday + 6) % 7 * 86400))
+		| todateiso8601 | .[0:10];
+	[.[] | select(.closed_at | type == "string"
+		and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T"))] as $closed |
+	($closed
+		| group_by(.closed_at | weekof)
+		| map({
+			week_start: (.[0].closed_at | weekof),
+			closed_count: length,
+			median_cycle_hours:
+				([.[].cycle_hours | select(type == "number")] as $v |
+				if ($v | length) >= 5 then
+					($v | sort | if length % 2 == 1 then .[length / 2 | floor]
+						else (.[length / 2 - 1] + .[length / 2]) / 2 end)
+				else "unknown(instability-rule)" end)}))
+		as $weeks |
+	{weeks: $weeks}' "$entries")
+
+# --- movement against the prior sidecar ------------------------------------------
+
+# Comparability, in the issue's own order: the prior must parse as a document
+# with the envelope fields a comparison needs; its selector must equal this
+# run's selector exactly (a different population is not a predecessor); its
+# schema major must be one this collector knows; and neither side may be
+# truncated -- movement between partial populations is not movement. The
+# prior-side truncation check runs first: the prior snapshot is the fixed
+# term of the comparison. Every refusal degrades to an explicit status inside
+# metrics.movement -- never an empty section, never a guessed delta, never a
+# failed run.
+movement_status='omitted'
+movement_reason='no-prior'
+movement_families=''
+if [[ -n $PRIOR_SIDECAR ]]; then
+	# A real sidecar nests its aggregates under metrics.aggregate; jq's
+	# has() streams one result per key, so membership is spelled as typed
+	# checks rather than a multi-key has() whose last word would silently
+	# decide the conjunction.
+	if ! jq -e 'type == "object"
+			and (.selector | type) == "string"
+			and (.schema_version | type) == "string"
+			and (.truncated | type) == "boolean"
+			and (.metrics | type) == "object"
+			and (.metrics.aggregate | type) == "object"' \
+		"$PRIOR_SIDECAR" >/dev/null 2>&1; then
+		movement_reason='unreadable-prior'
+	else
+		prior_selector=$(jq -r '.selector' "$PRIOR_SIDECAR")
+		prior_schema=$(jq -r '.schema_version' "$PRIOR_SIDECAR")
+		prior_truncated=$(jq -r '.truncated' "$PRIOR_SIDECAR")
+		if [[ $prior_selector != "$SELECTOR" ]]; then
+			movement_reason='selector-mismatch'
+		elif [[ $prior_schema != 1.* ]]; then
+			movement_reason='unknown-prior-schema'
+		elif [[ $prior_truncated == true ]]; then
+			movement_status='incomparable'
+			movement_reason='truncated-prior'
+		elif [[ $truncated == true ]]; then
+			movement_status='incomparable'
+			movement_reason='truncated-current'
+		else
+			prior_generated=$(jq -r '.generated_at // ""' "$PRIOR_SIDECAR")
+			prior_aggregate=$(jq '.metrics.aggregate' "$PRIOR_SIDECAR")
+			movement_status='compared'
+			movement_reason=''
+			# One family per span where both sides carry a numeric median;
+			# the delta keeps the aggregate stage's one-decimal discipline.
+			# A family unresolved on either side is absent from the object,
+			# never zero-filled against nothing.
+			movement_families=$(jq -n \
+				--argjson cur "$aggregate" \
+				--argjson pri "$prior_aggregate" '
+				["cycle_hours", "lead_time_hours", "pr_lifespan_hours",
+				 "full_delivery_hours", "merge_lag_hours",
+				 "build_private_hours", "ci_wall_hours", "reopen_count",
+				 "triage_latency_hours", "queue_wait_hours",
+				 "blocked_dwell_hours", "human_response_hours",
+				 "rework_bounces"] as $fs |
+				reduce $fs[] as $f ({};
+					if ($cur[$f].median | type) == "number"
+						and ($pri[$f].median | type) == "number"
+						and ($cur[$f].count | type) == "number"
+						and ($pri[$f].count | type) == "number"
+					then . + {($f): {
+						previous_median: $pri[$f].median,
+						current_median: $cur[$f].median,
+						delta_median:
+							((($cur[$f].median - $pri[$f].median)
+								* 10 | round) / 10),
+						previous_count: $pri[$f].count,
+						current_count: $cur[$f].count}}
+					else . end)')
+		fi
+	fi
+fi
+
+if [[ $movement_status == compared ]]; then
+	movement=$(jq -n \
+		--argjson families "$movement_families" \
+		--arg selector "$prior_selector" \
+		--arg generated_at "$prior_generated" \
+		'{status: "compared",
+		  against: {selector: $selector, generated_at: $generated_at},
+		  families: $families}')
+else
+	movement=$(jq -n --arg status "$movement_status" --arg reason "$movement_reason" \
+		'{status: $status, reason: $reason}')
+fi
+
+# The issues array rides in through --slurpfile, never argv: a full
+# population as a single argument exceeds Linux's per-argument size limit.
+metrics=$(jq -n \
+	--slurpfile issues "$entries" \
+	--argjson aggregate "$aggregate" \
+	--argjson coverage "$coverage" \
+	--argjson risk_bands "$risk_bands" \
+	--argjson cohorts "$cohorts" \
+	--argjson quartiles "$quartiles" \
+	--argjson movement "$movement" \
+	--argjson throughput "$throughput" \
+	'{issues: $issues, aggregate: $aggregate, coverage: $coverage,
+	  risk_band_cycle_hours: $risk_bands,
+	  cohorts: $cohorts,
+	  quartiles: $quartiles, throughput: $throughput,
+	  movement: $movement}')
+
+printf '%s\n' "$metrics" >"$work/metrics.json"
+jq -n \
+	--arg schema_version "$SCHEMA_VERSION" \
+	--arg selector "$SELECTOR" \
+	--arg mode "$mode" \
+	--arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+	--argjson truncated "$truncated" \
+	--argjson population_count "$pop_count" \
+	--argjson population_issues "$pop_issues" \
+	--argjson rate_limited "$rate_limited" \
+	--slurpfile metrics "$work/metrics.json" \
+	'({schema_version: $schema_version, selector: $selector, mode: $mode,
+	  generated_at: $generated_at, truncated: $truncated,
+	  population: {count: $population_count, issues: $population_issues},
+	  metrics: $metrics[0]}
+	+ (if $rate_limited then {rate_limited: true} else {} end))'

@@ -79,11 +79,43 @@ fi
 # The engine reports its taxonomy class; this script's exit surface is 2 for
 # usage and 1 for any operational failure, so an unreachable repository must not
 # surface as 2 and read as "called with bad arguments".
-target_status=0
-canonical_url=$("$tracker" target-url --target "$repo" 2>&1) || target_status=$?
-if ((target_status != 0)); then
-	printf 'canonical repository URL could not be resolved for %s\n' \
+#
+# `target-url` reads a value, so the subprocess's stdout is that value and its
+# stderr is not. Merging them made any line written on an otherwise-successful
+# call -- a gh release-update notice, the engine's own scratch cleanup -- part of
+# the URL, and the check below then reported a repository that is fine as
+# malformed, sending the operator to inspect configuration that was never at
+# fault. The `create` call further down is a different thing and keeps its
+# merge: that one scrapes a URL out of combined output on purpose.
+#
+# Merging also discarded the engine's reason for a genuine failure, because the
+# captured value was dropped unread. Stderr goes to a scratch file and into the
+# diagnostic instead, sanitized like every other value this script prints: the
+# engine relays gh's output, and a control character in it would otherwise reach
+# a log that reads control characters as commands.
+#
+# Nothing has been created at this point, so a scratch file this host cannot
+# allocate is an ordinary failure and reports as one -- unlike the read-back
+# scratch file below, whose halves are commented there.
+target_err=$(mktemp) || {
+	printf 'canonical repository URL could not be resolved for %s:' \
 		"$(diagnostic_value "$repo")" >&2
+	printf ' no scratch file for the resolution command\n' >&2
+	exit 1
+}
+target_status=0
+canonical_url=$("$tracker" target-url --target "$repo" 2>"$target_err") ||
+	target_status=$?
+target_stderr=$(cat "$target_err")
+# Read first, then removed on the next line, so the only statement spanning the
+# file's life is a capture whose failure is caught above -- no trap to install
+# and hand off to the read-back one. An unremovable file names its path and
+# leaves the status alone; bare, it would exit here on rm's own status.
+rm -f -- "$target_err" ||
+	printf 'retained scratch path: %s\n' "$target_err" >&2
+if ((target_status != 0)); then
+	printf 'canonical repository URL could not be resolved for %s: %s\n' \
+		"$(diagnostic_value "$repo")" "$(diagnostic_value "$target_stderr")" >&2
 	exit 1
 fi
 canonical_url=${canonical_url%/}
@@ -138,8 +170,33 @@ if [[ $issue_url != "$canonical_url/issues/$issue_number" ]]; then
 	exit 1
 fi
 
-view_err=$(mktemp)
-trap 'rm -f -- "$view_err"' EXIT
+# Past this point the issue exists and its URL has been checked, so every exit
+# here has to say so: a bare non-zero from an unguarded `mktemp` or from an
+# unguarded removal inside the EXIT trap is the silent failure the partial-write
+# branch above describes, and the caller's remedy for a silent failure is the
+# re-run that creates a duplicate live issue.
+#
+# The two halves therefore end differently. A scratch file that cannot be
+# created leaves the read-back unperformed, which is a real failure and reports
+# as one -- naming the issue so nobody retries the write. A scratch file that
+# cannot be removed after a run that verified everything has broken nothing;
+# reporting it as a failure would invite exactly that re-run to reclaim a temp
+# file. So cleanup names the retained path and leaves the status alone, which is
+# where this diverges from the gate scripts, whose exit 1 means something else.
+view_err=$(mktemp) || {
+	printf '%s: read-back could not be attempted (no scratch file);' "$issue_url" >&2
+	printf ' creation was not retried\n' >&2
+	exit 1
+}
+# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
+cleanup() {
+	local exit_status=$?
+	if ! rm -f -- "$view_err"; then
+		printf '%s: retained scratch path: %s\n' "$issue_url" "$view_err" >&2
+	fi
+	exit "$exit_status"
+}
+trap cleanup EXIT
 view_status=0
 issue_json=$("$tracker" view --target "$repo" "$issue_number" 2>"$view_err") ||
 	view_status=$?

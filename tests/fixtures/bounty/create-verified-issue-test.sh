@@ -38,6 +38,10 @@ printf '%q ' "$@" >>"$GH_CALL_LOG"
 printf '\n' >>"$GH_CALL_LOG"
 
 if [[ $1 == repo && $2 == view ]]; then
+  if [[ ${GH_SCENARIO:-success} == target-url-error ]]; then
+    printf 'HTTP 403 lookup denied\n' >&2
+    exit 1
+  fi
   host=github.com
   [[ ${GH_SCENARIO:-success} == ghes ]] && host=ghe.example.com
   printf 'https://%s/example/repo\n' "$host"
@@ -293,5 +297,125 @@ assert_count 2 '^issue create ' "$SCRATCH/decompose-calls"
 assert_contains 'https://github.com/example/repo/issues/102' "$SCRATCH/decompose-report"
 expected='title: expected "Confirmed title", observed "Observed title"'
 assert_contains "$expected" "$SCRATCH/decompose-report"
+
+# --- resolving the canonical repository URL ----------------------------------
+# `target-url` reads a value, so the engine's stdout is that value and its
+# stderr is not. The engine's reason for failing still has to reach the
+# operator, so it is captured separately and named in the diagnostic rather than
+# discarded -- which is what merging the streams and then dropping the value did.
+if run_case target-url-error; then
+	fail 'an unresolvable repository URL unexpectedly passed'
+fi
+assert_contains 'canonical repository URL could not be resolved' "$SCRATCH/stderr"
+assert_contains 'HTTP 403 lookup denied' "$SCRATCH/stderr"
+assert_count 0 '^issue create ' "$SCRATCH/calls"
+
+# Nothing has been created when the resolution scratch file is allocated, so a
+# host that cannot allocate one is an ordinary failure and says so. That is the
+# opposite of the read-back scratch file below, whose every exit has a live
+# issue behind it. The shim keys off an empty call log because this allocation
+# precedes every `gh` call in the run, including the engine's own.
+mkdir -p "$SCRATCH/mktemp-early-bin"
+cat >"$SCRATCH/mktemp-early-bin/mktemp" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ! -s \$GH_CALL_LOG ]]; then
+	printf 'mktemp-stub: no usable temp directory\n' >&2
+	exit 1
+fi
+exec $(command -v mktemp) "\$@"
+STUB
+chmod +x "$SCRATCH/mktemp-early-bin/mktemp"
+
+: >"$SCRATCH/calls"
+if GH_SCENARIO=success GH_CALL_LOG="$SCRATCH/calls" \
+	PATH="$SCRATCH/mktemp-early-bin:$SCRATCH/bin:$PATH" \
+	"$helper" --repo example/repo --title 'Confirmed title' --body-file "$body_file" \
+	--label bug --label status:ready --parent 42 \
+	>"$SCRATCH/stdout" 2>"$SCRATCH/stderr"; then
+	fail 'an unallocatable resolution scratch file unexpectedly passed'
+fi
+assert_contains 'canonical repository URL could not be resolved' "$SCRATCH/stderr"
+assert_contains 'no scratch file' "$SCRATCH/stderr"
+assert_count 0 '^repo view ' "$SCRATCH/calls"
+assert_count 0 '^issue create ' "$SCRATCH/calls"
+
+# --- the read-back scratch file ----------------------------------------------
+# Everything past the URL check has already created a live issue, so an exit
+# that says nothing is the one outcome this script exists to prevent: the
+# caller's remedy for a silent failure is the re-run that files a duplicate.
+# Both halves of the scratch file could produce one -- an unguarded `mktemp`
+# exiting on its own status, and an unguarded EXIT trap returning rm's -- and
+# they end differently on purpose, which is what these two cases pin.
+#
+# The mktemp shim keys off the call log rather than a call count: tracker.sh
+# allocates its own scratch file before every `gh` invocation, so a shim that
+# simply failed would stop the run at the repository lookup and never reach the
+# line under test. `issue create` in the log is the fixture's own marker that
+# the write has happened and the next allocation is the helper's.
+mkdir -p "$SCRATCH/mktemp-bin"
+cat >"$SCRATCH/mktemp-bin/mktemp" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+if rg -q '^issue create ' "\$GH_CALL_LOG"; then
+	printf 'mktemp-stub: no usable temp directory\n' >&2
+	exit 1
+fi
+exec $(command -v mktemp) "\$@"
+STUB
+chmod +x "$SCRATCH/mktemp-bin/mktemp"
+
+: >"$SCRATCH/calls"
+if GH_SCENARIO=success GH_CALL_LOG="$SCRATCH/calls" \
+	PATH="$SCRATCH/mktemp-bin:$SCRATCH/bin:$PATH" \
+	"$helper" --repo example/repo --title 'Confirmed title' --body-file "$body_file" \
+	--label bug --label status:ready --parent 42 \
+	>"$SCRATCH/stdout" 2>"$SCRATCH/stderr"; then
+	fail 'an unallocatable read-back scratch file unexpectedly passed'
+fi
+# The issue number is what proves the run got past creation: a diagnostic
+# without it would mean the shim stopped the run somewhere harmless instead.
+assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stderr"
+assert_contains 'read-back could not be attempted' "$SCRATCH/stderr"
+assert_contains 'creation was not retried' "$SCRATCH/stderr"
+assert_count 1 '^issue create ' "$SCRATCH/calls"
+assert_count 0 '^issue view ' "$SCRATCH/calls"
+
+# The other half. The issue was created and every field verified, so a scratch
+# file that will not go away has broken nothing -- and reporting it as a failure
+# would invite the duplicate-creating re-run to reclaim a temp file. The path is
+# named and the status stays 0. The shim removes the file for real before
+# reporting failure, so a suite run leaks nothing into the per-user temp
+# directory that a bare `mktemp` resolves through on macOS whatever TMPDIR says.
+#
+# It is also chatty, and that is the second thing this case pins. The shim
+# covers every rm in the run, including the tracker engine's own scratch
+# cleanup, whose line therefore lands on the engine's stderr during the
+# repository lookup. While that lookup merged the engine's streams the line
+# became part of the URL and the run died calling a repository that is fine
+# malformed -- so a chatty shim reddened here before it ever reached the
+# removal-status half below. A failing `rm` is only the cheapest way to make the
+# engine talk; a gh release-update notice does it on a wholly successful call.
+mkdir -p "$SCRATCH/rm-bin"
+cat >"$SCRATCH/rm-bin/rm" <<STUB
+#!/usr/bin/env bash
+$(command -v rm) "\$@" || :
+printf 'rm-stub: refusing to remove\n' >&2
+exit 1
+STUB
+chmod +x "$SCRATCH/rm-bin/rm"
+
+: >"$SCRATCH/calls"
+GH_SCENARIO=success GH_CALL_LOG="$SCRATCH/calls" \
+	PATH="$SCRATCH/rm-bin:$SCRATCH/bin:$PATH" \
+	"$helper" --repo example/repo --title 'Confirmed title' --body-file "$body_file" \
+	--label bug --label status:ready --parent 42 \
+	>"$SCRATCH/stdout" 2>"$SCRATCH/stderr" ||
+	fail 'a failed scratch removal turned a verified creation into a failure'
+assert_contains 'https://github.com/example/repo/issues/101' "$SCRATCH/stdout"
+assert_contains 'retained scratch path' "$SCRATCH/stderr"
+if rg -q 'malformed or does not match' "$SCRATCH/stderr"; then
+	fail 'a stray line on the engine stderr was read as the canonical repository URL'
+fi
 
 printf 'create-verified-issue-test: ok\n'

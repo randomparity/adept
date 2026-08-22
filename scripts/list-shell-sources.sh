@@ -27,6 +27,14 @@ set -euo pipefail
 # the diagnostic names which case it is. A `.sh` file is classified by name and
 # never opened here, so an unopenable one reaches shellcheck and shfmt instead
 # and fails there.
+#
+# Exit 2 is the separate status for this script failing to run at all, rather
+# than for an inventory it distrusts: a bad argument, a scratch file it cannot
+# create, and a scratch file it cannot remove on an otherwise-clean run. The
+# split matters because exit 1 is read by every consumer as "discovery broke,
+# distrust the list", and the two conditions below could reach it with a
+# complete, correct inventory already on stdout and nothing printed under this
+# script's prefix to say otherwise.
 
 mode='tabs'
 nul=0
@@ -104,8 +112,33 @@ is_two_space() {
 # inventory and exit 0 -- the same silent miss this script's other two failure
 # modes exist to prevent, in its own producer. It is why the lint and
 # format-check recipes capture this script's output in turn.
-tracked=$(mktemp)
-trap 'rm -f "$tracked"' EXIT
+tracked=$(mktemp) || {
+	printf 'list-shell-sources: could not create a scratch file for the tracked-file listing\n' >&2
+	exit 2
+}
+
+# Under the `set -e` above, an EXIT trap's non-zero return becomes the shell's
+# exit status, so the bare `trap 'rm -f "$tracked"' EXIT` this replaces turned a
+# scratch file it could not remove into exit 1 -- the status this script reserves
+# for an inventory nobody should trust, reached with the whole inventory already
+# printed and only rm's own diagnostic to explain it. Capture the run's status
+# first, name the path nothing else will name, and let the removal take the fault
+# status only when the run was otherwise clean, so a real inventory fault keeps
+# its own.
+#
+# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
+cleanup() {
+	local exit_status=$?
+	if ! rm -f -- "$tracked"; then
+		printf 'list-shell-sources: retained scratch path: %s\n' "$tracked" >&2
+		if ((exit_status == 0)); then
+			exit 2
+		fi
+	fi
+	exit "$exit_status"
+}
+trap cleanup EXIT
+
 git ls-files -z >"$tracked" || {
 	printf 'list-shell-sources: could not list the repository'\''s tracked files\n' >&2
 	exit 1

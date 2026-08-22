@@ -172,9 +172,17 @@ assert_no_ci 'non-branch ref'
 
 new_repo
 assert_fails 'malformed input' 'only three fields\n' 'malformed ref update'
-assert_fails 'invalid object' \
+# The two causes the object witness may legitimately reject a push for. Both
+# reach `git rev-parse --verify --quiet` at exit 1 -- the status that says git
+# answered and the answer was no -- and must be told apart from the exit 2 the
+# stubbed-fault case below asserts.
+assert_fails 'absent object' \
 	'refs/heads/main deadbeef refs/heads/main 0000000000000000000000000000000000000000\n' \
-	'invalid branch object'
+	'branch object is not a commit in this repository'
+BLOB=$(git -C "$REPO" rev-parse HEAD:marker)
+assert_fails 'non-commit object' \
+	"refs/heads/main $BLOB refs/heads/main 0000000000000000000000000000000000000000\n" \
+	'branch object is not a commit in this repository'
 
 new_repo
 printf 'second\n' >"$REPO/marker"
@@ -232,6 +240,123 @@ unset FAIL_CI
 set -e
 [[ $failure_status == 73 && $failure_output == *'retained cleanup path'* ]] ||
 	fail 'cleanup failure should preserve the ci failure status'
+
+# The verifier clears Git's repository-local selectors before it resolves
+# anything inside the detached worktree. Read through a process substitution
+# that loop reported its own status and never rev-parse's, so a rev-parse that
+# could not answer left nothing unset and every later command resolving against
+# the hook's repository instead of this one. Both shapes of that failure -- a
+# non-zero status, and the same silence wearing a zero one -- must stop the run
+# before ci is reached.
+cat >"$FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == -C && \${3:-} == rev-parse && \${4:-} == --local-env-vars ]]; then
+  printf 'stub git: cannot report the local env vars\n' >&2
+  exit 128
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$FAIL_BIN/git"
+new_repo
+set +e
+env_fault_output=$(run_verifier_with_git \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\\n" "$FAIL_BIN" 2>&1)
+env_fault_status=$?
+set -e
+[[ $env_fault_status -eq 2 && $env_fault_output == *'cannot read git local env vars'* ]] ||
+	fail "unreadable local env vars should stop the run: $env_fault_output"
+assert_no_ci 'unreadable local env vars'
+
+cat >"$FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == -C && \${3:-} == rev-parse && \${4:-} == --local-env-vars ]]; then
+  exit 0
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$FAIL_BIN/git"
+new_repo
+set +e
+env_empty_output=$(run_verifier_with_git \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\\n" "$FAIL_BIN" 2>&1)
+env_empty_status=$?
+set -e
+[[ $env_empty_status -eq 2 && $env_empty_output == *'reported no local env vars'* ]] ||
+	fail "an empty local env var list should stop the run: $env_empty_output"
+assert_no_ci 'empty local env vars'
+
+# The worktree-root probe is the sibling read in the same file and gets the same
+# two cases. A non-zero status must carry git's own line through rather than
+# assert a cause the script did not establish, and empty output at exit 0 must
+# stop the run rather than let `git -C ""` resolve against the ambient
+# repository.
+cat >"$FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == rev-parse && \${2:-} == --show-toplevel ]]; then
+  printf 'stub git: cannot resolve the worktree root\n' >&2
+  exit 128
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$FAIL_BIN/git"
+new_repo
+set +e
+root_fault_output=$(run_verifier_with_git \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\\n" "$FAIL_BIN" 2>&1)
+root_fault_status=$?
+set -e
+[[ $root_fault_status -eq 2 && $root_fault_output == *'could not resolve the worktree root'* &&
+	$root_fault_output == *'stub git: cannot resolve the worktree root'* ]] ||
+	fail "an unresolvable worktree root should stop the run and keep git's line: $root_fault_output"
+assert_no_ci 'unresolvable worktree root'
+
+cat >"$FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == rev-parse && \${2:-} == --show-toplevel ]]; then
+  exit 0
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$FAIL_BIN/git"
+new_repo
+set +e
+root_empty_output=$(run_verifier_with_git \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\\n" "$FAIL_BIN" 2>&1)
+root_empty_status=$?
+set -e
+[[ $root_empty_status -eq 2 && $root_empty_output == *'reported no worktree root'* ]] ||
+	fail "an empty worktree root should stop the run: $root_empty_output"
+assert_no_ci 'empty worktree root'
+
+# The branch-object witness is the third read in this file that must separate a
+# push it rejected from a check it could not run. `git cat-file -e` could not:
+# it exits 128 for an absent oid, a non-commit oid, a GIT_DIR pointing at
+# nothing and an unreadable object store alike, so a repository git could not
+# read was reported as a bad push. Under `git rev-parse --verify --quiet` a
+# witness that could not answer exits 128, and the verifier must report that as
+# a check that could not run -- exit 2, naming the command and its status --
+# and keep git's own line, which is all the operator gets from a pre-push hook.
+cat >"$FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == rev-parse && \${2:-} == --verify ]]; then
+  printf 'stub git: not a git repository\n' >&2
+  exit 128
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$FAIL_BIN/git"
+new_repo
+set +e
+object_fault_output=$(run_verifier_with_git \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\\n" "$FAIL_BIN" 2>&1)
+object_fault_status=$?
+set -e
+[[ $object_fault_status -eq 2 &&
+	$object_fault_output == *"could not verify the branch object $OBJECT"* &&
+	$object_fault_output == *'git rev-parse --verify exit 128'* &&
+	$object_fault_output == *'stub git: not a git repository'* ]] ||
+	fail "an unverifiable branch object should stop the run and keep git's line: $object_fault_output"
+assert_no_ci 'unverifiable branch object'
 
 HOOK_REPO="$SCRATCH/hook-repo"
 HOOK_BIN="$SCRATCH/hook-bin"
@@ -317,6 +442,35 @@ IFS=$'\t' read -r hook_ci_root hook_ci_object <"$SCRATCH/hook-ci.log"
 HOOK_SOURCE_ROOT=$(cd "$HOOK_REPO" && pwd -P)
 [[ $hook_ci_root != "$HOOK_SOURCE_ROOT" && $hook_ci_object == "$HOOK_OBJECT" ]] ||
 	fail 'native pre-push should verify the isolated pushed object'
+
+# The hook resolves the worktree root before anything else can report, so its
+# diagnostic is the only one an operator sees. A non-zero rev-parse must carry
+# git's own line through -- for dubious ownership that line holds the
+# safe.directory remedy -- rather than assert a "not in a worktree" cause the
+# hook did not establish.
+HOOK_FAIL_BIN="$SCRATCH/hook-failing-git"
+mkdir -p "$HOOK_FAIL_BIN"
+cat >"$HOOK_FAIL_BIN/git" <<EOF
+#!/usr/bin/env bash
+if [[ \${1:-} == rev-parse && \${2:-} == --show-toplevel ]]; then
+  printf 'stub git: detected dubious ownership in repository\n' >&2
+  exit 128
+fi
+exec "$GIT_REAL" "\$@"
+EOF
+chmod +x "$HOOK_FAIL_BIN/git"
+: >"$SCRATCH/hook-ci.log"
+set +e
+hook_root_output=$(printf 'refs/heads/main %s refs/heads/main %s\n' "$HOOK_OBJECT" "$HOOK_OBJECT" | (
+	cd "$HOOK_REPO"
+	PATH="$HOOK_FAIL_BIN:$HOOK_BIN:$PATH" HOOK_CI_LOG="$SCRATCH/hook-ci.log" "$HOOK_PATH"
+) 2>&1)
+hook_root_status=$?
+set -e
+[[ $hook_root_status -eq 2 && $hook_root_output == *'could not resolve the worktree root'* &&
+	$hook_root_output == *'stub git: detected dubious ownership in repository'* ]] ||
+	fail "an unresolvable worktree root should stop the hook and keep git's line: $hook_root_output"
+[[ ! -s $SCRATCH/hook-ci.log ]] || fail 'unresolvable worktree root reached ci'
 
 printf '%s\nold\n' '# adept: managed pre-push hook' >"$HOOK_PATH"
 run_hooks

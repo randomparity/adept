@@ -82,9 +82,16 @@ leftover() {
 # self-check below compares this output against the file on disk; those are the same
 # comparison only while nothing else in the worktree has moved. It is also what keeps the
 # migration reviewable as a commit of its own.
+#
+# A `git status` that could not run is reported as that and nothing more. E-NOT-REPO named a
+# cause this read never established — an unreadable index and a damaged object store both
+# reach it from inside a perfectly ordinary repository — and the code is what an operator
+# searches for.
 require_clean_worktree() {
-  local dirty
-  dirty=$(git status --porcelain) || abort "E-NOT-REPO: cannot read the working tree state"
+  local dirty dirty_status=0
+  dirty=$(git status --porcelain) || dirty_status=$?
+  [ "$dirty_status" -eq 0 ] ||
+    abort "E-WORKTREE-SCAN: could not read the working tree state (git status --porcelain exit $dirty_status)"
   if [ -n "$dirty" ]; then
     abort "E-DIRTY: the worktree has uncommitted changes — commit or stash them first, so this migration lands as its own reviewable commit"
   fi
@@ -454,10 +461,14 @@ parse_args() {
 }
 
 migrate_main() {
-  local root name
+  local root name root_status=0
   parse_args "$@"
 
-  root=$(git rev-parse --show-toplevel 2>/dev/null) || abort "E-NOT-REPO: not inside a git repository — run this from the repository root"
+  # The gate's require_repo_root carries why this reports the probe rather than asserting a
+  # cause, and keeps git's line instead of discarding it. Same probe, same wording.
+  root=$(git rev-parse --show-toplevel) || root_status=$?
+  [ "$root_status" -eq 0 ] ||
+    abort "E-ROOT-UNRESOLVED: could not resolve the repository root (git rev-parse --show-toplevel exit $root_status)"
   cd "$root"
   require_clean_worktree
 

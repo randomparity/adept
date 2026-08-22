@@ -800,13 +800,16 @@ check_sections_append_only() {
 
 check_not_rewritten() {
   local base=$1 path=$2 tmp blob_status=0 marker_status
-  # `|| return 0` here was itself a fail-open of the class this sweep closes: a failed mktemp
-  # silently skipped all three anti-erasure rules, and it also made the inner E-TMPFILE branches
-  # below unreachable, so they promised a guarantee nothing could deliver.
-  tmp=$(mktemp) || {
-    err_full "E-TMPFILE: $path: cannot create a temp file for the base ref's copy, so the append-only rules did not run"
+  # Returning 0 here exempted the record from all three rules below with no diagnostic at all,
+  # so a run over an unusable temp directory reported every record as unrewritten. Its own code
+  # rather than evaluate_base_conformance's E-TMPFILE: that one also fires over every record,
+  # so a reader — and the suite, which asserts on the code — cannot tell from an E-TMPFILE alone
+  # whether the anti-erasure rules ran. err_full for the same reason the branch below uses it:
+  # these three rules describe a change, not a record, and are never downgradable.
+  if ! tmp=$(mktemp); then
+    err_full "E-REWRITE-TMPFILE: $path: cannot create a temp file, so the append-only rules did not run"
     return 0
-  }
+  fi
   read_base_blob "$base" "$path" "$tmp" || blob_status=$?
   case $blob_status in
   0) ;;
@@ -1324,10 +1327,18 @@ gate_paths() {
   done | sort -u
 }
 
+# `git rev-parse --show-toplevel` exits non-zero for more than "you are not inside a git
+# repository": dubious ownership under a bind mount or a container UID mismatch, an unreadable
+# or damaged .git, an unreadable parent directory. E-NOT-REPO named the first of those and
+# `2>/dev/null` threw away git's own line — which for dubious ownership carries the exact
+# `git config --global --add safe.directory <path>` remedy, the only line that gets the
+# operator moving. Report what the probe established instead, as ADR 0005 decision 1 asks: the
+# command that ran and the status it returned, with git's line left standing in front of it.
 require_repo_root() {
-  local root
-  if ! root=$(git rev-parse --show-toplevel 2>/dev/null); then
-    err "E-NOT-REPO: not inside a git repository — run this from the repository root"
+  local root root_status=0
+  root=$(git rev-parse --show-toplevel) || root_status=$?
+  if [ "$root_status" -ne 0 ]; then
+    err "E-ROOT-UNRESOLVED: could not resolve the repository root (git rev-parse --show-toplevel exit $root_status)"
     return 1
   fi
   cd "$root"
@@ -1576,7 +1587,7 @@ run_profile() {
 # The order is load-bearing: `outside_tree` copies the engine (with its profiles sibling)
 # outside this repository and still asserts E-GATE-UNLOCATABLE, which it reaches only
 # because the gate check runs before profile resolution, not because of any unknown-profile
-# interaction; `not_a_repo` requires E-NOT-REPO to win.
+# interaction; `not_a_repo` requires E-ROOT-UNRESOLVED to win.
 #
 # Without a base ref there is nothing to compare against, so the base-ref and gate phases do
 # not apply — exactly as today, where they live inside a function that only runs when BASE_SHA

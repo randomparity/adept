@@ -21,7 +21,7 @@ Otherwise, work from the session context or ask the user what to design.
 If you are running as part of a larger workflow (e.g. `$quest`),
 `BASE_BRANCH` and guardrail commands should already be recorded from
 `$attunement`. If running standalone, discover them first: read `AGENTS.md` /
-`AGENTS.md`, find the default branch (`gh repo view --json defaultBranchRef`),
+`CLAUDE.md`, find the default branch (`gh repo view --json defaultBranchRef`),
 and identify the repo's check suite.
 
 **Caller contract.** If invoked inside `$quest`, completing this step
@@ -133,8 +133,37 @@ norm, not a terse outlier. A record running longer than the artifact it
 governs has stopped recording the decision and started defending it; a 514-line ADR
 over a 19-line state machine is the failure this bounds. State the decision and stop.
 
+Every `Considered & rejected` bullet names its alternative, then opens the ground that
+sank it with one of two tags saying how that ground was established:
+
+- **`verified:`** — a factual ground. It carries the command run and what that command
+  produced, plus the environment wherever the result could depend on it — a commit, a
+  released version, a platform — named so a later reader can return to it, since "this
+  branch" is gone after the merge and the record is not. Where the ground is factual but
+  no command settles it, `verified:` carries the source that does.
+- **`judgment:`** — complexity, fit, taste, or cost. It carries no evidence; the token is
+  the obligation, and naming which of the four applies is optional.
+
+Both are legitimate grounds. A judgment presented as a fact is not. The tag classes the
+ground, so it does not exempt a factual premise sitting inside that ground: a `judgment:`
+resting on an unrun behaviour claim is the same defect wearing the other label. Where an
+alternative is sunk by both a measured fact and a judgment, lead with `verified:` — the
+factual half is the half that owes evidence.
+
+What the tag replaces is the paragraph of justification behind the ground, never the
+sentence or two that states the ground. A tagged bullet reads
+
+- **Configure the hooks path globally.** verified: `prek install` refuses and exits 2
+  under a global `core.hooksPath` (prek 0.4.13, macOS).
+- **Keep a second index of the records.** judgment: a merge-conflict surface for a lookup
+  nothing performs.
+
+in place of the reasoning it summarises. A rejected alternative is a road nobody drives,
+so nobody re-tests the reason it was rejected; the tag is what tells a later reader which
+grounds were checked.
+
 Use the orchestrator-assigned ADR number if you were given one (from
-`$attunement` step 6); otherwise take the next free number. Link the ADR from
+`$attunement` step 7); otherwise take the next free number. Link the ADR from
 the spec. Run the relevant doc guardrails and commit the spec/ADR.
 
 ### Spec self-review
@@ -159,11 +188,11 @@ index table serializes parallel ADR PRs on one merge conflict — N such PRs cos
 O(N²) resolutions, because git conflicts on adjacent insertions even when the
 assigned numbers are disjoint. If a repo keeps such an index anyway, add your row
 only on a **solo** run; on a **dispatched** run (an orchestrator handed you an ADR
-number, `$attunement` step 6) write only the ADR file and report `index row pending`
+number, `$attunement` step 7) write only the ADR file and report `index row pending`
 in your completion report, leaving the row to the orchestrator.
 
 **CI gating the index outranks that split**: the row is a merge
-precondition there, and run type is only a convention. `$attunement` step 4 reports the
+precondition there, and run type is only a convention. `$attunement` step 5 reports the
 coupling verdict — and separates checks CI hard-gates **individually** from ones
 reachable only through an umbrella recipe, since only the former can block a PR. Under
 `$campaign` the verdict reaches you in your dispatch prompt rather than being yours to
@@ -315,15 +344,38 @@ For each ADR path in the set, run `$trial-loop` in file-list mode:
   option; unstated or understated consequences and residuals; and whether a simpler
   decision would meet the same context. Size is in scope: a record arguing for its
   decision at greater length than the decision governs is a finding, and its remedy
-  is cutting rather than more text. This ADR file is the review target, not settled
-  ground — challenge its decision on the merits.`
+  is cutting rather than more text. Evidence class is in scope: a rejection whose ground
+  is stated as fact but carries no command, result, or source is a finding, as is a claim
+  about a rejected alternative's behaviour that you cannot reproduce from what the bullet
+  states — whichever tag precedes it, since a judgment resting on an unrun behaviour claim
+  is the same defect relabelled. The command and result a factual ground carries are the
+  ground, not argument, so the size clause above does not ask for them to be cut. A record
+  carrying no tags at all either predates this contract or ignores it wholesale: report
+  that once rather than filing a finding per bullet. This ADR file is the review target,
+  not settled ground — challenge its decision on the merits.`
 
 Do **not** pass the spec/plan reviews' "don't reopen settled ADR choices" focus
 here: it would tell the review to treat its own target as settled and neuter it.
 Editing the ADR to address findings is legitimate — it is pre-merge on the design
 branch, and `AGENTS.md`'s immutability applies only once the ADR is merged. If the
-loop blocks (5 iterations without `approve`), stop as blocked per `$trial-loop`'s
-stop contract; do not run the spec review against an unhardened ADR.
+loop reports blocked — including cap exhaustion at 5 iterations — stop as blocked
+per `$trial-loop`'s stop contract; do not run the spec review against an unhardened
+ADR. A *sound with record notes* exit is **not** that case — a pass confirmed every
+load-bearing claim it named in the ADR, and the standing findings carry no consequence —
+so continue to the spec review and carry the outstanding notes into the spec.
+
+*converged with deferrals* and *converged on own surface* are **not** that case either.
+Both are terminal non-blocking exits, so continue to the spec review on either.
+`$trial-loop` reports the exit by name and owns the condition each one fires on; this step
+does not re-derive them. Route on that name rather than on the last verdict, which on a
+named exit is ordinarily `needs-attention` and never by itself means the ADR is unhardened.
+
+Carry every deferral from every run in this ADR set — each entry with its owning record
+path or tracker issue — into the spec whichever way each run ended, `approve` included.
+The set can hold more than one path, so a later run must not erase an earlier one's
+entries. The loop discloses its deferrals on every exit, and the spec is what step 4's
+plan is derived from, so that is where a later implementer meets them. Not the ADR — it
+merges append-only, and an entry there cannot be struck when its tracker closes.
 
 ## 3. Adversarial-review the spec
 
@@ -378,9 +430,15 @@ Start the plan with a header carrying the goal in a sentence, the architecture
 in two or three, the tech stack, and a **Global Constraints** section holding
 whatever binds the project as a whole: the lowest supported versions, what may
 be depended on, the rules governing names and wording, the platforms that must
-work — **transcribed from the spec exactly, values and all**. A paraphrased version floor is a wrong version floor. Every task's
-requirements implicitly include that section, so it is written once instead of
-re-derived per task.
+work — **transcribed from the spec exactly, values and all**. A paraphrased
+version floor is a wrong version floor. A version the plan introduces or
+raises — a dependency, a CI action, a tool — is resolved against its registry
+at authoring time, never asserted from memory; transcription then governs
+carrying the resolved value forward unchanged. Pins are also checked
+together: two dependencies whose versions do not resolve against each other
+are a plan defect, and a lookup scoped to one package never catches it.
+Every task's requirements implicitly include that section, so it is written
+once instead of re-derived per task.
 
 Give each task:
 
@@ -413,14 +471,21 @@ plan containing one is not finished:
 - a cross-reference used to avoid repeating something — "as in Task 4"
 - a step naming an outcome without the means to reach it
 - a type, function, or signature used but defined by no task
+- a type, function, or signature borrowed from the existing codebase or a
+  dependency, used by tasks without being confirmed to exist there with the
+  signature the plan assumes
 
 **Then self-review the finished plan against the spec, with fresh eyes.** Walk
 each spec requirement and point to the task implementing it; a requirement with
 no task means adding the task. Sweep for the placeholder patterns above. Check
 that the names, signatures, and properties used in later tasks match what
 earlier tasks defined — a function called `clearLayers()` in Task 3 and
-`clearFullLayers()` in Task 7 is a defect the implementer inherits. Fix what you
-find inline.
+`clearFullLayers()` in Task 7 is a defect the implementer inherits. Ground every
+name the plan borrows instead of defines: for each type, function, or signature
+taken from the existing codebase or from a dependency, check the target
+repository — or the dependency's registry and docs — that it exists with the
+signature the plan assumes, and correct the plan inline where a name does not
+resolve. Fix what you find inline.
 
 Run relevant guardrails and commit the plan.
 
@@ -431,9 +496,11 @@ Run `$trial-loop` with:
 - challenge_args: `<path-to-plan.md>`
 - focus: `Focus on phase ordering, missing prerequisites, steps that cannot
   run in the claimed order, rollback and cleanup paths, verification gaps,
-  and tasks that are not self-contained enough for an implementer. Do not
-  reopen choices already settled in linked ADR rejected alternatives unless
-  the plan contradicts them or introduces a new risk.`
+  ungrounded references — a type, function, or signature borrowed from the
+  codebase or a dependency without confirmation it exists with the assumed
+  signature — and tasks that are not self-contained enough for an
+  implementer. Do not reopen choices already settled in linked ADR rejected
+  alternatives unless the plan contradicts them or introduces a new risk.`
 
 ## Context checkpoint
 

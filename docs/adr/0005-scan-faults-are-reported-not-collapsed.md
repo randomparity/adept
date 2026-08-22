@@ -4,6 +4,8 @@
 
 Accepted (2026-08-12)
 
+> **Superseded by [0024](0024-a-failing-repository-probe-is-not-evidence-of-absence.md)** (2026-08-19)
+
 ## Context
 
 Nearly every rule in `check-records.sh`, its profiles, and `tracker.sh` is a

@@ -337,4 +337,234 @@ for recipe in lint format-check; do
 		fail "$recipe: a lister that failed partway did not fail the recipe: $out"
 done
 
+# The `test` recipe carries the same shape over a different discovery: it reads
+# `git ls-files` rather than the lister, so its stub is a PATH shim rather than
+# a script copy. The shim answers `ls-files` with a partial list and a non-zero
+# status and forwards every other subcommand to the real git, so nothing else
+# the recipe or just may ask git is disturbed. The fixture holds the one suite
+# the shim names, executable and passing: a status-blind recipe runs it, counts
+# one, and reports a green run over a suite set it never finished discovering.
+git_stub=$SCRATCH/git-stub
+mkdir -p "$git_stub"
+cat >"$git_stub/git" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "\${1-}" = ls-files ]; then
+	printf 'scripts/partial-test.sh\0'
+	printf 'git-stub: discovery stopped partway\n' >&2
+	exit 1
+fi
+exec "$real_git" "\$@"
+STUB
+chmod +x "$git_stub/git"
+partial_suites=$SCRATCH/partial-suites
+mkdir -p "$partial_suites/scripts"
+cat >"$partial_suites/scripts/partial-test.sh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'partial-test: pass\n'
+STUB
+chmod +x "$partial_suites/scripts/partial-test.sh"
+status=0
+out=$(PATH=$git_stub:$PATH "$just_real" \
+	--working-directory "$partial_suites" --justfile "$recipe_root/Justfile" \
+	test 2>&1) || status=$?
+[ "$status" -ne 0 ] ||
+	fail "test: a discovery that failed partway did not fail the recipe: $out"
+# A non-zero status alone would also be satisfied by a recipe that never
+# reached the discovery at all -- a mistyped justfile path, a shim that could
+# not execute. The shim's own diagnostic proves the recipe got as far as
+# `git ls-files`, and the absence of the summary proves it did not go on to
+# report a pass over what that discovery had already emitted.
+printf '%s\n' "$out" | grep -q 'git-stub: discovery stopped partway' ||
+	fail "test: the recipe never reached the stubbed discovery: $out"
+if printf '%s\n' "$out" | grep -q 'suites passed'; then
+	fail "test: the recipe reported a pass over a partial discovery: $out"
+fi
+# Failing at the end is not the same as failing before the damage. A recipe
+# that ran the suites it did receive and only then noticed the discovery had
+# died satisfies both checks above, so the suite's own marker has to be absent
+# too: the discovery must stop the run before anything from a short list runs.
+if printf '%s\n' "$out" | grep -q 'partial-test: pass'; then
+	fail "test: the recipe ran a suite from a discovery that had already failed: $out"
+fi
+
+# Capturing the list to a file makes that file the read loop's stdin, so the
+# recipe runs each suite with stdin closed. Without that a suite reading stdin
+# consumes the entries queued behind it and the run truncates -- the same green
+# partial pass by a second route -- and a suite that prompted would instead hang
+# an interactive run on the terminal. This fixture discovers cleanly and asserts
+# the guarantee from inside a suite. Two entries are load-bearing: after the
+# loop reads a single-entry list there is nothing left to consume, so the
+# unclosed case would look identical to the closed one.
+git_whole=$SCRATCH/git-whole
+mkdir -p "$git_whole"
+cat >"$git_whole/git" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "\${1-}" = ls-files ]; then
+	printf 'scripts/first-test.sh\0scripts/second-test.sh\0'
+	exit 0
+fi
+exec "$real_git" "\$@"
+STUB
+chmod +x "$git_whole/git"
+whole_suites=$SCRATCH/whole-suites
+mkdir -p "$whole_suites/scripts"
+cat >"$whole_suites/scripts/first-test.sh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ -t 0 ]; then
+	printf 'first-test: stdin is the terminal\n' >&2
+	exit 1
+fi
+if IFS= read -r -n 1 byte; then
+	printf 'first-test: stdin carried readable input: %s\n' "$byte" >&2
+	exit 1
+fi
+printf 'first-test: stdin is closed\n'
+STUB
+printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "second-test: pass\\n"\n' \
+	>"$whole_suites/scripts/second-test.sh"
+chmod +x "$whole_suites/scripts/first-test.sh" "$whole_suites/scripts/second-test.sh"
+status=0
+out=$(PATH=$git_whole:$PATH "$just_real" \
+	--working-directory "$whole_suites" --justfile "$recipe_root/Justfile" \
+	test 2>&1) || status=$?
+[ "$status" -eq 0 ] ||
+	fail "test: a discovery that completed did not pass the recipe: $out"
+printf '%s\n' "$out" | grep -q 'first-test: stdin is closed' ||
+	fail "test: a suite was not run with its stdin closed: $out"
+printf '%s\n' "$out" | grep -qF 'test: 2 suites passed' ||
+	fail "test: the recipe did not run every discovered suite: $out"
+
+# --- scratch-file allocation and cleanup ------------------------------------
+# Both halves of the same defect: under the lister's `set -e` an unguarded
+# `tracked=$(mktemp)` exits on mktemp's own status and an unguarded EXIT trap
+# returns rm's, and exit 1 is the status every consumer reads as "discovery
+# broke, distrust this list". So a scratch file this host could not create or
+# could not remove reddened the gates with a complete inventory already on
+# stdout and only rm's own line to explain it.
+#
+# The rm shim removes the file for real and then reports failure. A shim that
+# merely refused would strand a scratch file outside SCRATCH on every run:
+# `mktemp` is called bare here, and on macOS a bare mktemp resolves through the
+# per-user temp directory and ignores TMPDIR, so pointing TMPDIR into the
+# fixture would not reclaim it. What the cases assert is the status and the
+# diagnostic, and both are decided by the removal's status alone.
+real_rm=$(command -v rm)
+rm_stub=$SCRATCH/rm-fail-bin
+mkdir -p "$rm_stub"
+cat >"$rm_stub/rm" <<STUB
+#!/usr/bin/env bash
+"$real_rm" "\$@" || :
+printf 'rm-stub: simulated removal failure\n' >&2
+exit 1
+STUB
+chmod +x "$rm_stub/rm"
+
+mktemp_stub=$SCRATCH/mktemp-fail-bin
+mkdir -p "$mktemp_stub"
+cat >"$mktemp_stub/mktemp" <<'STUB'
+#!/usr/bin/env bash
+printf 'mktemp-stub: no usable temp directory\n' >&2
+exit 1
+STUB
+chmod +x "$mktemp_stub/mktemp"
+
+# A clean run whose cleanup fails. The inventory is correct and complete, so the
+# one thing that must not happen is the finding status.
+cleanup_clean=$(new_fixture cleanup_clean)
+write_tracked "$cleanup_clean" scripts/hook '#!/usr/bin/env bash
+'
+status=0
+out=$(cd "$cleanup_clean" && PATH="$rm_stub:$PATH" \
+	./scripts/list-shell-sources.sh --tabs 2>&1) || status=$?
+[ "$status" -eq 2 ] ||
+	fail "cleanup_clean: a failed removal on a clean run exited $status, not the fault status 2: $out"
+printf '%s\n' "$out" | grep -q '^list-shell-sources: retained scratch path: ' ||
+	fail "cleanup_clean: the retained scratch path was not named: $out"
+lists "$out" scripts/hook ||
+	fail "cleanup_clean: the inventory was not printed: $out"
+
+# The same failed removal over a run that had already found a real fault. The
+# fault status outranks nothing here: exit 1 is the answer the run earned and
+# cleanup must not overwrite it, in either direction.
+cleanup_faulted=$(new_fixture cleanup_faulted)
+write_tracked "$cleanup_faulted" scripts/hook '#!/usr/bin/env bash
+'
+"$real_rm" -- "$cleanup_faulted/scripts/hook"
+status=0
+out=$(cd "$cleanup_faulted" && PATH="$rm_stub:$PATH" \
+	./scripts/list-shell-sources.sh --tabs 2>&1) || status=$?
+[ "$status" -eq 1 ] ||
+	fail "cleanup_faulted: a failed removal displaced the run's own exit 1 with $status: $out"
+printf '%s\n' "$out" | grep -q '^list-shell-sources: scripts/hook is tracked but nothing is there' ||
+	fail "cleanup_faulted: the run's own diagnostic was lost: $out"
+
+# The allocation half. Nothing is listed and nothing can be, so the only
+# question is whether the status says "this list is short" or "there is no
+# list", and whether anything says it under this script's own prefix.
+allocation=$(new_fixture allocation)
+write_tracked "$allocation" scripts/hook '#!/usr/bin/env bash
+'
+status=0
+out=$(cd "$allocation" && PATH="$mktemp_stub:$PATH" \
+	./scripts/list-shell-sources.sh --tabs 2>&1) || status=$?
+[ "$status" -eq 2 ] ||
+	fail "allocation: a scratch file that could not be created exited $status, not 2: $out"
+printf '%s\n' "$out" | grep -q '^list-shell-sources: could not create a scratch file' ||
+	fail "allocation: no diagnostic under the script's own prefix: $out"
+
+# The recipes carry the same two halves over their own scratch files, and they
+# are where the unguarded form read worst: `just test` printed its summary line
+# and then exited 1, so the summary and the verdict disagreed. The lister is
+# stubbed out here so the failing rm reaches only the recipe's own cleanup --
+# with the real lister in place its cleanup fails first and the recipe never
+# gets far enough to have a clean run to protect.
+#
+# The two listed files are indentation-neutral so one pair satisfies both
+# `shfmt` invocations format-check makes, and shellcheck-clean so lint's verdict
+# is the recipe's cleanup and not a finding in a fixture.
+recipe_clean=$SCRATCH/recipe-clean
+mkdir -p "$recipe_clean/scripts" "$recipe_clean/.github/scripts"
+cat >"$recipe_clean/scripts/list-shell-sources.sh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+case ${1-} in
+--tabs) printf 'scripts/tabbed.sh\0' ;;
+--two-space) printf '.github/scripts/twospace.sh\0' ;;
+*) printf 'scripts/tabbed.sh\0.github/scripts/twospace.sh\0' ;;
+esac
+STUB
+chmod +x "$recipe_clean/scripts/list-shell-sources.sh"
+printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "tabbed\\n"\n' \
+	>"$recipe_clean/scripts/tabbed.sh"
+printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "twospace\\n"\n' \
+	>"$recipe_clean/.github/scripts/twospace.sh"
+for recipe in lint format-check; do
+	status=0
+	out=$(PATH="$rm_stub:$PATH" "$just_real" --working-directory "$recipe_clean" \
+		--justfile "$recipe_root/Justfile" "$recipe" 2>&1) || status=$?
+	[ "$status" -eq 2 ] ||
+		fail "$recipe: a failed cleanup on a clean run exited $status, not the fault status 2: $out"
+	printf '%s\n' "$out" | grep -q "^$recipe: retained scratch path: " ||
+		fail "$recipe: the retained scratch path was not named: $out"
+done
+
+# The `test` recipe over the discovery fixture that already passes above, so the
+# suites run and the summary prints before cleanup is reached. Both halves are
+# asserted here: the summary must still be there -- the run really did pass --
+# and the status must still say the recipe could not finish cleanly.
+status=0
+out=$(PATH="$rm_stub:$git_whole:$PATH" "$just_real" \
+	--working-directory "$whole_suites" --justfile "$recipe_root/Justfile" \
+	test 2>&1) || status=$?
+[ "$status" -eq 2 ] ||
+	fail "test: a failed cleanup on a passing run exited $status, not the fault status 2: $out"
+printf '%s\n' "$out" | grep -qF 'test: 2 suites passed' ||
+	fail "test: the passing run's summary was lost: $out"
+printf '%s\n' "$out" | grep -q '^test: retained scratch path: ' ||
+	fail "test: the retained scratch path was not named: $out"
+
 printf 'list-shell-sources-test: ok%s\n' "$skipped"
