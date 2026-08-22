@@ -11,7 +11,8 @@ Mine the pipeline's own telemetry — `status:` label transition timelines and
 process-learning counterpart to `$grimoire`, which records *solutions* only.
 
 **Read-only against GitHub and git.** The skill performs no `gh` call and no
-arithmetic of its own. Every GitHub read and every computation happens inside
+arithmetic of its own beyond §4's bounded follow-through search. Every collection
+read and every computation happens inside
 `scripts/collect-telemetry` (this directory), which takes the selector and emits
 exactly one JSON telemetry document on stdout conforming to ADR 0030
 (`docs/adr/0030-retrospective-telemetry-envelope-and-collector-contract.md`).
@@ -303,8 +304,32 @@ is never a write-only artifact for its primary reader. On an overwrite, state th
 an existing file was replaced.
 
 Then state the **learn→tune** step: a human routes any worthwhile proposal into the
-pipeline via `$bounty` (born triaged) or applies it on a branch. `$bards-tale` never files
-the issue or edits the files itself.
+pipeline via `$bounty` (born triaged) or applies it on a branch. An issue filed from a
+retrospective proposal carries a whole-line citation in its body naming the proposing
+report —
+
+    Retro: docs/retro/<date>-<slug>.md
+
+— written by whoever files the issue, exactly like the existing `Part of #N` courtesy
+line; nothing in `$bounty` changes. `$bards-tale` never files the issue or edits the
+files itself.
+
+**Follow-through check.** The citation makes routing measurable, so close the loop:
+when §1 located a prior sidecar for this selector, run one bounded read-only search
+for issues citing that prior report —
+
+    gh search issues --repo <owner>/<name> --limit 50 --json number,title,state,body \
+      "\"Retro: docs/retro/<prior-date>-<slug>.md\""
+
+— and compare its results against the prior report's **Proposed tuning** section
+(a local read of the prior report file). Report, in the in-session summary above,
+which of that report's proposals were routed (an issue cites the report) and which
+were unrouted. Honesty rules: a prior report carrying proposals but returning zero
+citations reports **convention not in use for this report** — never "no proposals
+were adopted", because a report filed before the convention existed cannot be
+measured by it. When the returned count equals the limit, report possible
+truncation per ADR 0013 rather than presenting the result as complete. The check
+never files, comments on, or otherwise routes anything itself.
 
 Given the young telemetry corpus, an early run over a historical selector may be
 dominated by `unknown` results. That is fine — surface it honestly via the coverage
@@ -312,8 +337,9 @@ and data-gaps sections; a degenerate report is clearly labeled, not silently emp
 
 ## Read-only contract (hard constraints)
 
-- **Zero mutating `gh` calls.** Every `gh` invocation — all of them live inside
-  `scripts/collect-telemetry` — must be one of: `gh repo view`, `gh search …`,
+- **Zero mutating `gh` calls.** Every `gh` invocation — the collection reads live
+  inside `scripts/collect-telemetry`, and the sole other sanctioned call is §4's
+  bounded follow-through search — must be one of: `gh repo view`, `gh search …`,
   `gh issue view|list`, `gh pr view|list`, or `gh api` **path-scoped to the
   timeline read endpoint** (`gh api repos/*/issues/*/timeline …`). Forbidden:
   `gh issue edit|close|reopen|comment|lock`, `gh pr
