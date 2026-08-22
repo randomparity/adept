@@ -510,12 +510,16 @@ assert_doc 'single-commit PR spans compute' \
 # its unlabeled event. 502 (open): an in-progress anchor predating ready and an
 # awaiting-merge label written after merge both run backwards and report as
 # error, never clamped; a blocked episode with no exit stays unknown.
+# 503 (closed): a dwell interval whose exit precedes its entry sums negative
+# and reports as error, never a negative span.
 cat >"$SCRATCH/fake/search.json" <<'JSON'
 [
  {"number":501,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
   "closedAt":"2026-07-01T18:00:00Z","labels":[]},
  {"number":502,"state":"open","createdAt":"2026-07-01T06:00:00Z",
-  "closedAt":null,"labels":[]}
+  "closedAt":null,"labels":[]},
+ {"number":503,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[]}
 ]
 JSON
 cat >"$SCRATCH/fake/tl-501.jsonl" <<'JSONL'
@@ -527,6 +531,13 @@ cat >"$SCRATCH/fake/tl-501.jsonl" <<'JSONL'
 {"event":"unlabeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T11:00:00Z"}
 {"event":"closed","created_at":"2026-07-01T18:00:00Z"}
 JSONL
+cat >"$SCRATCH/fake/tl-503.jsonl" <<'JSONL'
+{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T10:00:00Z"}
+{"event":"unlabeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T09:00:00Z"}
+{"event":"closed","created_at":"2026-07-01T14:00:00Z"}
+JSONL
+printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-503.json"
+printf '%s\n' '[]' >"$SCRATCH/fake/prlist-503.json"
 printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-501.json"
 printf '%s\n' '[{"number":421,"body":"Closes #501"}]' >"$SCRATCH/fake/prlist-501.json"
 jq -n '{comments:[],additions:10,deletions:2,changedFiles:2,
@@ -535,12 +546,6 @@ jq -n '{comments:[],additions:10,deletions:2,changedFiles:2,
 	statusCheckRollup:[{__typename:"CheckRun",name:"suite",
 		startedAt:"2026-07-01T09:00:00Z",completedAt:"2026-07-01T09:20:00Z"}]}' \
 	>"$SCRATCH/fake/pr-421.json"
-cat >"$SCRATCH/fake/tl-502.jsonl" <<'JSONL'
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T05:00:00Z"}
-{"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T06:30:00Z"}
-{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T07:00:00Z"}
-{"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T08:00:00Z"}
-JSONL
 printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-502.json"
 printf '%s\n' '[{"number":422,"body":"Closes #502"}]' >"$SCRATCH/fake/prlist-502.json"
 jq -n '{comments:[],additions:10,deletions:2,changedFiles:2,
@@ -568,6 +573,8 @@ assert_doc 'issue 502 backwards spans are errors, unexited dwell is unknown' \
 	.triage_latency_hours == 0.5 and .queue_wait_hours == "error"
 	and .blocked_dwell_hours == "unknown(still-blocked)"
 	and .rework_bounces == 0 and .human_response_hours == "error"'
+assert_doc 'backwards dwell interval is error, never a negative span' \
+	'([.metrics.issues[] | select(.number == 503)][0].blocked_dwell_hours) == "error"'
 assert_doc 'drift coverage counts only the paired issue' \
 	'.metrics.coverage.review_drift_hours == 1
 	and .metrics.coverage.blocked_dwell_hours == 1'

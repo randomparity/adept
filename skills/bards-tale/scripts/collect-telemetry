@@ -265,6 +265,7 @@ blocked_dwell_of() { # tl-file
 				+ (($e.created_at | fromdateiso8601) - (.enter | fromdateiso8601)))}
 		else . end)
 		| if .inside then "unknown(still-blocked)"
+			elif .total < 0 then "error"
 			else (((.total / 360) | round) / 10) end' "$1"
 }
 
