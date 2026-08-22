@@ -595,14 +595,17 @@ coverage=$(jq -s '
 	 full_delivery_hours: $delivery, merge_lag_hours: $lag,
 	 build_private_hours: $bprivate, ci_wall_hours: $ci, reopen_count: $reopens}' "$entries")
 
+# The issues array rides in through --slurpfile, never argv: a full
+# population as a single argument exceeds Linux's per-argument size limit.
 metrics=$(jq -n \
-	--argjson issues "$(jq -s . "$entries")" \
+	--slurpfile issues "$entries" \
 	--argjson aggregate "$aggregate" \
 	--argjson coverage "$coverage" \
 	'{issues: $issues, aggregate: $aggregate, coverage: $coverage}')
 
 # --- emission ---------------------------------------------------------------------
 
+printf '%s\n' "$metrics" >"$work/metrics.json"
 jq -n \
 	--arg schema_version "$SCHEMA_VERSION" \
 	--arg selector "$SELECTOR" \
@@ -612,9 +615,9 @@ jq -n \
 	--argjson population_count "$pop_count" \
 	--argjson population_issues "$pop_issues" \
 	--argjson rate_limited "$rate_limited" \
-	--argjson metrics "$metrics" \
-	'{schema_version: $schema_version, selector: $selector, mode: $mode,
+	--slurpfile metrics "$work/metrics.json" \
+	'({schema_version: $schema_version, selector: $selector, mode: $mode,
 	  generated_at: $generated_at, truncated: $truncated,
 	  population: {count: $population_count, issues: $population_issues},
-	  metrics: $metrics}
-	+ (if $rate_limited then {rate_limited: true} else {} end)'
+	  metrics: $metrics[0]}
+	+ (if $rate_limited then {rate_limited: true} else {} end))'
