@@ -12,7 +12,7 @@ process-learning counterpart to `$grimoire`, which records *solutions* only.
 
 **Read-only against GitHub and git.** The skill performs no `gh` call and no
 arithmetic of its own beyond §4's bounded follow-through search. Every collection
-read and every computation happens inside
+read and every collection computation happens inside
 `scripts/collect-telemetry` (this directory), which takes the selector and emits
 exactly one JSON telemetry document on stdout conforming to ADR 0030
 (`docs/adr/0030-retrospective-telemetry-envelope-and-collector-contract.md`).
@@ -29,10 +29,10 @@ The user-supplied text is the selector: a **label-set** or a **date-range**.
 
 ## 1. Run the collector
 
-The collector performs the selection, **every** `gh` read, and every
-computation; this skill performs none. Pass the selector exactly as the user
-supplied it and capture stdout wholesale — the document exists on stdout and
-nowhere else:
+The collector performs the selection, **every** collection `gh` read, and every
+collection computation; within §1 this skill performs none. Pass the selector
+exactly as the user supplied it and capture stdout wholesale — the document
+exists on stdout and nowhere else:
 
 ```bash
 DOC=$(mktemp)
