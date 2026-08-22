@@ -177,10 +177,15 @@ cat >"$SCRATCH/fake/search.json" <<'JSON'
 ]
 JSON
 cat >"$SCRATCH/fake/tl-101.jsonl" <<'JSONL'
+{"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T09:00:00Z"}
 {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T10:00:00Z"}
+{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T10:30:00Z"}
+{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T11:00:00Z"}
 {"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T11:00:00Z"}
-{"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T13:30:00Z"}
+{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T12:00:00Z"}
+{"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T12:30:00Z"}
 {"event":"reopened","created_at":"2026-07-01T12:45:00Z"}
+{"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T13:30:00Z"}
 {"event":"closed","created_at":"2026-07-01T14:00:00Z"}
 JSONL
 cat >"$SCRATCH/fake/tl-103.jsonl" <<'JSONL'
@@ -213,7 +218,7 @@ if ! run_collector 'status:ready'; then
 fi
 
 assert_doc 'top-level envelope.' \
-	'.schema_version == "1.2"
+	'.schema_version == "1.3"
 	and .selector == "status:ready"
 	and .mode == "label-set"
 	and (.generated_at | type == "string")
@@ -237,6 +242,11 @@ assert_doc 'issue 103 in-flight cycle is a number with the flag set' \
 	and .phase_build_hours == "unknown(no-events)"
 	and .phase_review_hours == "unknown(no-events)"'
 
+assert_doc 'issue 101 queue and rework metrics' \
+	'([.metrics.issues[] | select(.number == 101)][0]) |
+	.triage_latency_hours == 1 and .queue_wait_hours == 1
+	and .blocked_dwell_hours == 0.5 and .rework_bounces == 1
+	and .human_response_hours == 0.1 and .review_drift_hours == 0.9'
 assert_doc 'PR resolved to the closing PR' \
 	'([.metrics.issues[] | select(.number == 101)][0].pr) == 211'
 assert_doc 'review fields parsed from the latest complete block' \
@@ -245,6 +255,13 @@ assert_doc 'review fields parsed from the latest complete block' \
 	and .security == "not triggered" and .exit == "none"'
 assert_doc 'LOC actual is additions plus deletions' \
 	'([.metrics.issues[] | select(.number == 101)][0].loc_actual) == 400'
+assert_doc 'issue 103 queue metrics are data gaps, dwell and bounces are measured zeros' \
+	'([.metrics.issues[] | select(.number == 103)][0]) |
+	.triage_latency_hours == "unknown(never-ready)"
+	and .queue_wait_hours == "unknown(no-ready-anchor)"
+	and .blocked_dwell_hours == 0 and .rework_bounces == 0
+	and .human_response_hours == "unknown(never-awaiting-merge)"
+	and .review_drift_hours == "unknown(no-review-phase)"'
 assert_doc 'scope estimate extracted' \
 	'([.metrics.issues[] | select(.number == 101)][0].scope_estimate) == "M"'
 
@@ -286,14 +303,20 @@ assert_doc 'aggregate median and range over value-state cycles.' \
 assert_doc 'aggregates exist per span family over the value-state entries' \
 	'.metrics.aggregate.lead_time_hours == {count: 1, median: 6, min: 6, max: 6}
 	and .metrics.aggregate.reopen_count.count == 2
-	and (.metrics.aggregate.ci_wall_hours.median | type == "number")'
+	and (.metrics.aggregate.ci_wall_hours.median | type == "number")
+	and .metrics.aggregate.blocked_dwell_hours == {count: 2, median: 0.25, min: 0, max: 0.5}
+	and .metrics.aggregate.rework_bounces.count == 2
+	and .metrics.aggregate.triage_latency_hours.count == 1
+	and .metrics.aggregate.human_response_hours == {count: 1, median: 0.1, min: 0.1, max: 0.1}'
 assert_doc 'coverage counts value-state entries' \
 	'.metrics.coverage == {
 		cycle_hours: 2, phase_build_hours: 1, phase_review_hours: 1,
 		pr: 1, review_iterations: 1, scope_estimate: 1, loc_actual: 1,
 		lead_time_hours: 1, pr_lifespan_hours: 1, full_delivery_hours: 1,
 		merge_lag_hours: 1, build_private_hours: 1, ci_wall_hours: 1,
-		reopen_count: 2}'
+		reopen_count: 2,
+		triage_latency_hours: 1, queue_wait_hours: 1, blocked_dwell_hours: 2,
+		human_response_hours: 1, rework_bounces: 2, review_drift_hours: 1}'
 
 assert_count 'every gh read is logged' '^gh ' "$SCRATCH/calls" 9
 if rg --no-config -q 'graphql' "$SCRATCH/calls"; then
@@ -365,6 +388,11 @@ assert_doc 'processed-but-errored issues carry error, not unknown' \
 	'([.metrics.issues[] | select(.number == 203)][0].cycle_hours) == "error"'
 assert_doc 'reopen count under a failed timeline read is error' \
 	'([.metrics.issues[] | select(.number == 203)][0].reopen_count) == "error"'
+assert_doc 'queue metrics under a failed timeline read are error' \
+	'([.metrics.issues[] | select(.number == 203)][0]) |
+	.triage_latency_hours == "error" and .queue_wait_hours == "error"
+	and .blocked_dwell_hours == "error" and .rework_bounces == "error"
+	and .human_response_hours == "error" and .review_drift_hours == "error"'
 assert_doc 'processing stopped after the fifth consecutive error' \
 	'([.metrics.issues[] | select(.number == 205)] | length) == 1
 	and ([.metrics.issues[] | select(.number == 206)] | length) == 0
@@ -406,6 +434,13 @@ assert_doc 'ambiguous closers stay unknown, never guessed' \
 	and .loc_actual == "unknown(ambiguous)"
 	and .pr_lifespan_hours == "unknown(ambiguous)"
 	and .ci_wall_hours == "unknown(ambiguous)"'
+assert_doc 'never-instrumented issue reports queue-metric data gaps' \
+	'([.metrics.issues[] | select(.number == 301)][0]) |
+	.triage_latency_hours == "unknown(never-ready)"
+	and .queue_wait_hours == "unknown(no-ready-anchor)"
+	and .blocked_dwell_hours == 0 and .rework_bounces == 0
+	and .human_response_hours == "unknown(never-awaiting-merge)"
+	and .review_drift_hours == "unknown(no-review-phase)"'
 assert_doc 'PR-side spans inherit a failed PR read as error' \
 	'([.metrics.issues[] | select(.number == 302)][0]) |
 	.pr_lifespan_hours == "error" and .full_delivery_hours == "error"
@@ -413,6 +448,13 @@ assert_doc 'PR-side spans inherit a failed PR read as error' \
 	and .ci_wall_hours == "error"'
 assert_doc 'reopen count still computes when only the PR side fails' \
 	'([.metrics.issues[] | select(.number == 302)][0].reopen_count) == 0'
+assert_doc 'issue-side queue metrics survive a failed PR read' \
+	'([.metrics.issues[] | select(.number == 302)][0]) |
+	.triage_latency_hours == "unknown(never-ready)"
+	and .queue_wait_hours == "unknown(no-ready-anchor)"
+	and .blocked_dwell_hours == 0 and .rework_bounces == 0
+	and .human_response_hours == "unknown(never-awaiting-merge)"
+	and .review_drift_hours == "unknown(no-review-phase)"'
 assert_doc 'never-in-progress is a data gap, not an error' \
 	'([.metrics.issues[] | select(.number == 301)][0].cycle_hours) == "unknown(never-in-progress)"'
 assert_doc 'failed PR-side read is error while issue-side still computes' \
@@ -462,6 +504,73 @@ assert_doc 'single-commit PR spans compute' \
 	.merge_lag_hours == 1.5 and .build_private_hours == 0.5
 	and .pr_lifespan_hours == 1 and .full_delivery_hours == 5'
 
+# --- scenario: drift, unlabeled dwell exit, still-blocked, backwards spans -----
+# 501 (closed): the label-derived review phase disagrees with the GitHub-derived
+# PR lifespan far past the 10%-or-1h threshold; a blocked episode exits through
+# its unlabeled event. 502 (open): an in-progress anchor predating ready and an
+# awaiting-merge label written after merge both run backwards and report as
+# error, never clamped; a blocked episode with no exit stays unknown.
+cat >"$SCRATCH/fake/search.json" <<'JSON'
+[
+ {"number":501,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-01T18:00:00Z","labels":[]},
+ {"number":502,"state":"open","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":null,"labels":[]}
+]
+JSON
+cat >"$SCRATCH/fake/tl-501.jsonl" <<'JSONL'
+{"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T07:00:00Z"}
+{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"}
+{"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T08:30:00Z"}
+{"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T09:00:00Z"}
+{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T10:00:00Z"}
+{"event":"unlabeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T11:00:00Z"}
+{"event":"closed","created_at":"2026-07-01T18:00:00Z"}
+JSONL
+printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-501.json"
+printf '%s\n' '[{"number":421,"body":"Closes #501"}]' >"$SCRATCH/fake/prlist-501.json"
+jq -n '{comments:[],additions:10,deletions:2,changedFiles:2,
+	createdAt:"2026-07-01T08:30:00Z",mergedAt:"2026-07-01T17:30:00Z",
+	commits:[{committedDate:"2026-07-01T08:00:00Z"}],
+	statusCheckRollup:[{__typename:"CheckRun",name:"suite",
+		startedAt:"2026-07-01T09:00:00Z",completedAt:"2026-07-01T09:20:00Z"}]}' \
+	>"$SCRATCH/fake/pr-421.json"
+cat >"$SCRATCH/fake/tl-502.jsonl" <<'JSONL'
+{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T05:00:00Z"}
+{"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T06:30:00Z"}
+{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T07:00:00Z"}
+{"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T08:00:00Z"}
+JSONL
+printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-502.json"
+printf '%s\n' '[{"number":422,"body":"Closes #502"}]' >"$SCRATCH/fake/prlist-502.json"
+jq -n '{comments:[],additions:10,deletions:2,changedFiles:2,
+	createdAt:"2026-07-01T07:00:00Z",mergedAt:"2026-07-01T07:30:00Z",
+	commits:[{committedDate:"2026-07-01T06:45:00Z"}],statusCheckRollup:[]}' \
+	>"$SCRATCH/fake/pr-422.json"
+cat >"$SCRATCH/fake/tl-502.jsonl" <<'JSONL'
+{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T05:00:00Z"}
+{"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T06:30:00Z"}
+{"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T08:00:00Z"}
+{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T09:00:00Z"}
+JSONL
+if ! run_collector 'status:blocked'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'drift scenario unexpectedly failed'
+fi
+assert_doc 'issue 501 queue spans and unlabeled dwell exit' \
+	'([.metrics.issues[] | select(.number == 501)][0]) |
+	.triage_latency_hours == 1 and .queue_wait_hours == 1
+	and .blocked_dwell_hours == 1 and .rework_bounces == 0
+	and .human_response_hours == 8.5
+	and .review_drift_hours == 8.5'
+assert_doc 'issue 502 backwards spans are errors, unexited dwell is unknown' \
+	'([.metrics.issues[] | select(.number == 502)][0]) |
+	.triage_latency_hours == 0.5 and .queue_wait_hours == "error"
+	and .blocked_dwell_hours == "unknown(still-blocked)"
+	and .rework_bounces == 0 and .human_response_hours == "error"'
+assert_doc 'drift coverage counts only the paired issue' \
+	'.metrics.coverage.review_drift_hours == 1
+	and .metrics.coverage.blocked_dwell_hours == 1'
 # --- scenario: selection failure aborts ----------------------------------------
 rm -f "$SCRATCH/fake/search.json"
 PATH="$SCRATCH/bin:$PATH" FAKE_DIR="$SCRATCH/fake" CALL_LOG="$SCRATCH/calls" \
