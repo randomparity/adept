@@ -38,6 +38,11 @@ DOC=$(mktemp)
 skills/bards-tale/scripts/collect-telemetry "<selector>" > "$DOC"
 ```
 
+If the collector exits non-zero or stdout does not parse as JSON, stop:
+write nothing — no sidecar, no report — and surface the collector's stderr.
+ADR 0030 makes a non-zero exit or an unparseable capture an aborted
+collection that is never parsed as partial output.
+
 - **`schema_version`** — reject a major version this skill does not know
   rather than guessing at its shape (ADR 0030's bump rule).
 - **`selector`, `mode`** — the selector as passed, and `"label-set"` or

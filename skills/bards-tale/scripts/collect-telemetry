@@ -93,6 +93,25 @@ metric_json() { # value
 
 # --- issue-side reads -----------------------------------------------------------
 
+issue_side_repo() { # destination
+	fetch_failed=0
+	if ! gh repo view --json nameWithOwner --jq .nameWithOwner >"$1"; then
+		fetch_failed=1
+	fi
+}
+
+# Selection: date-range selectors carry ".." and select issues closed in the
+# window; everything else is a label-set selecting issues carrying all named
+# labels. Both go through gh search: it percent-encodes colon labels correctly,
+# where `gh issue list --label` silently matches nothing.
+issue_side_search() { # query destination
+	fetch_failed=0
+	if ! gh search issues --repo "$repo" "$1" \
+		--json number,state,closedAt,labels --limit "$SEARCH_LIMIT" >"$2"; then
+		fetch_failed=1
+	fi
+}
+
 # Ordered labeled/closed/commented event stream for one issue, one event object
 # per line so --paginate stays a clean JSONL stream.
 issue_side_timeline() { # number destination
@@ -295,7 +314,13 @@ collect_issue() { # number state
 				security=$(text_or_unknown "$(annotation_field "$rblock" security)")
 				exit_field=$(text_or_unknown "$(annotation_field "$rblock" exit)")
 			fi
-			if ! loc=$(jq -r '.additions + .deletions' "$prblob"); then
+			# A malformed-but-exit-0 blob must not smuggle a "null" string into a
+			# metric position: absent diffstats are the data gap they are, never a
+			# fake value and never null-as-identity arithmetic.
+			if ! loc=$(jq -r 'if (.additions | type) == "number"
+				and (.deletions | type) == "number"
+				then .additions + .deletions
+				else "unknown(no-diffstats)" end' "$prblob"); then
 				loc='error'
 			fi
 		fi
@@ -339,16 +364,14 @@ collect_issue() { # number state
 
 # --- selection ------------------------------------------------------------------
 
-repo_status=0
-repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || repo_status=$?
-((repo_status == 0)) || die "repository could not be resolved (gh exit $repo_status)"
+issue_side_repo "$work/repo.json"
+((fetch_failed == 0)) || die "repository could not be resolved (gh exit $fetch_failed)"
+repo=$(jq -r '.nameWithOwner' "$work/repo.json")
 owner=${repo%/*}
 name=${repo#*/}
 
-# Date-range selectors carry ".." and select issues closed in the window;
-# everything else is a label-set selecting issues carrying all named labels.
-# Both go through gh search: it percent-encodes colon labels correctly, where
-# `gh issue list --label` silently matches nothing.
+# The selector's mode is decided here; the read itself runs through
+# issue_side_search above.
 if [[ $SELECTOR == *..* ]]; then
 	mode='date-range'
 	query="closed:$SELECTOR"
@@ -363,10 +386,9 @@ else
 	query=${query% }
 fi
 
-search_status=0
-search_json=$(gh search issues --repo "$repo" "$query" \
-	--json number,state,closedAt,labels --limit "$SEARCH_LIMIT") || search_status=$?
-((search_status == 0)) || die "selection read failed (gh exit $search_status)"
+issue_side_search "$query" "$work/search.json"
+((fetch_failed == 0)) || die "selection read failed (gh exit $fetch_failed)"
+search_json=$(cat "$work/search.json")
 
 # Epic-labelled issues sit outside the status state machine and are excluded
 # client-side. Truncation is judged on the raw result size: equality with the

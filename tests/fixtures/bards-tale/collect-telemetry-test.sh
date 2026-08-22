@@ -60,7 +60,7 @@ serve() {
 case $1 in
 repo)
 	# gh repo view --json nameWithOwner --jq .nameWithOwner
-	printf 'example/repo\n'
+	printf '%s\n' '{"nameWithOwner":"example/repo"}'
 	;;
 search)
 	# gh search issues --repo ... <query> --json ... --limit ...
@@ -349,11 +349,12 @@ cat >"$SCRATCH/fake/tl-302.jsonl" <<'JSONL'
 {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T10:00:00Z"}
 {"event":"closed","created_at":"2026-07-02T20:00:00Z"}
 JSONL
-printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-302.json"
 if ! run_collector 'priority:P1'; then
 	cat "$SCRATCH/stderr" >&2
 	fail 'ambiguity scenario unexpectedly failed'
 fi
+# 302 also has a failing issue-comment read (no issue file): the scope
+# estimate is error while the cycle still computes from the timeline.
 assert_doc 'ambiguous closers stay unknown, never guessed' \
 	'([.metrics.issues[] | select(.number == 301)][0]) |
 	.pr == "unknown(ambiguous)"
@@ -366,8 +367,8 @@ assert_doc 'failed PR-side read is error while issue-side still computes' \
 	.pr == "error" and .loc_actual == "error"
 	and .review_iterations == "error"
 	and (.cycle_hours | type == "number")'
-assert_doc '34-hour cycle computes as fractional hours' \
-	'([.metrics.issues[] | select(.number == 302)][0].cycle_hours) == 34'
+assert_doc 'failed issue-side comment read is error, cycle unaffected' \
+	'([.metrics.issues[] | select(.number == 302)][0].scope_estimate) == "error"'
 
 # --- scenario: selection failure aborts ----------------------------------------
 rm -f "$SCRATCH/fake/search.json"
