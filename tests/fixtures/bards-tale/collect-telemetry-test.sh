@@ -43,8 +43,10 @@ assert_count() { # description pattern file expected
 # Dispatches on the subcommand and serves files from $FAKE_DIR, logging every
 # invocation to $CALL_LOG so the suite can pin which reads ran. A response file
 # that exists but is empty serves as a genuinely empty successful read (an
-# empty timeline); one that does not exist makes the read fail with exit 1,
-# which is how the tri-state and rate-limit cases model a failed gh read.
+# empty timeline); one that does not exist makes the read fail non-zero --
+# serve's exit 1 on the verbatim branches, jq's own exit status once the api
+# branch projects through it -- which is how the tri-state and rate-limit
+# cases model a failed gh read.
 mkdir -p "$SCRATCH/bin"
 printf '%s\n' '#!/usr/bin/env bash' >"$SCRATCH/bin/gh"
 cat >>"$SCRATCH/bin/gh" <<'FAKE_GH'
