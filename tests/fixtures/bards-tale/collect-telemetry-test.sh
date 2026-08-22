@@ -338,23 +338,16 @@ assert_doc 'open issue lead time is an incomplete span, never elapsed-so-far' \
 
 assert_doc 'null-free invariant' \
 	'[. | .. | select(type == "null")] | length == 0'
-assert_doc 'aggregate split: each cohort reports its own median and range' \
-	'.metrics.aggregate.instrumented.cycle_hours == {count: 1, median: 4, min: 4, max: 4}
-	and (.metrics.aggregate.legacy.cycle_hours.count) == 1
-	and (.metrics.aggregate.legacy.cycle_hours.median | type == "number")
-	and .metrics.aggregate.combined_context.cycle_hours.count == 2
-	and .metrics.aggregate.combined_context.cycle_hours.max
-		> .metrics.aggregate.combined_context.cycle_hours.min'
-assert_doc 'aggregates exist per span family within each cohort' \
-	'.metrics.aggregate.instrumented.lead_time_hours == {count: 1, median: 6, min: 6, max: 6}
-	and .metrics.aggregate.instrumented.ci_wall_hours.count == 1
-	and .metrics.aggregate.instrumented.triage_latency_hours.count == 1
-	and .metrics.aggregate.instrumented.human_response_hours
+assert_doc 'aggregate stays flat and combined, as schema 1.4 fixed it' \
+	'.metrics.aggregate.cycle_hours.count == 2
+	and .metrics.aggregate.blocked_dwell_hours == {count: 2, median: 0.25, min: 0, max: 0.5}'
+assert_doc 'cohort aggregates split instrumented from legacy' \
+	'.metrics.cohorts.instrumented.cycle_hours == {count: 1, median: 4, min: 4, max: 4}
+	and (.metrics.cohorts.legacy.cycle_hours.count) == 1
+	and (.metrics.cohorts.legacy.cycle_hours.median | type == "number")
+	and .metrics.cohorts.instrumented.human_response_hours
 		== {count: 1, median: 0.1, min: 0.1, max: 0.1}
-	and .metrics.aggregate.combined_context.reopen_count.count == 2
-	and .metrics.aggregate.combined_context.blocked_dwell_hours
-		== {count: 2, median: 0.25, min: 0, max: 0.5}
-	and .metrics.aggregate.combined_context.rework_bounces.count == 2'
+	and .metrics.cohorts.legacy.reopen_count.count == 1'
 assert_doc 'combined quartiles gated below the N >= 20 threshold' \
 	'.metrics.quartiles.cycle_hours == {count: 2}
 	and .metrics.quartiles.lead_time_hours == {count: 1}
@@ -455,6 +448,10 @@ assert_doc 'queue metrics under a failed timeline read are error' \
 	.triage_latency_hours == "error" and .queue_wait_hours == "error"
 	and .blocked_dwell_hours == "error" and .rework_bounces == "error"
 	and .human_response_hours == "error" and .review_drift_hours == "error"'
+assert_doc 'cohort flag under a failed comment read is error; close instant survives' \
+	'([.metrics.issues[] | select(.number == 203)][0]) |
+	.scope_complete == "error"
+	and .closed_at == "2026-07-01T14:00:00Z"'
 assert_doc 'processing stopped after the fifth consecutive error' \
 	'([.metrics.issues[] | select(.number == 205)] | length) == 1
 	and ([.metrics.issues[] | select(.number == 206)] | length) == 0
@@ -758,7 +755,7 @@ assert_doc 'thin segments report only their count' \
 
 # --- scenario: quartiles cross the combined-population threshold ---------------
 # Twenty-one closed issues with measured cycles 1..21 hours: the combined
-# population crosses N >= 20 so p25/p75 appear (nearest-rank over the sorted
+# population crosses N >= 20 so nearest-rank p25/p75 appear over the sorted
 python3 - "$SCRATCH/fake/search.json" "$SCRATCH/fake" <<'PY'
 import json, sys
 from datetime import datetime, timedelta, timezone
@@ -799,6 +796,26 @@ assert_doc 'combined quartiles appear at and above N >= 20' \
 assert_doc 'a populated week reports its median' \
 	'.metrics.throughput.weeks == [{week_start: "2026-06-29",
 		closed_count: 21, median_cycle_hours: 11}]'
+
+# The N = 20 edge discriminates the rank convention: nearest-rank p25/p75 of
+# cycles 1..20 land on values 5 and 15, where a floor index would read 6/16.
+python3 - "$SCRATCH/fake/search.json" <<'PY'
+import json, sys
+issues = [{"number": n, "state": "closed",
+           "createdAt": "2026-07-01T06:00:00Z",
+           "closedAt": "2026-07-01T14:00:00Z", "labels": []}
+          for n in range(901, 921)]
+with open(sys.argv[1], "w") as fh:
+    json.dump(issues, fh)
+PY
+if ! run_collector 'status:blocked'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'quartile N=20 scenario unexpectedly failed'
+fi
+assert_doc 'nearest-rank quartiles discriminate at the N = 20 edge' \
+	'.metrics.quartiles.cycle_hours.count == 20
+	and .metrics.quartiles.cycle_hours.p25 == 5
+	and .metrics.quartiles.cycle_hours.p75 == 15'
 
 # --- scenario: selection failure aborts ----------------------------------------
 rm -f "$SCRATCH/fake/search.json"

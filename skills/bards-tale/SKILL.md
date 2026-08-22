@@ -139,8 +139,9 @@ collection that is never parsed as partial output.
   `WORK:SCOPE` block exists under latest-complete-wins — the boundary the
   report's cohort split follows, independent of whether its complexity line
   parses) and `closed_at` (the raw close instant; an open issue reports
-  `unknown(not-closed)`); `metrics.aggregate` split into `instrumented`,
-  `legacy`, and `combined_context`; `metrics.quartiles`, combined-population
+  `unknown(not-closed)`); `metrics.cohorts` (per-cohort aggregates over
+  `instrumented` / `legacy`, the pre-existing flat `metrics.aggregate`
+  becoming the labelled combined context); `metrics.quartiles`, combined-population
   p25/p75 gated at N >= 20; `metrics.throughput.weeks`, weekly closed counts
   with instability-gated per-week median cycle. The renderer contract for all
   of these is §3.
@@ -196,10 +197,10 @@ Sections:
      cycle, closing PR, LOC. The remaining columns are structurally
      `unknown` for these issues, and printing that word seventy times
      communicates nothing; the compact shape is the honesty, not a loss.
-   - **Aggregates** — `metrics.aggregate.instrumented` and
-     `metrics.aggregate.legacy`: **median + range** per span family within
+   - **Aggregates** — `metrics.cohorts.instrumented` and
+     `metrics.cohorts.legacy`: **median + range** per span family within
      each cohort (not a fabricated p90 over a handful of points). The
-     combined figure (`metrics.aggregate.combined_context`) may appear once
+     combined figure (`metrics.aggregate`, all issues) may appear once
      beneath both, explicitly labelled *context — all issues*, never as
      either cohort's headline. Durations are hours to one decimal — a
      sub-hour cycle reports `0.4`, never `0`. Emit an **instability note

@@ -47,13 +47,13 @@ set -euo pipefail
 # - The report-cohort contract (issue #112): per-issue `closed_at` and
 #   `scope_complete` (a complete WORK:SCOPE block exists under
 #   latest-complete-wins — the cohort boundary, independent of whether its
-#   complexity line parses); `metrics.aggregate` split into `instrumented`,
-#   `legacy`, and an explicitly-labelled `combined_context`; a new
-#   `metrics.quartiles` over the combined population, gated at N >= 20; and
+#   complexity line parses); new objects `metrics.cohorts` (per-cohort
+#   aggregates over `instrumented` / `legacy`), `metrics.quartiles`
+#   (combined population, nearest-rank p25/p75 gated at N >= 20), and
 #   `metrics.throughput.weeks` (weekly closed counts and per-week median
-#   cycle, instability-gated). Additive fields and one reshaped aggregate
-#   whose sole consumer is this skill's own renderer, hence schema_version
-#   1.5.
+#   cycle, instability-gated). The pre-existing flat `metrics.aggregate` is
+#   untouched and becomes the report's combined-context figure. All
+#   additions under ADR 0030's minor-bump clause, hence schema_version 1.5.
 # - Every gh read belongs to one of two named groups: issue_side_* (timeline,
 #   issue comments) or pr_side_* (PR candidate search, PR metadata). The groups
 #   do not interleave in one function, so a later migration of the issue-side
@@ -873,15 +873,46 @@ done < <(jq -r '.[].number' <<<"$selected_json")
 
 # --- aggregates ------------------------------------------------------------------
 
-# Median + range over each span family's value-state durations, split by
-# cohort: an issue belongs to the instrumented cohort iff a complete
-# WORK:SCOPE block exists for it (`scope_complete` true); every other entry
-# is legacy. The combined figure rides along as explicit context under
-# `combined_context`, never as either cohort's headline — a median over "all
-# issues" mixes a measured cohort with one that was never measured, which is
-# exactly the number this split exists to stop publishing. An empty selection
-# or empty cohort carries the count alone, never null-filled medians.
+# Median + range over each span family's value-state durations across the
+# whole selection. This is the document's combined figure; the report
+# contract renders it only as explicitly-labelled context beside the
+# per-cohort aggregates in `metrics.cohorts`, never as either cohort's
+# headline — a median over "all issues" mixes a measured cohort with one
+# that was never measured, which is exactly the number the cohort split
+# exists to stop publishing. An empty selection carries the count alone,
+# never null-filled medians of nothing. The shape is unchanged from
+# schema 1.4: re-nesting these families would be a major bump under ADR
+# 0030, and nothing here needs one.
 aggregate=$(jq -s '
+	def agg(f):
+		[.[] | select(.[f] | type == "number") | .[f]] |
+		if length == 0 then {count: 0}
+		else {
+			median: (sort |
+				if length % 2 == 1 then .[length / 2 | floor]
+				else (.[length / 2 - 1] + .[length / 2]) / 2 end),
+			min: min,
+			max: max,
+			count: length
+		} end;
+	{cycle_hours: agg("cycle_hours"),
+	 lead_time_hours: agg("lead_time_hours"),
+	 pr_lifespan_hours: agg("pr_lifespan_hours"),
+	 full_delivery_hours: agg("full_delivery_hours"),
+	 merge_lag_hours: agg("merge_lag_hours"),
+	 build_private_hours: agg("build_private_hours"),
+	 ci_wall_hours: agg("ci_wall_hours"),
+	 reopen_count: agg("reopen_count"),
+	 triage_latency_hours: agg("triage_latency_hours"),
+	 queue_wait_hours: agg("queue_wait_hours"),
+	 blocked_dwell_hours: agg("blocked_dwell_hours"),
+	 human_response_hours: agg("human_response_hours"),
+	 rework_bounces: agg("rework_bounces")}' "$entries")
+
+# Per-cohort aggregates under the minor-bump clause: an issue belongs to
+# the instrumented cohort iff a complete WORK:SCOPE block exists for it
+# (`scope_complete` true); every other entry is legacy.
+cohorts=$(jq -s '
 	def agg(f):
 		[.[] | select(.[f] | type == "number") | .[f]] |
 		if length == 0 then {count: 0}
@@ -909,8 +940,7 @@ aggregate=$(jq -s '
 		 rework_bounces: agg("rework_bounces")};
 	([.[] | select(.scope_complete == true)] | families) as $instrumented |
 	([.[] | select(.scope_complete != true)] | families) as $legacy |
-	families as $combined |
-	{instrumented: $instrumented, legacy: $legacy, combined_context: $combined}' "$entries")
+	{instrumented: $instrumented, legacy: $legacy}' "$entries")
 
 # Per-metric coverage: how many entries carry a genuine value, so a thin sample
 # is never mistaken for a complete one.
@@ -966,8 +996,8 @@ risk_bands=$(jq -s '
 			else "unknown(instability-rule)" end),
 		 min: (if ($v | length) >= 5 then ($v | min)
 			else "unknown(instability-rule)" end),
-		 max: (if ($v | length) >= 5 then ($v | max)
-			else "unknown(instability-rule)" end)};
+	 max: (if ($v | length) >= 5 then ($v | max)
+		else "unknown(instability-rule)" end)};
 	{"night-safe": seg("night-safe"),
 	 "night-watch": seg("night-watch"),
 	 "daytime-only": seg("daytime-only"),
@@ -984,8 +1014,8 @@ quartiles=$(jq -s '
 		[.[] | select(.[f] | type == "number") | .[f]] as $v |
 		{count: ($v | length)} +
 		(if ($v | length) >= 20 then
-			{p25: ($v | sort | .[(length * 0.25 | floor)]),
-			 p75: ($v | sort | .[(length * 0.75 | floor)])}
+			{p25: ($v | sort | .[((length * 0.25) | ceil) - 1]),
+			 p75: ($v | sort | .[((length * 0.75) | ceil) - 1])}
 		else {} end);
 	{cycle_hours: quart("cycle_hours"),
 	 lead_time_hours: quart("lead_time_hours"),
@@ -1037,10 +1067,12 @@ metrics=$(jq -n \
 	--argjson aggregate "$aggregate" \
 	--argjson coverage "$coverage" \
 	--argjson risk_bands "$risk_bands" \
+	--argjson cohorts "$cohorts" \
 	--argjson quartiles "$quartiles" \
 	--argjson throughput "$throughput" \
 	'{issues: $issues, aggregate: $aggregate, coverage: $coverage,
 	  risk_band_cycle_hours: $risk_bands,
+	  cohorts: $cohorts,
 	  quartiles: $quartiles, throughput: $throughput}')
 
 printf '%s\n' "$metrics" >"$work/metrics.json"
