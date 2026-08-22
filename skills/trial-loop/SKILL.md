@@ -68,7 +68,8 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   also part of the supplied challenge arguments — challenge extracts it.
 - `iteration_budget`: optional caller-supplied cycle cap, 2 through 5; omission
   means 5. Only a caller holding a validated risk assessment — a triage subtype,
-  a divination verdict, an explicit human instruction — may lower it; the loop
+  a divination verdict, an explicit human instruction, or a reversal-cost assessment
+  recorded under the `$counterspell` path (ADR 0031) — may lower it; the loop
   never derives a lower budget itself. The floor is 2 because a pass that
   applied fixes always needs a confirming pass. A lower budget is not a lower
   bar: the final-iteration stop condition still blocks on unresolved
