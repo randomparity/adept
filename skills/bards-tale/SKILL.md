@@ -103,6 +103,38 @@ collection that is never parsed as partial output.
   `pr_lifespan_hours` or 1 hour, whichever is larger**, means labels were
   written late or not at all — the drift `$resurrection` exists to repair —
   not that review was fast.
+- **Trajectory mining** — five per-issue fields read line-anchored from the
+  latest complete `WORK:TRAJECTORY` block in the already-fetched issue
+  comments (latest-complete-wins): `trajectory_phase` (the `phase:` or
+  `outcome:` slot — the parked phase or terminal outcome),
+  `trajectory_branch` (`branch:` / `branch/pr:`), `trajectory_pr` (the
+  first integer of an explicit `pr:` field), `trajectory_guardrails`
+  (`guardrails:` / `guardrail status:`), and `trajectory_surprises`
+  (`surprises worth remembering:` / `surprises:`). An absent block is
+  `unknown`; prose that defeats the line-anchored read is the data gap it
+  honestly is — a multi-line surprises section surfaces only its first
+  line.
+- **Divination calibration** — `divination_complexity` from the latest
+  complete `WORK:DIVINATION` block, plus `scope_miss_location`: the
+  skill's heuristic LOC bands (S < 50, M 50–300, L > 300) turn each link
+  of the divination → `WORK:SCOPE` estimate → `loc_actual` chain into a
+  band, and the agreement pattern locates a miss — `aligned` (all three
+  bands agree), `assessment` (the estimate repeats the divination against
+  a differing actual, or the estimate matches the actual the divination
+  misread — the divergence begins at the pre-work assessment), `freeze`
+  (divination and actual agree against a differing estimate — the freeze
+  diverged from a correct assessment), `divergent` (no two links agree),
+  or `unknown(no-divination)` / `unknown(no-scope)` / `unknown(no-loc)`
+  for a link that did not resolve. A failed comment or diff read is
+  `error` at every position it feeds.
+- **Risk-band cycle segmentation** — a per-issue `risk_band` (most
+  restrictive of the `risk:` labels present, quest-log's multi-match rule;
+  `unjudged` when none — absence is the third state it is everywhere
+  else, never `night-safe`) and `metrics.risk_band_cycle_hours`, the
+  cycle-time distribution (count, median, min, max) per band. The
+  instability rule is structural here: a band with fewer than five
+  measured cycles reports only its count, with
+  `unknown(instability-rule)` at each distribution position.
 
 **Empty selection.** When `population.count == 0`, write nothing — no report,
 no sidecar — and state plainly that the selector matched zero issues (`gh
@@ -142,7 +174,9 @@ Sections:
    p90 over a handful of points). Durations are hours to one decimal — a
    sub-hour cycle reports `0.4`, never `0`. Emit an **instability note
    whenever a metric's coverage `N < 5`**, warning against over-trusting a
-   2–4-point median. Flag any issue whose `review_drift_hours` exceeds
+   2–4-point median. Risk-band cycle segments are gated structurally — a
+   band under five measured cycles reports its count only. Flag any issue
+   whose `review_drift_hours` exceeds
    `max(1, 0.1 × pr_lifespan_hours)`: the label timestamps lag reality.
 3. **Findings** — process observations, each **grounded in a named metric**.
    Every finding must reference an issue number or aggregate present in the

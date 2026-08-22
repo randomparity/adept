@@ -35,6 +35,14 @@ set -euo pipefail
 #   label-derived review phase against the GitHub-derived PR lifespan. They
 #   are additive per-issue fields under ADR 0030's minor-bump clause, hence
 #   schema_version 1.3.
+#
+# - Three annotation-mining families ride the already-fetched issue-side
+#   comment blob under latest-complete-wins: WORK:TRAJECTORY mining (phase
+#   or outcome, branch, PR, guardrail status, surprises), the
+#   WORK:DIVINATION to WORK:SCOPE to actual-LOC calibration chain, and a
+#   per-issue risk_band feeding cycle-time segmentation by `risk:` band,
+#   gated behind the N < 5 instability rule. They are additive fields under
+#   ADR 0030's minor-bump clause, hence schema_version 1.4.
 # - Every gh read belongs to one of two named groups: issue_side_* (timeline,
 #   issue comments) or pr_side_* (PR candidate search, PR metadata). The groups
 #   do not interleave in one function, so a later migration of the issue-side
@@ -45,9 +53,8 @@ set -euo pipefail
 # Bash 3.2 floor: indexed arrays only, no mapfile, no associative arrays.
 
 RATE_LIMIT_STOP=5
+SCHEMA_VERSION='1.4'
 SEARCH_LIMIT=200
-SCHEMA_VERSION='1.3'
-
 usage() {
 	printf 'usage: %s SELECTOR\n' "${0##*/}" >&2
 	printf '       SELECTOR  a label-set ("status:ready") or a date-range\n' >&2
@@ -221,6 +228,51 @@ text_or_unknown() { # raw
 	fi
 }
 
+# First run of decimal digits in a raw field value, or empty — the PR number
+# of an explicitly labelled field, read without guessing at surrounding
+# prose. Prose that only mentions a PR in passing stays the data gap it is.
+first_integer() { # raw
+	jq -rn --arg v "$1" '([$v | scan("[0-9]+")] | first) // ""'
+}
+
+# Remainder of the first line naming any of the given labelled fields, tried
+# in order; writers phrase the same slot as "phase:" or "**Outcome**:", and
+# the miner follows both spellings rather than picking one dialect.
+annotation_field_any() { # block names...
+	local block=$1 raw name
+	shift
+	for name in "$@"; do
+		raw=$(annotation_field "$block" "$name")
+		if [[ -n $raw ]]; then
+			printf '%s\n' "$raw"
+			return
+		fi
+	done
+	printf '\n'
+}
+
+# The skill's heuristic LOC bands: S < 50, M 50-300, L > 300. A value that
+# is not a measured LOC actual has no band.
+loc_band() { # loc-value
+	if [[ $1 =~ ^[0-9]+$ ]]; then
+		if (($1 < 50)); then
+			printf 'S\n'
+		elif (($1 > 300)); then
+			printf 'L\n'
+		else
+			printf 'M\n'
+		fi
+	fi
+}
+
+# Band letter for an already-normalized complexity value; anything else
+# (unknown, error) has none.
+band_of() { # complexity-value
+	case $1 in
+	S | M | L) printf '%s\n' "$1" ;;
+	esac
+}
+
 # Count of reopened events in a captured timeline stream. Zero from a
 # successful read is a genuine value — the never-zero-fill rule bars filling
 # absence with zero, not reporting a measured zero.
@@ -273,8 +325,8 @@ blocked_dwell_of() { # tl-file
 
 # Sets ENTRY (one compact JSON object) and ISSUE_ERRORED (1 when any read for
 # this issue failed). Orchestrates the two read groups; the gh calls themselves
-collect_issue() { # number state created closed
-	local n=$1 state=$2 created=$3 closed=$4
+collect_issue() { # number state created closed risk-band
+	local n=$1 state=$2 created=$3 closed=$4 risk_band=$5
 	local tl="$work/tl-$n.jsonl" blob="$work/issue-$n.json" cand="$work/prlist-$n.json"
 	local cycle inflight=false build review tl_failed
 	local first_ip last_closed in_review awaiting_merge
@@ -284,6 +336,10 @@ collect_issue() { # number state created closed
 	local first_ready am_last
 	local triage='error' queue='error' dwell='error' bounces='error'
 	local hr='error' drift='error' hr_open=0 drift_open=0
+	local tblock dblock
+	local traj_phase='error' traj_branch='error' traj_pr='error'
+	local traj_guardrails='error' traj_surprises='error'
+	local div_cx='error' miss='error' db sb ab
 
 	ISSUE_ERRORED=0
 
@@ -416,6 +472,34 @@ collect_issue() { # number state created closed
 		scope_est=$(complexity_of "$(latest_complete_block "$blob" 'WORK:SCOPE' 'SCOPE:COMPLETE')")
 	else
 		scope_est='error'
+	fi
+
+	# Trajectory and divination mining ride the same captured comment blob
+	# under latest-complete-wins. A failed blob read leaves every position
+	# it feeds at error; an absent or sentinel-less block is the data gap
+	# it is; prose that defeats the line-anchored read stays unknown.
+	if [[ -s $blob ]]; then
+		tblock=$(latest_complete_block "$blob" 'WORK:TRAJECTORY' 'TRAJECTORY:COMPLETE')
+		if [[ -z $tblock ]]; then
+			traj_phase='unknown'
+			traj_branch='unknown'
+			traj_pr='unknown'
+			traj_guardrails='unknown'
+			traj_surprises='unknown'
+		else
+			traj_phase=$(text_or_unknown \
+				"$(annotation_field_any "$tblock" phase outcome)")
+			traj_branch=$(text_or_unknown \
+				"$(annotation_field_any "$tblock" branch branch/pr)")
+			traj_pr=$(numeric_or_unknown \
+				"$(first_integer "$(annotation_field "$tblock" pr)")")
+			traj_guardrails=$(text_or_unknown \
+				"$(annotation_field_any "$tblock" guardrails 'guardrail status')")
+			traj_surprises=$(text_or_unknown \
+				"$(annotation_field_any "$tblock" 'surprises worth remembering' surprises)")
+		fi
+		dblock=$(latest_complete_block "$blob" 'WORK:DIVINATION' 'DIVINATION:COMPLETE')
+		div_cx=$(complexity_of "$dblock")
 	fi
 
 	# PR-derived metrics follow the resolver outcome: unresolved stays unknown
@@ -574,6 +658,32 @@ collect_issue() { # number state created closed
 			;;
 		esac
 	fi
+
+	# Divination-to-scope-to-actual calibration. The heuristic LOC bands turn
+	# each link into a band, and the agreement pattern locates a miss: at the
+	# pre-work assessment, at the freeze, nowhere, or nowhere in particular. A
+	# link that did not resolve names itself and stops the chain — never a
+	# guessed verdict.
+	db=$(band_of "$div_cx")
+	sb=$(band_of "$scope_est")
+	ab=$(loc_band "$loc")
+	if [[ $div_cx == error || $scope_est == error || $loc == error ]]; then
+		miss='error'
+	elif [[ -z $db ]]; then
+		miss='unknown(no-divination)'
+	elif [[ -z $sb ]]; then
+		miss='unknown(no-scope)'
+	elif [[ -z $ab ]]; then
+		miss='unknown(no-loc)'
+	elif [[ $db == "$sb" && $sb == "$ab" ]]; then
+		miss='aligned'
+	elif [[ $db == "$sb" || $sb == "$ab" ]]; then
+		miss='assessment'
+	elif [[ $db == "$ab" ]]; then
+		miss='freeze'
+	else
+		miss='divergent'
+	fi
 	ENTRY=$(jq -cn \
 		--argjson number "$n" \
 		--arg state "$state" \
@@ -601,6 +711,14 @@ collect_issue() { # number state created closed
 		--argjson human_response_hours "$(metric_json "$hr")" \
 		--argjson rework_bounces "$(metric_json "$bounces")" \
 		--argjson review_drift_hours "$(metric_json "$drift")" \
+		--arg risk_band "$risk_band" \
+		--arg trajectory_phase "$traj_phase" \
+		--arg trajectory_branch "$traj_branch" \
+		--argjson trajectory_pr "$(metric_json "$traj_pr")" \
+		--arg trajectory_guardrails "$traj_guardrails" \
+		--arg trajectory_surprises "$traj_surprises" \
+		--arg divination_complexity "$div_cx" \
+		--arg scope_miss_location "$miss" \
 		'{number: $number, state: $state,
 		  cycle_hours: $cycle_hours, cycle_in_flight: $cycle_in_flight,
 		  phase_build_hours: $phase_build_hours,
@@ -619,7 +737,15 @@ collect_issue() { # number state created closed
 		  blocked_dwell_hours: $blocked_dwell_hours,
 		  human_response_hours: $human_response_hours,
 		  rework_bounces: $rework_bounces,
-		  review_drift_hours: $review_drift_hours}')
+		  review_drift_hours: $review_drift_hours,
+		  risk_band: $risk_band,
+		  trajectory_phase: $trajectory_phase,
+		  trajectory_branch: $trajectory_branch,
+		  trajectory_pr: $trajectory_pr,
+		  trajectory_guardrails: $trajectory_guardrails,
+		  trajectory_surprises: $trajectory_surprises,
+		  divination_complexity: $divination_complexity,
+		  scope_miss_location: $scope_miss_location}')
 	printf '%s\n' "$ENTRY"
 }
 
@@ -669,12 +795,28 @@ entries="$work/issues.jsonl"
 consecutive_errors=0
 rate_limited=false
 
+# The risk band rides the same per-issue projection: most restrictive value
+# wins when several risk: labels are present (quest-log's multi-match rule),
+# and absence is the third state it is everywhere else — unjudged, never
+# night-safe.
 while read -r n; do
-	IFS=$'\t' read -r issue_state created closed <<<"$(jq -r --argjson n "$n" \
+	{
+		read -r issue_state
+		read -r created
+		read -r closed
+		read -r risk_band
+	} <<<"$(jq -r --argjson n "$n" \
 		'([.[] | select(.number == $n)][0])
-			| [(.state | ascii_downcase), (.createdAt // ""), (.closedAt // "")] | @tsv' \
+			| (.state | ascii_downcase),
+				(.createdAt // ""),
+				(.closedAt // ""),
+				([.labels[].name] as $ls |
+					if ($ls | index("risk:daytime-only")) then "daytime-only"
+					elif ($ls | index("risk:night-watch")) then "night-watch"
+					elif ($ls | index("risk:night-safe")) then "night-safe"
+					else "unjudged" end)' \
 		<<<"$selected_json")"
-	collect_issue "$n" "$issue_state" "$created" "$closed" >>"$entries"
+	collect_issue "$n" "$issue_state" "$created" "$closed" "$risk_band" >>"$entries"
 	if ((ISSUE_ERRORED)); then
 		consecutive_errors=$((consecutive_errors + 1))
 		if ((consecutive_errors >= RATE_LIMIT_STOP)); then
@@ -739,6 +881,11 @@ coverage=$(jq -s '
 	(map(select(.human_response_hours | type == "number")) | length) as $human |
 	(map(select(.rework_bounces | type == "number")) | length) as $bounces |
 	(map(select(.review_drift_hours | type == "number")) | length) as $drift |
+	(map(select(.trajectory_phase != "unknown" and .trajectory_phase != "error")) | length) as $traj |
+	(map(select(.divination_complexity != "unknown"
+		and .divination_complexity != "error")) | length) as $div |
+	(map(select(.scope_miss_location != "error"
+		and (.scope_miss_location | startswith("unknown") | not))) | length) as $miss |
 	{cycle_hours: $cycle, phase_build_hours: $build, phase_review_hours: $review,
 	 pr: $pr, review_iterations: $iterations, scope_estimate: $scope, loc_actual: $loc,
 	 lead_time_hours: $lead, pr_lifespan_hours: $lifespan,
@@ -746,7 +893,31 @@ coverage=$(jq -s '
 	 build_private_hours: $bprivate, ci_wall_hours: $ci, reopen_count: $reopens,
 	 triage_latency_hours: $triage, queue_wait_hours: $queue,
 	 blocked_dwell_hours: $dwell, human_response_hours: $human,
-	 rework_bounces: $bounces, review_drift_hours: $drift}' "$entries")
+	 rework_bounces: $bounces, review_drift_hours: $drift,
+	 trajectory_phase: $traj, divination_complexity: $div,
+	 scope_miss_location: $miss}' "$entries")
+
+# Cycle time segmented by risk band. The instability rule gates every
+# segment: below five measured cycles the band reports only its count, with
+# unknown(instability-rule) at each distribution position — a 2-4-point
+# median is exactly the over-trusted number the rule exists to prevent.
+risk_bands=$(jq -s '
+	def seg(b):
+		[.[] | select(.risk_band == b)
+			| select(.cycle_hours | type == "number") | .cycle_hours] as $v |
+		{count: ($v | length),
+		 median: (if ($v | length) >= 5 then
+			($v | sort | if length % 2 == 1 then .[length / 2 | floor]
+				else (.[length / 2 - 1] + .[length / 2]) / 2 end)
+			else "unknown(instability-rule)" end),
+		 min: (if ($v | length) >= 5 then ($v | min)
+			else "unknown(instability-rule)" end),
+		 max: (if ($v | length) >= 5 then ($v | max)
+			else "unknown(instability-rule)" end)};
+	{"night-safe": seg("night-safe"),
+	 "night-watch": seg("night-watch"),
+	 "daytime-only": seg("daytime-only"),
+	 "unjudged": seg("unjudged")}' "$entries")
 
 # The issues array rides in through --slurpfile, never argv: a full
 # population as a single argument exceeds Linux's per-argument size limit.
@@ -754,9 +925,9 @@ metrics=$(jq -n \
 	--slurpfile issues "$entries" \
 	--argjson aggregate "$aggregate" \
 	--argjson coverage "$coverage" \
-	'{issues: $issues, aggregate: $aggregate, coverage: $coverage}')
-
-# --- emission ---------------------------------------------------------------------
+	--argjson risk_bands "$risk_bands" \
+	'{issues: $issues, aggregate: $aggregate, coverage: $coverage,
+	  risk_band_cycle_hours: $risk_bands}')
 
 printf '%s\n' "$metrics" >"$work/metrics.json"
 jq -n \
