@@ -43,6 +43,17 @@ set -euo pipefail
 #   per-issue risk_band feeding cycle-time segmentation by `risk:` band,
 #   gated behind the N < 5 instability rule. They are additive fields under
 #   ADR 0030's minor-bump clause, hence schema_version 1.4.
+#
+# - The report-cohort contract (issue #112): per-issue `closed_at` and
+#   `scope_complete` (a complete WORK:SCOPE block exists under
+#   latest-complete-wins — the cohort boundary, independent of whether its
+#   complexity line parses); new objects `metrics.cohorts` (per-cohort
+#   aggregates over `instrumented` / `legacy`), `metrics.quartiles`
+#   (combined population, nearest-rank p25/p75 gated at N >= 20), and
+#   `metrics.throughput.weeks` (weekly closed counts and per-week median
+#   cycle, instability-gated). The pre-existing flat `metrics.aggregate` is
+#   untouched and becomes the report's combined-context figure. All
+#   additions under ADR 0030's minor-bump clause, hence schema_version 1.5.
 # - Every gh read belongs to one of two named groups: issue_side_* (timeline,
 #   issue comments) or pr_side_* (PR candidate search, PR metadata). The groups
 #   do not interleave in one function, so a later migration of the issue-side
@@ -53,7 +64,7 @@ set -euo pipefail
 # Bash 3.2 floor: indexed arrays only, no mapfile, no associative arrays.
 
 RATE_LIMIT_STOP=5
-SCHEMA_VERSION='1.4'
+SCHEMA_VERSION='1.5'
 SEARCH_LIMIT=200
 usage() {
 	printf 'usage: %s SELECTOR\n' "${0##*/}" >&2
@@ -330,7 +341,7 @@ collect_issue() { # number state created closed risk-band
 	local tl="$work/tl-$n.jsonl" blob="$work/issue-$n.json" cand="$work/prlist-$n.json"
 	local cycle inflight=false build review tl_failed
 	local first_ip last_closed in_review awaiting_merge
-	local pr pr_ok iters verdict security exit_field scope_est loc
+	local scope_complete closed_at
 	local lead reopens lifespan full_del lag bprivate ci
 	local pr_created pr_merged commit_span first_commit last_commit
 	local first_ready am_last
@@ -467,11 +478,33 @@ collect_issue() { # number state created closed risk-band
 		lead='error'
 	fi
 
+	# The raw close instant rides the same search projection as cycle time;
+	# the weekly throughput buckets key on it. Same tri-state reasons as
+	# lead time, whose anchors it shares.
+	if [[ $state != closed ]]; then
+		closed_at='unknown(not-closed)'
+	elif [[ -z $closed ]]; then
+		closed_at='unknown(no-closed-at)'
+	else
+		closed_at=$closed
+	fi
+
 	# Scope estimate from the latest complete WORK:SCOPE on the issue.
+	# scope_complete is the cohort boundary the report splits on: a complete
+	# block exists under latest-complete-wins, whether or not its complexity
+	# line parses into an estimate. A failed blob read is error at both.
 	if [[ -s $blob ]]; then
-		scope_est=$(complexity_of "$(latest_complete_block "$blob" 'WORK:SCOPE' 'SCOPE:COMPLETE')")
+		local sblob
+		sblob=$(latest_complete_block "$blob" 'WORK:SCOPE' 'SCOPE:COMPLETE')
+		scope_est=$(complexity_of "$sblob")
+		if [[ -n $sblob ]]; then
+			scope_complete=true
+		else
+			scope_complete=false
+		fi
 	else
 		scope_est='error'
+		scope_complete='error'
 	fi
 
 	# Trajectory and divination mining ride the same captured comment blob
@@ -684,6 +717,13 @@ collect_issue() { # number state created closed risk-band
 	else
 		miss='divergent'
 	fi
+	# metric_json quotes anything non-numeric, so the boolean cohort flag
+	# is rendered here: true and false pass raw; a failed blob read is the
+	# one string state it can carry.
+	case $scope_complete in
+	true | false) scope_complete_json=$scope_complete ;;
+	*) scope_complete_json='"error"' ;;
+	esac
 	ENTRY=$(jq -cn \
 		--argjson number "$n" \
 		--arg state "$state" \
@@ -691,6 +731,7 @@ collect_issue() { # number state created closed risk-band
 		--argjson cycle_in_flight "$inflight" \
 		--argjson phase_build_hours "$(metric_json "$build")" \
 		--argjson phase_review_hours "$(metric_json "$review")" \
+		--argjson scope_complete "$scope_complete_json" \
 		--argjson pr "$(metric_json "$pr")" \
 		--argjson review_iterations "$(metric_json "$iters")" \
 		--arg review_verdict "$verdict" \
@@ -698,6 +739,7 @@ collect_issue() { # number state created closed risk-band
 		--arg exit_ "$exit_field" \
 		--arg scope_estimate "$scope_est" \
 		--argjson loc_actual "$(metric_json "$loc")" \
+		--argjson closed_at "$(metric_json "$closed_at")" \
 		--argjson lead_time_hours "$(metric_json "$lead")" \
 		--argjson pr_lifespan_hours "$(metric_json "$lifespan")" \
 		--argjson full_delivery_hours "$(metric_json "$full_del")" \
@@ -726,6 +768,7 @@ collect_issue() { # number state created closed risk-band
 		  pr: $pr, review_iterations: $review_iterations,
 		  review_verdict: $review_verdict, security: $security, exit: $exit_,
 		  scope_estimate: $scope_estimate, loc_actual: $loc_actual,
+		  scope_complete: $scope_complete, closed_at: $closed_at,
 		  lead_time_hours: $lead_time_hours,
 		  pr_lifespan_hours: $pr_lifespan_hours,
 		  full_delivery_hours: $full_delivery_hours,
@@ -830,8 +873,16 @@ done < <(jq -r '.[].number' <<<"$selected_json")
 
 # --- aggregates ------------------------------------------------------------------
 
-# Median + range over each span family's value-state durations; an empty
-# selection carries the count alone, never null-filled medians of nothing.
+# Median + range over each span family's value-state durations across the
+# whole selection. This is the document's combined figure; the report
+# contract renders it only as explicitly-labelled context beside the
+# per-cohort aggregates in `metrics.cohorts`, never as either cohort's
+# headline — a median over "all issues" mixes a measured cohort with one
+# that was never measured, which is exactly the number the cohort split
+# exists to stop publishing. An empty selection carries the count alone,
+# never null-filled medians of nothing. The shape is unchanged from
+# schema 1.4: re-nesting these families would be a major bump under ADR
+# 0030, and nothing here needs one.
 aggregate=$(jq -s '
 	def agg(f):
 		[.[] | select(.[f] | type == "number") | .[f]] |
@@ -857,6 +908,39 @@ aggregate=$(jq -s '
 	 blocked_dwell_hours: agg("blocked_dwell_hours"),
 	 human_response_hours: agg("human_response_hours"),
 	 rework_bounces: agg("rework_bounces")}' "$entries")
+
+# Per-cohort aggregates under the minor-bump clause: an issue belongs to
+# the instrumented cohort iff a complete WORK:SCOPE block exists for it
+# (`scope_complete` true); every other entry is legacy.
+cohorts=$(jq -s '
+	def agg(f):
+		[.[] | select(.[f] | type == "number") | .[f]] |
+		if length == 0 then {count: 0}
+		else {
+			median: (sort |
+				if length % 2 == 1 then .[length / 2 | floor]
+				else (.[length / 2 - 1] + .[length / 2]) / 2 end),
+			min: min,
+			max: max,
+			count: length
+		} end;
+	def families:
+		{cycle_hours: agg("cycle_hours"),
+		 lead_time_hours: agg("lead_time_hours"),
+		 pr_lifespan_hours: agg("pr_lifespan_hours"),
+		 full_delivery_hours: agg("full_delivery_hours"),
+		 merge_lag_hours: agg("merge_lag_hours"),
+		 build_private_hours: agg("build_private_hours"),
+		 ci_wall_hours: agg("ci_wall_hours"),
+		 reopen_count: agg("reopen_count"),
+		 triage_latency_hours: agg("triage_latency_hours"),
+		 queue_wait_hours: agg("queue_wait_hours"),
+		 blocked_dwell_hours: agg("blocked_dwell_hours"),
+		 human_response_hours: agg("human_response_hours"),
+		 rework_bounces: agg("rework_bounces")};
+	([.[] | select(.scope_complete == true)] | families) as $instrumented |
+	([.[] | select(.scope_complete != true)] | families) as $legacy |
+	{instrumented: $instrumented, legacy: $legacy}' "$entries")
 
 # Per-metric coverage: how many entries carry a genuine value, so a thin sample
 # is never mistaken for a complete one.
@@ -912,12 +996,69 @@ risk_bands=$(jq -s '
 			else "unknown(instability-rule)" end),
 		 min: (if ($v | length) >= 5 then ($v | min)
 			else "unknown(instability-rule)" end),
-		 max: (if ($v | length) >= 5 then ($v | max)
-			else "unknown(instability-rule)" end)};
+	 max: (if ($v | length) >= 5 then ($v | max)
+		else "unknown(instability-rule)" end)};
 	{"night-safe": seg("night-safe"),
 	 "night-watch": seg("night-watch"),
 	 "daytime-only": seg("daytime-only"),
 	 "unjudged": seg("unjudged")}' "$entries")
+
+# Combined-population quartiles, keyed to the report contract: per-cohort
+# quartiles are excluded outright — a dozen points say nothing a median and
+# range do not say better — so quartiles exist only where the whole
+# population is large enough to carry them. A family with fewer than 20
+# measured values reports its count alone; the renderer labels the section
+# "combined population" so the threshold is visible to the reader.
+quartiles=$(jq -s '
+	def quart(f):
+		[.[] | select(.[f] | type == "number") | .[f]] as $v |
+		{count: ($v | length)} +
+		(if ($v | length) >= 20 then
+			{p25: ($v | sort | .[((length * 0.25) | ceil) - 1]),
+			 p75: ($v | sort | .[((length * 0.75) | ceil) - 1])}
+		else {} end);
+	{cycle_hours: quart("cycle_hours"),
+	 lead_time_hours: quart("lead_time_hours"),
+	 pr_lifespan_hours: quart("pr_lifespan_hours"),
+	 full_delivery_hours: quart("full_delivery_hours"),
+	 merge_lag_hours: quart("merge_lag_hours"),
+	 build_private_hours: quart("build_private_hours"),
+	 ci_wall_hours: quart("ci_wall_hours"),
+	 reopen_count: quart("reopen_count"),
+	 triage_latency_hours: quart("triage_latency_hours"),
+	 queue_wait_hours: quart("queue_wait_hours"),
+	 blocked_dwell_hours: quart("blocked_dwell_hours"),
+	 human_response_hours: quart("human_response_hours"),
+	 rework_bounces: quart("rework_bounces")}' "$entries")
+
+# Weekly throughput: closed counts and per-week median cycle, so a
+# date-range retrospective can answer whether the pipeline is changing, not
+# only how fast it was. Weeks are Monday-start UTC keyed by their ISO date
+# and appear only when at least one issue closed in them — no zero-fill
+# between weeks. The per-week median carries the same instability gate as
+# every segmented distribution: below five measured cycles the week reports
+# only its closed count.
+throughput=$(jq -s '
+	def weekof:
+		(fromdateiso8601) as $ts |
+		($ts | gmtime | .[6]) as $weekday |
+		($ts - (($weekday + 6) % 7 * 86400))
+		| todateiso8601 | .[0:10];
+	[.[] | select(.closed_at | type == "string"
+		and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T"))] as $closed |
+	($closed
+		| group_by(.closed_at | weekof)
+		| map({
+			week_start: (.[0].closed_at | weekof),
+			closed_count: length,
+			median_cycle_hours:
+				([.[].cycle_hours | select(type == "number")] as $v |
+				if ($v | length) >= 5 then
+					($v | sort | if length % 2 == 1 then .[length / 2 | floor]
+						else (.[length / 2 - 1] + .[length / 2]) / 2 end)
+				else "unknown(instability-rule)" end)}))
+		as $weeks |
+	{weeks: $weeks}' "$entries")
 
 # The issues array rides in through --slurpfile, never argv: a full
 # population as a single argument exceeds Linux's per-argument size limit.
@@ -926,8 +1067,13 @@ metrics=$(jq -n \
 	--argjson aggregate "$aggregate" \
 	--argjson coverage "$coverage" \
 	--argjson risk_bands "$risk_bands" \
+	--argjson cohorts "$cohorts" \
+	--argjson quartiles "$quartiles" \
+	--argjson throughput "$throughput" \
 	'{issues: $issues, aggregate: $aggregate, coverage: $coverage,
-	  risk_band_cycle_hours: $risk_bands}')
+	  risk_band_cycle_hours: $risk_bands,
+	  cohorts: $cohorts,
+	  quartiles: $quartiles, throughput: $throughput}')
 
 printf '%s\n' "$metrics" >"$work/metrics.json"
 jq -n \
