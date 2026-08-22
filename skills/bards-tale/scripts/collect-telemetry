@@ -1,0 +1,455 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Retrospective telemetry collector for the bards-tale skill.
+#
+# Takes the selector (a label-set or date-range string) and emits exactly one
+# JSON document on stdout conforming to the envelope fixed by ADR 0030
+# (docs/adr/0030-retrospective-telemetry-envelope-and-collector-contract.md):
+# schema_version, selector, mode, generated_at, truncated, population, and the
+# per-issue metrics under `metrics`. The document carries no prose; the skill
+# captures stdout wholesale, writes it byte-for-byte as the sidecar, and renders
+# the report from it.
+#
+# Contract points this script owns:
+#
+# - Tri-state discipline: every metric position carries a native value, the
+#   literal string "unknown(<reason>)" for a genuinely absent source, or
+#   "error" for a failed gh read. Never zero-fill; error never folds into
+#   unknown; no field ever carries JSON null.
+# - Durations are elapsed wall-clock hours to one decimal, computed in jq from
+#   ISO timestamps (portable across BSD and GNU hosts); nothing floors to days.
+# - Issues are processed serially. After RATE_LIMIT_STOP consecutive issues
+#   with a failed read, processing stops and the partial document carries an
+#   explicit top-level "rate_limited": true marker; unprocessed issues simply
+#   have no entry under metrics.issues. That marker is an additive envelope
+#   field under ADR 0030's minor-bump clause, hence schema_version 1.1.
+# - Every gh read belongs to one of two named groups: issue_side_* (timeline,
+#   issue comments) or pr_side_* (PR candidate search, PR metadata). The groups
+#   do not interleave in one function, so a later migration of the issue-side
+#   group onto the quest-log tracker contract swaps one group.
+#
+# Every gh invocation is a read enumerated by the skill's read-only contract;
+# every scan captures its exit status explicitly rather than collapsing it.
+# Bash 3.2 floor: indexed arrays only, no mapfile, no associative arrays.
+
+RATE_LIMIT_STOP=5
+SEARCH_LIMIT=200
+SCHEMA_VERSION='1.1'
+
+usage() {
+	printf 'usage: %s SELECTOR\n' "${0##*/}" >&2
+	printf '       SELECTOR  a label-set ("status:ready") or a date-range\n' >&2
+	printf '                    ("2026-07-01..2026-07-20")\n' >&2
+	exit 2
+}
+
+die() {
+	printf '%s: %s\n' "${0##*/}" "$1" >&2
+	exit 1
+}
+
+(($# == 1)) || usage
+SELECTOR=$1
+
+for tool in gh jq; do
+	command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not installed"
+done
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/collect-telemetry.XXXXXX") || {
+	die 'could not create a scratch directory'
+}
+cleanup() {
+	status=$?
+	if ! rm -R -f -- "$work"; then
+		printf 'retained scratch path: %s\n' "$work" >&2
+	fi
+	exit "$status"
+}
+trap cleanup EXIT
+
+# Elapsed wall-clock hours between two ISO 8601 timestamps, to one decimal:
+# seconds divided by 360 is hours-times-ten, so the rounding lands on the
+# decimal the report shows. Computed in jq because BSD and GNU `date` disagree
+# about parsing; `date` is never used for delta math.
+hours_between() { # from to
+	jq -rn --arg a "$1" --arg b "$2" \
+		'((($b | fromdateiso8601) - ($a | fromdateiso8601)) / 360) | round | . / 10'
+}
+
+hours_since() { # from
+	jq -rn --arg a "$1" '(((now) - ($a | fromdateiso8601)) / 360) | round | . / 10'
+}
+
+# JSON literal for a tri-state metric position: a numeric value passes through
+# bare so consumers see a number; anything else is encoded as the exact string
+# the tri-state rule mandates.
+metric_json() { # value
+	case $1 in
+	'' | *[!0-9.-]*) jq -Rn --arg v "$1" '$v' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+# --- issue-side reads -----------------------------------------------------------
+
+# Ordered labeled/closed/commented event stream for one issue, one event object
+# per line so --paginate stays a clean JSONL stream.
+issue_side_timeline() { # number destination
+	fetch_failed=0
+	if ! gh api "repos/${owner}/${name}/issues/$1/timeline" --paginate --jq '.[]' >"$2"; then
+		fetch_failed=1
+	fi
+}
+
+# Issue comments: the source of WORK:SCOPE.
+issue_side_comments() { # number destination
+	fetch_failed=0
+	if ! gh issue view "$1" --repo "$repo" --json comments >"$2"; then
+		fetch_failed=1
+	fi
+}
+
+# --- PR-side reads --------------------------------------------------------------
+
+pr_side_candidates() { # number destination
+	fetch_failed=0
+	if ! gh pr list --repo "$repo" --search "$1 in:body" --state merged \
+		--json number,body >"$2"; then
+		fetch_failed=1
+	fi
+}
+
+pr_side_view() { # pr-number destination
+	fetch_failed=0
+	if ! gh pr view "$1" --repo "$repo" \
+		--json comments,additions,deletions,changedFiles >"$2"; then
+		fetch_failed=1
+	fi
+}
+
+# --- extraction helpers ---------------------------------------------------------
+
+# Latest complete WORK:<type> block from a comment blob; a block missing its
+# completion sentinel is absent (latest-complete-wins). Empty output means none.
+latest_complete_block() { # blob-file work-type complete-type
+	jq -r --arg work "$2" --arg done_ "$3" '
+		[.comments[].body |
+			select(test("(?m)^<!-- " + $work + " -->$")
+				and test("(?m)^<!-- " + $done_ + " -->$"))]
+		| (last // "")' "$1"
+}
+
+# Remainder of the first line naming a labelled field ("complexity: M",
+# "- **iterations**: 2"), or empty. Deliberately line-anchored: the annotations
+# are advisory telemetry, and prose that does not parse reports as the data gap
+# it is, never as a guessed value.
+annotation_field() { # block-text field-name
+	jq -rn --arg text "$1" --arg name "$2" '
+		[($text | scan("(?im)^[ \t>*-]*[*]{0,2}" + $name
+			+ "[*]{0,2}(?![A-Za-z])[ \t]*[:=][ \t]*(.*?)[ \t]*$"))]
+		| first // [] | (first // "")'
+}
+
+# Closing-PR tie-break, verbatim from the resolver spec: standalone closing
+# keyword anchored on both sides; one match wins, zero or several stay unknown.
+resolve_closing_pr() { # candidates-file issue-number
+	jq -r --argjson n "$2" '
+		[.[] | select((.body // "") |
+			test("(?i)(?<![a-z])(clos|fix|resolv)[eds]*:? +#" + ($n | tostring) + "(?![0-9])"))]
+		| if length == 1 then (first.number | tostring)
+		elif length == 0 then "unknown(no-closer)"
+		else "unknown(ambiguous)" end' "$1"
+}
+
+# S/M/L from a WORK:SCOPE block; anything the line-anchored read cannot pin is
+# the data gap it honestly is.
+complexity_of() { # block
+	local raw
+	raw=$(annotation_field "$1" complexity)
+	raw=${raw%.}
+	case $raw in
+	[Ss]) printf 'S\n' ;;
+	[Mm]) printf 'M\n' ;;
+	[Ll]) printf 'L\n' ;;
+	*) printf 'unknown\n' ;;
+	esac
+}
+
+numeric_or_unknown() { # raw
+	case $1 in
+	'' | *[!0-9]*) printf 'unknown\n' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+text_or_unknown() { # raw
+	if [[ -z $1 ]]; then
+		printf 'unknown\n'
+	else
+		printf '%s\n' "$1"
+	fi
+}
+
+# --- per-issue collection -------------------------------------------------------
+
+# Sets ENTRY (one compact JSON object) and ISSUE_ERRORED (1 when any read for
+# this issue failed). Orchestrates the two read groups; the gh calls themselves
+# live only in the issue_side_/pr_side_ functions above.
+collect_issue() { # number state
+	local n=$1 state=$2
+	local tl="$work/tl-$n.jsonl" blob="$work/issue-$n.json" cand="$work/prlist-$n.json"
+	local cycle inflight=false build review
+	local first_ip last_closed in_review awaiting_merge
+	local pr pr_ok iters verdict security exit_field scope_est loc
+
+	ISSUE_ERRORED=0
+
+	issue_side_timeline "$n" "$tl"
+	tl_failed=$fetch_failed
+	((fetch_failed)) && ISSUE_ERRORED=1
+	issue_side_comments "$n" "$blob"
+	((fetch_failed)) && ISSUE_ERRORED=1
+
+	pr_side_candidates "$n" "$cand"
+	if ((fetch_failed)); then
+		ISSUE_ERRORED=1
+		pr='error'
+		pr_ok=0
+	else
+		pr=$(resolve_closing_pr "$cand" "$n")
+		pr_ok=1
+	fi
+
+	# Cycle time from the timeline; current state governs. A failed fetch is
+	# error; an exit-0 capture without an in-progress anchor is the data gap
+	# it genuinely is.
+	if ((tl_failed)); then
+		cycle='error'
+		build='error'
+		review='error'
+	else
+		first_ip=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:in-progress")] | first | (.created_at // "")' "$tl")
+		last_closed=$(jq -rs '[.[] | select(.event == "closed")] | last | (.created_at // "")' "$tl")
+		in_review=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:in-review")] | first | (.created_at // "")' "$tl")
+		awaiting_merge=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:awaiting-merge")] | first | (.created_at // "")' "$tl")
+
+		if [[ -z $first_ip ]]; then
+			cycle='unknown(never-in-progress)'
+		elif [[ $state == closed ]]; then
+			if [[ -z $last_closed ]]; then
+				cycle='unknown(no-close-event)'
+			else
+				cycle=$(hours_between "$first_ip" "$last_closed")
+			fi
+		else
+			cycle=$(hours_since "$first_ip")
+			inflight=true
+		fi
+
+		# Best-effort phase durations, only when both of their anchors exist.
+		build='unknown(no-events)'
+		review='unknown(no-events)'
+		if [[ -n $first_ip && -n $in_review ]]; then
+			build=$(hours_between "$first_ip" "$in_review")
+		fi
+		if [[ -n $in_review && -n $awaiting_merge ]]; then
+			review=$(hours_between "$in_review" "$awaiting_merge")
+		fi
+	fi
+
+	# Scope estimate from the latest complete WORK:SCOPE on the issue.
+	if [[ -s $blob ]]; then
+		scope_est=$(complexity_of "$(latest_complete_block "$blob" 'WORK:SCOPE' 'SCOPE:COMPLETE')")
+	else
+		scope_est='error'
+	fi
+
+	# PR-derived metrics follow the resolver outcome: unresolved stays unknown
+	# with the resolver's reason; a failed PR read is error; a resolved read
+	# feeds the iteration fields and the LOC actual.
+	if ((pr_ok)) && [[ $pr != unknown* ]]; then
+		local prblob="$work/pr-$pr.json"
+		pr_side_view "$pr" "$prblob"
+		if ((fetch_failed)); then
+			ISSUE_ERRORED=1
+			iters='error'
+			verdict='error'
+			security='error'
+			exit_field='error'
+			loc='error'
+		else
+			local rblock
+			rblock=$(latest_complete_block "$prblob" 'WORK:REVIEW' 'REVIEW:COMPLETE')
+			if [[ -z $rblock ]]; then
+				iters='unknown'
+				verdict='unknown'
+				security='unknown'
+				exit_field='unknown'
+			else
+				iters=$(numeric_or_unknown "$(annotation_field "$rblock" iterations)")
+				verdict=$(text_or_unknown "$(annotation_field "$rblock" verdict)")
+				security=$(text_or_unknown "$(annotation_field "$rblock" security)")
+				exit_field=$(text_or_unknown "$(annotation_field "$rblock" exit)")
+			fi
+			if ! loc=$(jq -r '.additions + .deletions' "$prblob"); then
+				loc='error'
+			fi
+		fi
+	elif [[ $pr == unknown* ]]; then
+		iters=$pr
+		verdict='unknown'
+		security='unknown'
+		exit_field='unknown'
+		loc=$pr
+	else
+		iters='error'
+		verdict='error'
+		security='error'
+		exit_field='error'
+		loc='error'
+	fi
+
+	ENTRY=$(jq -cn \
+		--argjson number "$n" \
+		--arg state "$state" \
+		--argjson cycle_hours "$(metric_json "$cycle")" \
+		--argjson cycle_in_flight "$inflight" \
+		--argjson phase_build_hours "$(metric_json "$build")" \
+		--argjson phase_review_hours "$(metric_json "$review")" \
+		--argjson pr "$(metric_json "$pr")" \
+		--argjson review_iterations "$(metric_json "$iters")" \
+		--arg review_verdict "$verdict" \
+		--arg security "$security" \
+		--arg exit_ "$exit_field" \
+		--arg scope_estimate "$scope_est" \
+		--argjson loc_actual "$(metric_json "$loc")" \
+		'{number: $number, state: $state,
+		  cycle_hours: $cycle_hours, cycle_in_flight: $cycle_in_flight,
+		  phase_build_hours: $phase_build_hours,
+		  phase_review_hours: $phase_review_hours,
+		  pr: $pr, review_iterations: $review_iterations,
+		  review_verdict: $review_verdict, security: $security, exit: $exit_,
+		  scope_estimate: $scope_estimate, loc_actual: $loc_actual}')
+	printf '%s\n' "$ENTRY"
+}
+
+# --- selection ------------------------------------------------------------------
+
+repo_status=0
+repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || repo_status=$?
+((repo_status == 0)) || die "repository could not be resolved (gh exit $repo_status)"
+owner=${repo%/*}
+name=${repo#*/}
+
+# Date-range selectors carry ".." and select issues closed in the window;
+# everything else is a label-set selecting issues carrying all named labels.
+# Both go through gh search: it percent-encodes colon labels correctly, where
+# `gh issue list --label` silently matches nothing.
+if [[ $SELECTOR == *..* ]]; then
+	mode='date-range'
+	query="closed:$SELECTOR"
+else
+	mode='label-set'
+	read -r -a selector_labels <<<"$SELECTOR"
+	((${#selector_labels[@]} > 0)) || usage
+	query=''
+	for label in "${selector_labels[@]}"; do
+		query+="label:$label "
+	done
+	query=${query% }
+fi
+
+search_status=0
+search_json=$(gh search issues --repo "$repo" "$query" \
+	--json number,state,closedAt,labels --limit "$SEARCH_LIMIT") || search_status=$?
+((search_status == 0)) || die "selection read failed (gh exit $search_status)"
+
+# Epic-labelled issues sit outside the status state machine and are excluded
+# client-side. Truncation is judged on the raw result size: equality with the
+# limit means the population is possibly incomplete even if the epic exclusion
+# shrinks what remains.
+selected_json=$(jq -c '[.[] | select([.labels[].name] | index("epic") | not)]' <<<"$search_json")
+raw_count=$(jq 'length' <<<"$search_json")
+pop_count=$(jq 'length' <<<"$selected_json")
+pop_issues=$(jq -c '[.[].number]' <<<"$selected_json")
+truncated=false
+((raw_count >= SEARCH_LIMIT)) && truncated=true
+
+# --- serial collection ----------------------------------------------------------
+
+entries="$work/issues.jsonl"
+: >"$entries"
+consecutive_errors=0
+rate_limited=false
+
+while read -r n; do
+	issue_state=$(jq -r --argjson n "$n" \
+		'([.[] | select(.number == $n)][0].state | ascii_downcase)' <<<"$selected_json")
+	collect_issue "$n" "$issue_state" >>"$entries"
+	if ((ISSUE_ERRORED)); then
+		consecutive_errors=$((consecutive_errors + 1))
+		if ((consecutive_errors >= RATE_LIMIT_STOP)); then
+			rate_limited=true
+			break
+		fi
+	else
+		consecutive_errors=0
+	fi
+done < <(jq -r '.[].number' <<<"$selected_json")
+
+# --- aggregates ------------------------------------------------------------------
+
+# Median + range over the value-state cycle durations; an empty selection
+# carries the count alone, never null-filled medians of nothing.
+aggregate=$(jq -s '
+	[.[] | select(.cycle_hours | type == "number") | .cycle_hours] |
+	if length == 0 then {count: 0}
+	else {
+		median: (sort |
+			if length % 2 == 1 then .[length / 2 | floor]
+			else (.[length / 2 - 1] + .[length / 2]) / 2 end),
+		min: min,
+		max: max,
+		count: length
+	} end' "$entries")
+
+# Per-metric coverage: how many entries carry a genuine value, so a thin sample
+# is never mistaken for a complete one.
+coverage=$(jq -s '
+	(map(select(.cycle_hours | type == "number")) | length) as $cycle |
+	(map(select(.phase_build_hours | type == "number")) | length) as $build |
+	(map(select(.phase_review_hours | type == "number")) | length) as $review |
+	(map(select(.pr | type == "number")) | length) as $pr |
+	(map(select(.review_iterations | type == "number")) | length) as $iterations |
+	(map(select(.scope_estimate != "unknown" and .scope_estimate != "error")) | length) as $scope |
+	(map(select(.loc_actual | type == "number")) | length) as $loc |
+	{cycle_hours: $cycle, phase_build_hours: $build, phase_review_hours: $review,
+	 pr: $pr, review_iterations: $iterations, scope_estimate: $scope, loc_actual: $loc}' "$entries")
+
+metrics=$(jq -n \
+	--argjson issues "$(jq -s . "$entries")" \
+	--argjson aggregate "$aggregate" \
+	--argjson coverage "$coverage" \
+	'{issues: $issues, aggregate: {cycle_hours: $aggregate}, coverage: $coverage}')
+
+# --- emission ---------------------------------------------------------------------
+
+jq -n \
+	--arg schema_version "$SCHEMA_VERSION" \
+	--arg selector "$SELECTOR" \
+	--arg mode "$mode" \
+	--arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+	--argjson truncated "$truncated" \
+	--argjson population_count "$pop_count" \
+	--argjson population_issues "$pop_issues" \
+	--argjson rate_limited "$rate_limited" \
+	--argjson metrics "$metrics" \
+	'{schema_version: $schema_version, selector: $selector, mode: $mode,
+	  generated_at: $generated_at, truncated: $truncated,
+	  population: {count: $population_count, issues: $population_issues},
+	  metrics: $metrics}
+	+ (if $rate_limited then {rate_limited: true} else {} end)'
