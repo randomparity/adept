@@ -61,6 +61,23 @@ collection that is never parsed as partial output.
   is in exactly one tri-state: a value, `"unknown(<reason>)"` (a genuine data
   gap), or `"error"` (a failed read). Never zero-fill; never read an `error`
   as an `unknown`; never fold either into a default.
+- **GitHub-native spans** — seven per-issue fields sourced from GitHub's own
+  timestamps rather than pipeline labels, so they cannot be skewed by a
+  labeling bug: `lead_time_hours` (issue filed→closed; an open issue reports
+  `unknown(not-closed)` — the span is incomplete, never elapsed-so-far),
+  `pr_lifespan_hours` (PR opened→merged), `full_delivery_hours` (issue
+  filed→PR merged), `merge_lag_hours` (last commit→merged),
+  `build_private_hours` (first commit→PR opened), `ci_wall_hours`
+  (`statusCheckRollup`: earliest check start→latest completion over checks
+  carrying both timestamps — `CheckRun` entries; `StatusContext` entries carry
+  none, and a rollup with no timed checks is `unknown(no-checks)` /
+  `unknown(no-check-timings)`, never a zero fill), and `reopen_count` (counted
+  from `reopened` events in the captured timeline; a successful read with zero
+  reopens genuinely reports `0`). All ride the same reads as the label-anchored
+  metrics — widened `--json` lists, no additional round trips — and their
+  coverage equals the selected population minus fetch errors and genuinely
+  absent anchors (open issues, issues with no closing PR, PRs without
+  timestamps or commits) — far wider than the label-anchored samples.
 
 **Empty selection.** When `population.count == 0`, write nothing — no report,
 no sidecar — and state plainly that the selector matched zero issues (`gh
@@ -92,13 +109,15 @@ Sections:
    `rate_limited` when present, and per-metric **coverage** from
    `metrics.coverage` (how many of N issues carried each metric as a value).
    State coverage up front so a thin sample is never mistaken for a complete
-   one.
+   one. The label-anchored metrics are thin by nature; the GitHub-native
+   spans cover the whole selected population minus fetch errors and cannot
+   be skewed by a labeling bug — say so when contrasting the two families.
 2. **Metrics** — per-issue rows from `metrics.issues` plus the aggregate from
-   `metrics.aggregate.cycle_hours`: **median + range** (not a fabricated p90
-   over a handful of points). Durations are hours to one decimal — a sub-hour
-   cycle reports `0.4`, never `0`. Emit an **instability note whenever a
-   metric's coverage `N < 5`**, warning against over-trusting a 2–4-point
-   median.
+   `metrics.aggregate`: **median + range** per span family (not a fabricated
+   p90 over a handful of points). Durations are hours to one decimal — a
+   sub-hour cycle reports `0.4`, never `0`. Emit an **instability note
+   whenever a metric's coverage `N < 5`**, warning against over-trusting a
+   2–4-point median.
 3. **Findings** — process observations, each **grounded in a named metric**.
    Every finding must reference an issue number or aggregate present in the
    Metrics table, and any number it states must match the table. No finding
@@ -107,6 +126,9 @@ Sections:
    When narrating a review loop from `exit`, remember: the field takes one of
    five enumerated values (ADR 0021); absence is not `none`, so keep today's
    verdict-only reading when `exit` is missing or unrecognized.
+   Lead time carries a standing caveat: where issues are batch-filed by
+   `$saga` or `$bounty` and worked later, `lead_time_hours` is dominated by
+   queue position rather than effort — findings must not read it as slowness.
 4. **Proposed tuning (NOT applied)** — concrete suggestions, each satisfying
    **both** halves of the grounding rule: it **cites a real governing workflow
    or applicable repository instruction source** (verified with `Read` /

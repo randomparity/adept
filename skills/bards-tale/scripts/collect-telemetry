@@ -24,6 +24,11 @@ set -euo pipefail
 #   explicit top-level "rate_limited": true marker; unprocessed issues simply
 #   have no entry under metrics.issues. That marker is an additive envelope
 #   field under ADR 0030's minor-bump clause, hence schema_version 1.1.
+# - Seven GitHub-native timestamp spans (lead time, PR lifespan, full
+#   delivery, merge lag, build-private, CI wall time, reopen count) ride the
+#   same read groups with widened --json lists — no additional round trips.
+#   They are additive per-issue fields under ADR 0030's minor-bump clause,
+#   hence schema_version 1.2.
 # - Every gh read belongs to one of two named groups: issue_side_* (timeline,
 #   issue comments) or pr_side_* (PR candidate search, PR metadata). The groups
 #   do not interleave in one function, so a later migration of the issue-side
@@ -35,7 +40,7 @@ set -euo pipefail
 
 RATE_LIMIT_STOP=5
 SEARCH_LIMIT=200
-SCHEMA_VERSION='1.1'
+SCHEMA_VERSION='1.2'
 
 usage() {
 	printf 'usage: %s SELECTOR\n' "${0##*/}" >&2
@@ -95,7 +100,7 @@ metric_json() { # value
 
 issue_side_repo() { # destination
 	fetch_failed=0
-	if ! gh repo view --json nameWithOwner --jq .nameWithOwner >"$1"; then
+	if ! gh repo view --json nameWithOwner >"$1"; then
 		fetch_failed=1
 	fi
 }
@@ -107,7 +112,7 @@ issue_side_repo() { # destination
 issue_side_search() { # query destination
 	fetch_failed=0
 	if ! gh search issues --repo "$repo" "$1" \
-		--json number,state,closedAt,labels --limit "$SEARCH_LIMIT" >"$2"; then
+		--json number,state,closedAt,createdAt,labels --limit "$SEARCH_LIMIT" >"$2"; then
 		fetch_failed=1
 	fi
 }
@@ -142,7 +147,7 @@ pr_side_candidates() { # number destination
 pr_side_view() { # pr-number destination
 	fetch_failed=0
 	if ! gh pr view "$1" --repo "$repo" \
-		--json comments,additions,deletions,changedFiles >"$2"; then
+		--json comments,additions,deletions,changedFiles,createdAt,mergedAt,commits,statusCheckRollup >"$2"; then
 		fetch_failed=1
 	fi
 }
@@ -210,17 +215,25 @@ text_or_unknown() { # raw
 	fi
 }
 
+# Count of reopened events in a captured timeline stream. Zero from a
+# successful read is a genuine value — the never-zero-fill rule bars filling
+# absence with zero, not reporting a measured zero.
+reopen_count_of() { # tl-file
+	jq -rs '[.[] | select(.event == "reopened")] | length' "$1"
+}
+
 # --- per-issue collection -------------------------------------------------------
 
 # Sets ENTRY (one compact JSON object) and ISSUE_ERRORED (1 when any read for
 # this issue failed). Orchestrates the two read groups; the gh calls themselves
-# live only in the issue_side_/pr_side_ functions above.
-collect_issue() { # number state
-	local n=$1 state=$2
+collect_issue() { # number state created closed
+	local n=$1 state=$2 created=$3 closed=$4
 	local tl="$work/tl-$n.jsonl" blob="$work/issue-$n.json" cand="$work/prlist-$n.json"
 	local cycle inflight=false build review tl_failed
 	local first_ip last_closed in_review awaiting_merge
 	local pr pr_ok iters verdict security exit_field scope_est loc
+	local lead reopens lifespan full_del lag bprivate ci
+	local pr_created pr_merged commit_span first_commit last_commit
 
 	ISSUE_ERRORED=0
 
@@ -247,7 +260,11 @@ collect_issue() { # number state
 		cycle='error'
 		build='error'
 		review='error'
+		reopens='error'
 	else
+		if ! reopens=$(reopen_count_of "$tl"); then
+			reopens='error'
+		fi
 		first_ip=$(jq -rs '[.[] | select(.event == "labeled"
 				and .label.name == "status:in-progress")] | first | (.created_at // "")' "$tl")
 		last_closed=$(jq -rs '[.[] | select(.event == "closed")] | last | (.created_at // "")' "$tl")
@@ -256,28 +273,45 @@ collect_issue() { # number state
 		awaiting_merge=$(jq -rs '[.[] | select(.event == "labeled"
 				and .label.name == "status:awaiting-merge")] | first | (.created_at // "")' "$tl")
 
+		# A computation on a captured-but-malformed anchor is an error at
+		# that metric's position, never an aborted collection.
 		if [[ -z $first_ip ]]; then
 			cycle='unknown(never-in-progress)'
 		elif [[ $state == closed ]]; then
 			if [[ -z $last_closed ]]; then
 				cycle='unknown(no-close-event)'
-			else
-				cycle=$(hours_between "$first_ip" "$last_closed")
+			elif ! cycle=$(hours_between "$first_ip" "$last_closed"); then
+				cycle='error'
 			fi
+		elif ! cycle=$(hours_since "$first_ip"); then
+			cycle='error'
 		else
-			cycle=$(hours_since "$first_ip")
 			inflight=true
 		fi
 
 		# Best-effort phase durations, only when both of their anchors exist.
 		build='unknown(no-events)'
 		review='unknown(no-events)'
-		if [[ -n $first_ip && -n $in_review ]]; then
-			build=$(hours_between "$first_ip" "$in_review")
+		if [[ -n $first_ip && -n $in_review ]] &&
+			! build=$(hours_between "$first_ip" "$in_review"); then
+			build='error'
 		fi
-		if [[ -n $in_review && -n $awaiting_merge ]]; then
-			review=$(hours_between "$in_review" "$awaiting_merge")
+		if [[ -n $in_review && -n $awaiting_merge ]] &&
+			! review=$(hours_between "$in_review" "$awaiting_merge"); then
+			review='error'
 		fi
+	fi
+
+	# Lead time: filed to closed. An open issue has not completed the span,
+	# so elapsed-so-far is never reported for it.
+	if [[ $state != closed ]]; then
+		lead='unknown(not-closed)'
+	elif [[ -z $created ]]; then
+		lead='unknown(no-created-at)'
+	elif [[ -z $closed ]]; then
+		lead='unknown(no-closed-at)'
+	elif ! lead=$(hours_between "$created" "$closed"); then
+		lead='error'
 	fi
 
 	# Scope estimate from the latest complete WORK:SCOPE on the issue.
@@ -300,8 +334,12 @@ collect_issue() { # number state
 			security='error'
 			exit_field='error'
 			loc='error'
+			lifespan='error'
+			full_del='error'
+			lag='error'
+			bprivate='error'
+			ci='error'
 		else
-			local rblock
 			rblock=$(latest_complete_block "$prblob" 'WORK:REVIEW' 'REVIEW:COMPLETE')
 			if [[ -z $rblock ]]; then
 				iters='unknown'
@@ -323,6 +361,67 @@ collect_issue() { # number state
 				else "unknown(no-diffstats)" end' "$prblob"); then
 				loc='error'
 			fi
+			# GitHub-native PR-side spans, all riding this same read. A
+			# malformed-but-exit-0 blob errors every span it feeds; an
+			# absent anchor is the data gap it is.
+			if ! pr_created=$(jq -r '.createdAt // ""' "$prblob") ||
+				! pr_merged=$(jq -r '.mergedAt // ""' "$prblob") ||
+				! commit_span=$(jq -r '[(.commits // [])[]?.committedDate
+					| select(type == "string")] as $d |
+					if ($d | length) == 0 then ""
+					else "\($d | first) \($d | last)" end' "$prblob"); then
+				lifespan='error'
+				full_del='error'
+				lag='error'
+				bprivate='error'
+			else
+				# First and last computed in jq: committedDate carries no
+				# spaces, so a space-separated pair survives the read whole
+				# for any commit count.
+				read -r first_commit last_commit <<<"$commit_span"
+				if [[ -z $pr_created || -z $pr_merged ]]; then
+					lifespan='unknown(no-pr-timestamps)'
+					full_del='unknown(no-pr-timestamps)'
+					lag='unknown(no-pr-timestamps)'
+					bprivate='unknown(no-pr-timestamps)'
+				else
+					if ! lifespan=$(hours_between "$pr_created" "$pr_merged"); then
+						lifespan='error'
+					fi
+					if [[ -n $created ]]; then
+						if ! full_del=$(hours_between "$created" "$pr_merged"); then
+							full_del='error'
+						fi
+					else
+						full_del='unknown(no-created-at)'
+					fi
+					if [[ -z $last_commit ]]; then
+						lag='unknown(no-commits)'
+						bprivate='unknown(no-commits)'
+					else
+						if ! lag=$(hours_between "$last_commit" "$pr_merged"); then
+							lag='error'
+						fi
+						if ! bprivate=$(hours_between "$first_commit" "$pr_created"); then
+							bprivate='error'
+						fi
+					fi
+				fi
+			fi
+			# CI wall time spans the earliest check start to the latest
+			# completion. CheckRun entries carry both timestamps; entries
+			# without them (StatusContext) are excluded, and a rollup with
+			# none timed is the data gap it is — never a zero fill.
+			if ! ci=$(jq -r '(.statusCheckRollup // []) as $r |
+				[$r[] | select((.startedAt // "") != ""
+					and (.completedAt // "") != "")] as $t |
+				if ($r | length) == 0 then "unknown(no-checks)"
+				elif ($t | length) == 0 then "unknown(no-check-timings)"
+				else (((([$t[].completedAt] | max | fromdateiso8601)
+					- ([$t[].startedAt] | min | fromdateiso8601)) / 360)
+					| round) / 10 end' "$prblob"); then
+				ci='error'
+			fi
 		fi
 	elif [[ $pr == unknown* ]]; then
 		iters=$pr
@@ -330,12 +429,22 @@ collect_issue() { # number state
 		security='unknown'
 		exit_field='unknown'
 		loc=$pr
+		lifespan=$pr
+		full_del=$pr
+		lag=$pr
+		bprivate=$pr
+		ci=$pr
 	else
 		iters='error'
 		verdict='error'
 		security='error'
 		exit_field='error'
 		loc='error'
+		lifespan='error'
+		full_del='error'
+		lag='error'
+		bprivate='error'
+		ci='error'
 	fi
 
 	ENTRY=$(jq -cn \
@@ -352,13 +461,26 @@ collect_issue() { # number state
 		--arg exit_ "$exit_field" \
 		--arg scope_estimate "$scope_est" \
 		--argjson loc_actual "$(metric_json "$loc")" \
+		--argjson lead_time_hours "$(metric_json "$lead")" \
+		--argjson pr_lifespan_hours "$(metric_json "$lifespan")" \
+		--argjson full_delivery_hours "$(metric_json "$full_del")" \
+		--argjson merge_lag_hours "$(metric_json "$lag")" \
+		--argjson build_private_hours "$(metric_json "$bprivate")" \
+		--argjson ci_wall_hours "$(metric_json "$ci")" \
+		--argjson reopen_count "$(metric_json "$reopens")" \
 		'{number: $number, state: $state,
 		  cycle_hours: $cycle_hours, cycle_in_flight: $cycle_in_flight,
 		  phase_build_hours: $phase_build_hours,
 		  phase_review_hours: $phase_review_hours,
 		  pr: $pr, review_iterations: $review_iterations,
 		  review_verdict: $review_verdict, security: $security, exit: $exit_,
-		  scope_estimate: $scope_estimate, loc_actual: $loc_actual}')
+		  scope_estimate: $scope_estimate, loc_actual: $loc_actual,
+		  lead_time_hours: $lead_time_hours,
+		  pr_lifespan_hours: $pr_lifespan_hours,
+		  full_delivery_hours: $full_delivery_hours,
+		  merge_lag_hours: $merge_lag_hours,
+		  build_private_hours: $build_private_hours,
+		  ci_wall_hours: $ci_wall_hours, reopen_count: $reopen_count}')
 	printf '%s\n' "$ENTRY"
 }
 
@@ -409,9 +531,11 @@ consecutive_errors=0
 rate_limited=false
 
 while read -r n; do
-	issue_state=$(jq -r --argjson n "$n" \
-		'([.[] | select(.number == $n)][0].state | ascii_downcase)' <<<"$selected_json")
-	collect_issue "$n" "$issue_state" >>"$entries"
+	IFS=$'\t' read -r issue_state created closed <<<"$(jq -r --argjson n "$n" \
+		'([.[] | select(.number == $n)][0])
+			| [(.state | ascii_downcase), (.createdAt // ""), (.closedAt // "")] | @tsv' \
+		<<<"$selected_json")"
+	collect_issue "$n" "$issue_state" "$created" "$closed" >>"$entries"
 	if ((ISSUE_ERRORED)); then
 		consecutive_errors=$((consecutive_errors + 1))
 		if ((consecutive_errors >= RATE_LIMIT_STOP)); then
@@ -425,19 +549,28 @@ done < <(jq -r '.[].number' <<<"$selected_json")
 
 # --- aggregates ------------------------------------------------------------------
 
-# Median + range over the value-state cycle durations; an empty selection
-# carries the count alone, never null-filled medians of nothing.
+# Median + range over each span family's value-state durations; an empty
+# selection carries the count alone, never null-filled medians of nothing.
 aggregate=$(jq -s '
-	[.[] | select(.cycle_hours | type == "number") | .cycle_hours] |
-	if length == 0 then {count: 0}
-	else {
-		median: (sort |
-			if length % 2 == 1 then .[length / 2 | floor]
-			else (.[length / 2 - 1] + .[length / 2]) / 2 end),
-		min: min,
-		max: max,
-		count: length
-	} end' "$entries")
+	def agg(f):
+		[.[] | select(.[f] | type == "number") | .[f]] |
+		if length == 0 then {count: 0}
+		else {
+			median: (sort |
+				if length % 2 == 1 then .[length / 2 | floor]
+				else (.[length / 2 - 1] + .[length / 2]) / 2 end),
+			min: min,
+			max: max,
+			count: length
+		} end;
+	{cycle_hours: agg("cycle_hours"),
+	 lead_time_hours: agg("lead_time_hours"),
+	 pr_lifespan_hours: agg("pr_lifespan_hours"),
+	 full_delivery_hours: agg("full_delivery_hours"),
+	 merge_lag_hours: agg("merge_lag_hours"),
+	 build_private_hours: agg("build_private_hours"),
+	 ci_wall_hours: agg("ci_wall_hours"),
+	 reopen_count: agg("reopen_count")}' "$entries")
 
 # Per-metric coverage: how many entries carry a genuine value, so a thin sample
 # is never mistaken for a complete one.
@@ -449,17 +582,30 @@ coverage=$(jq -s '
 	(map(select(.review_iterations | type == "number")) | length) as $iterations |
 	(map(select(.scope_estimate != "unknown" and .scope_estimate != "error")) | length) as $scope |
 	(map(select(.loc_actual | type == "number")) | length) as $loc |
+	(map(select(.lead_time_hours | type == "number")) | length) as $lead |
+	(map(select(.pr_lifespan_hours | type == "number")) | length) as $lifespan |
+	(map(select(.full_delivery_hours | type == "number")) | length) as $delivery |
+	(map(select(.merge_lag_hours | type == "number")) | length) as $lag |
+	(map(select(.build_private_hours | type == "number")) | length) as $bprivate |
+	(map(select(.ci_wall_hours | type == "number")) | length) as $ci |
+	(map(select(.reopen_count | type == "number")) | length) as $reopens |
 	{cycle_hours: $cycle, phase_build_hours: $build, phase_review_hours: $review,
-	 pr: $pr, review_iterations: $iterations, scope_estimate: $scope, loc_actual: $loc}' "$entries")
+	 pr: $pr, review_iterations: $iterations, scope_estimate: $scope, loc_actual: $loc,
+	 lead_time_hours: $lead, pr_lifespan_hours: $lifespan,
+	 full_delivery_hours: $delivery, merge_lag_hours: $lag,
+	 build_private_hours: $bprivate, ci_wall_hours: $ci, reopen_count: $reopens}' "$entries")
 
+# The issues array rides in through --slurpfile, never argv: a full
+# population as a single argument exceeds Linux's per-argument size limit.
 metrics=$(jq -n \
-	--argjson issues "$(jq -s . "$entries")" \
+	--slurpfile issues "$entries" \
 	--argjson aggregate "$aggregate" \
 	--argjson coverage "$coverage" \
-	'{issues: $issues, aggregate: {cycle_hours: $aggregate}, coverage: $coverage}')
+	'{issues: $issues, aggregate: $aggregate, coverage: $coverage}')
 
 # --- emission ---------------------------------------------------------------------
 
+printf '%s\n' "$metrics" >"$work/metrics.json"
 jq -n \
 	--arg schema_version "$SCHEMA_VERSION" \
 	--arg selector "$SELECTOR" \
@@ -469,9 +615,9 @@ jq -n \
 	--argjson population_count "$pop_count" \
 	--argjson population_issues "$pop_issues" \
 	--argjson rate_limited "$rate_limited" \
-	--argjson metrics "$metrics" \
-	'{schema_version: $schema_version, selector: $selector, mode: $mode,
+	--slurpfile metrics "$work/metrics.json" \
+	'({schema_version: $schema_version, selector: $selector, mode: $mode,
 	  generated_at: $generated_at, truncated: $truncated,
 	  population: {count: $population_count, issues: $population_issues},
-	  metrics: $metrics}
-	+ (if $rate_limited then {rate_limited: true} else {} end)'
+	  metrics: $metrics[0]}
+	+ (if $rate_limited then {rate_limited: true} else {} end))'

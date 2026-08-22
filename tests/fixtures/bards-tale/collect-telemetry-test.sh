@@ -168,15 +168,19 @@ security: not triggered
 # instrumented and closed, one open and in flight.
 cat >"$SCRATCH/fake/search.json" <<'JSON'
 [
- {"number":101,"state":"closed","closedAt":"2026-07-01T14:00:00Z","labels":[]},
- {"number":102,"state":"closed","closedAt":"2026-07-01T14:00:00Z","labels":[{"name":"epic"}]},
- {"number":103,"state":"open","closedAt":null,"labels":[]}
+ {"number":101,"state":"closed","createdAt":"2026-07-01T08:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[]},
+ {"number":102,"state":"closed","createdAt":"2026-07-01T08:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[{"name":"epic"}]},
+ {"number":103,"state":"open","createdAt":"2026-07-01T09:30:00Z",
+  "closedAt":null,"labels":[]}
 ]
 JSON
 cat >"$SCRATCH/fake/tl-101.jsonl" <<'JSONL'
 {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T10:00:00Z"}
 {"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T11:00:00Z"}
 {"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T13:30:00Z"}
+{"event":"reopened","created_at":"2026-07-01T12:45:00Z"}
 {"event":"closed","created_at":"2026-07-01T14:00:00Z"}
 JSONL
 cat >"$SCRATCH/fake/tl-103.jsonl" <<'JSONL'
@@ -190,8 +194,18 @@ cat >"$SCRATCH/fake/prlist-101.json" <<'JSON'
  {"number":211,"body":"Closes #101"}
 ]
 JSON
+jq -n --arg b "$review_block_211" '{comments:[{body:$b}],additions:300,deletions:100,
+	changedFiles:7,createdAt:"2026-07-01T12:00:00Z",mergedAt:"2026-07-01T13:36:00Z",
+	commits:[{committedDate:"2026-07-01T11:00:00Z"},
+		{committedDate:"2026-07-01T12:30:00Z"},
+		{committedDate:"2026-07-01T13:00:00Z"}],
+	statusCheckRollup:[
+	 {__typename:"CheckRun",name:"suite",startedAt:"2026-07-01T13:10:00Z",
+	  completedAt:"2026-07-01T13:20:00Z"},
+	 {__typename:"CheckRun",name:"verify",startedAt:"2026-07-01T13:12:00Z",
+	  completedAt:"2026-07-01T13:30:00Z"},
+	 {__typename:"StatusContext",name:"lint"}]}' >"$SCRATCH/fake/pr-211.json"
 printf '%s\n' '[]' >"$SCRATCH/fake/prlist-103.json"
-jq -n --arg b "$review_block_211" '{comments:[{body:$b}],additions:300,deletions:100,changedFiles:7}' >"$SCRATCH/fake/pr-211.json"
 
 if ! run_collector 'status:ready'; then
 	cat "$SCRATCH/stderr" >&2
@@ -199,7 +213,7 @@ if ! run_collector 'status:ready'; then
 fi
 
 assert_doc 'top-level envelope.' \
-	'.schema_version == "1.1"
+	'.schema_version == "1.2"
 	and .selector == "status:ready"
 	and .mode == "label-set"
 	and (.generated_at | type == "string")
@@ -234,6 +248,13 @@ assert_doc 'LOC actual is additions plus deletions' \
 assert_doc 'scope estimate extracted' \
 	'([.metrics.issues[] | select(.number == 101)][0].scope_estimate) == "M"'
 
+assert_doc 'GitHub-native spans for issue 101' \
+	'([.metrics.issues[] | select(.number == 101)][0]) |
+	.lead_time_hours == 6 and .pr_lifespan_hours == 1.6
+	and .full_delivery_hours == 5.6 and .merge_lag_hours == 0.6
+	and .build_private_hours == 1 and .ci_wall_hours == 0.3
+	and .reopen_count == 1'
+
 assert_doc 'uninstrumented issue reports unknown, never zero' \
 	'([.metrics.issues[] | select(.number == 103)][0]) |
 	.pr == "unknown(no-closer)"
@@ -243,6 +264,15 @@ assert_doc 'uninstrumented issue reports unknown, never zero' \
 	and .review_verdict == "unknown"
 	and .security == "unknown"
 	and .exit == "unknown"'
+assert_doc 'open issue lead time is an incomplete span, never elapsed-so-far' \
+	'([.metrics.issues[] | select(.number == 103)][0]) |
+	.lead_time_hours == "unknown(not-closed)"
+	and .reopen_count == 0
+	and .pr_lifespan_hours == "unknown(no-closer)"
+	and .full_delivery_hours == "unknown(no-closer)"
+	and .merge_lag_hours == "unknown(no-closer)"
+	and .build_private_hours == "unknown(no-closer)"
+	and .ci_wall_hours == "unknown(no-closer)"'
 
 assert_doc 'null-free invariant' \
 	'[. | .. | select(type == "null")] | length == 0'
@@ -253,14 +283,24 @@ assert_doc 'aggregate median and range over value-state cycles.' \
 	and (.metrics.aggregate.cycle_hours.median | type == "number")
 	and (.metrics.aggregate.cycle_hours.max | type == "number")
 	and .metrics.aggregate.cycle_hours.max > .metrics.aggregate.cycle_hours.min'
+assert_doc 'aggregates exist per span family over the value-state entries' \
+	'.metrics.aggregate.lead_time_hours == {count: 1, median: 6, min: 6, max: 6}
+	and .metrics.aggregate.reopen_count.count == 2
+	and (.metrics.aggregate.ci_wall_hours.median | type == "number")'
 assert_doc 'coverage counts value-state entries' \
 	'.metrics.coverage == {
 		cycle_hours: 2, phase_build_hours: 1, phase_review_hours: 1,
-		pr: 1, review_iterations: 1, scope_estimate: 1, loc_actual: 1}'
+		pr: 1, review_iterations: 1, scope_estimate: 1, loc_actual: 1,
+		lead_time_hours: 1, pr_lifespan_hours: 1, full_delivery_hours: 1,
+		merge_lag_hours: 1, build_private_hours: 1, ci_wall_hours: 1,
+		reopen_count: 2}'
 
 assert_count 'every gh read is logged' '^gh ' "$SCRATCH/calls" 9
 if rg --no-config -q 'graphql' "$SCRATCH/calls"; then
 	fail 'collector issued a graphql read'
+fi
+if rg --no-config -q 'gh repo view .*--jq' "$SCRATCH/calls"; then
+	fail 'repo read must capture raw JSON: a pre-projected --jq value cannot be re-parsed by the extraction jq'
 fi
 
 # --- scenario: date-range mode -------------------------------------------------
@@ -323,6 +363,8 @@ assert_doc 'partial document carries the explicit marker' \
 	'.rate_limited == true and .population.count == 7'
 assert_doc 'processed-but-errored issues carry error, not unknown' \
 	'([.metrics.issues[] | select(.number == 203)][0].cycle_hours) == "error"'
+assert_doc 'reopen count under a failed timeline read is error' \
+	'([.metrics.issues[] | select(.number == 203)][0].reopen_count) == "error"'
 assert_doc 'processing stopped after the fifth consecutive error' \
 	'([.metrics.issues[] | select(.number == 205)] | length) == 1
 	and ([.metrics.issues[] | select(.number == 206)] | length) == 0
@@ -331,8 +373,10 @@ assert_doc 'processing stopped after the fifth consecutive error' \
 # --- scenario: ambiguity and a failed PR-side read -----------------------------
 cat >"$SCRATCH/fake/search.json" <<'JSON'
 [
- {"number":301,"state":"closed","closedAt":"2026-07-01T14:00:00Z","labels":[]},
- {"number":302,"state":"closed","closedAt":"2026-07-02T20:00:00Z","labels":[]}
+ {"number":301,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[]},
+ {"number":302,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-02T20:00:00Z","labels":[]}
 ]
 JSON
 # 301: never in progress; two closing PRs -> ambiguous.
@@ -359,7 +403,16 @@ assert_doc 'ambiguous closers stay unknown, never guessed' \
 	'([.metrics.issues[] | select(.number == 301)][0]) |
 	.pr == "unknown(ambiguous)"
 	and .review_iterations == "unknown(ambiguous)"
-	and .loc_actual == "unknown(ambiguous)"'
+	and .loc_actual == "unknown(ambiguous)"
+	and .pr_lifespan_hours == "unknown(ambiguous)"
+	and .ci_wall_hours == "unknown(ambiguous)"'
+assert_doc 'PR-side spans inherit a failed PR read as error' \
+	'([.metrics.issues[] | select(.number == 302)][0]) |
+	.pr_lifespan_hours == "error" and .full_delivery_hours == "error"
+	and .merge_lag_hours == "error" and .build_private_hours == "error"
+	and .ci_wall_hours == "error"'
+assert_doc 'reopen count still computes when only the PR side fails' \
+	'([.metrics.issues[] | select(.number == 302)][0].reopen_count) == 0'
 assert_doc 'never-in-progress is a data gap, not an error' \
 	'([.metrics.issues[] | select(.number == 301)][0].cycle_hours) == "unknown(never-in-progress)"'
 assert_doc 'failed PR-side read is error while issue-side still computes' \
@@ -369,6 +422,45 @@ assert_doc 'failed PR-side read is error while issue-side still computes' \
 	and (.cycle_hours | type == "number")'
 assert_doc 'failed issue-side comment read is error, cycle unaffected' \
 	'([.metrics.issues[] | select(.number == 302)][0].scope_estimate) == "error"'
+
+# --- scenario: statusCheckRollup timing variants --------------------------------
+# 401 resolves to a merged PR with an empty rollup; 402's PR carries only
+# checks without both timestamps (StatusContext-shaped entries). Both are data
+# gaps with distinct reasons, never zero and never a guessed wall time.
+cat >"$SCRATCH/fake/search.json" <<'JSON'
+[
+ {"number":401,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[]},
+ {"number":402,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[]}
+]
+JSON
+for n in 401 402; do
+	: >"$SCRATCH/fake/tl-$n.jsonl"
+	printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-$n.json"
+done
+printf '%s\n' '[{"number":411,"body":"Closes #401"}]' >"$SCRATCH/fake/prlist-401.json"
+printf '%s\n' '[{"number":412,"body":"Closes #402"}]' >"$SCRATCH/fake/prlist-402.json"
+jq -n '{comments:[],additions:1,deletions:0,changedFiles:1,
+	createdAt:"2026-07-01T10:00:00Z",mergedAt:"2026-07-01T11:00:00Z",
+	commits:[{committedDate:null},{committedDate:"2026-07-01T09:30:00Z"}],
+	statusCheckRollup:[]}' >"$SCRATCH/fake/pr-411.json"
+jq -n '{comments:[],additions:1,deletions:0,changedFiles:1,
+	createdAt:"2026-07-01T10:00:00Z",mergedAt:"2026-07-01T11:00:00Z",
+	commits:[{committedDate:"2026-07-01T09:30:00Z"}],
+	statusCheckRollup:[{__typename:"StatusContext",name:"lint"}]}' >"$SCRATCH/fake/pr-412.json"
+if ! run_collector 'status:ready'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'rollup-variant scenario unexpectedly failed'
+fi
+assert_doc 'empty rollup is unknown(no-checks)' \
+	'([.metrics.issues[] | select(.number == 401)][0].ci_wall_hours) == "unknown(no-checks)"'
+assert_doc 'untimed-only rollup is unknown(no-check-timings)' \
+	'([.metrics.issues[] | select(.number == 402)][0].ci_wall_hours) == "unknown(no-check-timings)"'
+assert_doc 'single-commit PR spans compute' \
+	'([.metrics.issues[] | select(.number == 401)][0]) |
+	.merge_lag_hours == 1.5 and .build_private_hours == 0.5
+	and .pr_lifespan_hours == 1 and .full_delivery_hours == 5'
 
 # --- scenario: selection failure aborts ----------------------------------------
 rm -f "$SCRATCH/fake/search.json"
