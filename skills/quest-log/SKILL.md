@@ -218,6 +218,12 @@ from the issue text; a proposed `night-watch` states its evidence for reversal b
 `daytime-only` is exempt — it authorizes nothing, so waving one through costs a night's
 throughput and nothing else.
 
+**Executor.** Triage reasons about reversal cost before work starts; `$counterspell` is
+where that reasoning runs again if the change lands bad. It reads the label — or
+re-derives the assessment from these criteria when none exists, reporting rather than
+writing, since the invariant above binds every writer — to choose between `git revert`
+and fixing forward (ADR 0031).
+
 ## Claim protocol
 
 A `$quest` run holds **implementation authority** over its issue as a
