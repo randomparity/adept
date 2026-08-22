@@ -267,6 +267,38 @@ case_empty_range_writes_nothing() {
 	ok "$name"
 }
 
+# A destination the shell cannot create or write used to print a success line
+# with an empty byte count and exit 0, because the group's failed redirection
+# does not stop the script under `set -e`. These pin the closed failure: a
+# non-zero status, stderr only -- expect_error's stdout emptiness is what
+# forbids the old 'wrote ...' line -- and no package file.
+case_unwritable_destination() {
+	local name='an unwritable destination exits nonzero'
+	local repo dir
+	repo=$(new_repo)
+	fixture_scratch review-package-locked
+	dir="$FIXTURE_SCRATCH/locked"
+	mkdir "$dir"
+	chmod 555 "$dir"
+	# The if, not `&&`, so a red run keeps the suite's report-everything shape.
+	if expect_error "$name" "$repo" 3 HEAD~1 HEAD "$dir/out.diff"; then
+		ok "$name"
+	fi
+}
+
+case_nonexistent_destination_dir() {
+	local name='a destination in a nonexistent directory exits nonzero'
+	local repo out
+	repo=$(new_repo)
+	out="$repo/no-such-dir/out.diff"
+	if expect_error "$name" "$repo" 3 HEAD~1 HEAD "$out"; then
+		ok "$name"
+	fi
+	if [ -e "$out" ]; then
+		fail "$name" 'a package was written under a missing directory'
+	fi
+}
+
 printf 'review-package\n\n'
 case_writes_named_outfile
 case_package_carries_its_sections
@@ -280,5 +312,7 @@ case_bad_base_writes_nothing
 
 case_empty_range_exits_nonzero
 case_empty_range_writes_nothing
+case_unwritable_destination
+case_nonexistent_destination_dir
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

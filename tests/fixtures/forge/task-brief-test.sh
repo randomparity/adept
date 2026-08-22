@@ -306,6 +306,26 @@ case_not_found_leaves_empty_outfile() {
 	ok "$name"
 }
 
+# task-brief already fails closed on an unwritable destination -- the awk
+# redirect's failure trips `set -e` and the script exits 1 -- but nothing
+# pinned that, so a sibling rewrite could have silently changed it. This is
+# the same case review-package's suite gained when its write stopped being
+# checked: exit 1, stderr only, no success line.
+case_unwritable_destination() {
+	local name='an unwritable destination exits nonzero'
+	local repo dir
+	repo=$(new_repo)
+	fixture_scratch task-brief-locked
+	dir="$FIXTURE_SCRATCH/locked"
+	mkdir "$dir"
+	chmod 555 "$dir"
+	write_plan "$repo/plan.md"
+	# The if, not `&&`, so a red run keeps the suite's report-everything shape.
+	if expect_error "$name" "$repo" 1 plan.md 1 "$dir/out.md"; then
+		ok "$name"
+	fi
+}
+
 printf 'task-brief\n\n'
 case_writes_named_outfile
 case_default_path_uses_workspace
@@ -319,6 +339,7 @@ case_too_many_arguments
 case_missing_plan_file
 case_task_not_found
 case_not_found_leaves_empty_outfile
+case_unwritable_destination
 
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
