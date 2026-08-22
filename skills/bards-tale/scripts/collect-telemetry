@@ -1088,8 +1088,16 @@ movement_status='omitted'
 movement_reason='no-prior'
 movement_families=''
 if [[ -n $PRIOR_SIDECAR ]]; then
+	# A real sidecar nests its aggregates under metrics.aggregate; jq's
+	# has() streams one result per key, so membership is spelled as typed
+	# checks rather than a multi-key has() whose last word would silently
+	# decide the conjunction.
 	if ! jq -e 'type == "object"
-			and has("selector", "schema_version", "truncated", "aggregate")' \
+			and (.selector | type) == "string"
+			and (.schema_version | type) == "string"
+			and (.truncated | type) == "boolean"
+			and ((.metrics // {}) | type) == "object"
+			and ((.metrics.aggregate // {}) | type) == "object"' \
 		"$PRIOR_SIDECAR" >/dev/null 2>&1; then
 		movement_reason='unreadable-prior'
 	else
@@ -1108,7 +1116,7 @@ if [[ -n $PRIOR_SIDECAR ]]; then
 			movement_reason='truncated-current'
 		else
 			prior_generated=$(jq -r '.generated_at // ""' "$PRIOR_SIDECAR")
-			prior_aggregate=$(jq '.aggregate' "$PRIOR_SIDECAR")
+			prior_aggregate=$(jq '.metrics.aggregate' "$PRIOR_SIDECAR")
 			movement_status='compared'
 			movement_reason=''
 			# One family per span where both sides carry a numeric median;

@@ -436,7 +436,8 @@ cat >"$SCRATCH/prior-untruncated.json" <<'JSON'
 {"schema_version":"1.5","selector":"status:ready","mode":"label-set",
  "generated_at":"2026-07-20T00:00:00Z","truncated":false,
  "population":{"count":1,"issues":[1]},
- "aggregate":{"cycle_hours":{"count":1,"median":9,"min":9,"max":9}}}
+ "metrics":{"aggregate":{
+   "cycle_hours":{"count":1,"median":9,"min":9,"max":9}}}}
 JSON
 if ! run_collector 'status:ready' "$SCRATCH/prior-untruncated.json"; then
 	cat "$SCRATCH/stderr" >&2
@@ -885,9 +886,10 @@ cat >"$SCRATCH/prior-comparable.json" <<'JSON'
 {"schema_version":"1.5","selector":"status:movement","mode":"label-set",
  "generated_at":"2026-07-20T00:00:00Z","truncated":false,
  "population":{"count":3,"issues":[2001,2002,2003]},
- "aggregate":{"cycle_hours":{"count":3,"median":10,"min":8,"max":12},
-              "lead_time_hours":{"count":3,"median":20,"min":18,"max":22},
-              "pr_lifespan_hours":{"count":0}}}
+ "metrics":{"aggregate":{
+   "cycle_hours":{"count":3,"median":10,"min":8,"max":12},
+   "lead_time_hours":{"count":3,"median":20,"min":18,"max":22},
+   "pr_lifespan_hours":{"count":0}}}}
 JSON
 if ! run_collector 'status:movement' "$SCRATCH/prior-comparable.json"; then
 	cat "$SCRATCH/stderr" >&2
