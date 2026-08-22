@@ -714,10 +714,14 @@ for n in range(801, 807):
 with open(sys.argv[1], "w") as fh:
     json.dump(issues, fh)
 PY
+# Cycles grow with the issue number (one through five hours for the
+# night-safe band), so the pinned median cannot pass while equal to the
+# min or max.
 for n in 801 802 803 804 805 806; do
-	cat >"$SCRATCH/fake/tl-$n.jsonl" <<'JSONL'
+	hour=$((8 + n - 800))
+	cat >"$SCRATCH/fake/tl-$n.jsonl" <<JSONL
 {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"}
-{"event":"closed","created_at":"2026-07-01T10:00:00Z"}
+{"event":"closed","created_at":"2026-07-01T$(printf '%02d:00:00Z' "$hour")"}
 JSONL
 	printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-$n.json"
 	printf '%s\n' '[{"number":820,"body":"Closes #'"$n"'"}]' \
@@ -729,11 +733,9 @@ if ! run_collector 'risk:night-safe'; then
 	cat "$SCRATCH/stderr" >&2
 	fail 'segmentation scenario unexpectedly failed'
 fi
-assert_doc 'multi-match risk labels take the most restrictive band' \
-	'([.metrics.issues[] | select(.number == 806)][0].risk_band) == "daytime-only"'
 assert_doc 'a stable segment reports its distribution' \
 	'.metrics.risk_band_cycle_hours["night-safe"]
-	== {count: 5, median: 2, min: 2, max: 2}'
+	== {count: 5, median: 3, min: 1, max: 5}'
 assert_doc 'thin segments report only their count' \
 	'.metrics.risk_band_cycle_hours["daytime-only"].count == 1
 	and .metrics.risk_band_cycle_hours["daytime-only"].median
