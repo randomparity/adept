@@ -54,6 +54,15 @@ set -euo pipefail
 #   cycle, instability-gated). The pre-existing flat `metrics.aggregate` is
 #   untouched and becomes the report's combined-context figure. All
 #   additions under ADR 0030's minor-bump clause, hence schema_version 1.5.
+#
+# - Movement against the previous retrospective sidecar (issue #113): an
+#   optional second argument names a prior sidecar file; the collector
+#   compares the two runs' combined aggregates per span family wherever both
+#   sides carry a numeric median, behind the issue's comparability rules --
+#   exact selector match, a known schema major on the prior, neither run
+#   truncated. Everything else degrades to an explicit omitted/incomparable
+#   status inside the additive `metrics.movement` object, under ADR 0030's
+#   minor-bump clause, hence schema_version 1.6.
 # - Every gh read belongs to one of two named groups: issue_side_* (timeline,
 #   issue comments) or pr_side_* (PR candidate search, PR metadata). The groups
 #   do not interleave in one function, so a later migration of the issue-side
@@ -64,12 +73,15 @@ set -euo pipefail
 # Bash 3.2 floor: indexed arrays only, no mapfile, no associative arrays.
 
 RATE_LIMIT_STOP=5
-SCHEMA_VERSION='1.5'
+SCHEMA_VERSION='1.6'
 SEARCH_LIMIT=200
 usage() {
-	printf 'usage: %s SELECTOR\n' "${0##*/}" >&2
+	printf 'usage: %s SELECTOR [PRIOR_SIDECAR]\n' "${0##*/}" >&2
 	printf '       SELECTOR  a label-set ("status:ready") or a date-range\n' >&2
 	printf '                    ("2026-07-01..2026-07-20")\n' >&2
+	printf "       PRIOR_SIDECAR  optional path to a previous run's telemetry\n" >&2
+	printf '                    sidecar; movement against it lands in\n' >&2
+	printf '                    metrics.movement (issue #113)\n' >&2
 	exit 2
 }
 
@@ -78,8 +90,9 @@ die() {
 	exit 1
 }
 
-(($# == 1)) || usage
+((($# == 1) || ($# == 2))) || usage
 SELECTOR=$1
+PRIOR_SIDECAR=${2:-}
 
 for tool in gh jq; do
 	command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not installed"
@@ -1060,6 +1073,96 @@ throughput=$(jq -s '
 		as $weeks |
 	{weeks: $weeks}' "$entries")
 
+# --- movement against the prior sidecar ------------------------------------------
+
+# Comparability, in the issue's own order: the prior must parse as a document
+# with the envelope fields a comparison needs; its selector must equal this
+# run's selector exactly (a different population is not a predecessor); its
+# schema major must be one this collector knows; and neither side may be
+# truncated -- movement between partial populations is not movement. The
+# prior-side truncation check runs first: the prior snapshot is the fixed
+# term of the comparison. Every refusal degrades to an explicit status inside
+# metrics.movement -- never an empty section, never a guessed delta, never a
+# failed run.
+movement_status='omitted'
+movement_reason='no-prior'
+movement_families=''
+if [[ -n $PRIOR_SIDECAR ]]; then
+	# A real sidecar nests its aggregates under metrics.aggregate; jq's
+	# has() streams one result per key, so membership is spelled as typed
+	# checks rather than a multi-key has() whose last word would silently
+	# decide the conjunction.
+	if ! jq -e 'type == "object"
+			and (.selector | type) == "string"
+			and (.schema_version | type) == "string"
+			and (.truncated | type) == "boolean"
+			and (.metrics | type) == "object"
+			and (.metrics.aggregate | type) == "object"' \
+		"$PRIOR_SIDECAR" >/dev/null 2>&1; then
+		movement_reason='unreadable-prior'
+	else
+		prior_selector=$(jq -r '.selector' "$PRIOR_SIDECAR")
+		prior_schema=$(jq -r '.schema_version' "$PRIOR_SIDECAR")
+		prior_truncated=$(jq -r '.truncated' "$PRIOR_SIDECAR")
+		if [[ $prior_selector != "$SELECTOR" ]]; then
+			movement_reason='selector-mismatch'
+		elif [[ $prior_schema != 1.* ]]; then
+			movement_reason='unknown-prior-schema'
+		elif [[ $prior_truncated == true ]]; then
+			movement_status='incomparable'
+			movement_reason='truncated-prior'
+		elif [[ $truncated == true ]]; then
+			movement_status='incomparable'
+			movement_reason='truncated-current'
+		else
+			prior_generated=$(jq -r '.generated_at // ""' "$PRIOR_SIDECAR")
+			prior_aggregate=$(jq '.metrics.aggregate' "$PRIOR_SIDECAR")
+			movement_status='compared'
+			movement_reason=''
+			# One family per span where both sides carry a numeric median;
+			# the delta keeps the aggregate stage's one-decimal discipline.
+			# A family unresolved on either side is absent from the object,
+			# never zero-filled against nothing.
+			movement_families=$(jq -n \
+				--argjson cur "$aggregate" \
+				--argjson pri "$prior_aggregate" '
+				["cycle_hours", "lead_time_hours", "pr_lifespan_hours",
+				 "full_delivery_hours", "merge_lag_hours",
+				 "build_private_hours", "ci_wall_hours", "reopen_count",
+				 "triage_latency_hours", "queue_wait_hours",
+				 "blocked_dwell_hours", "human_response_hours",
+				 "rework_bounces"] as $fs |
+				reduce $fs[] as $f ({};
+					if ($cur[$f].median | type) == "number"
+						and ($pri[$f].median | type) == "number"
+						and ($cur[$f].count | type) == "number"
+						and ($pri[$f].count | type) == "number"
+					then . + {($f): {
+						previous_median: $pri[$f].median,
+						current_median: $cur[$f].median,
+						delta_median:
+							((($cur[$f].median - $pri[$f].median)
+								* 10 | round) / 10),
+						previous_count: $pri[$f].count,
+						current_count: $cur[$f].count}}
+					else . end)')
+		fi
+	fi
+fi
+
+if [[ $movement_status == compared ]]; then
+	movement=$(jq -n \
+		--argjson families "$movement_families" \
+		--arg selector "$prior_selector" \
+		--arg generated_at "$prior_generated" \
+		'{status: "compared",
+		  against: {selector: $selector, generated_at: $generated_at},
+		  families: $families}')
+else
+	movement=$(jq -n --arg status "$movement_status" --arg reason "$movement_reason" \
+		'{status: $status, reason: $reason}')
+fi
+
 # The issues array rides in through --slurpfile, never argv: a full
 # population as a single argument exceeds Linux's per-argument size limit.
 metrics=$(jq -n \
@@ -1069,11 +1172,13 @@ metrics=$(jq -n \
 	--argjson risk_bands "$risk_bands" \
 	--argjson cohorts "$cohorts" \
 	--argjson quartiles "$quartiles" \
+	--argjson movement "$movement" \
 	--argjson throughput "$throughput" \
 	'{issues: $issues, aggregate: $aggregate, coverage: $coverage,
 	  risk_band_cycle_hours: $risk_bands,
 	  cohorts: $cohorts,
-	  quartiles: $quartiles, throughput: $throughput}')
+	  quartiles: $quartiles, throughput: $throughput,
+	  movement: $movement}')
 
 printf '%s\n' "$metrics" >"$work/metrics.json"
 jq -n \
