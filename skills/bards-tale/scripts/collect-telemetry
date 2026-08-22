@@ -218,7 +218,7 @@ text_or_unknown() { # raw
 collect_issue() { # number state
 	local n=$1 state=$2
 	local tl="$work/tl-$n.jsonl" blob="$work/issue-$n.json" cand="$work/prlist-$n.json"
-	local cycle inflight=false build review
+	local cycle inflight=false build review tl_failed
 	local first_ip last_closed in_review awaiting_merge
 	local pr pr_ok iters verdict security exit_field scope_est loc
 
