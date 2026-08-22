@@ -54,16 +54,33 @@ else
 	destination="$scratch/review-$abbreviated.diff"
 fi
 
+# The write is guarded explicitly because `set -e` does not stop the script
+# when a compound command's redirection fails: without the guard a failed
+# write fell through to the status line below, which interpolated wc's empty
+# output into it and exited 0 -- sending the caller off to review a package
+# that does not exist. The `||` form is what actually catches it; an `if !`
+# around the same group does not, because the failed redirect skips the whole
+# construct instead of failing its condition. Exit 3, like task-brief's
+# wrote-nothing path: the arguments were sound, the environment refused.
+#
+# Left of `||` the group's members lose errexit, so the commands inside are
+# chained with && instead: any one failing must fail the group, or a partial
+# package could still reach the success line below.
 {
-	printf '# Review package: %s\n\n' "$span"
-	printf '## Commits\n'
-	git log --oneline "$span"
-	printf '\n## Files changed\n'
-	git diff --stat "$span"
-	printf '\n## Diff\n'
-	git diff -U10 "$span"
-} >"$destination"
+	printf '# Review package: %s\n\n' "$span" &&
+		printf '## Commits\n' &&
+		git log --oneline "$span" &&
+		printf '\n## Files changed\n' &&
+		git diff --stat "$span" &&
+		printf '\n## Diff\n' &&
+		git diff -U10 "$span"
+} >"$destination" || {
+	printf 'review-package: could not write the package to %s\n' "$destination" >&2
+	exit 3
+}
 
+# Reached only after the guarded write succeeded, so the byte count cannot be
+# empty and the success line cannot lie about what landed.
 printf 'review-package: wrote %s (%s commit(s), %s bytes)\n' \
 	"$destination" \
 	"$commits" \
