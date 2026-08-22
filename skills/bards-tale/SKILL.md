@@ -38,6 +38,16 @@ DOC=$(mktemp)
 skills/bards-tale/scripts/collect-telemetry "<selector>" > "$DOC"
 ```
 
+**Prior sidecar.** Before invoking, check `docs/retro/` for the most recent
+prior sidecar of the same selector: files named `<date>-<slug>.json` whose
+`<slug>` renders the same selector and whose date is strictly earlier than
+today — the newest of them is the prior run. Pass its path as the optional
+second argument; the collector computes the comparison (below) and the report
+renders it. When no earlier sidecar exists — including one a human never
+committed, which this git-free skill simply cannot see — pass no second
+argument and the movement section is omitted entirely. Locating the file is a
+filesystem read and a name sort; the comparison itself is never done here.
+
 If the collector exits non-zero or stdout does not parse as JSON, stop:
 write nothing — no sidecar, no report — and surface the collector's stderr.
 ADR 0030 makes a non-zero exit or an unparseable capture an aborted
@@ -146,6 +156,13 @@ collection that is never parsed as partial output.
   with instability-gated per-week median cycle. The renderer contract for all
   of these is §3.
 
+- **Movement** — `metrics.movement`, present when a prior sidecar path was
+  passed: the comparison of this run's combined aggregates against the prior
+  run's, per span family, behind the issue's comparability rules (exact
+  selector match, a known prior schema major, neither run truncated). Every
+  refusal is an explicit `omitted`/`incomparable` status with its reason —
+  never a guessed delta. The renderer contract is §3's movement section.
+
 **Empty selection.** When `population.count == 0`, write nothing — no report,
 no sidecar — and state plainly that the selector matched zero issues (`gh
 search` percent-encodes colon labels correctly, so an empty result is genuinely
@@ -224,13 +241,28 @@ Sections:
    than five measured cycles reports its count with
    `unknown(instability-rule)` at the median position — read the sequence
    of counts before reading any median.
-4. **Findings** — process observations, each **grounded in a named metric**.
+4. **Movement against the previous run** — rendered only when a prior sidecar
+   was passed to the collector. `metrics.movement.status` decides the shape,
+   and the issue's comparability rules are the whole contract:
+   - `compared` — a table of the compared span families: family, previous
+     median, current median, Δ median (signed, one decimal), labelled with the
+     prior run's `generated_at` so the reader knows what moved against what.
+     Only families present in `movement.families` appear — a family either
+     side could not resolve is absent, and the table never zero-fills it.
+   - `incomparable` — one line naming the reason (`truncated-prior` /
+     `truncated-current`): the section exists to say why there is no movement,
+     because movement between partial populations is not movement.
+   - `omitted` — the section is omitted entirely: a different selector is not
+     a predecessor, and a prior that was never committed simply does not exist
+     for this git-free skill. Never an empty section, never a section
+     reporting movement against nothing.
+5. **Findings** — process observations, each **grounded in a named metric**.
    Every finding must reference an entity present in this report — an issue
    row in either cohort's table (compact rows ground legacy-cohort findings
-   on cycle, PR, or LOC), an aggregate or quartile figure, a throughput
-   week, or a coverage count — and any number it states must match the
-   entry it cites. No finding citing an entity absent from the report, or a
-   number the cited entry contradicts; a finding about the instrumented
+   on cycle, PR, or LOC), an aggregate or quartile figure, a movement row, a
+   throughput week, or a coverage count — and any number it states must match
+   the entry it cites. No finding citing an entity absent from the report, or
+   a number the cited entry contradicts; a finding about the instrumented
    cohort must not quietly lean on the combined context figures. Causal
    phrasing is allowed only to the extent the cited metric supports it.
    When narrating a review loop from `exit`, remember: the field takes one
@@ -240,7 +272,7 @@ Sections:
    `$saga` or `$bounty` and worked later, `lead_time_hours` is dominated by
    queue position rather than effort — findings must not read it as
    slowness.
-5. **Proposed tuning (NOT applied)** — concrete suggestions, each satisfying
+6. **Proposed tuning (NOT applied)** — concrete suggestions, each satisfying
    **both** halves of the grounding rule: it **cites a real governing workflow
    or applicable repository instruction source** (verified with `Read` /
    `Grep`) **and traces to a finding or metric** in this report. No proposal
@@ -251,13 +283,13 @@ Sections:
    **advisory**: the estimate is a qualitative judgement, so a mismatch flags
    an issue *worth a look*, and the retro may recommend re-tuning the bands
    themselves.
-6. **Data gaps** — entries whose source annotation is genuinely *absent*
+7. **Data gaps** — entries whose source annotation is genuinely *absent*
    (`unknown`). When a gap set is the majority for a category, list the
    **complement with a count** for the remainder — "complete `WORK:SCOPE`:
    14 issues (#26, #140, …); the remaining 56 have none" — instead of
    enumerating the majority. Enumerate a gap set directly only when it is
    the minority.
-7. **Fetch failures** — entries whose `gh` read *errored* (`error`; kept
+8. **Fetch failures** — entries whose `gh` read *errored* (`error`; kept
    distinct from Data gaps). Omit when there were none. If errors exceed
    successes, lead the report with a prominent unreliability warning
    suggesting a smaller selector or a retry.
