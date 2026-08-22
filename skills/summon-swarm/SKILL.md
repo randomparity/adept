@@ -62,7 +62,7 @@ Adapted from `suede-codex-fleet` in
    ```bash
    codex exec -C <workspace> --sandbox workspace-write --skip-git-repo-check \
      -o <workspace>/out/<run-name>-final-message.txt \
-    "Read the workspace instruction file at the workspace root, then execute the brief at briefs/<brief>.md exactly. Write the deliverable to the output file the brief names, run the brief's acceptance-criteria self-check, and state pass/fail per criterion in your final message."
+    "If the workspace root has an instruction file, read it first, then execute the brief at briefs/<brief>.md exactly. Write the deliverable to the output file the brief names, run the brief's acceptance-criteria self-check, and state pass/fail per criterion in your final message."
    ```
 
    - `-C` sets the worker's root; `--skip-git-repo-check` is required outside
@@ -73,9 +73,11 @@ Adapted from `suede-codex-fleet` in
    - Before waiting on any worker, persist its spawn to a fleet manifest at
      `<workspace>/out/sessions.tsv` — one row per worker: run name, session id
      (printed at run start), brief path, `-o` output path, status (`running`).
-     Update the row when the worker ends (`done`, `blocked`). Terminal scrollback
-     dies with the orchestrator; this manifest is what lets a fresh session
-     resume a dead run.
+     Update the row when the worker ends (`done`, `failed`, `blocked`). When the
+     single respawn launches, overwrite that row's session id and reset the status
+     to `running`, so resume-after-death sees at most one live attempt per brief.
+     Terminal scrollback dies with the orchestrator; this manifest is what lets a
+     fresh session resume a dead run.
 4. **Review gate (orchestrator, mandatory).** Read every `out/` file against the
    brief's acceptance criteria and the workspace instruction file's hard bans.
    Worker self-checks are evidence, not verdicts. Output that meets every criterion
@@ -109,7 +111,10 @@ A silent, crashed, or hung worker is a handled path, not a mystery:
    file and its task log. The usual causes are a sandbox denial, an auth lapse, or
    a brief pointing at a wrong path — each has a different fix, and respawning
    without reading repeats the failure.
-3. **Respawn once.** After fixing the cause, rerun the same brief one time.
+3. **Respawn once.** End what you can observe first: collect a non-zero exit, or
+   terminate a timed-out process and confirm it exited — a timeout is not an
+   observed end, and two live workers on one workspace corrupt both runs. Then,
+   after fixing the cause, rerun the same brief one time.
 4. **Surface, don't loop.** A second silence ends that worker's chances: mark its
    manifest row `blocked`, drop its output from the deliverable, and name it in
    the ship report so the caller decides whether to re-brief, split the task, or
@@ -131,8 +136,8 @@ worker can be continued with `codex exec resume <session-id>` instead of restart
 ```markdown
 # Brief <id> — <task name>
 
-Read the workspace instruction file (`AGENTS.md` by default) first. This
-brief only adds the task.
+Read the workspace instruction file first if preflight found one. This
+brief only adds the task (and carries conventions itself when none exists).
 
 ## Job
 <one paragraph: what and why>
