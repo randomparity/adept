@@ -62,14 +62,18 @@ fi
 # around the same group does not, because the failed redirect skips the whole
 # construct instead of failing its condition. Exit 3, like task-brief's
 # wrote-nothing path: the arguments were sound, the environment refused.
+#
+# Left of `||` the group's members lose errexit, so the commands inside are
+# chained with && instead: any one failing must fail the group, or a partial
+# package could still reach the success line below.
 {
-	printf '# Review package: %s\n\n' "$span"
-	printf '## Commits\n'
-	git log --oneline "$span"
-	printf '\n## Files changed\n'
-	git diff --stat "$span"
-	printf '\n## Diff\n'
-	git diff -U10 "$span"
+	printf '# Review package: %s\n\n' "$span" &&
+		printf '## Commits\n' &&
+		git log --oneline "$span" &&
+		printf '\n## Files changed\n' &&
+		git diff --stat "$span" &&
+		printf '\n## Diff\n' &&
+		git diff -U10 "$span"
 } >"$destination" || {
 	printf 'review-package: could not write the package to %s\n' "$destination" >&2
 	exit 3

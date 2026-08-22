@@ -276,6 +276,12 @@ case_unwritable_destination() {
 	local name='an unwritable destination exits nonzero'
 	local repo dir
 	repo=$(new_repo)
+	# chmod 555 does not stop root, so there the denial cannot be produced and
+	# the case would prove nothing; skip it the way tracker-test does.
+	if [[ $(id -u) -eq 0 ]]; then
+		printf 'review-package-test: skip unwritable destination; running as root, which chmod 555 does not deny\n'
+		return
+	fi
 	fixture_scratch review-package-locked
 	dir="$FIXTURE_SCRATCH/locked"
 	mkdir "$dir"
@@ -284,6 +290,7 @@ case_unwritable_destination() {
 	if expect_error "$name" "$repo" 3 HEAD~1 HEAD "$dir/out.diff"; then
 		ok "$name"
 	fi
+	chmod 755 "$dir"
 }
 
 case_nonexistent_destination_dir() {
