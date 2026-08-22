@@ -133,6 +133,10 @@ tracking issue and go through normal `$quest`.
   improvised as a revert inside the hand-off flow.
 - Urgent fixes get a bounded fast lane whose cost ceiling is explicit (budget 2) and
   whose floor is also explicit (one full review pass plus one confirming pass).
+- `$trial-loop`'s budget-lowering authority enumerates the assessments it accepts; this
+  decision adds the counterspell reversal-cost assessment to that enumeration, so the
+  fast lane's budget 2 rests on the loop's own contract rather than on a caller's
+  private claim to an exception.
 - The reopen-vs-new-issue rule makes the tracker's history truthful: an issue closed by a
   PR that failed its own criteria does not stay closed, and an issue genuinely delivered
   does not get blamed for an unrelated regression.
