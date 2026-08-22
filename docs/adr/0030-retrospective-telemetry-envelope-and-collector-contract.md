@@ -54,13 +54,14 @@ counts, ordinals, or identifiers.
 ### schema_version and the bump rule
 
 The document carries a top-level `schema_version` string of the form `"M.m"`, starting at
-`"1.0"`. **Adding an optional per-metric field, a new metric entry, or a new report
-section is a minor bump (`m` + 1) and requires no new ADR** — this record is deliberately
-narrow so that the five later metric entries land as minor bumps instead of
-supersessions. Removing, renaming, re-typing, or re-nesting any existing field, or
-changing the meaning of a sentinel, is a major bump (`M` + 1) and requires a new record
-that supersedes this one with a banner here. A consumer that meets a major version it
-does not know rejects the document rather than guessing.
+`"1.0"`. The bump rule partitions changes by kind, not by optionality. **Any addition — a
+new metric entry, a field inside one, or a new object beside `metrics` — is a minor bump
+(`m` + 1) and requires no new ADR**, whether the added field is optional or required; this
+record is deliberately narrow so that the five later metric entries land as minor bumps
+instead of supersessions. Removing, renaming, re-typing, or re-nesting any existing field,
+or changing the meaning of a sentinel or of an existing envelope field, is a major bump
+(`M` + 1) and requires a new record that supersedes this one with a banner here. A consumer
+that meets a major version it does not know rejects the document rather than guessing.
 
 ### Top-level envelope
 
@@ -82,18 +83,22 @@ minor-bump rule; this record fixes the envelope, not the metrics.
 
 ### Collector stdout contract
 
-After writing the document, the collector prints exactly one JSON status line to stdout,
-as the last line of its output:
+The collector takes the selector as its input and emits exactly one JSON document on
+standard output — the telemetry document itself, conforming to this envelope. Its stdout
+carries no prose, no summary, and no banner: a consumer captures stdout wholesale and
+parses it as the document, and the collector's suite asserts the emitted document's shape
+against fixtures.
 
-```json
-{"report":"docs/retro/2026-08-21-status-ready.json","schema_version":"1.0","generated_at":"2026-08-21T12:00:00Z","issues":42,"truncated":false}
-```
+The collector is the transfer mechanism, not the storage. The skill invokes it, writes the
+captured document byte-for-byte to `docs/retro/<date>-<slug>.json`, and renders the report
+from it; a human commits both artifacts. The durable object a later run parses is the
+written sidecar, so the envelope above governs the file and the emission identically.
 
-The keys are `report` (the written path), `schema_version`, `generated_at`, `issues`
-(population count), and `truncated`. The human-readable in-session summary the skill
-already prints precedes this line; consumers that want the machine result parse only the
-final line. A run that fails to write the document exits non-zero and prints no status
-line, so a missing or unparseable last line is itself the failure signal.
+Failure keeps the tri-state discipline: a failed `gh` read becomes `error` in the
+document, and the run never fail-fasts silently on a per-issue read. If the collector
+cannot produce a document at all it exits non-zero having emitted no complete JSON
+document; a consumer treats a non-zero exit or unparseable stdout as an aborted collection
+and never parses partial output.
 
 ### The collector reads through `gh`, not the tracker contract
 
@@ -134,9 +139,10 @@ to #18 and #20 for human disposition.
 The five later metric entries extend the document under the minor-bump clause without
 touching this record, and `docs/adr/` absorbs them append-only. Consumers gain a stable
 envelope to parse and a null-free invariant that keeps absence distinguishable from every
-default a JSON decoder might supply. The stdout line gives callers a machine result
-without parsing prose, at the cost of one more contract the collector must honor. Staying
-on `gh` couples retrospective telemetry to GitHub's availability and REST shapes —
+default a JSON decoder might supply. The emit-on-stdout boundary keeps the collector and
+the rendering skill independently testable, at the cost of one more contract the collector
+must honor.
+Staying on `gh` couples retrospective telemetry to GitHub's availability and REST shapes —
 accepted, because the source telemetry is GitHub-native and a tracker-portable retro would
 have nothing portable to read. Leaving `skills/bards-tale/SKILL.md` untouched means the
 silent-truncation hazard above remains until a later minor bump carries the completeness
