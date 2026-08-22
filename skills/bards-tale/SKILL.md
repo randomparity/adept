@@ -78,6 +78,31 @@ collection that is never parsed as partial output.
   coverage equals the selected population minus fetch errors and genuinely
   absent anchors (open issues, issues with no closing PR, PRs without
   timestamps or commits) — far wider than the label-anchored samples.
+- **Queue and rework spans** — five label-anchored per-issue fields computed
+  from the already-fetched timeline stream in the issue-side group:
+  `triage_latency_hours` (filed → first `status:ready`),
+  `queue_wait_hours` (first `status:ready` → first `status:in-progress`;
+  together the two decompose the filed-to-started interval and localize
+  where the delay sits), `blocked_dwell_hours` (summed time inside
+  `status:blocked` / `status:needs-human`; each entry pairs with its exit —
+  any other `status:` label, the matching `unlabeled` event, or the close
+  event — and an interval with no exit is `unknown(still-blocked)`),
+  `human_response_hours` (last `status:awaiting-merge` label → PR merge
+  instant), and `rework_bounces` (counted re-entries into `in-progress`
+  after `in-review`; a measured zero reports `0`, like `reopen_count`).
+  These degrade when the pipeline mislabels — which is exactly what the
+  drift cross-check reports — and that difference in failure mode is why
+  they sit in the issue-side group apart from the GitHub-native family. A
+  span that runs backwards (label history out of order) is `"error"` at its
+  position, never a clamped value.
+- **Drift cross-check** — `review_drift_hours`: where both sides exist, the
+  absolute disagreement between the label-derived review phase
+  (`phase_review_hours`) and its GitHub-timestamp analogue
+  (`pr_lifespan_hours`); otherwise it carries the same tri-state as its
+  missing or errored side. A disagreement exceeding **10% of
+  `pr_lifespan_hours` or 1 hour, whichever is larger**, means labels were
+  written late or not at all — the drift `$resurrection` exists to repair —
+  not that review was fast.
 
 **Empty selection.** When `population.count == 0`, write nothing — no report,
 no sidecar — and state plainly that the selector matched zero issues (`gh
@@ -117,7 +142,8 @@ Sections:
    p90 over a handful of points). Durations are hours to one decimal — a
    sub-hour cycle reports `0.4`, never `0`. Emit an **instability note
    whenever a metric's coverage `N < 5`**, warning against over-trusting a
-   2–4-point median.
+   2–4-point median. Flag any issue whose `review_drift_hours` exceeds
+   `max(1, 0.1 × pr_lifespan_hours)`: the label timestamps lag reality.
 3. **Findings** — process observations, each **grounded in a named metric**.
    Every finding must reference an issue number or aggregate present in the
    Metrics table, and any number it states must match the table. No finding

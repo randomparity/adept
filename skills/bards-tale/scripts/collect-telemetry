@@ -29,6 +29,12 @@ set -euo pipefail
 #   same read groups with widened --json lists — no additional round trips.
 #   They are additive per-issue fields under ADR 0030's minor-bump clause,
 #   hence schema_version 1.2.
+# - Five label-anchored queue/rework spans ride the already-fetched issue-side
+#   timeline (triage latency, queue wait, blocked dwell, human response,
+#   rework bounces) plus a label-vs-GitHub drift cross-check pairing the
+#   label-derived review phase against the GitHub-derived PR lifespan. They
+#   are additive per-issue fields under ADR 0030's minor-bump clause, hence
+#   schema_version 1.3.
 # - Every gh read belongs to one of two named groups: issue_side_* (timeline,
 #   issue comments) or pr_side_* (PR candidate search, PR metadata). The groups
 #   do not interleave in one function, so a later migration of the issue-side
@@ -40,7 +46,7 @@ set -euo pipefail
 
 RATE_LIMIT_STOP=5
 SEARCH_LIMIT=200
-SCHEMA_VERSION='1.2'
+SCHEMA_VERSION='1.3'
 
 usage() {
 	printf 'usage: %s SELECTOR\n' "${0##*/}" >&2
@@ -222,6 +228,47 @@ reopen_count_of() { # tl-file
 	jq -rs '[.[] | select(.event == "reopened")] | length' "$1"
 }
 
+# Count of re-entries into status:in-progress after status:in-review — the
+# rework signal the four anchor reads discarded. Zero from a successful read
+# is a genuine value, never a fill.
+rework_bounces_of() { # tl-file
+	jq -rs 'reduce .[] as $e (
+		{seen: false, n: 0};
+		($e.label.name // "") as $ln |
+		if $e.event == "labeled" and $ln == "status:in-review" then .seen = true
+		elif $e.event == "labeled" and $ln == "status:in-progress" and .seen
+		then {seen: false, n: (.n + 1)}
+		else . end) | .n' "$1"
+}
+
+# Total hours spent inside status:blocked / status:needs-human. Each entry
+# into a stuck state pairs with its exit: any other status:* label, the
+# matching unlabeled event, or the close event. An interval with no exit on a
+# captured stream is the data gap it is, never elapsed-so-far.
+blocked_dwell_of() { # tl-file
+	jq -rs 'reduce .[] as $e (
+		{inside: false, enter: "", total: 0};
+		($e.label.name // "") as $ln |
+		if $e.event == "labeled"
+			and ($ln == "status:blocked" or $ln == "status:needs-human")
+		then if .inside
+			then .
+			else {inside: true, enter: ($e.created_at // ""), total: .total} end
+		elif .inside and (
+			($e.event == "unlabeled"
+				and ($ln == "status:blocked" or $ln == "status:needs-human"))
+			or $e.event == "closed"
+			or ($e.event == "labeled" and ($ln | startswith("status:"))
+				and $ln != "status:blocked" and $ln != "status:needs-human"))
+		then {inside: false, enter: "",
+			total: (.total
+				+ (($e.created_at | fromdateiso8601) - (.enter | fromdateiso8601)))}
+		else . end)
+		| if .inside then "unknown(still-blocked)"
+			elif .total < 0 then "error"
+			else (((.total / 360) | round) / 10) end' "$1"
+}
+
 # --- per-issue collection -------------------------------------------------------
 
 # Sets ENTRY (one compact JSON object) and ISSUE_ERRORED (1 when any read for
@@ -234,6 +281,9 @@ collect_issue() { # number state created closed
 	local pr pr_ok iters verdict security exit_field scope_est loc
 	local lead reopens lifespan full_del lag bprivate ci
 	local pr_created pr_merged commit_span first_commit last_commit
+	local first_ready am_last
+	local triage='error' queue='error' dwell='error' bounces='error'
+	local hr='error' drift='error' hr_open=0 drift_open=0
 
 	ISSUE_ERRORED=0
 
@@ -261,6 +311,7 @@ collect_issue() { # number state created closed
 		build='error'
 		review='error'
 		reopens='error'
+		drift='error'
 	else
 		if ! reopens=$(reopen_count_of "$tl"); then
 			reopens='error'
@@ -272,6 +323,43 @@ collect_issue() { # number state created closed
 				and .label.name == "status:in-review")] | first | (.created_at // "")' "$tl")
 		awaiting_merge=$(jq -rs '[.[] | select(.event == "labeled"
 				and .label.name == "status:awaiting-merge")] | first | (.created_at // "")' "$tl")
+		first_ready=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:ready")] | first | (.created_at // "")' "$tl")
+		am_last=$(jq -rs '[.[] | select(.event == "labeled"
+				and .label.name == "status:awaiting-merge")] | last | (.created_at // "")' "$tl")
+		if ! bounces=$(rework_bounces_of "$tl"); then
+			bounces='error'
+		fi
+		if ! dwell=$(blocked_dwell_of "$tl"); then
+			dwell='error'
+		fi
+
+		# Triage latency and queue wait decompose the filed-to-started
+		# interval. A span that runs backwards means out-of-order label
+		# history and reports as the error it is, never a clamped value.
+		if [[ -z $created ]]; then
+			triage='unknown(no-created-at)'
+		elif [[ -z $first_ready ]]; then
+			triage='unknown(never-ready)'
+		elif ! triage=$(hours_between "$created" "$first_ready") || [[ $triage == -* ]]; then
+			triage='error'
+		fi
+		if [[ -z $first_ready ]]; then
+			queue='unknown(no-ready-anchor)'
+		elif [[ -z $first_ip ]]; then
+			queue='unknown(no-in-progress-anchor)'
+		elif ! queue=$(hours_between "$first_ready" "$first_ip") || [[ $queue == -* ]]; then
+			queue='error'
+		fi
+
+		# Human response and the drift cross-check resolve after the PR-side
+		# reads below settle their GitHub-native endpoints.
+		hr=''
+		if [[ -z $am_last ]]; then
+			hr='unknown(never-awaiting-merge)'
+		else
+			hr_open=1
+		fi
 
 		# A computation on a captured-but-malformed anchor is an error at
 		# that metric's position, never an aborted collection.
@@ -300,6 +388,15 @@ collect_issue() { # number state created closed
 			! review=$(hours_between "$in_review" "$awaiting_merge"); then
 			review='error'
 		fi
+
+		# The drift cross-check rides the label-derived review phase; a
+		# numeric phase opens a pending resolved against the PR lifespan
+		# after the PR-side reads below.
+		case $review in
+		error) drift='error' ;;
+		unknown*) drift='unknown(no-review-phase)' ;;
+		*) drift_open=1 ;;
+		esac
 	fi
 
 	# Lead time: filed to closed. An open issue has not completed the span,
@@ -446,7 +543,37 @@ collect_issue() { # number state created closed
 		bprivate='error'
 		ci='error'
 	fi
-
+	# The pendings resolve here, where the GitHub-native endpoints above
+	# have settled: human response pairs the last awaiting-merge label with
+	# the PR merge instant; the drift cross-check pairs the label-derived
+	# review phase against the GitHub-derived PR lifespan. Either span's
+	# data gap or error carries to its pairing position.
+	if ((hr_open)); then
+		if [[ $pr == error ]]; then
+			hr='error'
+		elif [[ $pr == unknown* ]]; then
+			hr=$pr
+		elif [[ $lifespan == error ]]; then
+			hr='error'
+		elif [[ -z $pr_merged ]]; then
+			hr='unknown(no-merge-time)'
+		elif ! hr=$(hours_between "$am_last" "$pr_merged") || [[ $hr == -* ]]; then
+			hr='error'
+		fi
+	fi
+	if ((drift_open)); then
+		case $lifespan in
+		error) drift='error' ;;
+		unknown*) drift=$lifespan ;;
+		*)
+			if ! drift=$(jq -rn --arg r "$review" --arg l "$lifespan" \
+				'(((($l | tonumber) - ($r | tonumber)) | if . < 0 then -. else . end)
+					* 10 | round) / 10'); then
+				drift='error'
+			fi
+			;;
+		esac
+	fi
 	ENTRY=$(jq -cn \
 		--argjson number "$n" \
 		--arg state "$state" \
@@ -468,6 +595,12 @@ collect_issue() { # number state created closed
 		--argjson build_private_hours "$(metric_json "$bprivate")" \
 		--argjson ci_wall_hours "$(metric_json "$ci")" \
 		--argjson reopen_count "$(metric_json "$reopens")" \
+		--argjson triage_latency_hours "$(metric_json "$triage")" \
+		--argjson queue_wait_hours "$(metric_json "$queue")" \
+		--argjson blocked_dwell_hours "$(metric_json "$dwell")" \
+		--argjson human_response_hours "$(metric_json "$hr")" \
+		--argjson rework_bounces "$(metric_json "$bounces")" \
+		--argjson review_drift_hours "$(metric_json "$drift")" \
 		'{number: $number, state: $state,
 		  cycle_hours: $cycle_hours, cycle_in_flight: $cycle_in_flight,
 		  phase_build_hours: $phase_build_hours,
@@ -480,7 +613,13 @@ collect_issue() { # number state created closed
 		  full_delivery_hours: $full_delivery_hours,
 		  merge_lag_hours: $merge_lag_hours,
 		  build_private_hours: $build_private_hours,
-		  ci_wall_hours: $ci_wall_hours, reopen_count: $reopen_count}')
+		  ci_wall_hours: $ci_wall_hours, reopen_count: $reopen_count,
+		  triage_latency_hours: $triage_latency_hours,
+		  queue_wait_hours: $queue_wait_hours,
+		  blocked_dwell_hours: $blocked_dwell_hours,
+		  human_response_hours: $human_response_hours,
+		  rework_bounces: $rework_bounces,
+		  review_drift_hours: $review_drift_hours}')
 	printf '%s\n' "$ENTRY"
 }
 
@@ -570,7 +709,12 @@ aggregate=$(jq -s '
 	 merge_lag_hours: agg("merge_lag_hours"),
 	 build_private_hours: agg("build_private_hours"),
 	 ci_wall_hours: agg("ci_wall_hours"),
-	 reopen_count: agg("reopen_count")}' "$entries")
+	 reopen_count: agg("reopen_count"),
+	 triage_latency_hours: agg("triage_latency_hours"),
+	 queue_wait_hours: agg("queue_wait_hours"),
+	 blocked_dwell_hours: agg("blocked_dwell_hours"),
+	 human_response_hours: agg("human_response_hours"),
+	 rework_bounces: agg("rework_bounces")}' "$entries")
 
 # Per-metric coverage: how many entries carry a genuine value, so a thin sample
 # is never mistaken for a complete one.
@@ -589,11 +733,20 @@ coverage=$(jq -s '
 	(map(select(.build_private_hours | type == "number")) | length) as $bprivate |
 	(map(select(.ci_wall_hours | type == "number")) | length) as $ci |
 	(map(select(.reopen_count | type == "number")) | length) as $reopens |
+	(map(select(.triage_latency_hours | type == "number")) | length) as $triage |
+	(map(select(.queue_wait_hours | type == "number")) | length) as $queue |
+	(map(select(.blocked_dwell_hours | type == "number")) | length) as $dwell |
+	(map(select(.human_response_hours | type == "number")) | length) as $human |
+	(map(select(.rework_bounces | type == "number")) | length) as $bounces |
+	(map(select(.review_drift_hours | type == "number")) | length) as $drift |
 	{cycle_hours: $cycle, phase_build_hours: $build, phase_review_hours: $review,
 	 pr: $pr, review_iterations: $iterations, scope_estimate: $scope, loc_actual: $loc,
 	 lead_time_hours: $lead, pr_lifespan_hours: $lifespan,
 	 full_delivery_hours: $delivery, merge_lag_hours: $lag,
-	 build_private_hours: $bprivate, ci_wall_hours: $ci, reopen_count: $reopens}' "$entries")
+	 build_private_hours: $bprivate, ci_wall_hours: $ci, reopen_count: $reopens,
+	 triage_latency_hours: $triage, queue_wait_hours: $queue,
+	 blocked_dwell_hours: $dwell, human_response_hours: $human,
+	 rework_bounces: $bounces, review_drift_hours: $drift}' "$entries")
 
 # The issues array rides in through --slurpfile, never argv: a full
 # population as a single argument exceeds Linux's per-argument size limit.
