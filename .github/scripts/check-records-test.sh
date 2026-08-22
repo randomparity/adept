@@ -2612,7 +2612,7 @@ STUB
   real_mktemp=$(command -v mktemp)
   cat >"$d.bin/mktemp" <<STUB
 #!/usr/bin/env bash
-count_file="\$TMPDIR/check-records-test-mktemp-count"
+count_file="\${TMPDIR:-/tmp}/check-records-test-mktemp-count"
 n=0
 [ -f "\$count_file" ] && n=\$(cat "\$count_file")
 n=\$((n + 1))
