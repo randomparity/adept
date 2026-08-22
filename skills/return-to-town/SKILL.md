@@ -58,6 +58,11 @@ Interpret `state` before `mergeable` or `mergeStateStatus`:
   required checks are green and the pull request is mergeable. Recheck computed fields when
   needed only on this route.
 
+`MERGED` is conclusive for cleanup and tracking; it is not a quality verdict. When the
+operator reports the merged PR as bad, do not improvise a revert here — invoke
+`$counterspell` with the PR number (ADR 0031) and let it choose the disposition and
+write the tracking state.
+
 A failed snapshot or an unexpected or missing `state` cannot authorize hand-off, merge, or
 cleanup. Stop with the read failure or unexpected value.
 
