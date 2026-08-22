@@ -162,6 +162,27 @@ iterations: 2
 security: not triggered
 
 <!-- REVIEW:COMPLETE -->'
+trajectory_decoy_101='<!-- WORK:TRAJECTORY -->
+## Trajectory — issue #101
+
+- phase: decoy-never-completed'
+trajectory_block_101='<!-- WORK:TRAJECTORY -->
+## Trajectory — issue #101
+
+- **Branch/PR**: feat/trajectories-110
+- phase: handoff
+- pr: 219
+- guardrails: just verify green
+- surprises worth remembering: label history ran backwards
+
+<!-- TRAJECTORY:COMPLETE -->'
+divination_block_101='<!-- WORK:DIVINATION -->
+## Divination — issue #101
+
+blast radius: collector plus suite
+complexity: S
+
+<!-- DIVINATION:COMPLETE -->'
 
 # --- scenario: success --------------------------------------------------------
 # Two selected issues (an epic-labelled third is excluded), one fully
@@ -169,7 +190,7 @@ security: not triggered
 cat >"$SCRATCH/fake/search.json" <<'JSON'
 [
  {"number":101,"state":"closed","createdAt":"2026-07-01T08:00:00Z",
-  "closedAt":"2026-07-01T14:00:00Z","labels":[]},
+  "closedAt":"2026-07-01T14:00:00Z","labels":[{"name":"risk:night-safe"}]},
  {"number":102,"state":"closed","createdAt":"2026-07-01T08:00:00Z",
   "closedAt":"2026-07-01T14:00:00Z","labels":[{"name":"epic"}]},
  {"number":103,"state":"open","createdAt":"2026-07-01T09:30:00Z",
@@ -191,7 +212,10 @@ JSONL
 cat >"$SCRATCH/fake/tl-103.jsonl" <<'JSONL'
 {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T09:00:00Z"}
 JSONL
-jq -n --arg b "$scope_block_101" '{comments:[{body:$b}]}' >"$SCRATCH/fake/issue-101.json"
+jq -n --arg decoy "$trajectory_decoy_101" --arg scope "$scope_block_101" \
+	--arg traj "$trajectory_block_101" --arg div "$divination_block_101" \
+	'{comments: [{body:$decoy}, {body:$scope}, {body:$traj}, {body:$div}]}' \
+	>"$SCRATCH/fake/issue-101.json"
 printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-103.json"
 cat >"$SCRATCH/fake/prlist-101.json" <<'JSON'
 [
@@ -218,7 +242,7 @@ if ! run_collector 'status:ready'; then
 fi
 
 assert_doc 'top-level envelope.' \
-	'.schema_version == "1.3"
+	'.schema_version == "1.4"
 	and .selector == "status:ready"
 	and .mode == "label-set"
 	and (.generated_at | type == "string")
@@ -264,6 +288,25 @@ assert_doc 'issue 103 queue metrics are data gaps, dwell and bounces are measure
 	and .review_drift_hours == "unknown(no-review-phase)"'
 assert_doc 'scope estimate extracted' \
 	'([.metrics.issues[] | select(.number == 101)][0].scope_estimate) == "M"'
+assert_doc 'trajectory fields mined from the latest complete block only' \
+	'([.metrics.issues[] | select(.number == 101)][0]) |
+	.risk_band == "night-safe"
+	and .trajectory_phase == "handoff"
+	and .trajectory_branch == "feat/trajectories-110"
+	and .trajectory_pr == 219
+	and .trajectory_guardrails == "just verify green"
+	and .trajectory_surprises == "label history ran backwards"'
+assert_doc 'divination complexity and the miss-location chain verdict' \
+	'([.metrics.issues[] | select(.number == 101)][0]) |
+	.divination_complexity == "S" and .scope_miss_location == "divergent"'
+assert_doc 'uninstrumented issue leaves every mined position a data gap' \
+	'([.metrics.issues[] | select(.number == 103)][0]) |
+	.risk_band == "unjudged"
+	and .trajectory_phase == "unknown" and .trajectory_branch == "unknown"
+	and .trajectory_pr == "unknown" and .trajectory_guardrails == "unknown"
+	and .trajectory_surprises == "unknown"
+	and .divination_complexity == "unknown"
+	and .scope_miss_location == "unknown(no-divination)"'
 
 assert_doc 'GitHub-native spans for issue 101' \
 	'([.metrics.issues[] | select(.number == 101)][0]) |
@@ -316,7 +359,14 @@ assert_doc 'coverage counts value-state entries' \
 		merge_lag_hours: 1, build_private_hours: 1, ci_wall_hours: 1,
 		reopen_count: 2,
 		triage_latency_hours: 1, queue_wait_hours: 1, blocked_dwell_hours: 2,
-		human_response_hours: 1, rework_bounces: 2, review_drift_hours: 1}'
+		human_response_hours: 1, rework_bounces: 2, review_drift_hours: 1,
+		trajectory_phase: 1, divination_complexity: 1, scope_miss_location: 1}'
+assert_doc 'risk-band segmentation gated behind the instability rule' \
+	'.metrics.risk_band_cycle_hours["night-safe"].count == 1
+	and .metrics.risk_band_cycle_hours["night-safe"].median == "unknown(instability-rule)"
+	and .metrics.risk_band_cycle_hours["unjudged"].count == 1
+	and .metrics.risk_band_cycle_hours["night-watch"].count == 0
+	and .metrics.risk_band_cycle_hours["daytime-only"].count == 0'
 
 assert_count 'every gh read is logged' '^gh ' "$SCRATCH/calls" 9
 if rg --no-config -q 'graphql' "$SCRATCH/calls"; then
@@ -578,6 +628,119 @@ assert_doc 'backwards dwell interval is error, never a negative span' \
 assert_doc 'drift coverage counts only the paired issue' \
 	'.metrics.coverage.review_drift_hours == 1
 	and .metrics.coverage.blocked_dwell_hours == 1'
+
+# --- scenario: the divination-to-scope-to-actual chain --------------------------
+# 701: divination M, scope S, actual 100 (M) — the assessment matched reality
+# and the freeze diverged from it. 702: all three land in S. 703: divination
+# and scope agree against an L actual — the assessment's error carried into
+# the freeze. 701 also carries a phase-only trajectory block: fields the
+# block does not name stay unknown.
+cat >"$SCRATCH/fake/search.json" <<'JSON'
+[
+ {"number":701,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[]},
+ {"number":702,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[]},
+ {"number":703,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[]}
+]
+JSON
+for n in 701 702 703; do
+	: >"$SCRATCH/fake/tl-$n.jsonl"
+done
+printf '%s\n' '[{"number":711,"body":"Closes #701"}]' >"$SCRATCH/fake/prlist-701.json"
+printf '%s\n' '[{"number":712,"body":"Closes #702"}]' >"$SCRATCH/fake/prlist-702.json"
+printf '%s\n' '[{"number":713,"body":"Closes #703"}]' >"$SCRATCH/fake/prlist-703.json"
+printf '%s\n' '{"comments":[],"additions":80,"deletions":20}' >"$SCRATCH/fake/pr-711.json"
+printf '%s\n' '{"comments":[],"additions":20,"deletions":10}' >"$SCRATCH/fake/pr-712.json"
+printf '%s\n' '{"comments":[],"additions":300,"deletions":100}' >"$SCRATCH/fake/pr-713.json"
+mk_issue_comment() { # number scope-complexity div-complexity
+	jq -n --arg scope "<!-- WORK:SCOPE -->
+## Scope — issue #$1
+
+- complexity: $2
+
+<!-- SCOPE:COMPLETE -->" --arg div "<!-- WORK:DIVINATION -->
+## Divination — issue #$1
+
+- complexity: $3
+
+<!-- DIVINATION:COMPLETE -->" \
+		'{comments:[{body:$scope},{body:$div}]}'
+}
+mk_issue_comment 701 S M >"$SCRATCH/fake/issue-701.json"
+mk_issue_comment 702 S S >"$SCRATCH/fake/issue-702.json"
+mk_issue_comment 703 M M >"$SCRATCH/fake/issue-703.json"
+jq --arg t '<!-- WORK:TRAJECTORY -->
+## Trajectory — issue #701
+
+- phase: handoff
+
+<!-- TRAJECTORY:COMPLETE -->' \
+	'{comments: (.comments + [{body:$t}])}' \
+	"$SCRATCH/fake/issue-701.json" >"$SCRATCH/fake/issue-701.tmp.json"
+mv "$SCRATCH/fake/issue-701.tmp.json" "$SCRATCH/fake/issue-701.json"
+if ! run_collector 'status:blocked'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'calibration scenario unexpectedly failed'
+fi
+assert_doc 'freeze verdict when the assessment matched reality' \
+	'([.metrics.issues[] | select(.number == 701)][0]) |
+	.divination_complexity == "M" and .scope_estimate == "S"
+	and .loc_actual == 100 and .scope_miss_location == "freeze"
+	and .trajectory_phase == "handoff" and .trajectory_branch == "unknown"'
+assert_doc 'aligned verdict when every link lands in one band' \
+	'([.metrics.issues[] | select(.number == 702)][0]) |
+	.scope_miss_location == "aligned"'
+assert_doc 'assessment verdict when the estimate repeats the divination' \
+	'([.metrics.issues[] | select(.number == 703)][0]) |
+	.scope_miss_location == "assessment"'
+
+# --- scenario: a stable risk-band segment ---------------------------------------
+# Six closed issues with measured cycles: five night-safe (stable), one
+# carrying night-safe plus daytime-only (most restrictive wins), so the
+# night-safe band crosses the instability threshold while daytime-only and
+# unjudged stay gated.
+python3 - "$SCRATCH/fake/search.json" <<'PY'
+import json, sys
+issues = []
+for n in range(801, 807):
+    labels = [{"name": "risk:night-safe"}]
+    if n == 806:
+        labels.append({"name": "risk:daytime-only"})
+    issues.append({"number": n, "state": "closed",
+                   "createdAt": "2026-07-01T06:00:00Z",
+                   "closedAt": "2026-07-01T14:00:00Z", "labels": labels})
+with open(sys.argv[1], "w") as fh:
+    json.dump(issues, fh)
+PY
+for n in 801 802 803 804 805 806; do
+	cat >"$SCRATCH/fake/tl-$n.jsonl" <<'JSONL'
+{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"}
+{"event":"closed","created_at":"2026-07-01T10:00:00Z"}
+JSONL
+	printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-$n.json"
+	printf '%s\n' '[{"number":820,"body":"Closes #'"$n"'"}]' \
+		>"$SCRATCH/fake/prlist-$n.json"
+	printf '%s\n' '{"comments":[],"additions":10,"deletions":2}' \
+		>"$SCRATCH/fake/pr-820.json"
+done
+if ! run_collector 'risk:night-safe'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'segmentation scenario unexpectedly failed'
+fi
+assert_doc 'multi-match risk labels take the most restrictive band' \
+	'([.metrics.issues[] | select(.number == 806)][0].risk_band) == "daytime-only"'
+assert_doc 'a stable segment reports its distribution' \
+	'.metrics.risk_band_cycle_hours["night-safe"]
+	== {count: 5, median: 2, min: 2, max: 2}'
+assert_doc 'thin segments report only their count' \
+	'.metrics.risk_band_cycle_hours["daytime-only"].count == 1
+	and .metrics.risk_band_cycle_hours["daytime-only"].median
+		== "unknown(instability-rule)"
+	and .metrics.risk_band_cycle_hours["unjudged"].count == 0
+	and .metrics.risk_band_cycle_hours["unjudged"].max
+		== "unknown(instability-rule)"'
 # --- scenario: selection failure aborts ----------------------------------------
 rm -f "$SCRATCH/fake/search.json"
 PATH="$SCRATCH/bin:$PATH" FAKE_DIR="$SCRATCH/fake" CALL_LOG="$SCRATCH/calls" \
