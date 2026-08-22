@@ -197,6 +197,7 @@ JSON
 jq -n --arg b "$review_block_211" '{comments:[{body:$b}],additions:300,deletions:100,
 	changedFiles:7,createdAt:"2026-07-01T12:00:00Z",mergedAt:"2026-07-01T13:36:00Z",
 	commits:[{committedDate:"2026-07-01T11:00:00Z"},
+		{committedDate:"2026-07-01T12:30:00Z"},
 		{committedDate:"2026-07-01T13:00:00Z"}],
 	statusCheckRollup:[
 	 {__typename:"CheckRun",name:"suite",startedAt:"2026-07-01T13:10:00Z",
@@ -442,7 +443,7 @@ printf '%s\n' '[{"number":411,"body":"Closes #401"}]' >"$SCRATCH/fake/prlist-401
 printf '%s\n' '[{"number":412,"body":"Closes #402"}]' >"$SCRATCH/fake/prlist-402.json"
 jq -n '{comments:[],additions:1,deletions:0,changedFiles:1,
 	createdAt:"2026-07-01T10:00:00Z",mergedAt:"2026-07-01T11:00:00Z",
-	commits:[{committedDate:"2026-07-01T09:30:00Z"}],
+	commits:[{committedDate:null},{committedDate:"2026-07-01T09:30:00Z"}],
 	statusCheckRollup:[]}' >"$SCRATCH/fake/pr-411.json"
 jq -n '{comments:[],additions:1,deletions:0,changedFiles:1,
 	createdAt:"2026-07-01T10:00:00Z",mergedAt:"2026-07-01T11:00:00Z",

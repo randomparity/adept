@@ -75,8 +75,9 @@ collection that is never parsed as partial output.
   from `reopened` events in the captured timeline; a successful read with zero
   reopens genuinely reports `0`). All ride the same reads as the label-anchored
   metrics — widened `--json` lists, no additional round trips — and their
-  coverage equals the selected population minus fetch errors, not the thin
-  label-anchored samples.
+  coverage equals the selected population minus fetch errors and genuinely
+  absent anchors (open issues, issues with no closing PR, PRs without
+  timestamps or commits) — far wider than the label-anchored samples.
 
 **Empty selection.** When `population.count == 0`, write nothing — no report,
 no sidecar — and state plainly that the selector matched zero issues (`gh

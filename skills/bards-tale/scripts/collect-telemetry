@@ -233,7 +233,7 @@ collect_issue() { # number state created closed
 	local first_ip last_closed in_review awaiting_merge
 	local pr pr_ok iters verdict security exit_field scope_est loc
 	local lead reopens lifespan full_del lag bprivate ci
-	local pr_created pr_merged commit_dates first_commit last_commit
+	local pr_created pr_merged commit_span first_commit last_commit
 
 	ISSUE_ERRORED=0
 
@@ -273,27 +273,32 @@ collect_issue() { # number state created closed
 		awaiting_merge=$(jq -rs '[.[] | select(.event == "labeled"
 				and .label.name == "status:awaiting-merge")] | first | (.created_at // "")' "$tl")
 
+		# A computation on a captured-but-malformed anchor is an error at
+		# that metric's position, never an aborted collection.
 		if [[ -z $first_ip ]]; then
 			cycle='unknown(never-in-progress)'
 		elif [[ $state == closed ]]; then
 			if [[ -z $last_closed ]]; then
 				cycle='unknown(no-close-event)'
-			else
-				cycle=$(hours_between "$first_ip" "$last_closed")
+			elif ! cycle=$(hours_between "$first_ip" "$last_closed"); then
+				cycle='error'
 			fi
+		elif ! cycle=$(hours_since "$first_ip"); then
+			cycle='error'
 		else
-			cycle=$(hours_since "$first_ip")
 			inflight=true
 		fi
 
 		# Best-effort phase durations, only when both of their anchors exist.
 		build='unknown(no-events)'
 		review='unknown(no-events)'
-		if [[ -n $first_ip && -n $in_review ]]; then
-			build=$(hours_between "$first_ip" "$in_review")
+		if [[ -n $first_ip && -n $in_review ]] &&
+			! build=$(hours_between "$first_ip" "$in_review"); then
+			build='error'
 		fi
-		if [[ -n $in_review && -n $awaiting_merge ]]; then
-			review=$(hours_between "$in_review" "$awaiting_merge")
+		if [[ -n $in_review && -n $awaiting_merge ]] &&
+			! review=$(hours_between "$in_review" "$awaiting_merge"); then
+			review='error'
 		fi
 	fi
 
@@ -305,8 +310,8 @@ collect_issue() { # number state created closed
 		lead='unknown(no-created-at)'
 	elif [[ -z $closed ]]; then
 		lead='unknown(no-closed-at)'
-	else
-		lead=$(hours_between "$created" "$closed")
+	elif ! lead=$(hours_between "$created" "$closed"); then
+		lead='error'
 	fi
 
 	# Scope estimate from the latest complete WORK:SCOPE on the issue.
@@ -361,26 +366,32 @@ collect_issue() { # number state created closed
 			# absent anchor is the data gap it is.
 			if ! pr_created=$(jq -r '.createdAt // ""' "$prblob") ||
 				! pr_merged=$(jq -r '.mergedAt // ""' "$prblob") ||
-				! commit_dates=$(jq -r '[.commits[]?.committedDate] | @tsv' "$prblob"); then
+				! commit_span=$(jq -r '[(.commits // [])[]?.committedDate
+					| select(type == "string")] as $d |
+					if ($d | length) == 0 then ""
+					else "\($d | first) \($d | last)" end' "$prblob"); then
 				lifespan='error'
 				full_del='error'
 				lag='error'
 				bprivate='error'
 			else
-				read -r first_commit last_commit <<<"$commit_dates"
-				# A single-commit PR yields one @tsv field: last == first.
-				if [[ -z $last_commit && -n $first_commit ]]; then
-					last_commit=$first_commit
-				fi
+				# First and last computed in jq: committedDate carries no
+				# spaces, so a space-separated pair survives the read whole
+				# for any commit count.
+				read -r first_commit last_commit <<<"$commit_span"
 				if [[ -z $pr_created || -z $pr_merged ]]; then
 					lifespan='unknown(no-pr-timestamps)'
 					full_del='unknown(no-pr-timestamps)'
 					lag='unknown(no-pr-timestamps)'
 					bprivate='unknown(no-pr-timestamps)'
 				else
-					lifespan=$(hours_between "$pr_created" "$pr_merged")
+					if ! lifespan=$(hours_between "$pr_created" "$pr_merged"); then
+						lifespan='error'
+					fi
 					if [[ -n $created ]]; then
-						full_del=$(hours_between "$created" "$pr_merged")
+						if ! full_del=$(hours_between "$created" "$pr_merged"); then
+							full_del='error'
+						fi
 					else
 						full_del='unknown(no-created-at)'
 					fi
@@ -388,8 +399,12 @@ collect_issue() { # number state created closed
 						lag='unknown(no-commits)'
 						bprivate='unknown(no-commits)'
 					else
-						lag=$(hours_between "$last_commit" "$pr_merged")
-						bprivate=$(hours_between "$first_commit" "$pr_created")
+						if ! lag=$(hours_between "$last_commit" "$pr_merged"); then
+							lag='error'
+						fi
+						if ! bprivate=$(hours_between "$first_commit" "$pr_created"); then
+							bprivate='error'
+						fi
 					fi
 				fi
 			fi
