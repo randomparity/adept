@@ -229,10 +229,10 @@ status_is_canonical() {
 report_status_leftover() {
   local file=$1 label=$2 status banner body read_status=0
   # One guarded read serves both the banner and the status word, where there used to be two
-  # pipelines each starting with an unchecked `section_body` (ADR 0008 decision 1). The former
+  # pipelines each starting with an unchecked `section_body` (ADR 0032 decision 1). The former
   # status_line_of helper was inlined here rather than converted in place: its only caller ran
   # it as `$(status_line_of …)`, so a report raised inside it would have set migrate_failed=1
-  # in a discarded subshell — ADR 0008 decision 6.
+  # in a discarded subshell — ADR 0032 decision 6.
   read_section "$file" "## Status" || read_status=$?
   if [ "$read_status" -ne 0 ]; then
     # shellcheck disable=SC2154 # assigned by read_section in the sourced check-records.sh
@@ -243,7 +243,7 @@ report_status_leftover() {
   body=$read_section_out
 
   # In-memory from here, which ADR 0005 decision 1 exempts; the discards are written out per
-  # ADR 0008 decision 2 rather than left to migrate_profile's ambient `set -e` suppression.
+  # ADR 0032 decision 2 rather than left to migrate_profile's ambient `set -e` suppression.
   banner=$(printf '%s\n' "$body" | grep "$BANNER_PREFIX") || :
   if [ -n "$banner" ]; then
     if ! printf '%s' "$banner" | grep -qE "$BANNER_PATTERN"; then
@@ -283,7 +283,7 @@ report_leftovers() {
       continue
       ;;
     esac
-    # The read is lifted out and its status captured (ADR 0008 decision 1); the `tr` that
+    # The read is lifted out and its status captured (ADR 0032 decision 1); the `tr` that
     # remains reads a shell variable. A faulting awk used to yield an empty body, which this
     # reported as a section needing prose written for it.
     body_status=0
@@ -305,14 +305,14 @@ report_leftovers() {
 show_rewrites() {
   local before=$1 after=$2 line diff_out diff_status=0 changed_lines
   # diff is lifted out of the process substitution it used to feed, where a fault had no
-  # channel to report through (ADR 0008 decision 6). 0 identical and 1 differing are both
+  # channel to report through (ADR 0032 decision 6). 0 identical and 1 differing are both
   # ordinary; 2 or more is the fault.
   diff_out=$(diff "$before" "$after") || diff_status=$?
   if [ "$diff_status" -ge 2 ]; then
     report_failure "E-MIGRATE-DIFF-SCAN: $before: could not diff the transform's output for the report (diff exit $diff_status)"
     return 0
   fi
-  # In-memory; discard per ADR 0008 decision 2. The emptiness guard keeps a here-string from
+  # In-memory; discard per ADR 0032 decision 2. The emptiness guard keeps a here-string from
   # feeding the loop one blank line where the process substitution fed it nothing.
   changed_lines=$(printf '%s\n' "$diff_out" | grep -E '^[<>] ') || :
   [ -n "$changed_lines" ] || return 0
@@ -338,7 +338,7 @@ migrate_record() {
   tmp=$(mktemp) || abort "E-TMPFILE: cannot create a temp file"
   profile_migrate_markers "$path" "$num" >"$tmp"
 
-  # marker_only_change is three-valued since ADR 0008, so it cannot be called under `if !` —
+  # marker_only_change is three-valued since ADR 0032, so it cannot be called under `if !` —
   # that collapses "not marker-only" and "could not tell" into one branch, and the second used
   # to be reported as the first: an awk that could not read either file produced two empty
   # shapes, which compared equal and passed the self-check on a transform nothing verified.
@@ -366,7 +366,7 @@ migrate_record() {
     report_failure "E-MIGRATE-DIFF-SCAN: $path: could not diff the transform's output against the record (diff exit $diff_status)"
     return 0
   fi
-  # In-memory; discard per ADR 0008 decision 2. grep -c prints 0 and exits 1 when the transform
+  # In-memory; discard per ADR 0032 decision 2. grep -c prints 0 and exits 1 when the transform
   # rewrote nothing, which is the ordinary "already canonical" answer.
   changed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
   info "$path: $changed marker line(s) rewritten"
@@ -399,7 +399,7 @@ migrate_profile() {
   # so a symlink or a stray file is never rewritten. The loop reads a here-string rather than
   # a process substitution, so the counters migrate_record updates stay in this shell.
   #
-  # find is lifted out and its status captured (ADR 0008 decision 1). Inside the process
+  # find is lifted out and its status captured (ADR 0032 decision 1). Inside the process
   # substitution its fault had no channel, and an unreadable record directory yielded an empty
   # listing — so the migrator reported "0 record(s) examined" and exited 0 over a directory it
   # never managed to read.
@@ -418,7 +418,7 @@ migrate_profile() {
     report_failure "E-MIGRATE-LIST-SCAN: $RECORD_DIR: could not order the record listing (sort exit $sort_status)"
     return 1
   fi
-  # In-memory; discard per ADR 0008 decision 2. grep exits 1 when the directory holds no file
+  # In-memory; discard per ADR 0032 decision 2. grep exits 1 when the directory holds no file
   # matching the record pattern, which is an ordinary empty listing.
   records=$(printf '%s\n' "$sorted" | grep -E "$RECORD_RE") || :
   [ -n "$records" ] || return 0

@@ -175,7 +175,7 @@ section_body() {
 # The body comes back in a global rather than on stdout because a caller that ran this in `$( )`
 # could not see the status: PIPESTATUS does not survive a command substitution either, so
 # `var=$(section_body … | grep …)` had no way to tell an awk that could not open the file from a
-# grep that honestly matched nothing. That is the defect ADR 0008 closes, and returning the body
+# grep that honestly matched nothing. That is the defect ADR 0032 closes, and returning the body
 # by value is what makes the status reachable.
 #
 # awk's real status is left in read_section_status for the caller's diagnostic, the way
@@ -362,7 +362,7 @@ check_sections() {
       err_full "E-SECTION-BODY-SCAN: $label: could not read the body of section '$section' in $file (awk exit $read_section_status)"
       continue
     fi
-    # In-memory, and the discard is written out per ADR 0008 decision 2. Unlike protected_shape
+    # In-memory, and the discard is written out per ADR 0032 decision 2. Unlike protected_shape
     # this one fails toward a false error rather than a false pass, so it is not captured.
     body=$(printf '%s' "$read_section_out" | tr -d '[:space:]') || :
     if [ -z "$body" ]; then
@@ -633,7 +633,7 @@ records_in_ref() {
     return 2
   fi
   # `printf` over a shell variable, which ADR 0005 decision 1 places outside the scan rule and
-  # ADR 0008 decision 4 confirms does not convert: grep's exit 1 here means the ref simply held
+  # ADR 0032 decision 4 confirms does not convert: grep's exit 1 here means the ref simply held
   # no records. The discard is written out per decision 2.
   records_in_ref_out=$(printf '%s' "$raw" | grep -E "$RECORD_RE") || :
   return 0
@@ -682,7 +682,7 @@ check_headings_intact() {
 # substitution has no way to report — ADR 0005 — and an awk that could not open the file used to
 # yield an empty side, which diff then read as every line removed or none, depending on which
 # side faulted. Temp files rather than captured strings because `$( )` strips trailing newlines
-# and diff counts them; ADR 0008 records why the printf repairs do not work.
+# and diff counts them; ADR 0032 records why the printf repairs do not work.
 check_preamble_intact() {
   local tmp=$1 path=$2 removed base_pre tree_pre read_status=0 diff_out diff_status=0
   base_pre=$(mktemp) || {
@@ -715,7 +715,7 @@ check_preamble_intact() {
     return 0
   fi
 
-  # In-memory, so ADR 0005 decision 1 exempts it and ADR 0008 decision 2 requires the discard be
+  # In-memory, so ADR 0005 decision 1 exempts it and ADR 0032 decision 2 requires the discard be
   # written here rather than left to the caller's ambient `set -e` suppression. grep -c prints 0
   # and exits 1 when nothing matched, which is the ordinary "nothing was removed" answer.
   removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
@@ -744,7 +744,7 @@ check_sections_append_only() {
   if [ "$sections" = "*" ]; then
     # Split from the filter below: only this grep reads a file and can fault on one. The
     # `grep -vxF` that follows reads what this produced, so ADR 0005 decision 1 exempts it and
-    # ADR 0008 decision 4 confirms it does not convert -- its exit 1 just means every section
+    # ADR 0032 decision 4 confirms it does not convert -- its exit 1 just means every section
     # was `## Status`.
     all_sections=$(grep -E '^## ' "$tmp") || list_status=$?
     case $list_status in

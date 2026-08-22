@@ -1,4 +1,4 @@
-# 0008 A pipeline's reading stage is lifted out, not interrogated
+# 0032 A pipeline's reading stage is lifted out, not interrogated
 
 ## Status
 
@@ -288,9 +288,9 @@ found by reading and are converted here.
   adds a third shape for such a gate to recognise — mitigated by decision 2's
   requirement that every deliberate discard carry a comment naming this record,
   which gives that gate something to key on other than an allowlist.
-- This record is numbered 0008, not the 0007 the dispatching campaign
-  pre-assigned: 0007 merged to `main` first, and 0006 is held by unmerged issue
-  #50.
+- This record is numbered 0032, assigned by the dispatching campaign after
+  its first assignment (0008) was taken on `main` by a sibling wave's merged
+  record; 0006 is held by unmerged issue #50, and 0007 and 0008 merged first.
 
 ## Considered & rejected
 

@@ -53,7 +53,7 @@ BANNER_REPLACES_STATUS=yes
 # so it runs in both passes and takes no notice of which one.
 profile_check_status() {
   local file=$1 label=$2 status=0
-  # This was the literal shape ADR 0008 was written for: `section_body … | grep -qi '^Open'`,
+  # This was the literal shape ADR 0032 was written for: `section_body … | grep -qi '^Open'`,
   # where a faulting awk emitted nothing, grep read empty input and exited 1, and the `if`
   # read that as an honest "Status is not Open". The read is lifted out and its status
   # captured; ${PIPESTATUS[@]} would not have served, since it does not survive a command
@@ -65,7 +65,7 @@ profile_check_status() {
     return 0
   fi
   # In-memory, so this pipeline's status is a legitimate verdict (ADR 0005 decision 1). It
-  # carries no `head`, so 141 cannot reach it — ADR 0008 decision 3.
+  # carries no `head`, so 141 cannot reach it — ADR 0032 decision 3.
   # shellcheck disable=SC2154 # assigned by read_section in check-records.sh, which sources this
   if printf '%s\n' "$read_section_out" | grep -qi '^Open'; then
     return 0
@@ -83,7 +83,7 @@ profile_check_status() {
 # a grandfathered record.
 #
 # The reader is lifted above the loop rather than left in the `< <(…)` it used to feed (ADR
-# 0008 decision 6). Inside a process substitution its fault had nowhere to go, and an awk that
+# 0032 decision 6). Inside a process substitution its fault had nowhere to go, and an awk that
 # could not open the file produced no target lines at all — which this rule then reported as
 # E-TARGET-MISSING, a record faulted for lacking a line nothing ever looked for.
 check_targets() {
@@ -93,7 +93,7 @@ check_targets() {
     err_full "E-TARGET-SCAN: $label: could not read the Provenance section (awk exit $read_section_status)"
     return 0
   fi
-  # In-memory; discard per ADR 0008 decision 2. sed exits 0 having printed nothing when the
+  # In-memory; discard per ADR 0032 decision 2. sed exits 0 having printed nothing when the
   # section carries no target line, which is E-TARGET-MISSING's honest case below.
   targets=$(printf '%s\n' "$read_section_out" | sed -n 's/^target:[[:space:]]*//p') || :
 
@@ -122,7 +122,7 @@ check_targets() {
 # uncaught on the records that resolve would make the rule depend on when it was looked at.
 check_review_by() {
   local file=$1 label=$2 resolved=$3 review_by today review_int today_int status=0
-  # Lifted per ADR 0008 decision 1. A faulted read yielded an empty review_by, which this rule
+  # Lifted per ADR 0032 decision 1. A faulted read yielded an empty review_by, which this rule
   # reported as E-REVIEWBY-MISSING — an open deferral faulted for lacking a date on a Status
   # section that was never read.
   read_section "$file" "## Status" || status=$?
@@ -130,7 +130,7 @@ check_review_by() {
     err_full "E-REVIEWBY-SCAN: $label: could not read the Status section to find review-by (awk exit $read_section_status)"
     return 0
   fi
-  # In-memory; discard per ADR 0008 decision 2.
+  # In-memory; discard per ADR 0032 decision 2.
   review_by=$(printf '%s\n' "$read_section_out" | sed -n 's/^review-by:[[:space:]]*//p' | head -1) || :
   if [ -z "$review_by" ]; then
     [ "$resolved" = yes ] && return 0
@@ -139,7 +139,7 @@ check_review_by() {
   fi
 
   # `printf` over a shell variable, which ADR 0005 decision 1 places outside the scan rule and
-  # ADR 0008 decision 4 confirms does not convert: there is no could-not-run case to report.
+  # ADR 0032 decision 4 confirms does not convert: there is no could-not-run case to report.
   if ! printf '%s' "$review_by" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
     err "E-REVIEWBY-FORM: $label: review-by '$review_by' is not an ISO-8601 date (YYYY-MM-DD)"
     return 0

@@ -1760,7 +1760,7 @@ STUB
   expect_no_match "$d/.err" 'E-TITLE-MISMATCH suppressed' \
     'E-TITLE-MISMATCH also fired for a title never read' 'E-TITLE-MISMATCH: '
 
-  # The ADR supersession banner's Status read (ADR 0008). A faulting awk yielded an empty link
+  # The ADR supersession banner's Status read (ADR 0032). A faulting awk yielded an empty link
   # and the rule then passed the record, so a banner naming a record that is not here went
   # unreported -- the rule's whole purpose. Keyed on `-v want=`, which only section_body uses.
   stub_bin="$SCRATCH/awk-supersede-bin"
@@ -1857,7 +1857,7 @@ STUB
   run_case "preamble read faults, not a clean pass" 1 E-PREAMBLE-DIFF-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
 
-  # The scenario ADR 0008 calls its worst instance, pinned in the direction that matters. When
+  # The scenario ADR 0032 calls its worst instance, pinned in the direction that matters. When
   # canonicalise cannot read the file, both protected_shape results used to come back empty,
   # compare equal, and send check_not_rewritten home before any anti-erasure rule ran -- so a
   # merged record with a protected section gutted reported `Records OK.` and exit 0. Nothing
@@ -2229,7 +2229,7 @@ STUB
   # A record made unreadable in place drives it through the same grep call the checker makes
   # on the working tree, on the same skip guard as the case above.
   #
-  # The same fixture reaches the conversion that mattered most in ADR 0008: canonicalise's awk
+  # The same fixture reaches the conversion that mattered most in ADR 0032: canonicalise's awk
   # cannot open the file either, so marker_only_change can no longer say whether the change is
   # marker-only and reports E-MARKER-SHAPE-SCAN. Both protected_shape results used to come back empty,
   # compare equal, and turn all three anti-erasure rules off at once on a run that exited 0.
@@ -2245,7 +2245,7 @@ STUB
     chmod 644 "$d/docs/debt/0001-valid.md"
   fi
 
-  # The section_body reads ADR 0008 lifted out of their pipelines. An unreadable file cannot
+  # The section_body reads ADR 0032 lifted out of their pipelines. An unreadable file cannot
   # reach them -- check_sections' grep faults first and reports E-SECTION-SCAN -- so these need
   # a fault that hits awk while grep still works. section_body is the only awk in either script
   # invoked with `-v want=`, so a stub keyed on that argument faults exactly the reads under
@@ -3296,7 +3296,7 @@ STUB
   run_migrator "migrator section scan faults, not silently skipped" 1 E-SECTION-SCAN "$d"
   PATH=$saved_path
 
-  # The migrator's own pipeline conversions (ADR 0008). Its reads used to start pipelines whose
+  # The migrator's own pipeline conversions (ADR 0032). Its reads used to start pipelines whose
   # status went nowhere, so a faulting awk produced an empty section body, an empty status line
   # and an empty banner -- reported as prose a human still has to write, on a record the
   # migrator never managed to read. `-v want=` keys section_body alone.
@@ -3323,7 +3323,7 @@ STUB
   run_migrator "migrator status read faults" 1 E-MIGRATE-STATUS-SCAN "$d"
   PATH=$saved_path
 
-  # The migrator's self-check. marker_only_change went three-valued in ADR 0008, and the `if !`
+  # The migrator's self-check. marker_only_change went three-valued in ADR 0032, and the `if !`
   # this replaced collapsed "could not tell" into "not marker-only". The worse direction was
   # the checker's, where the same collapse read a faulted comparison as "marker-only" and
   # skipped every anti-erasure rule; here it refuses to write, which is the safe end of the

@@ -53,7 +53,7 @@ BANNER_REPLACES_STATUS=no
 # repeats that list verbatim, so an author following the instructions this repo ships writes it.
 profile_check_status() {
   local file=$1 label=$2 body status=0
-  # The read is lifted out of the pipeline and its status captured (ADR 0008 decision 1). It
+  # The read is lifted out of the pipeline and its status captured (ADR 0032 decision 1). It
   # used to be the first stage of `section_body … | grep -v | grep . | head -1`, where an awk
   # that could not open the file emitted nothing, grep read empty input and exited 1, and this
   # rule reported E-STATUS against a Status section it never read.
@@ -64,7 +64,7 @@ profile_check_status() {
     return 0
   fi
   # In-memory from here, which ADR 0005 decision 1 places outside the scan rule. The status is
-  # discarded in the text per ADR 0008 decision 2 rather than left to the caller's ambient
+  # discarded in the text per ADR 0032 decision 2 rather than left to the caller's ambient
   # `set -e` suppression: `grep .` exits 1 on any record whose Status holds only a banner, and
   # `head` can leave 141 behind on a long one. Neither is a verdict.
   # shellcheck disable=SC2154 # assigned by read_section in check-records.sh, which sources this
@@ -118,14 +118,14 @@ check_supersede_link() {
   local file=$1 label=$2 link status=0
   # Same lift as profile_check_status. `sed` rather than `grep` downstream, which changes
   # nothing: the defect is a file-reading first stage whose status is discarded, not the name of
-  # the command after the pipe (ADR 0008 decision 7). A faulted read yielded an empty link and
+  # the command after the pipe (ADR 0032 decision 7). A faulted read yielded an empty link and
   # this rule then passed a record whose banner may well dangle.
   read_section "$file" "## Status" || status=$?
   if [ "$status" -ne 0 ]; then
     err_full "E-SUPERSEDE-SCAN: $label: could not read the Status section to resolve the supersession banner (awk exit $read_section_status)"
     return 0
   fi
-  # In-memory; discard per ADR 0008 decision 2, as in profile_check_status.
+  # In-memory; discard per ADR 0032 decision 2, as in profile_check_status.
   link=$(printf '%s\n' "$read_section_out" |
     sed -n 's/^> \*\*Superseded by \[[0-9]\{4\}\](\([^)]*\)).*/\1/p' | head -1) || :
   [ -n "$link" ] || return 0
