@@ -10,7 +10,9 @@
 # "${arr[@]}" on an empty array is fatal under `set -u`.
 #
 # Every value below is read by check-records.sh after it sources this file, never within it;
-# linted standalone, shellcheck cannot see that use.
+# linted standalone, shellcheck cannot see that use. SC2154 is the mirror of that blindness:
+# read_section_out and read_section_status are assigned by read_section in check-records.sh,
+# which sources this file, so a standalone lint sees only the reads.
 # shellcheck disable=SC2034
 
 RECORD_DIR="docs/adr"
@@ -50,8 +52,23 @@ BANNER_REPLACES_STATUS=no
 # recorded: the profile names five status words including it, and the deployed reviewer prompt
 # repeats that list verbatim, so an author following the instructions this repo ships writes it.
 profile_check_status() {
-  local file=$1 label=$2 body
-  body=$(section_body "$file" "## Status" | grep -v '^>' | grep . | head -1)
+  local file=$1 label=$2 body status=0
+  # The read is lifted out of the pipeline and its status captured (ADR 0032 decision 1). It
+  # used to be the first stage of `section_body … | grep -v | grep . | head -1`, where an awk
+  # that could not open the file emitted nothing, grep read empty input and exited 1, and this
+  # rule reported E-STATUS against a Status section it never read.
+  read_section "$file" "## Status" || status=$?
+  if [ "$status" -ne 0 ]; then
+    # shellcheck disable=SC2154 # assigned by read_section in check-records.sh, which sources this
+    err_full "E-STATUS-SCAN: $label: could not read the Status section (awk exit $read_section_status)"
+    return 0
+  fi
+  # In-memory from here, which ADR 0005 decision 1 places outside the scan rule. The status is
+  # discarded in the text per ADR 0032 decision 2 rather than left to the caller's ambient
+  # `set -e` suppression: `grep .` exits 1 on any record whose Status holds only a banner, and
+  # `head` can leave 141 behind on a long one. Neither is a verdict.
+  # shellcheck disable=SC2154 # assigned by read_section in check-records.sh, which sources this
+  body=$(printf '%s\n' "$read_section_out" | grep -v '^>' | grep . | head -1) || :
   case "$body" in
   Proposed | Deferred) return 0 ;;
   esac
@@ -98,9 +115,19 @@ check_title_number() {
 # tree-pass rule, and it reports through err_full because a grandfathered record must not soften
 # it: the likeliest record to acquire a banner here is the one pre-template ADR.
 check_supersede_link() {
-  local file=$1 label=$2 link
-  link=$(section_body "$file" "## Status" |
-    sed -n 's/^> \*\*Superseded by \[[0-9]\{4\}\](\([^)]*\)).*/\1/p' | head -1)
+  local file=$1 label=$2 link status=0
+  # Same lift as profile_check_status. `sed` rather than `grep` downstream, which changes
+  # nothing: the defect is a file-reading first stage whose status is discarded, not the name of
+  # the command after the pipe (ADR 0032 decision 7). A faulted read yielded an empty link and
+  # this rule then passed a record whose banner may well dangle.
+  read_section "$file" "## Status" || status=$?
+  if [ "$status" -ne 0 ]; then
+    err_full "E-SUPERSEDE-SCAN: $label: could not read the Status section to resolve the supersession banner (awk exit $read_section_status)"
+    return 0
+  fi
+  # In-memory; discard per ADR 0032 decision 2, as in profile_check_status.
+  link=$(printf '%s\n' "$read_section_out" |
+    sed -n 's/^> \*\*Superseded by \[[0-9]\{4\}\](\([^)]*\)).*/\1/p' | head -1) || :
   [ -n "$link" ] || return 0
   if [ ! -f "$RECORD_DIR/$link" ]; then
     err_full "E-SUPERSEDE-DANGLING: $label: supersession banner names $RECORD_DIR/$link, which is not a record here"
