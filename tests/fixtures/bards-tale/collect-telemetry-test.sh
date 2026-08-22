@@ -43,8 +43,10 @@ assert_count() { # description pattern file expected
 # Dispatches on the subcommand and serves files from $FAKE_DIR, logging every
 # invocation to $CALL_LOG so the suite can pin which reads ran. A response file
 # that exists but is empty serves as a genuinely empty successful read (an
-# empty timeline); one that does not exist makes the read fail with exit 1,
-# which is how the tri-state and rate-limit cases model a failed gh read.
+# empty timeline); one that does not exist makes the read fail non-zero --
+# serve's exit 1 on the verbatim branches, jq's own exit status once the api
+# branch projects through it -- which is how the tri-state and rate-limit
+# cases model a failed gh read.
 mkdir -p "$SCRATCH/bin"
 printf '%s\n' '#!/usr/bin/env bash' >"$SCRATCH/bin/gh"
 cat >>"$SCRATCH/bin/gh" <<'FAKE_GH'
@@ -67,15 +69,33 @@ search)
 	serve "${FAKE_DIR:?}/search.json"
 	;;
 api)
-	# gh api repos/<owner>/<name>/issues/<N>/timeline --paginate --jq '.[]'
+	# gh api repos/<owner>/<name>/issues/<N>/timeline --paginate --jq '.[]'.
+	# The fake extracts the --jq program and projects the canned payload
+	# through real jq in compact mode, so a fixture stores what GitHub
+	# actually returns -- one page-shaped JSON array per call -- and the
+	# collector receives the flattened JSONL real gh would emit. A jq
+	# evaluation failure propagates non-zero.
+	jq_expr=
+	path_arg=
+	expect_expr=0
 	for arg in "$@"; do
+		if ((expect_expr)); then
+			jq_expr=$arg
+			expect_expr=0
+			continue
+		fi
 		case $arg in
+		--jq) expect_expr=1 ;;
 		*/issues/*) path_arg=$arg ;;
 		esac
 	done
 	number=${path_arg##*/issues/}
 	number=${number%%/*}
-	serve "${FAKE_DIR:?}/tl-$number.jsonl"
+	if [[ -n $jq_expr ]]; then
+		jq -c "$jq_expr" "${FAKE_DIR:?}/tl-$number.json"
+	else
+		serve "${FAKE_DIR:?}/tl-$number.json"
+	fi
 	;;
 issue)
 	# gh issue view <N> --repo ... --json comments
@@ -201,7 +221,12 @@ complexity: S
 
 # --- scenario: success --------------------------------------------------------
 # Two selected issues (an epic-labelled third is excluded), one fully
-# instrumented and closed, one open and in flight.
+# instrumented and closed, one open and in flight. Timeline fixtures are
+# page-shaped JSON arrays -- what GitHub's timeline endpoint returns per call;
+# the fake gh applies the collector's '.[]' projection, so the suite also
+# covers an element lacking .label entirely (the commented event below, with
+# payload fields no metric reads). Under the old verbatim-serving fake that
+# case was indistinguishable from a well-formed stream.
 cat >"$SCRATCH/fake/search.json" <<'JSON'
 [
  {"number":101,"state":"closed","createdAt":"2026-07-01T08:00:00Z",
@@ -212,21 +237,26 @@ cat >"$SCRATCH/fake/search.json" <<'JSON'
   "closedAt":null,"labels":[]}
 ]
 JSON
-cat >"$SCRATCH/fake/tl-101.jsonl" <<'JSONL'
-{"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T09:00:00Z"}
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T10:00:00Z"}
-{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T10:30:00Z"}
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T11:00:00Z"}
-{"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T11:00:00Z"}
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T12:00:00Z"}
-{"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T12:30:00Z"}
-{"event":"reopened","created_at":"2026-07-01T12:45:00Z"}
-{"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T13:30:00Z"}
-{"event":"closed","created_at":"2026-07-01T14:00:00Z"}
-JSONL
-cat >"$SCRATCH/fake/tl-103.jsonl" <<'JSONL'
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T09:00:00Z"}
-JSONL
+cat >"$SCRATCH/fake/tl-101.json" <<'JSON'
+[
+ {"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T09:00:00Z"},
+ {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T10:00:00Z"},
+ {"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T10:30:00Z"},
+ {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T11:00:00Z"},
+ {"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T11:00:00Z"},
+ {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T12:00:00Z"},
+ {"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T12:30:00Z"},
+ {"event":"reopened","created_at":"2026-07-01T12:45:00Z"},
+ {"event":"commented","body":{"body":"noise"},"actor":{"login":"ghost"}},
+ {"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T13:30:00Z"},
+ {"event":"closed","created_at":"2026-07-01T14:00:00Z"}
+]
+JSON
+cat >"$SCRATCH/fake/tl-103.json" <<'JSON'
+[
+ {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T09:00:00Z"}
+]
+JSON
 jq -n --arg decoy "$trajectory_decoy_101" --arg scope "$scope_block_101" \
 	--arg traj "$trajectory_block_101" --arg div "$divination_block_101" \
 	'{comments: [{body:$decoy}, {body:$scope}, {body:$traj}, {body:$div}]}' \
@@ -329,6 +359,10 @@ assert_doc 'GitHub-native spans for issue 101' \
 	and .full_delivery_hours == 5.6 and .merge_lag_hours == 0.6
 	and .build_private_hours == 1 and .ci_wall_hours == 0.3
 	and .reopen_count == 1'
+assert_doc 'the label-less commented event shifts no metric' \
+	'([.metrics.issues[] | select(.number == 101)][0]) |
+	.cycle_hours == 4 and .blocked_dwell_hours == 0.5
+	and .human_response_hours == 0.1 and .rework_bounces == 1'
 
 assert_doc 'uninstrumented issue reports unknown, never zero' \
 	'([.metrics.issues[] | select(.number == 103)][0]) |
@@ -421,7 +455,9 @@ with open(sys.argv[1], "w") as fh:
     json.dump(issues, fh)
 PY
 for n in $(seq 1 200); do
-	: >"$SCRATCH/fake/tl-$n.jsonl"
+	# An empty page array: '.[]' emits zero bytes, the same stream an
+	# issue with no timeline events produces against real gh.
+	printf '%s\n' '[]' >"$SCRATCH/fake/tl-$n.json"
 	printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-$n.json"
 	printf '%s\n' '[]' >"$SCRATCH/fake/prlist-$n.json"
 done
@@ -452,7 +488,7 @@ assert_doc 'a truncated current run is incomparable against an untruncated prior
 # Seven selected issues. The first five timeline reads fail; the collector stops
 # after five consecutive errored issues and emits a partial document carrying
 # rate_limited, leaving issues 206 and 207 unprocessed.
-rm -f "$SCRATCH"/fake/tl-*.jsonl "$SCRATCH"/fake/issue-*.json \
+rm -f "$SCRATCH"/fake/tl-*.json "$SCRATCH"/fake/issue-*.json \
 	"$SCRATCH"/fake/prlist-*.json "$SCRATCH"/fake/pr-*.json
 python3 - "$SCRATCH/fake/search.json" <<'PY'
 import json, sys
@@ -464,7 +500,7 @@ with open(sys.argv[1], "w") as fh:
     json.dump(issues, fh)
 PY
 for n in 206 207; do
-	: >"$SCRATCH/fake/tl-$n.jsonl"
+	printf '%s\n' '[]' >"$SCRATCH/fake/tl-$n.json"
 done
 if ! run_collector 'status:blocked'; then
 	cat "$SCRATCH/stderr" >&2
@@ -500,7 +536,7 @@ cat >"$SCRATCH/fake/search.json" <<'JSON'
 ]
 JSON
 # 301: never in progress; two closing PRs -> ambiguous.
-: >"$SCRATCH/fake/tl-301.jsonl"
+printf '%s\n' '[]' >"$SCRATCH/fake/tl-301.json"
 printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-301.json"
 cat >"$SCRATCH/fake/prlist-301.json" <<'JSON'
 [
@@ -509,10 +545,12 @@ cat >"$SCRATCH/fake/prlist-301.json" <<'JSON'
 ]
 JSON
 # 302: timeline ok, but the pr-list read fails (missing prlist file).
-cat >"$SCRATCH/fake/tl-302.jsonl" <<'JSONL'
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T10:00:00Z"}
-{"event":"closed","created_at":"2026-07-02T20:00:00Z"}
-JSONL
+cat >"$SCRATCH/fake/tl-302.json" <<'JSON'
+[
+ {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T10:00:00Z"},
+ {"event":"closed","created_at":"2026-07-02T20:00:00Z"}
+]
+JSON
 if ! run_collector 'priority:P1'; then
 	cat "$SCRATCH/stderr" >&2
 	fail 'ambiguity scenario unexpectedly failed'
@@ -570,7 +608,7 @@ cat >"$SCRATCH/fake/search.json" <<'JSON'
 ]
 JSON
 for n in 401 402; do
-	: >"$SCRATCH/fake/tl-$n.jsonl"
+	printf '%s\n' '[]' >"$SCRATCH/fake/tl-$n.json"
 	printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-$n.json"
 done
 printf '%s\n' '[{"number":411,"body":"Closes #401"}]' >"$SCRATCH/fake/prlist-401.json"
@@ -614,20 +652,24 @@ cat >"$SCRATCH/fake/search.json" <<'JSON'
   "closedAt":"2026-07-01T14:00:00Z","labels":[]}
 ]
 JSON
-cat >"$SCRATCH/fake/tl-501.jsonl" <<'JSONL'
-{"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T07:00:00Z"}
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"}
-{"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T08:30:00Z"}
-{"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T09:00:00Z"}
-{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T10:00:00Z"}
-{"event":"unlabeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T11:00:00Z"}
-{"event":"closed","created_at":"2026-07-01T18:00:00Z"}
-JSONL
-cat >"$SCRATCH/fake/tl-503.jsonl" <<'JSONL'
-{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T10:00:00Z"}
-{"event":"unlabeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T09:00:00Z"}
-{"event":"closed","created_at":"2026-07-01T14:00:00Z"}
-JSONL
+cat >"$SCRATCH/fake/tl-501.json" <<'JSON'
+[
+ {"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T07:00:00Z"},
+ {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"},
+ {"event":"labeled","label":{"name":"status:in-review"},"created_at":"2026-07-01T08:30:00Z"},
+ {"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T09:00:00Z"},
+ {"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T10:00:00Z"},
+ {"event":"unlabeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T11:00:00Z"},
+ {"event":"closed","created_at":"2026-07-01T18:00:00Z"}
+]
+JSON
+cat >"$SCRATCH/fake/tl-503.json" <<'JSON'
+[
+ {"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T10:00:00Z"},
+ {"event":"unlabeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T09:00:00Z"},
+ {"event":"closed","created_at":"2026-07-01T14:00:00Z"}
+]
+JSON
 printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-503.json"
 printf '%s\n' '[]' >"$SCRATCH/fake/prlist-503.json"
 printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-501.json"
@@ -640,16 +682,14 @@ jq -n '{comments:[],additions:10,deletions:2,changedFiles:2,
 	>"$SCRATCH/fake/pr-421.json"
 printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-502.json"
 printf '%s\n' '[{"number":422,"body":"Closes #502"}]' >"$SCRATCH/fake/prlist-502.json"
-jq -n '{comments:[],additions:10,deletions:2,changedFiles:2,
-	createdAt:"2026-07-01T07:00:00Z",mergedAt:"2026-07-01T07:30:00Z",
-	commits:[{committedDate:"2026-07-01T06:45:00Z"}],statusCheckRollup:[]}' \
-	>"$SCRATCH/fake/pr-422.json"
-cat >"$SCRATCH/fake/tl-502.jsonl" <<'JSONL'
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T05:00:00Z"}
-{"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T06:30:00Z"}
-{"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T08:00:00Z"}
-{"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T09:00:00Z"}
-JSONL
+cat >"$SCRATCH/fake/tl-502.json" <<'JSON'
+[
+ {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T05:00:00Z"},
+ {"event":"labeled","label":{"name":"status:ready"},"created_at":"2026-07-01T06:30:00Z"},
+ {"event":"labeled","label":{"name":"status:awaiting-merge"},"created_at":"2026-07-01T08:00:00Z"},
+ {"event":"labeled","label":{"name":"status:blocked"},"created_at":"2026-07-01T09:00:00Z"}
+]
+JSON
 if ! run_collector 'status:blocked'; then
 	cat "$SCRATCH/stderr" >&2
 	fail 'drift scenario unexpectedly failed'
@@ -688,7 +728,7 @@ cat >"$SCRATCH/fake/search.json" <<'JSON'
 ]
 JSON
 for n in 701 702 703; do
-	: >"$SCRATCH/fake/tl-$n.jsonl"
+	printf '%s\n' '[]' >"$SCRATCH/fake/tl-$n.json"
 done
 printf '%s\n' '[{"number":711,"body":"Closes #701"}]' >"$SCRATCH/fake/prlist-701.json"
 printf '%s\n' '[{"number":712,"body":"Closes #702"}]' >"$SCRATCH/fake/prlist-702.json"
@@ -761,10 +801,10 @@ PY
 # min or max.
 for n in 801 802 803 804 805 806; do
 	hour=$((8 + n - 800))
-	cat >"$SCRATCH/fake/tl-$n.jsonl" <<JSONL
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"}
-{"event":"closed","created_at":"2026-07-01T$(printf '%02d:00:00Z' "$hour")"}
-JSONL
+	cat >"$SCRATCH/fake/tl-$n.json" <<JSON
+[{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"},
+ {"event":"closed","created_at":"2026-07-01T$(printf '%02d:00:00Z' "$hour")"}]
+JSON
 	printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-$n.json"
 	printf '%s\n' '[{"number":820,"body":"Closes #'"$n"'"}]' \
 		>"$SCRATCH/fake/prlist-$n.json"
@@ -802,12 +842,12 @@ for n in range(901, 922):
     issues.append({"number": n, "state": "closed",
                    "createdAt": "2026-07-01T06:00:00Z",
                    "closedAt": fmt(closed), "labels": []})
-    with open(f"{sys.argv[2]}/tl-{n}.jsonl", "w") as fh:
-        fh.write(json.dumps({"event": "labeled",
-                             "label": {"name": "status:in-progress"},
-                             "created_at": fmt(start)}) + "\n")
-        fh.write(json.dumps({"event": "closed",
-                             "created_at": fmt(closed)}) + "\n")
+    with open(f"{sys.argv[2]}/tl-{n}.json", "w") as fh:
+        json.dump([{"event": "labeled",
+                    "label": {"name": "status:in-progress"},
+                    "created_at": fmt(start)},
+                   {"event": "closed",
+                    "created_at": fmt(closed)}], fh)
 with open(sys.argv[1], "w") as fh:
     json.dump(issues, fh)
 PY
@@ -853,19 +893,21 @@ assert_doc 'nearest-rank quartiles discriminate at the N = 20 edge' \
 # --- scenario: movement against a prior sidecar --------------------------------
 # One closed issue (cycle 4h, lead 8h) compared against handcrafted prior
 # sidecars. The prior sidecar is a local file input: no additional gh read of
-# any kind may appear because of it. The fake gh serves canned files and
-# ignores --jq projections, so every prior here is crafted by hand rather than
-# captured from an earlier run.
+# any kind may appear because of it. The priors are crafted by hand because
+# they stand in for documents captured from earlier runs, not because the fake
+# cannot serve a projection.
 cat >"$SCRATCH/fake/search.json" <<'JSON'
 [
  {"number":1001,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
   "closedAt":"2026-07-01T14:00:00Z","labels":[]}
 ]
 JSON
-cat >"$SCRATCH/fake/tl-1001.jsonl" <<'JSONL'
-{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"}
-{"event":"closed","created_at":"2026-07-01T12:00:00Z"}
-JSONL
+cat >"$SCRATCH/fake/tl-1001.json" <<'JSON'
+[
+ {"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"},
+ {"event":"closed","created_at":"2026-07-01T12:00:00Z"}
+]
+JSON
 printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-1001.json"
 printf '%s\n' '[]' >"$SCRATCH/fake/prlist-1001.json"
 
