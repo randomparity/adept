@@ -319,7 +319,11 @@ when §1 located a prior sidecar for this selector, run one bounded read-only se
 for issues citing that prior report —
 
     gh search issues --repo <owner>/<name> --limit 50 --json number,title,state,body \
-      "\"Retro: docs/retro/<prior-date>-<slug>.md\""
+      '"Retro" "docs/retro/<prior-date>-<slug>.md"'
+
+GitHub search rejects a colon inside a quoted phrase, so the query pairs the
+`Retro` term with an exact-phrase match on the report path rather than quoting
+the whole citation line.
 
 — and compare its results against the prior report's **Proposed tuning** section
 (a local read of the prior report file). Report, in the in-session summary above,
