@@ -45,12 +45,15 @@ assigning.
   third-party state — the daytime-only reversal criteria), because reverting would trade
   one broken state for another; or consumers already depend on the landed behavior, so
   removal is itself breaking.
-- **Revert now plus a follow-up issue** when the capability should return after rework:
-  the revert stops the bleeding, the follow-up issue carries the redesign through the
-  normal pipeline.
+- **Revert now, redesign later** when the capability should return after rework: the
+  revert stops the bleeding; the redesign is the working issue's business and runs
+  through normal `$quest`, not this pipeline (see *Tracking state* for which issue that
+  is).
 
 Git mechanics follow repo policy: never `git reset --hard`, never any force-push form;
-revert forward, always. Under a merge-commit landing, `git revert -m 1 <merge-sha>`;
+revert forward, always. Determine which shape landed from the merge commit's parent count
+(`git rev-list --parents -n 1 <sha>`): two parents is a merge-commit landing, one parent
+a rebase landing. Under a merge-commit landing, `git revert -m 1 <merge-sha>`;
 under a rebase landing, revert the range commit-by-commit in reverse order. A revert that
 would touch `docs/adr/` or other append-only records stops at those paths — records are
 append-only once merged, so the revert restores them from the pre-revert commit rather
@@ -59,19 +62,25 @@ the revert route and the run falls back to fix-forward.
 
 ### Tracking state
 
-Keyed on whether the bad PR satisfied its own issue's acceptance criteria:
+Keyed on whether the bad PR satisfied its own issue's acceptance criteria, applied per
+originating issue:
 
-- It did not → **reopen the original issue**. Its closure asserted work that was not
-  delivered; reopening is the honest state. Strip any residual `status:` label, link the
-  bad PR, and let this run claim the reopened issue under the standard claim protocol if
-  the fix proceeds now, or leave it `status:ready` if it does not.
-- It did, but regressed something else → the original issue stays closed (it was true at
-  merge time); **file a new regression issue** referencing the bad PR and the affected
-  behavior, following the bounty conventions for a grounded issue. Leave `risk:` and
-  `priority:` to daytime triage; absence fails closed by design.
+- Criteria not met → **reopen that issue**. Its closure asserted work that was not
+  delivered; reopening is the honest state. Strip any residual `status:` label in the
+  same edit that sets the next one, link the bad PR, and post a `WORK:TRAJECTORY` naming
+  the disposition and evidence.
+- Criteria met, but something else regressed → the original issue stays closed (it was
+  true at merge time); **file one regression issue** for the run — naming every affected
+  PR when a reversal spans several delivered features, never one issue per feature —
+  referencing the bad PR and the affected behavior, grounded per the bounty conventions.
+  Leave `risk:` and `priority:` unassigned for daytime triage; absence fails closed by
+  design.
 
-Both cases get `WORK:*` annotations naming the disposition and the evidence, so a later
-session reads the whole story from GitHub.
+The issue whose failure constitutes the live damage is the **working issue**; any other
+reopened or affected issues go to `status:ready`, are named in the annotation, and are
+nobody's to claim implicitly. The "follow-up" of the revert-plus-follow-up disposition
+is not extra tracking state: it is the working issue's redesign work running through
+normal `$quest` instead of through this pipeline.
 
 ### The reduced pipeline
 
@@ -84,17 +93,28 @@ skips the scope audit for the same reason. What remains:
    protocol; set `status:in-progress`.
 3. Build. For a pure revert the mechanical steps above *are* the build; verify against
    the evidence that convicted the PR — the test or command that failed now passes.
-4. `$trial-loop` adversarial review, **iteration budget 2** — never zero. This is the
-   clause that keeps urgency from becoming a silent review skip: a pure revert still
-   meets one reviewer, because partial reverts and conflict-driven adaptations are the
-   dominant failure mode of reverts, not of ordinary changes. If a finding requires a
-   design decision, the change has outgrown this path: park and run full `$quest` on the
-   tracking issue.
+4. `$trial-loop` adversarial review, **iteration budget 2** — never zero. The lowering
+   authority trial-loop requires is the validated risk assessment this path already
+   produced in the disposition step: the issue's `risk:` label, or the run's recorded
+   derivation from the taxonomy criteria when none exists. This is the clause that keeps
+   urgency from becoming a silent review skip: a pure revert still meets one reviewer,
+   because partial reverts and conflict-driven adaptations are the dominant failure mode
+   of reverts, not of ordinary changes.
+
+   Two exits leave the pipeline: a finding requiring a design decision means the change
+   has outgrown this path — release the claim, park per the exit edges, and hand the
+   working issue to full `$quest`; a blocked stop at the budget (an unresolved
+   consequential finding that is not a design question) parks the same way —
+   `WORK:TRAJECTORY` first, then `status:needs-human`, branch and disposition annotation
+   left in place for the operator's approved-continuation decision. An unattended run
+   never continues past its own park.
 5. Security pass only under the quest skill's relevance test (a mechanical revert rarely
    triggers it; a hotfix that adds code can).
 6. Guardrails green, then `$deliver`: PR titled with a `revert:` or `hotfix:` prefix,
    body carrying the bad PR number, the chosen disposition and why, the tracking-issue
-   link, acceptance criteria, and `Closes #<working issue>`.
+   link, and acceptance criteria. A hotfix carries `Closes #<working issue>` — its merge
+   delivers the fix. A revert PR never carries `Closes`: taking the change back is not
+   delivering the working issue's work, so the issue stays open for the correct attempt.
 7. Hand off through `$return-to-town`'s default. Delegated runs never self-merge.
 
 If there is no live damage — the problem was caught by review before anyone consumed it —
@@ -103,7 +123,7 @@ tracking issue and go through normal `$quest`.
 
 ## Consequences
 
-- The plugin gains a twenty-ninth skill: `counterspell/` with one `SKILL.md`, a
+- The plugin gains a twenty-eighth skill: `counterspell/` with one `SKILL.md`, a
   cheatsheet row, and a MINOR version bump per the version gate.
 - The risk taxonomy gains an executor: the quest-log skill points its reversal-cost
   axis at `$counterspell` instead of leaving it reasoning about a moment (triage) that

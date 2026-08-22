@@ -44,7 +44,7 @@ Task 3).
 
 Exact content:
 
-```markdown
+````markdown
 ---
 name: counterspell
 description: "Reverse a bad merged PR: judge the live damage, choose git revert vs fix-forward using the risk taxonomy's reversal-cost axis, write truthful tracking state, and drive the urgent fix through a reduced pipeline whose review is compressed but never skipped. Use when a merged PR turned out bad."
@@ -66,11 +66,20 @@ Invoke with the pull-request number: `$counterspell <PR-number>`.
 Snapshot once:
 
 ```sh
-gh pr view <N> --json state,mergedAt,headRefOid,baseRefOid,closingIssuesReferences,title,body
+gh pr view <N> --json state,mergedAt,mergeCommit,headRefOid,baseRefName,closingIssuesReferences,title,body
 ```
 
 Read `state` first. `OPEN` belongs to its own quest's pipeline — stop and say so.
 `CLOSED` unmerged needs no reversal — stop and say so. Only `MERGED` proceeds.
+
+Determine the landing shape from the merge commit's parent count:
+
+```sh
+git rev-list --parents -n 1 <mergeCommit.oid>
+```
+
+Two parents is a merge-commit landing; one parent is a rebase landing. This selects the
+mechanical revert route in step 2 — determine it now, before anything is typed.
 
 Collect the originating issues: the PR's closing references plus any issue linked in its
 body. If none can be identified, file the regression issue first (step 3); never work
@@ -94,7 +103,8 @@ originating issue's `risk:` label when one carries it. When none does, derive th
 assessment from the taxonomy's own criteria and record the derivation in your annotation —
 never write a `risk:` label yourself: the taxonomy's human-read invariant binds every
 writer, and an unattended assignment nobody saw is a confidently wrong `night-safe` that
-looks identical to a correct one.
+looks identical to a correct one. This assessment, recorded, is also the validated risk
+assessment that authorizes step 4's lowered review budget.
 
 Choose exactly one disposition:
 
@@ -105,17 +115,16 @@ Choose exactly one disposition:
 - **Fix-forward** when any of: a correct fix is small and lands immediately; the reversal
   cost exceeds `git revert`, because reverting trades one broken state for another; or
   consumers already depend on the landed behavior, so removal is itself breaking.
-- **Revert now, follow-up issue for the rework** when the capability should return: the
-  revert stops the bleeding, the follow-up carries the redesign through the normal
-  pipeline.
+- **Revert now, redesign later** when the capability should return after rework: the
+  revert stops the bleeding; the redesign is the working issue's business and runs
+  through normal `$quest`, not this pipeline.
 
 Git mechanics, from repo policy:
 
 - Never `git reset --hard`; never any force-push form (`--force-with-lease` included).
   Revert forward, always.
 - Under a merge-commit landing: `git revert -m 1 <merge-sha>`. Under a rebase landing:
-  revert the range commit-by-commit in reverse order. Determine which shape landed from
-  the PR's merge commit before typing either.
+  revert the range commit-by-commit in reverse order. The shape was determined in step 0.
 - Exclude append-only record paths — `docs/adr/` above all — from any revert. Records do
   not roll back: restore them from the pre-revert commit
   (`git restore --source=<sha-before-revert> -- <path>`).
@@ -124,18 +133,23 @@ Git mechanics, from repo policy:
 
 ## 3. Write the tracking state
 
-Keyed on one question: did the bad PR satisfy its own issue's acceptance criteria?
+Keyed on one question per originating issue: did the bad PR satisfy that issue's
+acceptance criteria?
 
-- **It did not** — reopen the original issue. Its closure asserted work that was not
-  delivered; reopening is the honest state. Strip any residual `status:` label in the
-  same edit that sets the next one, link the bad PR, and post a `WORK:TRAJECTORY` naming
-  the disposition and evidence.
-- **It did, but regressed something else** — leave the original closed (it was true at
-  merge time) and file a new regression issue referencing the bad PR and the affected
-  behavior, grounded per the bounty conventions. Leave `risk:` and `priority:` unassigned
-  for daytime triage; absence fails closed by design.
+- **It did not** — reopen that issue. Its closure asserted work that was not delivered;
+  reopening is the honest state. Strip any residual `status:` label in the same edit that
+  sets the next one, link the bad PR, and post a `WORK:TRAJECTORY` naming the disposition
+  and evidence.
+- **It did, but something else regressed** — leave the original closed (it was true at
+  merge time) and file **one** regression issue for this run, naming every affected PR
+  when a reversal spans several delivered features, referencing the bad PR and the
+  affected behavior, grounded per the bounty conventions. Leave `risk:` and `priority:`
+  unassigned for daytime triage; absence fails closed by design.
 
-Whichever issue the fix will run through becomes the **working issue**.
+The issue whose failure constitutes the live damage is the **working issue**; any other
+reopened or affected issues go to `status:ready`, are named in your annotation, and are
+nobody's to claim implicitly. The "redesign later" disposition is not extra tracking
+state — it is the working issue's business, run through normal `$quest`.
 
 ## 4. Run the reduced pipeline
 
@@ -153,14 +167,24 @@ Urgency compresses the standard lifecycle; it does not remove its guards.
    hotfix, build minimally; scope discipline matters more here than anywhere, because
    every extra change widens the blast radius of an already-bad day.
 4. `$trial-loop` adversarial review with **iteration budget 2** — one full pass plus one
-   confirming pass. Never zero. A pure revert still meets a reviewer: partial reverts and
-   conflict-driven adaptations are the dominant revert failure, and urgency is why the
-   budget shrinks, not why the review disappears.
+   confirming pass. Never zero. The budget's lowering authority is the validated risk
+   assessment step 2 produced and recorded. A pure revert still meets a reviewer: partial
+   reverts and conflict-driven adaptations are the dominant revert failure, and urgency
+   is why the budget shrinks, not why the review disappears.
+
+   Two exits leave the pipeline here: a finding requiring a design decision means the
+   change has outgrown this path (release the claim, hand the working issue to full
+   `$quest`, per item 2); a blocked stop at the budget — an unresolved consequential
+   finding that is not a design question — parks instead: `WORK:TRAJECTORY` first, then
+   `status:needs-human`, branch and annotation left in place for the operator's
+   approved-continuation decision. An unattended run never continues past its own park.
 5. Security pass only under the quest skill's relevance test: a mechanical revert rarely
    triggers it; a hotfix that adds entry points, parses input, or changes defaults does.
 6. Guardrails green, then `$deliver`: PR titled `revert: …` or `hotfix: …`, body carrying
-   the bad PR number, the chosen disposition and why, the tracking-issue link, acceptance
-   criteria, and `Closes #<working issue>`.
+   the bad PR number, the chosen disposition and why, the tracking-issue link, and
+   acceptance criteria. A hotfix carries `Closes #<working issue>` — its merge delivers
+   the fix. A revert PR never carries `Closes`: taking the change back is not delivering
+   the working issue's work, so the issue stays open for the correct attempt.
 7. Hand off through `$return-to-town`'s default. A delegated run never merges its own
    reversal.
 
@@ -170,15 +194,17 @@ Park per the quest-log exit edges: `WORK:TRAJECTORY` first, then the label
 (`status:blocked` for an external dependency, `status:needs-human` when the pipeline
 cannot proceed). A stalled reversal is worse than a slow one — the bad code is live while
 you hold it, so surface the blocker immediately rather than improvising past a guard.
-```
+````
 
-**Acceptance:** file exists; frontmatter `name:` matches directory; `just ci` shape-check
-passes with it present.
+**Acceptance:** file exists; frontmatter `name:` matches directory; rules 1–3 of
+`scripts/check-skill-shape.sh $WORK` pass. Rule 6 necessarily still reports
+`counterspell: not referenced in docs/cheatsheet.md` until Task 4 lands — expect exactly
+that one finding at this checkpoint, and defer the full `just ci` to Task 6.
 
 ## Task 2 — Point the risk taxonomy at its executor (`skills/quest-log/SKILL.md`)
 
 **Files:** modifies `$WORK/skills/quest-log/SKILL.md`, end of the `## Risk dimension`
-section, immediately after the human-read-invariant paragraph.
+section, immediately after the human-read-invariant paragraph (before `## Claim protocol`).
 
 Insert:
 
@@ -196,7 +222,7 @@ does not duplicate the criteria.
 ## Task 3 — Route bad merges out of `$return-to-town`
 
 **Files:** modifies `$WORK/skills/return-to-town/SKILL.md`, immediately after the state
-interpretation list (the bullet ending "Only `OPEN` continues below…").
+interpretation list (the bullet beginning "Only `OPEN` continues below.").
 
 Insert:
 
@@ -240,8 +266,10 @@ naming counterspell; restore).
 **Files:** modifies `$WORK/.claude-plugin/plugin.json`, `"version": "2.8.1"` →
 `"2.9.0"`. MINOR per ADR 0022's rule: a skill was added.
 
-**Acceptance:** `scripts/check-plugin-version.sh` passes locally; CI enforces the
-strict-greater-than-base rule.
+**Acceptance:** the bump rule exercised locally against the real base —
+`BASE_SHA=$(git merge-base origin/main HEAD) scripts/check-plugin-version.sh` exits 0
+(unset `BASE_SHA` validates format only and would pass even without the bump); CI
+enforces the strict-greater-than-base rule again on the branch.
 
 ## Task 6 — Verify
 

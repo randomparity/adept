@@ -17,12 +17,15 @@ has already merged to the base branch and is believed bad. Secondary trigger:
 ## Inputs
 
 - The offending PR number. Resolved once via
-  `gh pr view <N> --json state,mergedAt,headRefOid,baseRefOid,closingIssuesReferences,body,title`.
+  `gh pr view <N> --json state,mergedAt,mergeCommit,headRefOid,baseRefName,closingIssuesReferences,body,title`.
   A PR whose `state` is not `MERGED` does not belong on this path: `OPEN` belongs to its
-  own quest's pipeline; `CLOSED` unmerged needs no reversal. Stop and say so.
+  own quest's pipeline; `CLOSED` unmerged needs no reversal. Stop and say so. The
+  landing shape comes from the merge commit's parent count
+  (`git rev-list --parents -n 1 <mergeCommit.oid>`): two parents = merge-commit landing,
+  one parent = rebase landing — this selects the mechanical revert route.
 - The originating issue(s): the PR's closing references plus any issue linked in its body.
-- The repository's known attunement facts (base branch, guardrail commands) — assumed
-  present; `$counterspell` re-verifies the base branch name but not the whole preflight.
+- The repository's known attunement facts (base branch name, guardrail commands) —
+  assumed present; `$counterspell` re-verifies `baseRefName` but not the whole preflight.
 
 ## Procedure
 
@@ -34,18 +37,23 @@ has already merged to the base branch and is believed bad. Secondary trigger:
    damage it buys nothing.
 2. **Read reversal cost.** From the originating issue's `risk:` label when present;
    otherwise derive from the taxonomy criteria in the quest-log skill and record the
-   derivation in the run's annotation. Never write a `risk:` label (human-read invariant).
-3. **Choose disposition** per the ADR matrix: revert / fix-forward / revert-plus-follow-up.
-4. **Write tracking state**: reopen the original issue when the PR failed its own
-   acceptance criteria; otherwise file a new grounded regression issue referencing the
-   bad PR. Post `WORK:*` annotations naming the disposition and evidence.
+   derivation in the run's annotation. Never write a `risk:` label (human-read
+   invariant).
+3. **Choose disposition** per the ADR matrix: revert / fix-forward / revert-now-redesign-later.
+4. **Write tracking state** per the ADR's *Tracking state* section — that section is
+   normative for the details (per-issue reopen rule, residual `status:` stripping, one
+   shared regression issue, `risk:`/`priority:` left to daytime triage). Designate the
+   working issue: the one whose failure constitutes the live damage. Post `WORK:*`
+   annotations naming the disposition and evidence.
 5. **Run the reduced pipeline** per the ADR: hotfix branch off `origin/BASE_BRANCH`,
    claim protocol on the working issue, build (for a pure revert: the mechanical git
-   steps, verified against the evidence that convicted the PR), mandatory `$trial-loop`
-   with iteration budget 2, security pass only under quest's relevance test, guardrails,
-   `$deliver` with a `revert:`/`hotfix:` prefixed title and a body carrying the bad PR
-   number, disposition rationale, tracking link, acceptance criteria, and
-   `Closes #<working issue>`; then `$return-to-town` default hand-off.
+   steps selected by the landing shape, verified against the evidence that convicted the
+   PR), mandatory `$trial-loop` with iteration budget 2 — the validated risk assessment
+   from step 2 is the lowering authority trial-loop requires — security pass only under
+   quest's relevance test, guardrails, `$deliver` with a `revert:`/`hotfix:` prefixed
+   title and a body carrying the bad PR number, disposition rationale, tracking link,
+   and acceptance criteria; a hotfix adds `Closes #<working issue>`, a revert PR never
+   does. Then `$return-to-town` default hand-off.
 
 ## Error handling
 
@@ -54,6 +62,11 @@ has already merged to the base branch and is believed bad. Secondary trigger:
   fix-forward, note the conflict in the tracking annotation.
 - **Revert touches append-only records** → exclude `docs/adr/` (and other record paths)
   from the revert; restore them from the pre-revert commit.
+- **Blocked at the review budget** (unresolved consequential finding that is not a
+  design question) → park per the quest-log exit edges: `WORK:TRAJECTORY` first, then
+  `status:needs-human`; branch, claim state, and disposition annotation stay in place
+  for the operator's approved-continuation decision. An unattended run never continues
+  past its own park.
 - **A review finding requires a design decision** → the change has outgrown the reduced
   pipeline: park per the quest-log exit edges and hand the tracking issue to full
   `$quest`.
@@ -71,7 +84,10 @@ This change ships instructions, not code; the guardrail suite is the test surfac
   new skill present and would fail if the cheatsheet row were dropped (mutate, run,
   revert).
 - Cross-reference integrity: every `` `$skill` `` invocation referenced in the new
-  SKILL.md resolves to an existing skill (rule 4), and relative links resolve (rule 5).
+  SKILL.md resolves to an existing skill (rule 4). Rule 5 scans only
+  `../../references/*.md` links from `skills/*/SKILL.md`; the new skill carries none, so
+  its links into `docs/adr/` are checked by no gate and are verified by hand during
+  review.
 
 ## Acceptance criteria
 
