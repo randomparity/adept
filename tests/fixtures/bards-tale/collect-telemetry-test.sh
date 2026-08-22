@@ -129,17 +129,32 @@ esac
 FAKE_GH
 chmod +x "$SCRATCH/bin/gh"
 
-run_collector() { # selector
+run_collector() { # selector [prior-sidecar]
 	CALL_LOG="$SCRATCH/calls"
 	FAKE_DIR="$SCRATCH/fake"
 	: >"$CALL_LOG"
 	mkdir -p "$FAKE_DIR"
-	DOC=$(
-		PATH="$SCRATCH/bin:$PATH" \
-			CALL_LOG="$CALL_LOG" \
-			FAKE_DIR="$FAKE_DIR" \
-			"$collector" "$1" 2>"$SCRATCH/stderr"
-	) || return 1
+	# Bash 3.2 floor: an empty array under `set -u` cannot expand bare, so the
+	# optional prior-sidecar argument rides a guarded expansion.
+	prior_args=''
+	if [[ -n ${2:-} ]]; then
+		prior_args=$2
+	fi
+	if [[ -n $prior_args ]]; then
+		DOC=$(
+			PATH="$SCRATCH/bin:$PATH" \
+				CALL_LOG="$CALL_LOG" \
+				FAKE_DIR="$FAKE_DIR" \
+				"$collector" "$1" "$prior_args" 2>"$SCRATCH/stderr"
+		) || return 1
+	else
+		DOC=$(
+			PATH="$SCRATCH/bin:$PATH" \
+				CALL_LOG="$CALL_LOG" \
+				FAKE_DIR="$FAKE_DIR" \
+				"$collector" "$1" 2>"$SCRATCH/stderr"
+		) || return 1
+	fi
 }
 
 # --- fixture pieces -----------------------------------------------------------
@@ -242,7 +257,7 @@ if ! run_collector 'status:ready'; then
 fi
 
 assert_doc 'top-level envelope.' \
-	'.schema_version == "1.5"
+	'.schema_version == "1.6"
 	and .selector == "status:ready"
 	and .mode == "label-set"
 	and (.generated_at | type == "string")
@@ -415,6 +430,22 @@ if ! run_collector 'status:ready'; then
 	fail 'truncation scenario unexpectedly failed'
 fi
 assert_doc 'limit-equal population marks truncated' '.truncated == true'
+# A current run that truncated cannot move against any prior population, so
+# even an untruncated prior reports incomparable with the current-side reason.
+cat >"$SCRATCH/prior-untruncated.json" <<'JSON'
+{"schema_version":"1.5","selector":"status:ready","mode":"label-set",
+ "generated_at":"2026-07-20T00:00:00Z","truncated":false,
+ "population":{"count":1,"issues":[1]},
+ "aggregate":{"cycle_hours":{"count":1,"median":9,"min":9,"max":9}}}
+JSON
+if ! run_collector 'status:ready' "$SCRATCH/prior-untruncated.json"; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'truncated-current scenario unexpectedly failed'
+fi
+assert_doc 'a truncated current run is incomparable against an untruncated prior' \
+	'.truncated == true
+	and .metrics.movement == {status:"incomparable",
+		reason:"truncated-current"}'
 
 # --- scenario: tri-state errors and the rate-limit cutoff ----------------------
 # Seven selected issues. The first five timeline reads fail; the collector stops
@@ -425,6 +456,7 @@ rm -f "$SCRATCH"/fake/tl-*.jsonl "$SCRATCH"/fake/issue-*.json \
 python3 - "$SCRATCH/fake/search.json" <<'PY'
 import json, sys
 issues = [{"number": n, "state": "closed",
+
            "closedAt": "2026-07-01T14:00:00Z", "labels": []}
           for n in range(201, 208)]
 with open(sys.argv[1], "w") as fh:
@@ -817,6 +849,94 @@ assert_doc 'nearest-rank quartiles discriminate at the N = 20 edge' \
 	and .metrics.quartiles.cycle_hours.p25 == 5
 	and .metrics.quartiles.cycle_hours.p75 == 15'
 
+# --- scenario: movement against a prior sidecar --------------------------------
+# One closed issue (cycle 4h, lead 8h) compared against handcrafted prior
+# sidecars. The prior sidecar is a local file input: no additional gh read of
+# any kind may appear because of it. The fake gh serves canned files and
+# ignores --jq projections, so every prior here is crafted by hand rather than
+# captured from an earlier run.
+cat >"$SCRATCH/fake/search.json" <<'JSON'
+[
+ {"number":1001,"state":"closed","createdAt":"2026-07-01T06:00:00Z",
+  "closedAt":"2026-07-01T14:00:00Z","labels":[]}
+]
+JSON
+cat >"$SCRATCH/fake/tl-1001.jsonl" <<'JSONL'
+{"event":"labeled","label":{"name":"status:in-progress"},"created_at":"2026-07-01T08:00:00Z"}
+{"event":"closed","created_at":"2026-07-01T12:00:00Z"}
+JSONL
+printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-1001.json"
+printf '%s\n' '[]' >"$SCRATCH/fake/prlist-1001.json"
+
+# Baseline run without a prior: movement reports the omission, never a section
+# shaped like a comparison.
+if ! run_collector 'status:movement'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'movement baseline scenario unexpectedly failed'
+fi
+assert_doc 'no prior argument omits the movement section' \
+	'.schema_version == "1.6"
+	and .metrics.movement == {status:"omitted", reason:"no-prior"}'
+
+# A comparable prior: cycle median 10 over 3 issues, lead median 20, and one
+# family whose median never resolved — that family must be absent from the
+# comparison, not zero-filled against nothing.
+cat >"$SCRATCH/prior-comparable.json" <<'JSON'
+{"schema_version":"1.5","selector":"status:movement","mode":"label-set",
+ "generated_at":"2026-07-20T00:00:00Z","truncated":false,
+ "population":{"count":3,"issues":[2001,2002,2003]},
+ "aggregate":{"cycle_hours":{"count":3,"median":10,"min":8,"max":12},
+              "lead_time_hours":{"count":3,"median":20,"min":18,"max":22},
+              "pr_lifespan_hours":{"count":0}}}
+JSON
+if ! run_collector 'status:movement' "$SCRATCH/prior-comparable.json"; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'movement compared scenario unexpectedly failed'
+fi
+assert_doc 'compared movement carries signed deltas at one decimal' \
+	'.metrics.movement == {status:"compared",
+		against:{selector:"status:movement", generated_at:"2026-07-20T00:00:00Z"},
+		families:{
+			cycle_hours:{previous_median:10, current_median:4,
+				delta_median:-6, previous_count:3, current_count:1},
+			lead_time_hours:{previous_median:20, current_median:8,
+				delta_median:-12, previous_count:3, current_count:1}}}'
+assert_doc 'a family unresolved on either side is absent from the comparison' \
+	'(.metrics.movement.families | has("pr_lifespan_hours") | not)'
+assert_count 'a comparable prior adds no gh read' '^gh ' "$SCRATCH/calls" 5
+
+prior_case() { # description jq-filter fixture-file
+	jq "$2" "$SCRATCH/prior-comparable.json" >"$SCRATCH/prior-case.json"
+	if ! run_collector 'status:movement' "$SCRATCH/prior-case.json"; then
+		cat "$SCRATCH/stderr" >&2
+		fail "$1 scenario unexpectedly failed"
+	fi
+	assert_doc "$1" ".metrics.movement == $3"
+}
+prior_case 'a different selector is omitted, never compared against nothing' \
+	'.selector = "status:other"' \
+	'{status:"omitted", reason:"selector-mismatch"}'
+prior_case 'an unknown prior schema major refuses to compare' \
+	'.schema_version = "2.0"' \
+	'{status:"omitted", reason:"unknown-prior-schema"}'
+prior_case 'a truncated prior poisons the comparison' \
+	'.truncated = true' \
+	'{status:"incomparable", reason:"truncated-prior"}'
+
+printf 'not json at all\n' >"$SCRATCH/prior-case.json"
+if ! run_collector 'status:movement' "$SCRATCH/prior-case.json"; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'unreadable-prior scenario unexpectedly failed'
+fi
+assert_doc 'an unparseable prior degrades to an omission' \
+	'.metrics.movement == {status:"omitted", reason:"unreadable-prior"}'
+if ! run_collector 'status:movement' "$SCRATCH/prior-missing.json"; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'missing-prior scenario unexpectedly failed'
+fi
+assert_doc 'a missing prior path degrades to an omission' \
+	'.metrics.movement == {status:"omitted", reason:"unreadable-prior"}'
+
 # --- scenario: selection failure aborts ----------------------------------------
 rm -f "$SCRATCH/fake/search.json"
 PATH="$SCRATCH/bin:$PATH" FAKE_DIR="$SCRATCH/fake" CALL_LOG="$SCRATCH/calls" \
@@ -830,7 +950,7 @@ assert_contains 'selection read failed' "$SCRATCH/stderr"
 # --- usage ----------------------------------------------------------------------
 PATH="$SCRATCH/bin:$PATH" "$collector" >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
 	fail 'missing selector must exit non-zero'
-PATH="$SCRATCH/bin:$PATH" "$collector" a b >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
+PATH="$SCRATCH/bin:$PATH" "$collector" a b c >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
 	fail 'extra arguments must exit non-zero'
 
 printf 'collect-telemetry-test: ok\n'
