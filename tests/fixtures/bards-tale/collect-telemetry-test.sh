@@ -242,7 +242,7 @@ if ! run_collector 'status:ready'; then
 fi
 
 assert_doc 'top-level envelope.' \
-	'.schema_version == "1.4"
+	'.schema_version == "1.5"
 	and .selector == "status:ready"
 	and .mode == "label-set"
 	and (.generated_at | type == "string")
@@ -251,10 +251,6 @@ assert_doc 'top-level envelope.' \
 	and .population.issues == [101, 103]
 	and (.metrics | type == "object")
 	and (has("rate_limited") | not)'
-
-assert_doc 'epic excluded from population' \
-	'([.population.issues[] | select(. == 102)] | length) == 0'
-
 assert_doc 'issue 101 cycle: hours to one decimal, not floored days' \
 	'([.metrics.issues[] | select(.number == 101)][0].cycle_hours) == 4'
 assert_doc 'issue 101 phases' \
@@ -288,6 +284,10 @@ assert_doc 'issue 103 queue metrics are data gaps, dwell and bounces are measure
 	and .review_drift_hours == "unknown(no-review-phase)"'
 assert_doc 'scope estimate extracted' \
 	'([.metrics.issues[] | select(.number == 101)][0].scope_estimate) == "M"'
+assert_doc 'cohort boundary and close instant for the instrumented issue' \
+	'([.metrics.issues[] | select(.number == 101)][0]) |
+	.scope_complete == true
+	and .closed_at == "2026-07-01T14:00:00Z"'
 assert_doc 'trajectory fields mined from the latest complete block only' \
 	'([.metrics.issues[] | select(.number == 101)][0]) |
 	.risk_band == "night-safe"
@@ -323,7 +323,9 @@ assert_doc 'uninstrumented issue reports unknown, never zero' \
 	and .scope_estimate == "unknown"
 	and .review_verdict == "unknown"
 	and .security == "unknown"
-	and .exit == "unknown"'
+	and .exit == "unknown"
+	and .scope_complete == false
+	and .closed_at == "unknown(not-closed)"'
 assert_doc 'open issue lead time is an incomplete span, never elapsed-so-far' \
 	'([.metrics.issues[] | select(.number == 103)][0]) |
 	.lead_time_hours == "unknown(not-closed)"
@@ -336,21 +338,31 @@ assert_doc 'open issue lead time is an incomplete span, never elapsed-so-far' \
 
 assert_doc 'null-free invariant' \
 	'[. | .. | select(type == "null")] | length == 0'
-
-assert_doc 'aggregate median and range over value-state cycles.' \
-	'.metrics.aggregate.cycle_hours.count == 2
-	and .metrics.aggregate.cycle_hours.min == 4
-	and (.metrics.aggregate.cycle_hours.median | type == "number")
-	and (.metrics.aggregate.cycle_hours.max | type == "number")
-	and .metrics.aggregate.cycle_hours.max > .metrics.aggregate.cycle_hours.min'
-assert_doc 'aggregates exist per span family over the value-state entries' \
-	'.metrics.aggregate.lead_time_hours == {count: 1, median: 6, min: 6, max: 6}
-	and .metrics.aggregate.reopen_count.count == 2
-	and (.metrics.aggregate.ci_wall_hours.median | type == "number")
-	and .metrics.aggregate.blocked_dwell_hours == {count: 2, median: 0.25, min: 0, max: 0.5}
-	and .metrics.aggregate.rework_bounces.count == 2
-	and .metrics.aggregate.triage_latency_hours.count == 1
-	and .metrics.aggregate.human_response_hours == {count: 1, median: 0.1, min: 0.1, max: 0.1}'
+assert_doc 'aggregate split: each cohort reports its own median and range' \
+	'.metrics.aggregate.instrumented.cycle_hours == {count: 1, median: 4, min: 4, max: 4}
+	and (.metrics.aggregate.legacy.cycle_hours.count) == 1
+	and (.metrics.aggregate.legacy.cycle_hours.median | type == "number")
+	and .metrics.aggregate.combined_context.cycle_hours.count == 2
+	and .metrics.aggregate.combined_context.cycle_hours.max
+		> .metrics.aggregate.combined_context.cycle_hours.min'
+assert_doc 'aggregates exist per span family within each cohort' \
+	'.metrics.aggregate.instrumented.lead_time_hours == {count: 1, median: 6, min: 6, max: 6}
+	and .metrics.aggregate.instrumented.ci_wall_hours.count == 1
+	and .metrics.aggregate.instrumented.triage_latency_hours.count == 1
+	and .metrics.aggregate.instrumented.human_response_hours
+		== {count: 1, median: 0.1, min: 0.1, max: 0.1}
+	and .metrics.aggregate.combined_context.reopen_count.count == 2
+	and .metrics.aggregate.combined_context.blocked_dwell_hours
+		== {count: 2, median: 0.25, min: 0, max: 0.5}
+	and .metrics.aggregate.combined_context.rework_bounces.count == 2'
+assert_doc 'combined quartiles gated below the N >= 20 threshold' \
+	'.metrics.quartiles.cycle_hours == {count: 2}
+	and .metrics.quartiles.lead_time_hours == {count: 1}
+	and (.metrics.quartiles.cycle_hours | has("p25") | not)'
+assert_doc 'weekly throughput: Monday-start bucket, instability-gated median' \
+	'.metrics.throughput.weeks
+	== [{week_start: "2026-06-29", closed_count: 1,
+	     median_cycle_hours: "unknown(instability-rule)"}]'
 assert_doc 'coverage counts value-state entries' \
 	'.metrics.coverage == {
 		cycle_hours: 2, phase_build_hours: 1, phase_review_hours: 1,
@@ -743,6 +755,51 @@ assert_doc 'thin segments report only their count' \
 	and .metrics.risk_band_cycle_hours["unjudged"].count == 0
 	and .metrics.risk_band_cycle_hours["unjudged"].max
 		== "unknown(instability-rule)"'
+
+# --- scenario: quartiles cross the combined-population threshold ---------------
+# Twenty-one closed issues with measured cycles 1..21 hours: the combined
+# population crosses N >= 20 so p25/p75 appear (nearest-rank over the sorted
+python3 - "$SCRATCH/fake/search.json" "$SCRATCH/fake" <<'PY'
+import json, sys
+from datetime import datetime, timedelta, timezone
+
+closed = datetime(2026, 7, 1, 14, 0, tzinfo=timezone.utc)
+issues = []
+for n in range(901, 922):
+    k = n - 900  # cycle: 1..21 hours, closed on one date -> one week bucket
+    start = closed - timedelta(hours=k)
+    fmt = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
+    issues.append({"number": n, "state": "closed",
+                   "createdAt": "2026-07-01T06:00:00Z",
+                   "closedAt": fmt(closed), "labels": []})
+    with open(f"{sys.argv[2]}/tl-{n}.jsonl", "w") as fh:
+        fh.write(json.dumps({"event": "labeled",
+                             "label": {"name": "status:in-progress"},
+                             "created_at": fmt(start)}) + "\n")
+        fh.write(json.dumps({"event": "closed",
+                             "created_at": fmt(closed)}) + "\n")
+with open(sys.argv[1], "w") as fh:
+    json.dump(issues, fh)
+PY
+for n in $(seq 901 921); do
+	printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-$n.json"
+	printf '%s\n' '[{"number":930,"body":"Closes #'"$n"'"}]' \
+		>"$SCRATCH/fake/prlist-$n.json"
+	printf '%s\n' '{"comments":[],"additions":10,"deletions":2}' \
+		>"$SCRATCH/fake/pr-930.json"
+done
+if ! run_collector 'status:blocked'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'quartile scenario unexpectedly failed'
+fi
+assert_doc 'combined quartiles appear at and above N >= 20' \
+	'.metrics.quartiles.cycle_hours.count == 21
+	and .metrics.quartiles.cycle_hours.p25 == 6
+	and .metrics.quartiles.cycle_hours.p75 == 16'
+assert_doc 'a populated week reports its median' \
+	'.metrics.throughput.weeks == [{week_start: "2026-06-29",
+		closed_count: 21, median_cycle_hours: 11}]'
+
 # --- scenario: selection failure aborts ----------------------------------------
 rm -f "$SCRATCH/fake/search.json"
 PATH="$SCRATCH/bin:$PATH" FAKE_DIR="$SCRATCH/fake" CALL_LOG="$SCRATCH/calls" \

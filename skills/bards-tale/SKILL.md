@@ -135,6 +135,15 @@ collection that is never parsed as partial output.
   instability rule is structural here: a band with fewer than five
   measured cycles reports only its count, with
   `unknown(instability-rule)` at each distribution position.
+- **Cohort and throughput fields** — per-issue `scope_complete` (a complete
+  `WORK:SCOPE` block exists under latest-complete-wins — the boundary the
+  report's cohort split follows, independent of whether its complexity line
+  parses) and `closed_at` (the raw close instant; an open issue reports
+  `unknown(not-closed)`); `metrics.aggregate` split into `instrumented`,
+  `legacy`, and `combined_context`; `metrics.quartiles`, combined-population
+  p25/p75 gated at N >= 20; `metrics.throughput.weeks`, weekly closed counts
+  with instability-gated per-week median cycle. The renderer contract for all
+  of these is §3.
 
 **Empty selection.** When `population.count == 0`, write nothing — no report,
 no sidecar — and state plainly that the selector matched zero issues (`gh
@@ -163,33 +172,74 @@ Sections:
 
 1. **Header** — selector, mode (label-set / date-range), generated date (from
    `generated_at`), issue count (`population.count`), `truncated: yes|no`,
-   `rate_limited` when present, and per-metric **coverage** from
-   `metrics.coverage` (how many of N issues carried each metric as a value).
+   `rate_limited` when present, per-metric **coverage** from
+   `metrics.coverage` (how many of N issues carried each metric as a value),
+   and the **cohort split**: how many issues are instrumented (a complete
+   `WORK:SCOPE` block exists, `scope_complete` true) and how many are legacy.
    State coverage up front so a thin sample is never mistaken for a complete
    one. The label-anchored metrics are thin by nature; the GitHub-native
    spans cover the whole selected population minus fetch errors and cannot
    be skewed by a labeling bug — say so when contrasting the two families.
-2. **Metrics** — per-issue rows from `metrics.issues` plus the aggregate from
-   `metrics.aggregate`: **median + range** per span family (not a fabricated
-   p90 over a handful of points). Durations are hours to one decimal — a
-   sub-hour cycle reports `0.4`, never `0`. Emit an **instability note
-   whenever a metric's coverage `N < 5`**, warning against over-trusting a
-   2–4-point median. Risk-band cycle segments are gated structurally — a
-   band under five measured cycles reports its count only. Flag any issue
-   whose `review_drift_hours` exceeds
-   `max(1, 0.1 × pr_lifespan_hours)`: the label timestamps lag reality.
-3. **Findings** — process observations, each **grounded in a named metric**.
-   Every finding must reference an issue number or aggregate present in the
-   Metrics table, and any number it states must match the table. No finding
-   citing an entity absent from the table, or a number the table contradicts.
-   Causal phrasing is allowed only to the extent the cited metric supports it.
-   When narrating a review loop from `exit`, remember: the field takes one of
-   five enumerated values (ADR 0021); absence is not `none`, so keep today's
-   verdict-only reading when `exit` is missing or unrecognized.
+
+   **The cohort boundary.** Presence of a complete `WORK:SCOPE` is the line
+   between the legacy cohort and the instrumented cohort. Everything below
+   keeps the cohorts apart; combined figures appear only where this contract
+   says so, explicitly labelled as context — a median over "all issues"
+   mixes a measured cohort with one that was never measured, and publishing
+   it as one number is the dishonesty this structure exists to prevent.
+2. **Metrics** — two tables, one aggregate block per cohort:
+   - **Instrumented cohort table** — full rows for every issue with
+     `scope_complete` true: cycle, phases, closing PR, review iterations,
+     verdict/exit/security, scope estimate vs actual LOC, the GitHub-native
+     spans, the queue/rework spans, drift, trajectory and divination fields.
+   - **Legacy cohort table** — compact rows for every other issue: issue,
+     cycle, closing PR, LOC. The remaining columns are structurally
+     `unknown` for these issues, and printing that word seventy times
+     communicates nothing; the compact shape is the honesty, not a loss.
+   - **Aggregates** — `metrics.aggregate.instrumented` and
+     `metrics.aggregate.legacy`: **median + range** per span family within
+     each cohort (not a fabricated p90 over a handful of points). The
+     combined figure (`metrics.aggregate.combined_context`) may appear once
+     beneath both, explicitly labelled *context — all issues*, never as
+     either cohort's headline. Durations are hours to one decimal — a
+     sub-hour cycle reports `0.4`, never `0`. Emit an **instability note
+     whenever a metric's coverage `N < 5`**, warning against over-trusting
+     a 2–4-point median. Risk-band cycle segments are gated structurally —
+     a band under five measured cycles reports its count only. Flag any
+     issue whose `review_drift_hours` exceeds
+     `max(1, 0.1 × pr_lifespan_hours)`: the label timestamps lag reality.
+   - **Combined quartiles** — `metrics.quartiles`, labelled *combined
+     population*: p25/p75 for a span family only when at least 20 issues
+     carry it as a value (families below the threshold report their count
+     alone). Per-cohort quartiles are **excluded deliberately**: the
+     instrumented cohort is often a dozen points, and p25/p75 over that few
+     repeats the mixed-aggregate mistake in finer grain. If no family
+     reaches the threshold, omit the section rather than lower it.
+3. **Throughput over time** — `metrics.throughput.weeks` as a table: week
+   (Monday-start UTC), closed count, and per-week median cycle. A
+   date-range retrospective answers *whether the pipeline is changing*, not
+   only how fast it was; the trend of weekly medians is the signal, so
+   present weeks in order even when counts are small. A week with fewer
+   than five measured cycles reports its count with
+   `unknown(instability-rule)` at the median position — read the sequence
+   of counts before reading any median.
+4. **Findings** — process observations, each **grounded in a named metric**.
+   Every finding must reference an entity present in this report — an issue
+   row in either cohort's table (compact rows ground legacy-cohort findings
+   on cycle, PR, or LOC), an aggregate or quartile figure, a throughput
+   week, or a coverage count — and any number it states must match the
+   entry it cites. No finding citing an entity absent from the report, or a
+   number the cited entry contradicts; a finding about the instrumented
+   cohort must not quietly lean on the combined context figures. Causal
+   phrasing is allowed only to the extent the cited metric supports it.
+   When narrating a review loop from `exit`, remember: the field takes one
+   of five enumerated values (ADR 0021); absence is not `none`, so keep
+   today's verdict-only reading when `exit` is missing or unrecognized.
    Lead time carries a standing caveat: where issues are batch-filed by
    `$saga` or `$bounty` and worked later, `lead_time_hours` is dominated by
-   queue position rather than effort — findings must not read it as slowness.
-4. **Proposed tuning (NOT applied)** — concrete suggestions, each satisfying
+   queue position rather than effort — findings must not read it as
+   slowness.
+5. **Proposed tuning (NOT applied)** — concrete suggestions, each satisfying
    **both** halves of the grounding rule: it **cites a real governing workflow
    or applicable repository instruction source** (verified with `Read` /
    `Grep`) **and traces to a finding or metric** in this report. No proposal
@@ -200,9 +250,13 @@ Sections:
    **advisory**: the estimate is a qualitative judgement, so a mismatch flags
    an issue *worth a look*, and the retro may recommend re-tuning the bands
    themselves.
-5. **Data gaps** — entries whose source annotation is genuinely *absent*
-   (`unknown`).
-6. **Fetch failures** — entries whose `gh` read *errored* (`error`; kept
+6. **Data gaps** — entries whose source annotation is genuinely *absent*
+   (`unknown`). When a gap set is the majority for a category, list the
+   **complement with a count** for the remainder — "complete `WORK:SCOPE`:
+   14 issues (#26, #140, …); the remaining 56 have none" — instead of
+   enumerating the majority. Enumerate a gap set directly only when it is
+   the minority.
+7. **Fetch failures** — entries whose `gh` read *errored* (`error`; kept
    distinct from Data gaps). Omit when there were none. If errors exceed
    successes, lead the report with a prominent unreliability warning
    suggesting a smaller selector or a retry.
