@@ -128,8 +128,10 @@ silent-worker recovery in
 terminal scrollback. Rows marked `done` need no respawn — review their `out/`
 files through the normal gate. Rows still `running` may belong to dead processes:
 check each one's `-o` file and task log, then take survivors through the failure
-path above. Because session ids were persisted at spawn, a live-but-unreported
-worker can be continued with `codex exec resume <session-id>` instead of restarted.
+path above. Rows marked `failed` have an observed death and still own their one
+respawn: take them through the failure path from step 2. Because session ids were
+persisted at spawn, a live-but-unreported worker can be continued with
+`codex exec resume <session-id>` instead of restarted.
 
 ## Brief template
 
