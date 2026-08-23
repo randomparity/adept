@@ -49,8 +49,8 @@ Accepted ADR carries neither, so a sighting is worth a new issue citing this rec
 
 ## Consequences
 
-- README's workflow section gains a one-line pointer to this record, the convention it already
-  uses for ADRs 0001, 0002 and 0003. That pointer is what makes the absence findable; the
+- README's workflow section gains a one-line pointer to this record, the convention it
+  already uses for the ADRs it cites. That pointer is what makes the absence findable; the
   record alone would not, because the index here is deliberately the directory listing.
 - Nothing else in `README.md` or `docs/cheatsheet.md` changes. The lifecycle they draw is
   complete — no stage is missing from it.
