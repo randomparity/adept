@@ -61,10 +61,11 @@ Accepted ADR carries neither, so a sighting is worth a new issue citing this rec
   looks. Where a target repository publishes on merge to `main`, that publish is fired by the
   merge `$return-to-town` itself performs, and nothing here reads the workflow run it triggers.
   A publish that fails on registry auth, a version collision, or a missing tag permission goes
-  unobserved while the session reports the issue done. That inaccurate report is adept's own
-  and not the target repository's to fix; it is accepted here because watching a foreign
-  workflow run is the machinery this record declines, and it is tracked as issue #65 against
-  `$return-to-town`.
+  unobserved while the session reports the issue done. That inaccurate report was adept's
+  own and not the target repository's to fix — verified: issue #65 recorded it and PR #78
+  fixed adept's half, so `$return-to-town` now says plainly that the base-branch run its
+  merge triggered is unverified. What remains here — that nothing reads the run — is accepted
+  because watching a foreign workflow run is the machinery this record declines.
 
 ## Considered & rejected
 
@@ -97,7 +98,8 @@ Accepted ADR carries neither, so a sighting is worth a new issue citing this rec
 - **A post-merge verification skill only, dropping tagging and changelog.** The narrowest
   scope-in. Rejected — judgment: the same absence of any driving request, though this is the
   alternative closest to a real gap, and the part of it that is adept's own is real:
-  verified: issue #65 tracks it against `$return-to-town`.
+  verified: issue #65 recorded adept's half of it and PR #78 fixed it, leaving only the
+  unread-run residual this record accepts.
 - **A deferral record under `docs/debt/` rather than a record here.** Rejected — judgment:
   the trigger here is an event — a session being asked — and `review-by:` fires on a date, so
   the sweep would re-ask the question on an arbitrary day with no new evidence to answer it.

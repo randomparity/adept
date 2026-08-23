@@ -25,13 +25,12 @@ no blocked work.
 
 Evidence gathered before deciding:
 
-- No skill covers release, tagging, changelog, or deploy. The string `release` occurs in
-  `skills/sort-board/SKILL.md`, `skills/campaign/SKILL.md` and `skills/return-to-town/SKILL.md`
-  meaning *release a blocked issue*, and in `skills/clear-map/SKILL.md` meaning a protected
-  `release/*` branch pattern. `return-to-town` also warns that a publish, release tag or
-  deploy fired by a base-branch workflow runs *after* the merge — the post-merge residual
-  ADR 0006 tracks as issue #65. None of these is a pipeline stage that drives a software
-  release.
+- No skill covers release, tagging, changelog, or deploy. Occurrences of the string `release`
+  across `skills/*/SKILL.md` denote releasing a claim or held PR, releasing a blocked issue,
+  a protected `release/*` branch pattern, or released software versions — and
+  `return-to-town` warns that a publish, release tag or deploy fired by a base-branch
+  workflow runs *after* the merge, the post-merge residual ADR 0006 records as issue #65.
+  None of these is a pipeline stage that drives a software release.
 - This repository has no git tags and no GitHub releases, and runs one workflow, `verify.yml`.
 - `$warding` reports dependency version drift and `$restock` merges Dependabot updates. Both
   read versions; neither publishes anything.
