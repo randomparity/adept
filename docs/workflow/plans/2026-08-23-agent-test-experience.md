@@ -162,8 +162,8 @@ assert_contains "$run_stdout" 'ok   scripts/alpha-test.sh' 'selection ran the ma
 refuses "$run_stdout" 'gamma' 'selection skipped the non-match'
 assert_contains "$run_stdout" 'test: 1 suites passed' 'selection summary'
 
-# Case 3b: multiple patterns OR and deduplicate — beta matches two patterns and
-# must appear exactly once in the report.
+# Case 3b: multiple patterns OR and deduplicate — gamma matches all three
+# patterns (gamma, amma, gam) and must appear exactly once in the report.
 dedupe_root=$(new_fixture_repo dedupe)
 run_recipe "$dedupe_root" gamma amma gam
 [[ $run_status -eq 0 ]] || fail "dedupe: expected exit 0, got $run_status"
@@ -214,8 +214,12 @@ printf 'test-recipe-test: pass\n'
 ### Step 1.2 — Confirm the suite fails
 
 ```sh
-just test test-recipe
+./scripts/test-recipe-test.sh
 ```
+
+Run it directly, not through `just test`: the pre-change recipe ignores arguments, so
+the just form would run all 19 existing suites (~4.8 minutes) before reaching this one
+and could redden on an unrelated suite first. Direct invocation isolates the red.
 
 Expect: the suite runs (it is auto-discovered) and **fails** — the current recipe has no
 selection, no run/ok lines, and treats `-x` as a suite name — with messages like
@@ -291,8 +295,8 @@ existing comment blocks about capture and guarding — carry them over verbatim)
 			status=0
 			output=$("./$suite" </dev/null 2>&1) || status=$?
 			if ((status != 0)); then
-				printf '== %s\n' "$suite"
-				printf '%s\n' "$output"
+				printf '== %s\n' "$suite" >&2
+				printf '%s\n' "$output" >&2
 				exit "$status"
 			fi
 			printf 'ok   %s\n' "$suite"
@@ -318,14 +322,9 @@ existing comment blocks about capture and guarding — carry them over verbatim)
 just test test-recipe
 ```
 
-Expect: `test-recipe-test: pass` and the recipe summary line. Then confirm nothing else
-broke:
-
-```sh
-./scripts/test-recipe-test.sh
-```
-
-Expect exit 0.
+Expect: `test-recipe-test: pass` and the recipe summary line — this is the green proof
+through the real entry point, exercising discovery and argument plumbing end to end.
+Exit 0.
 
 **Acceptance:** suite fails against the old recipe (observed in 1.2), passes against the
 new one; `shellcheck -x scripts/test-recipe-test.sh` exits 0; `shfmt -d
