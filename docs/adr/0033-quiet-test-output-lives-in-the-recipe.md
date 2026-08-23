@@ -13,8 +13,8 @@ behind a `== <suite>` header. Agents iterating on the repository pay two costs: 
 recipes offer no subset selection (every change re-runs all 19 suites; a direct
 `./scripts/<suite>` invocation exists but bypasses the recipe's discovery and summary),
 and the default output is dominated by per-assertion `ok` lines that carry no information
-on a green run. The suites themselves are heterogeneous: most share
-`test-fixture-helpers.sh`, but several keep their own scaffolding deliberately, and the
+on a green run. Every non-twin suite sources the shared `test-fixture-helpers.sh`
+scaffold, but each keeps its own local assertion printers, and the
 3,747-line check-records twins print through their own inline `printf` sites.
 (`time just test`: 4m48s wall on an Apple M5 Max host, 2026-08-23.)
 
@@ -42,18 +42,22 @@ closing `test: N suites passed` counts them. No suite file changes.
   for paths like `scripts/check-plugin-version-test.sh`, cheap to explain, no new syntax.
 - CI and the managed pre-push hook keep running the full set unflagged; nothing about
   their verdict path changes.
+- Replayed failure output preserves content but not the live interleaving of stdout and
+  stderr (one merged capture stream); order-sensitive diagnosis reruns the suite directly.
 
 ## Considered & rejected
 
 - **Per-suite verbosity plumbing** (a shared `ok`-reporting helper every suite calls).
   judgment: the diff touches all 19 executing suites plus the shared helper — dozens of
-  inline printf sites across heterogeneous scaffolding, several suites keeping their own
-  deliberately — to achieve centrally what capture-and-replay achieves in one recipe;
+  local assertion-printer sites across them, each edit needing its suite's own printer
+  convention — to achieve centrally what capture-and-replay achieves in one recipe;
   cost without contract gain.
-- **Environment-variable verbosity** (`TEST_VERBOSE=1`). judgment: the issue asks for a
-  `-verbose` option, and an exported variable leaks into nested invocations — the managed
-  pre-push hook re-runs `just verify` in an isolated worktree and would inherit surprise
-  verbosity into push output.
+- **Environment-variable verbosity** (`TEST_VERBOSE=1`).
+  verified: an exported variable reaches the managed pre-push hook's isolated re-run —
+  the hook chain is `git push` → `scripts/verify-push.sh` → `just ci` → `just verify` in
+  a detached worktree (documented in CLAUDE.md, "Verifying a change") — so ambient
+  verbosity would surface in push output. The issue asks for a `-verbose` option, and a
+  flag is invoked state rather than ambient state.
 - **Streaming filter** (pipe live output through a matcher that drops `ok` lines).
   judgment: it must classify prose lines to work, so a suite whose summary line drifts
   gets misclassified silently; capture-and-replay classifies by exit status only.
@@ -68,3 +72,7 @@ closing `test: N suites passed` counts them. No suite file changes.
   instead of a re-run, but the retained artifacts need a home, a retention rule, and
   cleanup the repo's no-residue conventions would have to govern — more moving parts than
   the `-v` re-run they replace, which pattern selection already bounds to seconds.
+- **Concurrent suite execution.** judgment: it would attack the wall-clock figure, but
+  parallel output complicates failure attribution — the exact problem quiet mode exists
+  to simplify — and the issue asks for quieter, narrower runs, not faster ones; pattern
+  selection already bounds the common re-run to seconds.
