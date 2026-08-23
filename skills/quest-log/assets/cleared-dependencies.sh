@@ -1,5 +1,24 @@
 #!/usr/bin/env bash
 
+# Executed, this file is the canonical cleared-dependency recipe: the main
+# guard at the foot of the file dispatches to reconcile_cleared_dependencies,
+# so one command's exit status is the verdict and nothing lands in the caller's
+# shell. Sourced, it stays a library -- the behaviour suite takes the function
+# bodies from it that way -- and a sourcing caller's shell is not always bash.
+# The function bodies below use bash-only forms (`${!array[@]}`,
+# `BASH_REMATCH`), and one was worse than a failed call:
+# `cleared_dependency_run` declared `local status=0`, which under zsh assigns
+# the read-only special parameter `status` and killed the caller's whole
+# session. That declaration is `rc` now; the guard is what keeps every body
+# unreachable from a shell that cannot run it. `return`, never `exit`: an exit
+# inside a sourced file takes down the very session this guard exists to
+# protect, which is the failure mode itself. When bash executes or sources the
+# file, BASH_VERSION is always set and the guard does not fire.
+[ -n "${BASH_VERSION:-}" ] || {
+	printf 'cleared-dependencies.sh requires bash; source it from bash\n' >&2
+	return 1
+}
+
 cleared_dependency_reason=
 cleared_dependency_error=false
 cleared_dependency_max_lookups=500
@@ -7,6 +26,8 @@ cleared_dependency_lookup_count=0
 cleared_dependency_blocker_ids=()
 cleared_dependency_blocker_states=()
 cleared_dependency_state=
+cleared_dependency_out=
+cleared_dependency_err=
 
 reset_cleared_dependency_cache() {
 	cleared_dependency_lookup_count=0
@@ -22,6 +43,49 @@ cleared_dependency_safe_text() {
 	LC_ALL=C tr -cd '[:print:]' | cut -c1-200
 }
 
+# Four calls in this file read a value out of gh's stdout: a blocker's state
+# word, two issue payloads, and the open-issue page set. gh writes non-fatal
+# material to stderr while exiting 0 -- a release-update notice is the common
+# one -- so capturing those with the streams merged made that line part of the
+# value, and the recipe then decided labels from it. A closed blocker read as
+# open and the reason reported was false; worse, the blocker cache kept the
+# corrupted word, so one notice retained every dependent of that blocker for the
+# rest of the run. The payload captures fed the notice to jq, which then blamed
+# a race that had not happened.
+#
+# Stderr goes to a scratch file instead, and is read only to build the failure
+# diagnostic, so `unreadable blocker`, `unreadable dependent` and `cannot list
+# open dependents` keep naming a real reason. The merges on the `gh label
+# create` and `gh issue edit` calls below are a different thing and stay: those
+# capture a diagnostic and discard it on success.
+#
+# The value comes back in a variable rather than on stdout because a caller
+# capturing stdout would run this function in a subshell, and the stderr it
+# recorded would be discarded along with it.
+#
+# The scratch file is allocated and removed per call rather than held across the
+# run by an EXIT trap: this file is sourced, so a trap installed here would take
+# the slot from whichever skill sourced it. A host that cannot allocate one
+# reports through the same diagnostic as a gh call that did not answer, which is
+# the honest reading -- the lookup did not happen, and none of the four points
+# has written anything yet. The removal is guarded because a caller running
+# under `set -e` would otherwise end on a failed rm after a lookup that
+# succeeded.
+cleared_dependency_run() { # gh-args...
+	local scratch rc=0
+	cleared_dependency_out=
+	cleared_dependency_err=
+	scratch=$(mktemp) || {
+		cleared_dependency_err='no scratch file for the tracker command'
+		return 1
+	}
+	cleared_dependency_out=$(gh "$@" 2>"$scratch") || rc=$?
+	cleared_dependency_err=$(<"$scratch")
+	rm -f -- "$scratch" ||
+		printf 'retained scratch path: %s\n' "$scratch" >&2
+	return "$rc"
+}
+
 cleared_dependency_blocker_state() { # repo blocker dependent
 	local repo=$1 blocker=$2 dependent=$3 index state safe
 	for index in "${!cleared_dependency_blocker_ids[@]}"; do
@@ -35,10 +99,13 @@ cleared_dependency_blocker_state() { # repo blocker dependent
 		return
 	fi
 	((cleared_dependency_lookup_count += 1))
-	if ! state=$(gh issue view "$blocker" --repo "$repo" --json state --jq .state \
-		2>&1); then
-		safe=$(printf '%s' "$state" | cleared_dependency_safe_text)
-		if [[ $state == *'not found'* || $state == *'Could not resolve'* ]]; then
+	if cleared_dependency_run issue view "$blocker" --repo "$repo" \
+		--json state --jq .state; then
+		state=$cleared_dependency_out
+	else
+		safe=$(printf '%s' "$cleared_dependency_err" | cleared_dependency_safe_text)
+		if [[ $cleared_dependency_err == *'not found'* ||
+			$cleared_dependency_err == *'Could not resolve'* ]]; then
 			state=MISSING
 		else
 			state="UNREADABLE:$safe"
@@ -130,12 +197,13 @@ apply_cleared_dependency() { # repo issue-json
 	local initial_snapshot current_snapshot snapshot_filter err safe
 	local -a remove_args=()
 	number=$(jq -r .number <<<"$initial")
-	if ! current=$(gh issue view "$number" --repo "$repo" \
-		--json number,state,body,labels 2>&1); then
-		safe=$(printf '%s' "$current" | cleared_dependency_safe_text)
+	if ! cleared_dependency_run issue view "$number" --repo "$repo" \
+		--json number,state,body,labels; then
+		safe=$(printf '%s' "$cleared_dependency_err" | cleared_dependency_safe_text)
 		printf 'unreadable dependent #%s: %s; kept blocked\n' "$number" "$safe" >&2
 		return 1
 	fi
+	current=$cleared_dependency_out
 	if ! cleared_dependency_candidate "$current"; then
 		printf 'stale evaluation for #%s; state, labels, or epic status changed\n' \
 			"$number" >&2
@@ -169,13 +237,14 @@ apply_cleared_dependency() { # repo issue-json
 			"$number" "$safe" >&2
 		return 1
 	fi
-	if ! final=$(gh issue view "$number" --repo "$repo" \
-		--json number,state,body,labels 2>&1); then
-		safe=$(printf '%s' "$final" | cleared_dependency_safe_text)
+	if ! cleared_dependency_run issue view "$number" --repo "$repo" \
+		--json number,state,body,labels; then
+		safe=$(printf '%s' "$cleared_dependency_err" | cleared_dependency_safe_text)
 		printf 'verification unreadable for #%s: %s; inspect its status labels\n' \
 			"$number" "$safe" >&2
 		return 1
 	fi
+	final=$cleared_dependency_out
 	if ! status_labels=$(jq -c \
 		'[.labels[].name | select(startswith("status:"))]' <<<"$final" 2>&1); then
 		safe=$(printf '%s' "$status_labels" | cleared_dependency_safe_text)
@@ -205,7 +274,7 @@ apply_cleared_dependency() { # repo issue-json
 }
 
 reconcile_cleared_dependencies() { # plan|apply owner/name
-	local mode=$1 repo=$2 pages issues issue number body target selected failures=0
+	local mode=$1 repo=$2 pages issues issue number body target selected safe failures=0
 	local -a targets=()
 	shift 2
 	targets=("$@")
@@ -214,12 +283,13 @@ reconcile_cleared_dependencies() { # plan|apply owner/name
 		printf 'usage: reconcile_cleared_dependencies plan|apply owner/name\n' >&2
 		return 2
 	}
-	pages=$(gh api --paginate --slurp -X GET \
-		"repos/$repo/issues?state=open&per_page=100" 2>&1) || {
-		pages=$(printf '%s' "$pages" | cleared_dependency_safe_text)
-		printf 'cannot list open dependents: %s; no labels changed\n' "$pages" >&2
+	cleared_dependency_run api --paginate --slurp -X GET \
+		"repos/$repo/issues?state=open&per_page=100" || {
+		safe=$(printf '%s' "$cleared_dependency_err" | cleared_dependency_safe_text)
+		printf 'cannot list open dependents: %s; no labels changed\n' "$safe" >&2
 		return 1
 	}
+	pages=$cleared_dependency_out
 	if ! issues=$(jq -ce '[.[][] | select(has("pull_request") | not)]' \
 		<<<"$pages" 2>&1); then
 		issues=$(printf '%s' "$issues" | cleared_dependency_safe_text)
@@ -250,3 +320,12 @@ reconcile_cleared_dependencies() { # plan|apply owner/name
 	done < <(jq -c '.[]' <<<"$issues")
 	return "$failures"
 }
+
+# Executed rather than sourced, this file is the command the quest-log,
+# resurrection, and return-to-town recipes invoke; the dispatch makes the
+# command's exit status the verdict (0 clean, 1 degraded or partial, 2 usage).
+# Without the guard, executing a functions-only library was a silent no-op --
+# the shape issue #199 records.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+	reconcile_cleared_dependencies "$@"
+fi

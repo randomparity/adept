@@ -1,16 +1,19 @@
-# Implementer subagent prompt
+# Implementer worker prompt
 
 The dispatch template for handing one plan task to an implementer.
 
 Its flaky-test wording restates the policy in `references/true-seeing.md`
 instead of linking it. That duplication is deliberate: this text is pasted into
-a subagent working in the target repository, where a relative link into this
+a worker operating in the target repository, where a relative link into this
 repo's `references/` would not resolve. Do not collapse it into a link.
 
 ```
-Subagent (general-purpose):
+Worker (implementer):
   description: "Task N — [task name]"
-  model: [MODEL — REQUIRED: pick one from SKILL.md, Model Selection. Leave this
+  background: false  # REQUIRED: this wait is serial — nothing proceeds until this
+                     # worker returns, so a backgrounded dispatch buys no parallelism
+                     # and invites the dispatcher to spend turns checking on it.
+  model: [MODEL — REQUIRED: pick one from SKILL.md, Choosing a model. Leave this
          unset and the dispatch quietly inherits whatever model this session is
          running, which is the costliest choice available.]
   prompt: |
@@ -25,7 +28,29 @@ Subagent (general-purpose):
 
     [Scene-setting: where this fits, dependencies, architectural context]
 
-    Work from: [directory]
+    ## Placement — verify before your first edit
+
+    You are assigned exactly one working tree and one branch. Both values below
+    are mandatory; a dispatch that omits either one is invalid — stop and
+    report NEEDS_CONTEXT rather than guessing.
+
+    - **Worktree:** [WORKTREE_PATH] (absolute path)
+    - **Branch:** [BRANCH_NAME]
+
+    Before touching anything, confirm you are where the dispatch placed you:
+
+        git rev-parse --show-toplevel   # must print [WORKTREE_PATH]
+        git branch --show-current       # must print [BRANCH_NAME]
+
+    A mismatch means you are in the wrong tree or on the wrong branch. Stop
+    now and report NEEDS_CONTEXT, having changed nothing. This check runs
+    before the first edit because by commit time the edits are already in the
+    wrong tree, and recovery is a cherry-pick instead of a no-op.
+
+    Never work on `main` or `master` without explicit consent from the
+    dispatch that sent you: if [BRANCH_NAME] is either of those, stop and
+    report NEEDS_CONTEXT. Do not push, merge, rebase onto another branch, or
+    touch any branch other than [BRANCH_NAME].
 
     ## Ask before you start
 
@@ -42,7 +67,7 @@ Subagent (general-purpose):
     1. Build exactly what the task specifies.
     2. Write tests — test-first if the task calls for it.
     3. Confirm the implementation actually works.
-    4. Commit.
+    4. Commit to [BRANCH_NAME] — the branch you verified in Placement.
     5. Review your own work, as set out below.
     6. Report back.
 
@@ -58,15 +83,15 @@ Subagent (general-purpose):
     defect in its own right, and evidence of nothing in either direction: the
     green run does not clear your code and the red run does not condemn it.
     Report it with both outcomes and the test's name. Fixing or filing it is
-    the controller's call, not yours.
+    the orchestrator's call, not yours.
 
     If it fails both times and you can see that your change caused it, that is
-    ordinary work: fix it, or report BLOCKED. Do not commit past it.
+    ordinary work: fix it, or report CANNOT_COMPLETE. Do not commit past it.
 
     If it fails both times and you cannot see how your change reaches it, stop
     there. Report the test's name and whether you touched anything it covers,
     and say you did not classify it. Do not go hunting through the history to
-    prove it was already broken — the controller has the base commit and the
+    prove it was already broken — the orchestrator has the base commit and the
     plan, and settling it costs far less there than here.
 
     Whatever happened, never write "tests pass" on the strength of a re-run. A
@@ -104,9 +129,9 @@ Subagent (general-purpose):
     - you have opened file after file and understand the system no better than
       when you started.
 
-    **To escalate:** report back as BLOCKED or NEEDS_CONTEXT, and be specific —
+    **To escalate:** report back as CANNOT_COMPLETE or NEEDS_CONTEXT, and be specific —
     what stopped you, what you already tried, and what would unblock you. The
-    controller can supply the missing context, re-dispatch you on a stronger
+    orchestrator can supply the missing context, re-dispatch you on a stronger
     model, or cut the task into smaller pieces.
 
     ## Review your own work first
@@ -154,18 +179,20 @@ Subagent (general-purpose):
     Then keep the message you send back under fifteen lines, because the detail
     is in the file:
 
-    - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
+    - **Status:** DONE | DONE_WITH_CONCERNS | CANNOT_COMPLETE | NEEDS_CONTEXT
+    - **Branch:** [BRANCH_NAME] — the branch every commit below landed on;
+      the orchestrator verifies this rather than trusting it
     - the commits you made, short SHA and subject
     - one line on the tests, e.g. "14/14 passing, output pristine" — and name
       any test that flaked, however clean the final run looked
     - your concerns, if you have any
     - where the report file is
 
-    When the status is BLOCKED or NEEDS_CONTEXT, put the specifics in that final
-    message rather than only in the file — the controller reads it and acts.
+    When the status is CANNOT_COMPLETE or NEEDS_CONTEXT, put the specifics in that final
+    message rather than only in the file — the orchestrator reads it and acts.
 
     Choose the status honestly. DONE_WITH_CONCERNS is for work you finished but
-    are not certain of. BLOCKED is for work you cannot finish. NEEDS_CONTEXT is
+    are not certain of. CANNOT_COMPLETE is for work you cannot finish. NEEDS_CONTEXT is
     for work waiting on something you were never given. Never hand back work you
     doubt without saying that you doubt it.
 ```

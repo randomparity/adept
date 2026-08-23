@@ -167,6 +167,34 @@ section_body() {
   ' "$file"
 }
 
+# section_body with its awk's own exit status kept: 0 the body is in read_section_out, 2 the
+# read could not run. There is no 1 — an absent or empty section yields empty output at status
+# 0, which is an ordinary verdict E-SECTION-EMPTY already owns, unlike path_exists_at where
+# absence is a third distinct answer.
+#
+# The body comes back in a global rather than on stdout because a caller that ran this in `$( )`
+# could not see the status: PIPESTATUS does not survive a command substitution either, so
+# `var=$(section_body … | grep …)` had no way to tell an awk that could not open the file from a
+# grep that honestly matched nothing. That is the defect ADR 0032 closes, and returning the body
+# by value is what makes the status reachable.
+#
+# awk's real status is left in read_section_status for the caller's diagnostic, the way
+# path_exists_at leaves its own: this reader's 2 is a sentinel, and reporting it would name a
+# status awk never returned.
+read_section_out=""
+read_section_status=0
+read_section() {
+  local file=$1 heading=$2 status=0
+  read_section_out=""
+  read_section_status=0
+  read_section_out=$(section_body "$file" "$heading") || status=$?
+  if [ "$status" -ne 0 ]; then
+    read_section_status=$status
+    return 2
+  fi
+  return 0
+}
+
 # The single definition of what counts as a marker. Line-local, and it discards nothing: every
 # word of prose, all indentation and nesting outside marker lines, every heading's text and the
 # preamble survive into the output, so a comparison over the result is still order-sensitive and
@@ -227,11 +255,42 @@ preamble() {
 # The heading line itself stays: `## Status` is a heading, and a heading is protected.
 # canonicalise has already lowercased it, so `## Status:` and `## status` both arrive here
 # as `## status` and the same test recognises either spelling.
+#
+# `canonicalise` is an awk reading the file, and it used to be the first stage of a pipeline
+# whose status went nowhere. When that read faulted, this emitted nothing, marker_only_change
+# compared two empty shapes as equal, and check_not_rewritten returned before any anti-erasure
+# rule ran — a merged record with a protected section deleted reported E-REWRITE on a working
+# toolchain and `Records OK.` on a faulting one. The read is lifted out and its status captured;
+# the awk that remains filters a shell variable, which ADR 0005 decision 1 would exempt -- see
+# the note at the filter itself for why it is captured anyway.
+#
+# The shape comes back in a global for read_section's reason: a caller running this in `$( )`
+# could not see the status. Comparing captured strings is safe here in a way it is not at the
+# `diff` sites — `$( )` strips trailing newlines from both sides identically, so equality is
+# unchanged from the pipeline this replaces.
+protected_shape_out=""
+protected_shape_status=0
 protected_shape() {
-  canonicalise "$1" | awk '
+  local file=$1 canon status=0
+  protected_shape_out=""
+  protected_shape_status=0
+  canon=$(canonicalise "$file") || status=$?
+  if [ "$status" -ne 0 ]; then
+    protected_shape_status=$status
+    return 2
+  fi
+  # Captured despite reading a variable: an empty result here is a false *pass*, since two empty
+  # shapes compare equal. Discarding it would move the fail-open one stage right, not remove it.
+  status=0
+  protected_shape_out=$(printf '%s\n' "$canon" | awk '
     /^## / { in_status = ($0 == "## status"); print; next }
     !in_status { print }
-  '
+  ') || status=$?
+  if [ "$status" -ne 0 ]; then
+    protected_shape_status=$status
+    return 2
+  fi
+  return 0
 }
 
 # The marker-only allowance. Migration edits merged records, which E-REWRITE exists to
@@ -242,12 +301,33 @@ protected_shape() {
 # The permission is a property of the diff, which the author cannot fake: there is no
 # one-time escape hatch to forget to remove, and no way to smuggle a word of prose, a
 # re-indented sub-bullet or a reworded heading past it.
+#
+# Three-valued per ADR 0005 decision 3, because protected_shape can now fault: 0 marker-only,
+# 1 not marker-only, 2 the comparison could not be made. Never call it under `if !` or in an
+# `&&`/`||` chain that branches on it — both collapse 1 and 2 and reinstate the silent pass.
+marker_only_status=0
 marker_only_change() {
-  [ "$(protected_shape "$1")" = "$(protected_shape "$2")" ]
+  local a=$1 b=$2 shape_a status=0
+  marker_only_status=0
+  protected_shape "$a" || status=$?
+  if [ "$status" -ne 0 ]; then
+    marker_only_status=$protected_shape_status
+    return 2
+  fi
+  shape_a=$protected_shape_out
+
+  status=0
+  protected_shape "$b" || status=$?
+  if [ "$status" -ne 0 ]; then
+    marker_only_status=$protected_shape_status
+    return 2
+  fi
+
+  [ "$shape_a" = "$protected_shape_out" ]
 }
 
 check_sections() {
-  local file=$1 label=$2 section body grep_status
+  local file=$1 label=$2 section body grep_status body_status
   while IFS= read -r section; do
     [ -n "$section" ] || continue
     # grep exits 1 for "no match" and 2 or more for a fault it hit while
@@ -267,7 +347,24 @@ check_sections() {
       continue
       ;;
     esac
-    body=$(section_body "$file" "$section" | tr -d '[:space:]')
+    # `section_body … | tr -d` folded an awk that could not open the file into an empty body,
+    # reporting E-SECTION-EMPTY against a section it never read. The read is lifted out and its
+    # status captured; the `tr` that remains reads a shell variable, which ADR 0005 decision 1
+    # places outside the scan rule.
+    # err_full, not err: a scan fault describes the scan, not the record, so it must not be
+    # downgraded to W-LEGACY-SHAPE for a record that was already non-conforming at the base ref
+    # (ADR 0005). This read faults in both passes when it faults at all -- unlike the grep
+    # above, which reads the working-tree file while the base pass reads a readable temp copy --
+    # so `err` would leave the gate at exit 0 over a section it never read.
+    body_status=0
+    read_section "$file" "$section" || body_status=$?
+    if [ "$body_status" -ne 0 ]; then
+      err_full "E-SECTION-BODY-SCAN: $label: could not read the body of section '$section' in $file (awk exit $read_section_status)"
+      continue
+    fi
+    # In-memory, and the discard is written out per ADR 0032 decision 2. Unlike protected_shape
+    # this one fails toward a false error rather than a false pass, so it is not captured.
+    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]') || :
     if [ -z "$body" ]; then
       err "E-SECTION-EMPTY: $label: section '$section' is empty — a heading with no content is not a record"
     fi
@@ -363,19 +460,41 @@ present_as_real_file() {
   [ -f "$path" ]
 }
 
-# Tracked in the index. Checked alongside the filesystem because the two can disagree,
-# and each gap is a way to lose a record: one removed from git but left on disk as an
-# untracked file passes a filesystem test while being gone from the repository, and one
-# deleted from the working tree passes a git test while being gone from the checkout.
-# The index rather than HEAD, so a staged deletion is caught before it is committed.
+# Tracked in the index: 0 tracked, 1 not tracked, 2 the query could not run. Checked alongside
+# the filesystem because the two can disagree, and each gap is a way to lose a record: one
+# removed from git but left on disk as an untracked file passes a filesystem test while being
+# gone from the repository, and one deleted from the working tree passes a git test while being
+# gone from the checkout. The index rather than HEAD, so a staged deletion is caught before it
+# is committed.
+#
+# `git ls-files --error-unmatch` exits 1 for an untracked or absent path and 128 for a real
+# fault, so unlike `git cat-file` it separates the two on its own and needs no second witness
+# (ADR 0005 decision 2). Discarding that status made every caller read a damaged index as an
+# untracked path, which is the passing half of each caller's question.
+#
+# git's status is left in tracked_in_index_status for the callers' diagnostics, for the reason
+# path_exists_at leaves its own there: this predicate's 2 is a sentinel, and reporting it would
+# name a status git never returned.
+tracked_in_index_status=0
 tracked_in_index() {
-  local path=$1
-  git ls-files --error-unmatch -- "$path" >/dev/null 2>&1
+  local path=$1 status=0
+  tracked_in_index_status=0
+  git ls-files --error-unmatch -- "$path" >/dev/null 2>&1 || status=$?
+  case $status in
+  0) return 0 ;;
+  1) return 1 ;;
+  esac
+  tracked_in_index_status=$status
+  return 2
 }
 
+# Three-valued like tracked_in_index, which it delegates its second half to. The filesystem test
+# stays two-valued: `[ -f ]` reports no reason, so only the index query contributes a fault.
 still_a_record() {
-  local path=$1
-  present_as_real_file "$path" && tracked_in_index "$path"
+  local path=$1 status=0
+  present_as_real_file "$path" || return 1
+  tracked_in_index "$path" || status=$?
+  return "$status"
 }
 
 # A record whose path is gone may have been renumbered rather than erased. Accept it when its
@@ -392,19 +511,45 @@ still_a_record() {
 #
 # Assigns `renumbered_to` and reserves that destination in `used_renumber_targets`. Both come
 # from check_no_disappearances through bash's dynamic scoping, so a candidate can excuse only
-# one vanished base path. A temp-file failure returns 1 and lets E-GONE speak instead.
+# one vanished base path. A temp-file failure returns 1 and lets E-GONE speak instead: the record
+# is gone from its path either way, and that much the gate did establish — unlike an unreadable
+# base copy, a faulted candidate witness, or a candidate the index could not be read for, all
+# three of which return 2 and replace E-GONE with the fault.
 #
 # Candidates come from `records`, which collect_records builds only after reporting
 # E-RECORD-SYMLINK and skipping every symlink, so no candidate can be a link. A `[ ! -L ]` test
 # here would be a guard that cannot fire — a false guarantee, by the same argument date_to_int
 # makes about its own missing invalid-input branch.
+# What could not be scanned, for the caller's diagnostic. The three origins reach the caller
+# through one status, so without this the message could name only the vanished record — which is
+# the one file that was read successfully — and the status alone is unattributable, since the
+# three come from three different git commands. Phrased as the thing that could not be read
+# rather than as a bare path, the way gate_witness_path already is.
+renumber_fault_path=""
 renumbered_elsewhere() {
-  local base=$1 path=$2 blob_canon candidate tmp cand_status fault_status=0
+  local base=$1 path=$2 blob_canon candidate tmp cand_status blob_status=0 fault_status=0 fault_path=""
+  renumber_fault_path=""
   tmp=$(mktemp) || return 1
-  if ! git cat-file blob "${base}:${path}" >"$tmp" 2>/dev/null; then
+  read_base_blob "$base" "$path" "$tmp" || blob_status=$?
+  case $blob_status in
+  0) ;;
+  1)
     rm -f "$tmp"
     return 1
-  fi
+    ;;
+  # Whether the record moved is exactly what an unreadable base copy leaves undetermined, so
+  # returning 1 reported E-GONE off a search that never ran. The status travels in
+  # path_exists_status because that is the variable the caller's diagnostic reads; this fault,
+  # a candidate witness's, and a candidate index query's all reach the caller through it —
+  # which is why renumber_fault_path names what each one was reading, the way gate_witness_path
+  # does for the gate-existence witness.
+  *)
+    rm -f "$tmp"
+    path_exists_status=$base_blob_status
+    renumber_fault_path="the base-ref copy of $path"
+    return 2
+    ;;
+  esac
   blob_canon=$(canonicalise "$tmp")
   rm -f "$tmp"
   [ -n "$records" ] || return 1
@@ -412,7 +557,20 @@ renumbered_elsewhere() {
   while IFS= read -r candidate; do
     [ -n "$candidate" ] || continue
     [ -f "$candidate" ] || continue
-    tracked_in_index "$candidate" || continue
+    # An untracked candidate is not a destination. `tracked_in_index ... || continue` used to
+    # drop a faulted one the same way, so a damaged index removed the real destination from the
+    # search and the record below then reported E-GONE.
+    cand_status=0
+    tracked_in_index "$candidate" || cand_status=$?
+    case $cand_status in
+    0) ;;
+    1) continue ;;
+    *)
+      fault_status=$tracked_in_index_status
+      fault_path="the index entry for $candidate"
+      continue
+      ;;
+    esac
     # A candidate that already existed at the base ref is not a renumber destination. The
     # witness can also fail to run, which used to read the same as "did not exist" and so
     # let a faulted scan promote a candidate silently.
@@ -423,6 +581,7 @@ renumbered_elsewhere() {
     1) ;;
     *)
       fault_status=$path_exists_status
+      fault_path="$candidate at the base ref"
       continue
       ;;
     esac
@@ -445,17 +604,39 @@ $candidate"
   # unreliable by an unrelated candidate's scan failing.
   if [ "$fault_status" -ne 0 ]; then
     path_exists_status=$fault_status
+    renumber_fault_path=$fault_path
     return 2
   fi
   return 1
 }
 
+# The record listing at a ref, in records_in_ref_out, with git's real status in
+# records_in_ref_status: 0 the listing is in the global, 2 the read could not run.
+#
+# The listing comes back in a global rather than on stdout for read_section's reason, and this
+# function is where that reason was learned twice. Returning the payload on stdout forces every
+# caller into `$( )`, which runs the function in a subshell — so the assignment to
+# records_in_ref_status landed in a discarded child and the caller read the file-scope 0,
+# printing "git exit 0" inside a message saying the read failed. `path_exists_at`'s pattern
+# works only because it writes nothing to stdout and so is never called in `$( )`.
+records_in_ref_out=""
+records_in_ref_status=0
 records_in_ref() {
-  local ref=$1 raw
+  local ref=$1 raw status=0
+  records_in_ref_out=""
+  records_in_ref_status=0
   # The checker's coded ::error:: lines are its interface; a bare `fatal:` from git is not,
   # so a bad ref's stderr is suppressed here rather than at each call site.
-  raw=$(git ls-tree -r --name-only "$ref" -- "$RECORD_DIR" 2>/dev/null) || return 1
-  printf '%s' "$raw" | grep -E "$RECORD_RE" || true
+  raw=$(git ls-tree -r --name-only "$ref" -- "$RECORD_DIR" 2>/dev/null) || status=$?
+  if [ "$status" -ne 0 ]; then
+    records_in_ref_status=$status
+    return 2
+  fi
+  # `printf` over a shell variable, which ADR 0005 decision 1 places outside the scan rule and
+  # ADR 0032 decision 4 confirms does not convert: grep's exit 1 here means the ref simply held
+  # no records. The discard is written out per decision 2.
+  records_in_ref_out=$(printf '%s' "$raw" | grep -E "$RECORD_RE") || :
+  return 0
 }
 
 # Heading lines are the one region section_body skips outright — it matches a heading only to
@@ -496,9 +677,48 @@ check_headings_intact() {
 
 # The lines between the H1 and the first `## ` belong to no section at all, so section_body
 # never reaches them either — it is where a pre-template record keeps its metadata bullets.
+#
+# Both sides go to temp files rather than into `diff <(preamble …)`. A reader inside a process
+# substitution has no way to report — ADR 0005 — and an awk that could not open the file used to
+# yield an empty side, which diff then read as every line removed or none, depending on which
+# side faulted. Temp files rather than captured strings because `$( )` strips trailing newlines
+# and diff counts them; ADR 0032 records why the printf repairs do not work.
 check_preamble_intact() {
-  local tmp=$1 path=$2 removed
-  removed=$(diff <(preamble "$tmp") <(preamble "$path") | grep -c '^<' || true)
+  local tmp=$1 path=$2 removed base_pre tree_pre read_status=0 diff_out diff_status=0
+  base_pre=$(mktemp) || {
+    err_full "E-TMPFILE: $path: cannot create a temp file to compare the preamble"
+    return 0
+  }
+  tree_pre=$(mktemp) || {
+    rm -f "$base_pre"
+    err_full "E-TMPFILE: $path: cannot create a temp file to compare the preamble"
+    return 0
+  }
+
+  preamble "$tmp" >"$base_pre" || read_status=$?
+  if [ "$read_status" -eq 0 ]; then
+    preamble "$path" >"$tree_pre" || read_status=$?
+  fi
+  if [ "$read_status" -ne 0 ]; then
+    rm -f "$base_pre" "$tree_pre"
+    err_full "E-PREAMBLE-DIFF-SCAN: $path: could not read the preamble of it or of the base ref's copy, so the rule did not run (awk exit $read_status)"
+    return 0
+  fi
+
+  # diff exits 0 for identical, 1 for differing, 2 or more for trouble. Only the third is a
+  # fault, which is why this is the one captured status compared against 2 rather than switched
+  # three ways.
+  diff_out=$(diff "$base_pre" "$tree_pre") || diff_status=$?
+  rm -f "$base_pre" "$tree_pre"
+  if [ "$diff_status" -ge 2 ]; then
+    err_full "E-PREAMBLE-DIFF-SCAN: $path: could not compare the preamble against the base ref's copy (diff exit $diff_status)"
+    return 0
+  fi
+
+  # In-memory, so ADR 0005 decision 1 exempts it and ADR 0032 decision 2 requires the discard be
+  # written here rather than left to the caller's ambient `set -e` suppression. grep -c prints 0
+  # and exits 1 when nothing matched, which is the ordinary "nothing was removed" answer.
+  removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
   if [ "$removed" -gt 0 ]; then
     err_full "E-PREAMBLE-REWRITTEN: $path drops $removed line(s) between the title and the first section that the base ref had"
   fi
@@ -515,6 +735,7 @@ check_preamble_intact() {
 # forbid exactly the edit the format permits.
 check_sections_append_only() {
   local tmp=$1 path=$2 section removed list_status=0 all_sections
+  local base_sec tree_sec read_status diff_out diff_status
   # "*" means every level-2 heading the base ref had except ## Status. Level 2 only, matching
   # section_body's `^## ` terminator: a deeper heading is body content inside its enclosing
   # section, and enumerating one as a section of its own would produce overlapping bodies and
@@ -522,8 +743,9 @@ check_sections_append_only() {
   local sections=$APPEND_ONLY_SECTIONS
   if [ "$sections" = "*" ]; then
     # Split from the filter below: only this grep reads a file and can fault on one. The
-    # `grep -vxF` that follows reads what this produced, where exit 1 just means every section
-    # was `## Status` -- a pipeline whose stages need telling apart, tracked on #63.
+    # `grep -vxF` that follows reads what this produced, so ADR 0005 decision 1 exempts it and
+    # ADR 0032 decision 4 confirms it does not convert -- its exit 1 just means every section
+    # was `## Status`.
     all_sections=$(grep -E '^## ' "$tmp") || list_status=$?
     case $list_status in
     0 | 1) ;;
@@ -532,12 +754,44 @@ check_sections_append_only() {
       return 0
       ;;
     esac
-    sections=$(printf '%s\n' "$all_sections" | grep -vxF '## Status') || true
+    sections=$(printf '%s\n' "$all_sections" | grep -vxF '## Status') || :
   fi
 
   while IFS= read -r section; do
     [ -n "$section" ] || continue
-    removed=$(diff <(section_body "$tmp" "$section") <(section_body "$path" "$section") | grep -c '^<' || true)
+    # Same shape as check_preamble_intact, and temp files for the same two reasons: a reader in
+    # a process substitution cannot report, and diff counts the trailing newlines string capture
+    # would drop. Both files are removed on every path out of the iteration.
+    base_sec=$(mktemp) || {
+      err_full "E-TMPFILE: $path: cannot create a temp file to compare '$section'"
+      continue
+    }
+    tree_sec=$(mktemp) || {
+      rm -f "$base_sec"
+      err_full "E-TMPFILE: $path: cannot create a temp file to compare '$section'"
+      continue
+    }
+
+    read_status=0
+    section_body "$tmp" "$section" >"$base_sec" || read_status=$?
+    if [ "$read_status" -eq 0 ]; then
+      section_body "$path" "$section" >"$tree_sec" || read_status=$?
+    fi
+    if [ "$read_status" -ne 0 ]; then
+      rm -f "$base_sec" "$tree_sec"
+      err_full "E-APPEND-DIFF-SCAN: $path: could not read '$section' from it or from the base ref's copy, so the rule did not run for that section (awk exit $read_status)"
+      continue
+    fi
+
+    diff_status=0
+    diff_out=$(diff "$base_sec" "$tree_sec") || diff_status=$?
+    rm -f "$base_sec" "$tree_sec"
+    if [ "$diff_status" -ge 2 ]; then
+      err_full "E-APPEND-DIFF-SCAN: $path: could not compare '$section' against the base ref's copy (diff exit $diff_status)"
+      continue
+    fi
+
+    removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
     if [ "$removed" -gt 0 ]; then
       err_full "E-REWRITE: $path drops $removed line(s) from '$section' that the base ref had — a merged record is append-only there; resolve it with a banner rather than rewriting it"
     fi
@@ -545,18 +799,58 @@ check_sections_append_only() {
 }
 
 check_not_rewritten() {
-  local base=$1 path=$2 blob tmp
-  blob=$(git cat-file blob "${base}:${path}" 2>/dev/null) || return 0
-  tmp=$(mktemp) || return 0
-  printf '%s\n' "$blob" >"$tmp"
+  local base=$1 path=$2 tmp blob_status=0 marker_status
+  # Returning 0 here exempted the record from all three rules below with no diagnostic at all,
+  # so a run over an unusable temp directory reported every record as unrewritten. Its own code
+  # rather than evaluate_base_conformance's E-TMPFILE: that one also fires over every record,
+  # so a reader — and the suite, which asserts on the code — cannot tell from an E-TMPFILE alone
+  # whether the anti-erasure rules ran. err_full for the same reason the branch below uses it:
+  # these three rules describe a change, not a record, and are never downgradable.
+  if ! tmp=$(mktemp); then
+    err_full "E-REWRITE-TMPFILE: $path: cannot create a temp file, so the append-only rules did not run"
+    return 0
+  fi
+  read_base_blob "$base" "$path" "$tmp" || blob_status=$?
+  case $blob_status in
+  0) ;;
+  # Absent at the base ref: there is nothing for the three rules below to compare against, and
+  # they are each defined against a base-ref copy. The sole caller iterates the base ref's own
+  # record listing, so this branch is not reached in practice — it is here because the answer
+  # belongs to the predicate, not because a base record can vanish between two git queries.
+  1)
+    rm -f "$tmp"
+    return 0
+    ;;
+  # Present but unreadable. Returning 0 here exempted the record from check_sections_append_only,
+  # check_headings_intact and check_preamble_intact — every anti-erasure rule off at once,
+  # granted by a read that never completed, on a run that then exited 0.
+  *)
+    rm -f "$tmp"
+    err_full "E-BASE-BLOB-SCAN: $path: could not read the base ref's copy at $base, so the append-only rules did not run (exit $base_blob_status)"
+    return 0
+    ;;
+  esac
 
   # The one permitted class of edit to a merged record's protected regions. Checked before
   # any of the three rules rather than inside each, so all three answer to one predicate and
   # a change is either marker-only or it is not.
-  if marker_only_change "$tmp" "$path"; then
+  marker_status=0
+  marker_only_change "$tmp" "$path" || marker_status=$?
+  case $marker_status in
+  0)
     rm -f "$tmp"
     return 0
-  fi
+    ;;
+  1) ;;
+  # Neither shape could be built, so "is this change marker-only" has no answer. Reporting is
+  # the whole point: the `if marker_only_change` this replaces read a faulted read as "yes,
+  # marker-only" and turned all three anti-erasure rules off at once, silently.
+  *)
+    rm -f "$tmp"
+    err_full "E-MARKER-SHAPE-SCAN: $path: could not canonicalise it or the base ref's copy, so the append-only rules did not run (awk exit $marker_only_status)"
+    return 0
+    ;;
+  esac
 
   check_sections_append_only "$tmp" "$path"
   check_headings_intact "$tmp" "$path"
@@ -584,14 +878,31 @@ check_not_rewritten() {
 base_verdict=absent
 
 evaluate_base_conformance() {
-  local base=$1 path=$2 blob tmp saved_mode
+  local base=$1 path=$2 tmp saved_mode blob_status=0
   base_verdict=absent
-  blob=$(git cat-file blob "${base}:${path}" 2>/dev/null) || return 0
   if ! tmp=$(mktemp); then
     err "E-TMPFILE: cannot create a temp file — cannot determine the base-ref shape of $path"
     return 0
   fi
-  printf '%s\n' "$blob" >"$tmp"
+  read_base_blob "$base" "$path" "$tmp" || blob_status=$?
+  case $blob_status in
+  0) ;;
+  # Absent at the base ref, which is what `absent` means: the record is new, so it is neither
+  # grandfathered nor non-conforming and the tree pass judges it at full severity.
+  1)
+    rm -f "$tmp"
+    return 0
+    ;;
+  # Present but unreadable, which used to reach the same `absent` verdict — a record that could
+  # not be read at the base ref was reported as one that was not there. base_verdict stays
+  # `absent` here too, so the tree pass still runs at full severity: a read that never completed
+  # cannot establish the grandfathering a `nonconforming` verdict would grant.
+  *)
+    rm -f "$tmp"
+    err_full "E-BASE-SHAPE-SCAN: $path: could not read the base ref's copy at $base, so its base-ref shape is undetermined (exit $base_blob_status)"
+    return 0
+    ;;
+  esac
 
   saved_mode=$EMIT_MODE
   EMIT_MODE=collect
@@ -610,30 +921,49 @@ evaluate_base_conformance() {
 }
 
 check_no_disappearances() {
-  local base=$1 tree record renumbered_to="" used_renumber_targets="" renum_status
-  if ! tree=$(records_in_ref "$base"); then
-    err "E-BASE-TREE: could not read $RECORD_DIR at $base — cannot check for removed records"
+  local base=$1 tree record renumbered_to="" used_renumber_targets="" renum_status still_status
+  local tree_status=0
+  records_in_ref "$base" || tree_status=$?
+  if [ "$tree_status" -ne 0 ]; then
+    err "E-BASE-TREE: could not read $RECORD_DIR at $base — cannot check for removed records (git exit $records_in_ref_status)"
     return 0
   fi
+  tree=$records_in_ref_out
 
   while IFS= read -r record; do
     [ -n "$record" ] || continue
     if [ -L "$record" ]; then
       err "E-GONE-SYMLINK: $record was replaced by a symlink — a record is a real file, and a link is not one"
-    elif present_as_real_file "$record" && tracked_in_index "$record"; then
-      check_not_rewritten "$base" "$record"
-    elif ! still_a_record "$record"; then
+      continue
+    fi
+    # One predicate, evaluated once. The two branches used to spell it out separately —
+    # `present_as_real_file && tracked_in_index` against `! still_a_record` — which is the shape
+    # that collapses a three-valued answer, since neither can express the third case.
+    still_status=0
+    still_a_record "$record" || still_status=$?
+    case $still_status in
+    0) check_not_rewritten "$base" "$record" ;;
+    1)
       renumbered_to=""
       renum_status=0
       renumbered_elsewhere "$base" "$record" || renum_status=$?
       case $renum_status in
       0) info "note: $record was renumbered to $renumbered_to (content unchanged)" ;;
       1) err "E-GONE: $record is no longer a record at that path (deleted, moved, untracked, or renamed with its content changed) — resolve records in place with a '> **Resolved by ...**' banner" ;;
-      # Reported instead of E-GONE, never alongside it: a search that did not run establishes
-      # neither that the record moved nor that it is gone.
-      *) err_full "E-RENUMBER-SCAN: $record: could not search for a renumbered copy at $base (git exit $path_exists_status)" ;;
+      # Reported instead of E-GONE, never alongside it: whether the record moved is exactly what
+      # could not be established — by a candidate witness that did not run, by a candidate the
+      # index could not be read for, or by the record's own base-ref copy being unreadable,
+      # which aborts before any candidate is tried. The record stays the subject, because it is
+      # the record the verdict is about; renumber_fault_path names what could not be read, which
+      # is rarely that same file and is read by a different git command in each of the three.
+      *) err_full "E-RENUMBER-SCAN: $record: could not determine whether it was renumbered at $base (could not read $renumber_fault_path, exit $path_exists_status)" ;;
       esac
-    fi
+      ;;
+    # Neither branch above is safe on a record whose index entry could not be read: the first
+    # would run the append-only rules over a record the gate cannot say is still in the
+    # repository, and the second reported E-GONE for one sitting untouched in the tree.
+    *) err_full "E-TRACKED-SCAN: $record: could not read the index entry for it, so the append-only rules did not run (git exit $tracked_in_index_status)" ;;
+    esac
   done <<<"$tree"
 }
 
@@ -806,7 +1136,7 @@ gate_existed_at() {
 # profile — a repo with more than one profile would otherwise print every gate finding once
 # per profile in RECORD_PROFILES.
 check_gate_files() {
-  local base=$1 self successor successor_path gate_path_count=0 self_status
+  local base=$1 self successor successor_path gate_path_count=0 self_status still_status succ_status
   while IFS= read -r self; do
     [ -n "$self" ] || continue
     self_status=0
@@ -826,17 +1156,37 @@ check_gate_files() {
     gate_path_count=$((gate_path_count + 1))
     if [ -L "$self" ]; then
       err "E-GATE-SYMLINK: $self is a symlink — a gate file swapped for a link no longer contains the gate"
-    elif ! still_a_record "$self"; then
-      successor=$(predecessor_successor "$self") || successor=""
-      successor_path=""
-      [ -n "$successor" ] && successor_path=$(gate_predecessor_path "$successor")
-      if [ -n "$successor_path" ] && [ -f "$successor_path" ] && [ ! -L "$successor_path" ] &&
-        tracked_in_index "$successor_path"; then
-        info "note: $self was renamed to $successor_path"
-      else
-        err "E-GATE-GONE: $self was deleted or untracked — the gate cannot be removed by the change it gates"
-      fi
+      continue
     fi
+    still_status=0
+    still_a_record "$self" || still_status=$?
+    case $still_status in
+    0) continue ;;
+    1) ;;
+    # E-GATE-GONE accuses the change of removing a gate file. An index the gate could not read
+    # cannot support that accusation about a file that is sitting right there.
+    *)
+      err_full "E-GATE-TRACKED-SCAN: $self: could not read the index entry for the gate file (git exit $tracked_in_index_status)"
+      continue
+      ;;
+    esac
+
+    successor=$(predecessor_successor "$self") || successor=""
+    successor_path=""
+    [ -n "$successor" ] && successor_path=$(gate_predecessor_path "$successor")
+    # The exemption turns on the successor really being tracked, so the whole test is folded
+    # into one three-valued status: no declared successor and an untracked one are both the
+    # ordinary negative, and only an index query that could not run is the third case.
+    succ_status=1
+    if [ -n "$successor_path" ] && [ -f "$successor_path" ] && [ ! -L "$successor_path" ]; then
+      succ_status=0
+      tracked_in_index "$successor_path" || succ_status=$?
+    fi
+    case $succ_status in
+    0) info "note: $self was renamed to $successor_path" ;;
+    1) err "E-GATE-GONE: $self was deleted or untracked — the gate cannot be removed by the change it gates" ;;
+    *) err_full "E-GATE-SUCCESSOR-SCAN: $successor_path: could not read the index entry for $self's declared successor, so the rename is unverified (git exit $tracked_in_index_status)" ;;
+    esac
   done < <(gate_paths "$base" | sort -u)
 
   # An empty protected set means self-protection is off. That is the correct state for the
@@ -977,10 +1327,18 @@ gate_paths() {
   done | sort -u
 }
 
+# `git rev-parse --show-toplevel` exits non-zero for more than "you are not inside a git
+# repository": dubious ownership under a bind mount or a container UID mismatch, an unreadable
+# or damaged .git, an unreadable parent directory. E-NOT-REPO named the first of those and
+# `2>/dev/null` threw away git's own line — which for dubious ownership carries the exact
+# `git config --global --add safe.directory <path>` remedy, the only line that gets the
+# operator moving. Report what the probe established instead, as ADR 0005 decision 1 asks: the
+# command that ran and the status it returned, with git's line left standing in front of it.
 require_repo_root() {
-  local root
-  if ! root=$(git rev-parse --show-toplevel 2>/dev/null); then
-    err "E-NOT-REPO: not inside a git repository — run this from the repository root"
+  local root root_status=0
+  root=$(git rev-parse --show-toplevel) || root_status=$?
+  if [ "$root_status" -ne 0 ]; then
+    err "E-ROOT-UNRESOLVED: could not resolve the repository root (git rev-parse --show-toplevel exit $root_status)"
     return 1
   fi
   cd "$root"
@@ -1076,6 +1434,44 @@ path_exists_at() {
   return 0
 }
 
+# The base ref's copy of one record, written to `dest`. Three-valued like path_exists_at, which
+# it delegates the first half to: 0 the copy is in `dest`, 1 the path is absent from the base
+# ref, 2 the read could not run.
+#
+# The split is the whole point. `git cat-file blob` exits 128 both for a path absent from a valid
+# ref and for a bad or damaged one, so on its own it cannot say which happened — and absence is
+# the ordinary case, since a record the change adds has no base copy at all. Every caller below
+# therefore used to read an unreadable blob as an absent one and skip its rule. Presence is
+# witnessed with `git ls-tree` first (ADR 0005 decision 2) and a read that fails for a path git
+# has just listed is a fault, not an absence.
+#
+# The failing status is left in base_blob_status for the caller's diagnostic, for the reason
+# path_exists_at leaves its own there: this predicate's 2 is a sentinel, and reporting it would
+# name a status nothing returned. The callers' messages say `exit N` rather than `git exit N`,
+# because a redirection that fails on a full temp directory yields bash's status, not git's.
+base_blob_status=0
+read_base_blob() {
+  local base=$1 path=$2 dest=$3 status=0
+  base_blob_status=0
+  path_exists_at "$base" "$path" || status=$?
+  case $status in
+  0) ;;
+  1) return 1 ;;
+  *)
+    base_blob_status=$path_exists_status
+    return 2
+    ;;
+  esac
+
+  status=0
+  git cat-file blob "${base}:${path}" >"$dest" 2>/dev/null || status=$?
+  if [ "$status" -ne 0 ]; then
+    base_blob_status=$status
+    return 2
+  fi
+  return 0
+}
+
 # Whether the directory existed at the base ref. An absent-from-both-refs directory is a
 # misconfiguration; one that existed at base and is gone now is erasure, and must keep
 # reporting E-GONE per record — `no_dir` deletes docs/debt wholesale and asserts exactly that.
@@ -1108,7 +1504,7 @@ run_profile() {
   local name=$1
   load_profile "$name" || return 1
 
-  local records="" record_count base_records="" base_count dir_status=0
+  local records="" record_count base_records="" base_count dir_status=0 list_status
   # `if ! dir_in_ref` would collapse "absent at base" and "could not tell" into one branch,
   # which is the defect this rule was converted to remove. Branch on the captured status.
   if [ ! -d "$RECORD_DIR" ]; then
@@ -1137,10 +1533,20 @@ run_profile() {
   # under E-BASE-TREE instead of just E-BASE-REF, once per profile.
   if [ -n "${BASE_SHA:-}" ] && [ "$base_valid" -eq 1 ]; then
     check_no_disappearances "${BASE_SHA}"
-    base_records=$(records_in_ref "${BASE_SHA}" || true)
-    base_count=$(count_lines "$base_records")
-    if [ "$base_count" -gt 0 ] && [ "$record_count" -eq 0 ]; then
-      err "E-COUNT-FLOOR: $BASE_SHA held $base_count $RECORD_LABEL record(s) but none are readable now — refusing to report a clean run over nothing"
+    # `|| true` here discarded the fault records_in_ref raises when its `git ls-tree` faults on
+    # the base ref. The list came back empty, base_count was 0, and E-COUNT-FLOOR — the rule
+    # that exists to refuse a clean run over nothing — was disarmed by a read that never
+    # completed. ADR 0005 named this site and assigned it to #63.
+    list_status=0
+    records_in_ref "${BASE_SHA}" || list_status=$?
+    base_records=$records_in_ref_out
+    if [ "$list_status" -ne 0 ]; then
+      err_full "E-BASE-LIST-SCAN: $BASE_SHA: could not list the $RECORD_LABEL records at the base ref, so E-COUNT-FLOOR did not run (git exit $records_in_ref_status)"
+    else
+      base_count=$(count_lines "$base_records")
+      if [ "$base_count" -gt 0 ] && [ "$record_count" -eq 0 ]; then
+        err "E-COUNT-FLOOR: $BASE_SHA held $base_count $RECORD_LABEL record(s) but none are readable now — refusing to report a clean run over nothing"
+      fi
     fi
   fi
 
@@ -1181,7 +1587,7 @@ run_profile() {
 # The order is load-bearing: `outside_tree` copies the engine (with its profiles sibling)
 # outside this repository and still asserts E-GATE-UNLOCATABLE, which it reaches only
 # because the gate check runs before profile resolution, not because of any unknown-profile
-# interaction; `not_a_repo` requires E-NOT-REPO to win.
+# interaction; `not_a_repo` requires E-ROOT-UNRESOLVED to win.
 #
 # Without a base ref there is nothing to compare against, so the base-ref and gate phases do
 # not apply — exactly as today, where they live inside a function that only runs when BASE_SHA

@@ -16,7 +16,7 @@ fixture_init test-fixture-helpers-test
 # Every assertion below reports through abort rather than the sourced fail,
 # because fail is one of the things under test. Discharging these assertions
 # through it would mean a fail that stopped exiting could not be caught here --
-# and fail is now the assertion primitive of five other gate suites.
+# and fail is now the assertion primitive of nine other suites.
 abort() {
 	printf 'test-fixture-helpers-test: %s\n' "$*" >&2
 	exit 1
@@ -217,5 +217,116 @@ grep -qF 'git reported no local env vars' "$SCRATCH/child.out" ||
 	abort "expected a diagnostic, got: $(cat "$SCRATCH/child.out")"
 ! grep -qF reached "$SCRATCH/child.out" ||
 	abort 'clear_git_env returned having cleared nothing'
+
+# The `-f` on the cleanup `rm`. A git fixture holds mode-444 loose objects, and
+# without `-f` rm asks to override each one whenever it has a terminal, so the
+# trap fails and the suite reddens for a developer running it by hand while
+# passing under `just verify`. run_child cannot reach this: it closes stdin
+# deliberately, and with stdin closed rm removes an unwritable file without
+# asking, so the case would pass with or without the flag. Hence the pty.
+#
+# script(1) has two incompatible argument orders and neither host is guaranteed
+# to have it, so probe and skip loudly rather than redden somewhere it is
+# missing. The probe turns on a marker the probed command writes, never on an
+# exit status: util-linux before 2.39 takes the first positional as its
+# typescript file and silently discards the rest, so the BSD form there runs an
+# interactive shell instead of the command and still exits 0. Classifying on
+# that status would redden every such host -- Ubuntu 22.04, Debian 12, RHEL 9 --
+# with a message naming a cleanup defect that does not exist.
+#
+# The util-linux form is tried first for the same reason. It is the one whose
+# misfire is harmless: macOS script has no -c and exits on the unknown option
+# without spawning anything, whereas the BSD form's misfire is the interactive
+# shell above, which a login file setting `ignoreeof` turns into a hang.
+#
+# Every script(1) call closes its own stdin. script forwards its stdin to the
+# pty it allocates, so the child still sees a terminal and the case still bites;
+# what closing prevents is script draining whatever the caller happens to have
+# open on fd 0. The probe cannot know what that is, so it cannot rely on the
+# caller to keep it clear -- closing here is the only way to guarantee the
+# caller's stream survives the call, whoever the caller turns out to be.
+#
+# `just test` is the caller this once guarded against: the recipe runs each
+# discovered suite from inside a `while read` loop over the suite list, and an
+# unclosed script(1) call here would drain whatever of that list the loop
+# still had queued. The recipe closes that route itself now -- each suite's
+# own stdin is closed at the call site (`"./$suite" </dev/null` in the
+# Justfile) -- but the closing above does not depend on it and holds
+# regardless of what the next caller's stdin turns out to be.
+pty_marker=$SCRATCH/pty-probe-marker
+pty_probe=$SCRATCH/pty-probe.sh
+cat >"$pty_probe" <<PROBE
+#!/usr/bin/env bash
+: >$(q "$pty_marker")
+PROBE
+chmod +x "$pty_probe"
+
+pty_style=none
+# util-linux re-parses this argument through \$SHELL -c, so the path is quoted
+# for that shell the way every other generated path in this file is.
+script -q -c "$(q "$pty_probe")" /dev/null >/dev/null 2>&1 </dev/null || :
+if [ -e "$pty_marker" ]; then
+	pty_style=util-linux
+else
+	script -q /dev/null "$pty_probe" >/dev/null 2>&1 </dev/null || :
+	if [ -e "$pty_marker" ]; then
+		pty_style=bsd
+	fi
+fi
+
+if [ "$pty_style" != none ]; then
+	pty_child=$SCRATCH/pty-child.sh
+	{
+		printf '#!/usr/bin/env bash\nset -euo pipefail\n'
+		printf '. %q\n' "$helper"
+		cat <<CHILD
+fixture_init sample
+printf '%s\n' "\$SCRATCH" >$(q "$SCRATCH/pty-path")
+mkdir "\$SCRATCH/objects"
+printf 'object\n' >"\$SCRATCH/objects/loose"
+chmod 444 "\$SCRATCH/objects/loose"
+CHILD
+	} >"$pty_child"
+
+	# The child's own exit status is what this case turns on, and script(1)
+	# reports it only on util-linux and only with -e. A wrapper that records it
+	# needs neither flag nor version, and reports through the same marker-file
+	# evidence the probe above relies on.
+	pty_wrapper=$SCRATCH/pty-wrapper.sh
+	cat >"$pty_wrapper" <<WRAPPER
+#!/usr/bin/env bash
+TMPDIR=$(q "$child_tmp") bash $(q "$pty_child") >$(q "$SCRATCH/pty-child.out") 2>&1
+printf '%s\n' "\$?" >$(q "$SCRATCH/pty-status")
+WRAPPER
+	chmod +x "$pty_wrapper"
+
+	case $pty_style in
+	bsd) script -q /dev/null "$pty_wrapper" >/dev/null 2>&1 </dev/null || : ;;
+	util-linux)
+		script -q -c "$(q "$pty_wrapper")" /dev/null >/dev/null 2>&1 </dev/null || :
+		;;
+	esac
+
+	[ -s "$SCRATCH/pty-status" ] ||
+		abort 'the child under a terminal never reported its status'
+	# The wrapper writes pty-status unconditionally, so a status alone does not
+	# prove the child reached fixture_init. Without this the `cat` below fails
+	# under `set -e` and the suite dies unlabelled, naming no case.
+	[ -f "$SCRATCH/pty-path" ] ||
+		abort "the child under a terminal never reported its scratch directory: $(cat "$SCRATCH/pty-child.out")"
+	pty_path=$(cat "$SCRATCH/pty-path")
+	case $pty_path in
+	"$child_tmp"/sample.*) : ;;
+	*) abort "child did not report its scratch directory: $pty_path" ;;
+	esac
+	[ "$(cat "$SCRATCH/pty-status")" -eq 0 ] ||
+		abort "a read-only fixture should not redden a suite run from a terminal: $(cat "$SCRATCH/pty-child.out")"
+	[ ! -e "$pty_path" ] ||
+		abort "cleanup under a terminal stranded the read-only fixture at $pty_path"
+else
+	printf 'test-fixture-helpers-test: SKIP terminal-cleanup case: no usable\n'
+	printf 'test-fixture-helpers-test: script(1) on this host, so a pty could not\n'
+	printf 'test-fixture-helpers-test: be allocated. This run did not check it.\n'
+fi
 
 printf 'test-fixture-helpers-test: ok\n'

@@ -13,14 +13,14 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=SCRIPTDIR/../../../scripts/test-fixture-helpers.sh
+. "$SCRIPT_DIR/../../../scripts/test-fixture-helpers.sh"
+
 # Hooks export repository-local Git variables that override `git -C`. Clear
 # Git's complete reported set before any fixture repository is discovered.
-while IFS= read -r variable; do
-	[ -n "$variable" ] || continue
-	unset "$variable"
-done < <(git rev-parse --local-env-vars)
+clear_git_env
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # The suite lives in tests/fixtures/ so it is excluded from the installed
 # payload; the script it exercises ships under skills/.
 SCRIPT="$SCRIPT_DIR/../../../skills/forge/scripts/task-brief"
@@ -28,14 +28,15 @@ WORKSPACE="$SCRIPT_DIR/../../../skills/forge/scripts/sdd-workspace"
 
 passed=0
 failed=0
-workdir=$(mktemp -d "${TMPDIR:-/tmp}/task-brief-test.XXXXXX")
-trap 'rm -rf "$workdir"' EXIT
+fixture_init task-brief-test
 
 ok() {
 	passed=$((passed + 1))
 	printf '  ok   %s\n' "$1"
 }
 
+# Shadows the helper's fail deliberately: this suite reports every case and
+# totals at the end rather than exiting on the first failure.
 fail() {
 	failed=$((failed + 1))
 	printf '  FAIL %s: %s\n' "$1" "$2"
@@ -50,7 +51,7 @@ fail() {
 # equal what the script prints.
 new_repo() {
 	local dir
-	dir=$(cd "$(mktemp -d "$workdir/repo.XXXXXX")" && pwd -P)
+	dir=$(cd "$(mktemp -d "$SCRATCH/repo.XXXXXX")" && pwd -P)
 	git -C "$dir" init -q
 	git -C "$dir" config user.email test@example.com
 	git -C "$dir" config user.name 'Test'
@@ -305,6 +306,33 @@ case_not_found_leaves_empty_outfile() {
 	ok "$name"
 }
 
+# task-brief already fails closed on an unwritable destination -- the awk
+# redirect's failure trips `set -e` and the script exits 1 -- but nothing
+# pinned that, so a sibling rewrite could have silently changed it. This is
+# the same case review-package's suite gained when its write stopped being
+# checked: exit 1, stderr only, no success line.
+case_unwritable_destination() {
+	local name='an unwritable destination exits nonzero'
+	local repo dir
+	repo=$(new_repo)
+	# chmod 555 does not stop root, so there the denial cannot be produced and
+	# the case would prove nothing; skip it the way tracker-test does.
+	if [[ $(id -u) -eq 0 ]]; then
+		printf 'task-brief-test: skip unwritable destination; running as root, which chmod 555 does not deny\n'
+		return
+	fi
+	fixture_scratch task-brief-locked
+	dir="$FIXTURE_SCRATCH/locked"
+	mkdir "$dir"
+	chmod 555 "$dir"
+	write_plan "$repo/plan.md"
+	# The if, not `&&`, so a red run keeps the suite's report-everything shape.
+	if expect_error "$name" "$repo" 1 plan.md 1 "$dir/out.md"; then
+		ok "$name"
+	fi
+	chmod 755 "$dir"
+}
+
 printf 'task-brief\n\n'
 case_writes_named_outfile
 case_default_path_uses_workspace
@@ -318,6 +346,7 @@ case_too_many_arguments
 case_missing_plan_file
 case_task_not_found
 case_not_found_leaves_empty_outfile
+case_unwritable_destination
 
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

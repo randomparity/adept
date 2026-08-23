@@ -2,8 +2,8 @@
 
 One page of "which skill do I run." Full detail lives in each skill's
 `SKILL.md`; this is the printable summary. Invoke a skill by typing its slash
-command (`/quest 42`) or asking for it by name — the skill descriptions below
-are what the harness matches against.
+command (`/quest 42`) in Claude Code or (`$quest 42`) in Codex, or asking for
+it by name — the skill descriptions below are what the harness matches against.
 
 ## Start here
 
@@ -20,6 +20,7 @@ are what the harness matches against.
 | Something broke and I don't know why yet | `/detect-curse` |
 | A PR is ready to become mergeable | `/deliver` |
 | A PR is green and ready to merge | `/return-to-town` |
+| A merged PR turned out bad | `/counterspell` |
 | Dependabot has PRs open | `/restock` |
 | Merged branches are cluttering the worktree | `/clear-map` |
 | It's been a while since the last run — labels may be stale | `/resurrection` |
@@ -83,6 +84,7 @@ read-only step, not a new stage of `/quest` itself.
 | Skill | Does |
 |---|---|
 | `campaign` | Drive a set of issues to done: triage, dependency planning, parallel execution, serial merge |
+| `counterspell` | Reverse a bad merged PR: revert or fix-forward, tracking writes, expedited-but-present review |
 | `resurrection` | Reconcile status labels with actual PR/branch state; reset stale orphaned work |
 | `clear-map` | Delete local branches whose work has landed and remove their worktrees |
 | `restock` | Evaluate open Dependabot PRs against a clean baseline, group and merge safe ones |

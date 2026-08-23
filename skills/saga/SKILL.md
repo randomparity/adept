@@ -48,6 +48,13 @@ loops back to the interview **at most once**, and the re-draft gets exactly one 
 pass — two total. If the second pass still objects fundamentally, surface the
 disagreement and stop.
 
+The gauntlet dispatch is a report wait governed by
+[dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md). Retain the
+worker, wait site, observations, recovery-chain identifier, `unused` or `consumed` replacement
+budget, and draft/findings artifact dispositions for the current run, then include them in the
+challenge summary. If liveness or reconciliation remains unresolved, stop before confirmation or
+tracker writes and report the held chain; silence alone authorizes neither replacement nor cleanup.
+
 ## 6. Dedup + the one confirmation
 
 Run `$bounty`'s step-3 dedup gate — search across **all states**, with its `gh search`

@@ -59,10 +59,14 @@ frames carry no decision value, only the terminal states do.
    a background task and read only its final output. No streaming output enters
    context. Skipped integration jobs that require unavailable hardware or external
    services may be expected; wait on required checks.
-2. If a required check fails, inspect the failure, fix it, run relevant local
-   guardrails, push, and restart the loop. **Never re-run a failed check hoping
-   for green** — see [true-seeing](../../references/true-seeing.md), *Flaky
-   tests*.
+2. If a required check fails, establish its cause before fixing it. Direct correction is allowed
+   only when the current failure artifact or an already-recorded investigation identifies a
+   specific cause and the correction follows from that evidence. Familiarity, a plausible fix, or
+   stale evidence from another failure is not enough. Without current causal evidence, run
+   `$detect-curse`, then apply only the evidence-backed correction, run relevant local guardrails,
+   push, and restart the loop. If the same artifact recurs after the same correction with no new
+   evidence, stop instead of repeating the diagnose-fix cycle. **Never re-run a failed check hoping
+   for green** — see [true-seeing](../../references/true-seeing.md), *Flaky tests*.
 
    That rule bites only where the check is actually nondeterministic: the same
    check passed on an earlier run of this same commit, or passes again with

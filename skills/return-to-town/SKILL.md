@@ -4,8 +4,69 @@ description: "Hand off a green, mergeable pull request or merge it when explicit
 ---
 # Hand Off or Merge, Then Clean Up
 
-When `$deliver`'s exit condition holds — required checks green and the PR is
-mergeable — you are at the hand-off point.
+## Optional restock terminal-unit context
+
+`$restock` may invoke this skill for one dependency pull request with an immutable context:
+
+- `tracking mode: pr-only`;
+- actual pull-request head SHA and evaluated base SHA;
+- guardrail and local-integration evidence for that observed snapshot;
+- the exact unit-owned worktree and temporary ref; and
+- `shared: retain` for the restock clone, run root, ownership manifest, and reports.
+
+Validate every field before mutation. In this mode, include `baseRefOid` and `headRefOid` in the
+entry snapshot. A head mismatch refuses the merge. A base mismatch returns `BASE_CHANGED` without
+merge or cleanup, transferring control back to restock for its bounded fresh evaluation. Local
+integration is advisory evidence for the observed head/base snapshot: GitHub's guarded merge
+atomically protects only the head, so report the residual base-advance race and never claim the
+landed base combination was locally tested.
+
+PR-only tracking uses complete `WORK:TRAJECTORY` blocks on the pull request. Each transition first
+posts and reads back `outcome: pending`, changes and reads back labels, then posts and reads back a
+matching `outcome: applied`. Labels are current state; a pending block without its matching applied
+block is interrupted intent to reconcile. Use the caller's stable run token and include version,
+repository, pull request, observed head, and transition. One retry is permitted only after readback
+shows the intended write is absent.
+
+At entry, resolve the pull request and take one status snapshot before choosing the default
+hand-off or operator-authorized merge path:
+
+```sh
+gh pr view <N> \
+  --json state,mergedAt,mergeable,mergeStateStatus,statusCheckRollup,headRefOid,baseRefOid \
+  --jq '{state, mergedAt, head: .headRefOid, base: .baseRefOid,
+         mergeable, mergeState: .mergeStateStatus,
+         checks: [.statusCheckRollup[] | {name, status, conclusion}]}'
+```
+
+In restock PR-only mode, always compare `head` with `$EXPECTED_HEAD_SHA`. Compare `base` with
+`$EVALUATED_BASE_SHA` only while state is `OPEN` and before merge; a mismatch there returns
+`BASE_CHANGED`. On `MERGED` recovery, base movement is expected historical context. Verify the
+repository, PR, run token, authoritative merged state, and expected head, then repair terminal
+tracking before scoped cleanup without requiring the obsolete pre-merge base SHA.
+
+Interpret `state` before `mergeable` or `mergeStateStatus`:
+
+- `MERGED` is conclusive even when either computed field is `UNKNOWN`. Do not poll those
+  fields and do not repeat the default hand-off. In issue-backed mode, proceed to **Post-merge
+  reconciliation** below. In restock PR-only mode, verify the expected merged head, reconcile only
+  the terminal PR trajectory/status for the supplied run token, then perform or defer only its
+  scoped unit cleanup. Never enter issue closure or cleared-dependent reconciliation.
+- `CLOSED` means closed without merge. Stop without post-merge tracking or cleanup and report
+  that the pull request was closed unmerged.
+- Only `OPEN` continues below. For an open pull request, retain `$deliver`'s exit condition:
+  required checks are green and the pull request is mergeable. Recheck computed fields when
+  needed only on this route.
+
+`MERGED` is conclusive for cleanup and tracking; it is not a quality verdict. When the
+operator reports the merged PR as bad, do not improvise a revert here — invoke
+`$counterspell` with the PR number (ADR 0031) and let it choose the disposition and
+write the tracking state.
+
+A failed snapshot or an unexpected or missing `state` cannot authorize hand-off, merge, or
+cleanup. Stop with the read failure or unexpected value.
+
+When the `OPEN` route satisfies `$deliver`'s exit condition, you are at the hand-off point.
 
 ## Default: hand off, do not self-merge
 
@@ -39,6 +100,13 @@ When you do merge:
   `git bisect` relies on. Use `--rebase` (linear history) or `--merge` unless
   the repo says otherwise. Squash is acceptable only for pure doc/spec
   review-iteration PRs.
+- In restock PR-only mode, pass the actual expected head to GitHub's atomic guard:
+
+  ```sh
+  gh pr merge <N> "$MERGE_FLAG" --match-head-commit "$EXPECTED_HEAD_SHA"
+  ```
+
+  Never pass the synthetic local-integration commit as the pull-request head.
 - When several sibling PRs are in flight, **merge serially**: merge one, then
   for each remaining PR re-check `mergeStateStatus`; if it went
   `BEHIND`/`DIRTY`, merge the updated `BASE_BRANCH` into it — never rebase a
@@ -49,9 +117,21 @@ When you do merge:
   blocker. Never merge an unmergeable PR on the strength of
   previously-green checks.
 
-**Caller contract.** If invoked inside `$quest`, completing the cleanup
-means the issue is done — end your turn with a summary. If running standalone,
-the same applies: once cleanup is verified, report and stop.
+**What the completion report covers.** Merging lands the change; it does not
+establish what the merge triggered. A workflow that runs on `BASE_BRANCH` — a
+publish, a release tag, a deploy — fires *after* the merge, and `$deliver`'s
+green CI ran against the pull request head *before* it, so neither covers it.
+Nothing here reads that run. Report the merge landing, not everything
+downstream of it, and say plainly that the base-branch run the merge triggered
+is unverified, so whoever owns it knows to look. Say it even where the
+repository looks like it publishes nothing — nothing here establishes that it
+does not. See [true-seeing](../../references/true-seeing.md), *Every claim
+needs its own command*.
+
+**Caller contract.** If invoked inside `$quest`, completing the cleanup means
+the issue is done — the change landed, and what the merge triggered on
+`BASE_BRANCH` is not covered. End your turn with a summary. If running
+standalone, the same applies: once cleanup is verified, report and stop.
 
 ## Track state on the operator-merge path (quest-log skill)
 
@@ -61,11 +141,26 @@ operator-merge path only:
 - **Operator-merge path** (you merged, above): if `Closes #N` did not auto-close the issue,
   close it; strip its `status:` labels; post a `WORK:TRAJECTORY` comment on the issue with
   `outcome: merged via PR #N`, guardrail status, and any surprises.
+- **Restock PR-only path:** do not invent or close an issue and do not reconcile cleared
+  dependents. After the guarded merge, complete the pending/applied terminal trajectory on the pull
+  request and remove its `status:` labels. Terminal tracking precedes unit cleanup.
 
-### Release cleared dependents
+  If the merge succeeded but either terminal write still fails after readback and its one bounded
+  retry, re-read the authoritative merged state and expected head. Never retry the merge. Return
+  `MERGED_TRACKING_INCOMPLETE` with the exact missing trajectory or labels and leave the unit
+  worktree/ref untouched. Ownership returns to restock, which retains its manifest and repairs the
+  tracking state on a later run before exact Git-aware unit cleanup.
+
+### Post-merge reconciliation
+
+The operator-path issue writes above run only when this invocation performed the merge. On an
+entry snapshot that was already `MERGED`, do not repeat them; verify the merged issue's current
+closed state, then perform the shared dependent reconciliation below.
+
+#### Release cleared dependents
 
 After verifying the merged issue is closed, run the `quest-log` skill's canonical
-recipe in Bash and call `reconcile_cleared_dependencies apply <owner/name>`. This is the primary
+recipe in Bash: `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name>`. This is the primary
 owner of the cleared-dependency `status:blocked → status:ready` edge. Report every readied
 dependent and every retained dependent with its actionable reason. Do not limit the scan to
 the merged issue's prose or comments: the recipe exhaustively evaluates canonical whole-line
@@ -73,6 +168,11 @@ the merged issue's prose or comments: the recipe exhaustively evaluates canonica
 not prevent other dependents from being evaluated.
 
 ## After a merge (yours or the user's)
+
+In restock PR-only mode, replace this general list with the caller-supplied unit disposition: remove
+only the exact unit worktree and temporary ref, and only after terminal tracking is verified. Honor
+`shared: retain`; never switch or delete the shared clone, run root, manifest, or reports. On
+`MERGED_TRACKING_INCOMPLETE`, perform no unit cleanup.
 
 1. `cd` to the main checkout. If you have been working in an external
    worktree you are standing in the directory step 2 removes, and every

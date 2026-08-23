@@ -36,7 +36,7 @@ jobs:
             eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
             printf '%s\n' "$HOMEBREW_PREFIX/bin" >>"$GITHUB_PATH"
           fi
-          brew install --quiet just shfmt actionlint zizmor prek ripgrep shellcheck jq
+          brew install --quiet just shfmt actionlint zizmor prek ripgrep shellcheck jq zsh
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
@@ -45,12 +45,56 @@ jobs:
       # needs a Claude CLI, and it reads files rather than calling the API.
       #
       # zizmor's adhoc-packages audit wants installs to come from a lockfile.
-      # There is no lockfile for a global CLI, and pinning a version here would
-      # reintroduce the version-bump ritual this repo exists to remove — the
-      # gate's job is to validate the manifests against the harness people
-      # actually run, which is the current one.
-      - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code # zizmor: ignore[adhoc-packages]
+      # There is no lockfile for a global CLI, and the gate's job is to validate
+      # the manifests against the harness people actually run, which is the
+      # current one — a pinned CLI here would validate against a harness nobody
+      # has. The fallback below keeps that property: it installs the newest
+      # release this runner can install, never a version chosen in advance.
+      # The suppression sits on the step rather than beside each `npm install`:
+      # inside a block scalar a `#` is shell text, not a YAML comment, so zizmor
+      # never sees an ignore written there.
+      - name: Install Claude Code CLI # zizmor: ignore[adhoc-packages]
+        run: |
+          # npm skips an optional dependency it cannot resolve rather than
+          # failing, so a partial upstream publish — the wrapper at `latest`
+          # with no matching platform package for this runner — installs
+          # cleanly and leaves no binary behind. Measured 2026-08-20: wrapper
+          # 2.1.237 published while @anthropic-ai/claude-code-linux-x64 stopped
+          # at 2.1.236, so `npm install -g` reported "added 1 package" and every
+          # ubuntu leg then failed in `just plugin-check`, four gates away from
+          # the step that actually broke.
+          npm install -g @anthropic-ai/claude-code
+          if claude --version; then
+            exit 0
+          fi
+          # The wrapper pins its optional dependencies to its own version, so the
+          # newest published platform package names the newest wrapper whose
+          # binary exists for this runner. Only the platforms this matrix runs on
+          # are mapped: a new runner OS or architecture stops here rather than
+          # guessing a package name that would 404 into the same silent skip.
+          case "$(uname -s)" in
+          Linux) os=linux ;;
+          Darwin) os=darwin ;;
+          *)
+            printf 'no platform package mapped for OS %s\n' "$(uname -s)" >&2
+            exit 1
+            ;;
+          esac
+          case "$(uname -m)" in
+          x86_64) arch=x64 ;;
+          arm64 | aarch64) arch=arm64 ;;
+          *)
+            printf 'no platform package mapped for architecture %s\n' "$(uname -m)" >&2
+            exit 1
+            ;;
+          esac
+          version=$(npm view "@anthropic-ai/claude-code-$os-$arch" version)
+          printf 'latest carries no %s-%s binary; falling back to %s\n' "$os" "$arch" "$version"
+          npm install -g "@anthropic-ai/claude-code@$version"
+          # Re-checked rather than assumed. A fallback that resolved to the
+          # version already installed leaves npm's tree satisfied and the binary
+          # still missing, which is a different fault wearing the same symptom.
+          claude --version
       - name: Verify
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}

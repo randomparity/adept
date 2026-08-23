@@ -7,25 +7,28 @@ set -euo pipefail
 unset RIPGREP_CONFIG_PATH
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=SCRIPTDIR/../../../scripts/test-fixture-helpers.sh
+. "$script_dir/../../../scripts/test-fixture-helpers.sh"
 
-fail() {
-	printf 'cleared-dependencies-test: %s\n' "$*" >&2
-	exit 1
-}
-
-tmp_dir=$(mktemp -d)
-trap 'rm -rf "$tmp_dir"' EXIT
+fixture_init cleared-dependencies-test
 # The recipe ships as an asset under skills/; lint and format gates cover it
 # directly now that it is a file rather than a block embedded in SKILL.md.
 # shellcheck source=/dev/null
 source "$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh"
 
-gh_log=$tmp_dir/gh.log
-blocker_log=$tmp_dir/blockers.log
-ready_state=$tmp_dir/ready
+gh_log=$SCRATCH/gh.log
+blocker_log=$SCRATCH/blockers.log
+ready_state=$SCRATCH/ready
 fake_mode=normal
 
 gh() {
+	# gh writes non-fatal material to stderr while exiting 0, and a
+	# release-update notice is the common one. Every mode below can carry it,
+	# because the defect it reproduces is not in any one call: it is in reading a
+	# capture whose stdout is a value with the streams merged.
+	if [[ $fake_mode == chatty ]]; then
+		printf 'A new release of gh is available: 2.63.0 -> 2.65.0\n' >&2
+	fi
 	if [[ $1 == api ]]; then
 		if [[ $fake_mode == api-fail ]]; then
 			printf 'API \033[31mdenied\n' >&2
@@ -139,7 +142,7 @@ fi
 # shellcheck disable=SC2034
 cleared_dependency_max_lookups=500
 
-plan_errors=$tmp_dir/plan-errors
+plan_errors=$SCRATCH/plan-errors
 set +e
 plan_output=$(reconcile_cleared_dependencies plan owner/repo 2>"$plan_errors")
 plan_status=$?
@@ -165,35 +168,87 @@ edit=$(<"$gh_log")
 [[ $edit == *'--add-label status:ready'* ]] || fail 'ready label was not added'
 [[ $(wc -l <"$gh_log") -eq 1 ]] || fail 'status swap used more than one edit call'
 
+# --- a non-fatal notice beside a value ---------------------------------------
+# The four captures whose stdout is a value take stdout alone. While they merged
+# the streams, a notice joined the value: a closed blocker read as open, and the
+# corrupted word was cached, so one notice retained every dependent of that
+# blocker for the rest of the run. The two payload captures and the listing fed
+# the notice to jq, which then blamed a race that had not happened. All four
+# sites are covered below.
+fake_mode=chatty
+reset_cleared_dependency_cache
+cleared_dependency_body_verdict owner/repo 10 'Blocked by #1' ||
+	fail "a notice beside a blocker state retained #10: $cleared_dependency_reason"
+# Assigned by the sourced canonical recipe.
+# shellcheck disable=SC2154
+[[ ${cleared_dependency_blocker_states[0]} == CLOSED ]] ||
+	fail "the blocker cache kept a notice: ${cleared_dependency_blocker_states[0]}"
+
+reset_cleared_dependency_cache
+set +e
+chatty_plan=$(reconcile_cleared_dependencies plan owner/repo 2>"$SCRATCH/chatty-plan")
+chatty_status=$?
+set -e
+[[ $chatty_status -eq 1 ]] || fail 'a notice changed plan mode partial-failure status'
+[[ $chatty_plan == $'ready #101\nready #106' ]] ||
+	fail "a notice on the issue listing changed the plan: $chatty_plan"
+if rg -q 'cannot parse open dependents' "$SCRATCH/chatty-plan"; then
+	fail 'a notice reached the issue-listing payload'
+fi
+
+reset_cleared_dependency_cache
+rm -f "$ready_state"
+: >"$gh_log"
+apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/chatty-apply" ||
+	fail "a notice on a dependent payload cancelled the transition: $(<"$SCRATCH/chatty-apply")"
+rg -q -- '--add-label status:ready' "$gh_log" ||
+	fail 'the chatty apply path did not ready the dependent'
+
+# A host that cannot allocate the scratch file reports through the same
+# diagnostic as a gh call that did not answer: the lookup did not happen, and
+# nothing has been written at any of the four sites. Shimmed as a function
+# because the recipe is sourced into this shell rather than run as a subprocess.
+fake_mode=normal
+reset_cleared_dependency_cache
+# shellcheck disable=SC2329 # called by the sourced recipe, not from this file
+mktemp() { return 1; }
+if cleared_dependency_body_verdict owner/repo 10 'Blocked by #1'; then
+	fail 'an unallocatable scratch file cleared a dependent'
+fi
+unset -f mktemp
+[[ $cleared_dependency_reason == *'no scratch file'* ]] ||
+	fail "unallocatable scratch was not named: $cleared_dependency_reason"
+reset_cleared_dependency_cache
+
 fake_mode=stale
 rm -f "$ready_state"
-if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$tmp_dir/stale"; then
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/stale"; then
 	fail 'stale dependent snapshot must cancel the transition'
 fi
-rg -q 'stale evaluation' "$tmp_dir/stale" || fail 'stale snapshot was not reported'
+rg -q 'stale evaluation' "$SCRATCH/stale" || fail 'stale snapshot was not reported'
 
 fake_mode=changed-body
 rm -f "$ready_state"
-if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$tmp_dir/changed"; then
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/changed"; then
 	fail 'changed dependency body must cancel the transition'
 fi
-rg -q 'dependency snapshot changed' "$tmp_dir/changed" ||
+rg -q 'dependency snapshot changed' "$SCRATCH/changed" ||
 	fail 'changed dependency body was not reported'
 
 fake_mode=conflict
 rm -f "$ready_state"
-if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$tmp_dir/conflict"; then
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/conflict"; then
 	fail 'conflicting post-write status must be reported'
 fi
-rg -q 'conflicting status write' "$tmp_dir/conflict" || fail 'conflict was not actionable'
+rg -q 'conflicting status write' "$SCRATCH/conflict" || fail 'conflict was not actionable'
 
 fake_mode=race
 rm -f "$ready_state"
 : >"$gh_log"
-if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$tmp_dir/race"; then
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/race"; then
 	fail 'a blocker reopened during the edit must restore blocked status'
 fi
-rg -q 'restored #101 to status:blocked' "$tmp_dir/race" ||
+rg -q 'restored #101 to status:blocked' "$SCRATCH/race" ||
 	fail 'post-write blocker race was not restored'
 rg -q -- '--add-label status:blocked' "$gh_log" || fail 'race did not restore blocked label'
 
@@ -201,19 +256,105 @@ for failure_mode in label-fail edit-fail postread-fail; do
 	fake_mode=$failure_mode
 	rm -f "$ready_state"
 	if apply_cleared_dependency owner/repo "$initial" >/dev/null \
-		2>"$tmp_dir/$failure_mode"; then
+		2>"$SCRATCH/$failure_mode"; then
 		fail "$failure_mode must fail closed"
 	fi
-	if LC_ALL=C rg -q $'\033' "$tmp_dir/$failure_mode"; then
+	if LC_ALL=C rg -q $'\033' "$SCRATCH/$failure_mode"; then
 		fail "$failure_mode leaked a control character"
 	fi
 done
 fake_mode=api-fail
-if reconcile_cleared_dependencies plan owner/repo >/dev/null 2>"$tmp_dir/api-fail"; then
+if reconcile_cleared_dependencies plan owner/repo >/dev/null 2>"$SCRATCH/api-fail"; then
 	fail 'unreadable issue listing must fail closed'
 fi
-if LC_ALL=C rg -q $'\033' "$tmp_dir/api-fail"; then
+if LC_ALL=C rg -q $'\033' "$SCRATCH/api-fail"; then
 	fail 'issue-list error leaked a control character'
 fi
 
+# --- direct execution mirrors the sourced contract ----------------------------
+# The asset was a functions-only library, so executing it was a silent no-op and
+# every documented caller had to source it into its own shell -- the shape that
+# produced #198. The main guard at the foot of the file dispatches to
+# reconcile_cleared_dependencies when bash executes the file instead of sources
+# it, so one command's exit status is the verdict. The cases below run the file
+# as a subprocess against the same fake gh -- exported with its variables and
+# reached through a PATH shim -- and hold it to the same output and statuses as
+# the sourced cases above.
+fake_bin=$SCRATCH/direct-bin
+mkdir -p "$fake_bin"
+printf '#!/usr/bin/env bash\ngh "$@"\n' >"$fake_bin/gh"
+chmod +x "$fake_bin/gh"
+export -f gh fail
+export SCRATCH FIXTURE_LABEL fake_mode gh_log ready_state blocker_log
+
+direct_out=$SCRATCH/direct-plan.out
+direct_err=$SCRATCH/direct-plan.err
+fake_mode=normal
+set +e
+PATH="$fake_bin:$PATH" \
+	bash "$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh" \
+	plan owner/repo >"$direct_out" 2>"$direct_err"
+direct_status=$?
+set -e
+[[ $direct_status -eq 1 ]] || fail 'direct execution lost the partial-failure status'
+[[ $(cat "$direct_out") == $'ready #101\nready #106' ]] ||
+	fail "direct plan mode selected the wrong dependents: $(cat "$direct_out")"
+rg -q --no-config 'open blocker #2 retains #102' "$direct_err" ||
+	fail 'direct execution did not report the open blocker'
+rg -q --no-config 'malformed reference on #103' "$direct_err" ||
+	fail 'direct execution did not report the malformed line'
+
+direct_ok_out=$SCRATCH/direct-plan-target.out
+set +e
+PATH="$fake_bin:$PATH" \
+	bash "$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh" \
+	plan owner/repo 101 >"$direct_ok_out" 2>/dev/null
+direct_ok_status=$?
+set -e
+[[ $direct_ok_status -eq 0 ]] || fail 'a clean targeted direct plan must exit 0'
+[[ $(cat "$direct_ok_out") == 'ready #101' ]] ||
+	fail "targeted direct plan selected the wrong dependents: $(cat "$direct_ok_out")"
+
+direct_usage_err=$SCRATCH/direct-usage.err
+set +e
+PATH="$fake_bin:$PATH" \
+	bash "$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh" \
+	>"$SCRATCH/direct-usage.out" 2>"$direct_usage_err"
+direct_usage_status=$?
+set -e
+[[ $direct_usage_status -eq 2 ]] || fail 'a direct usage error must exit 2'
+rg -q --no-config '^usage:' "$direct_usage_err" ||
+	fail 'the direct usage error printed no usage line'
+
+# --- a non-bash interpreter refuses without killing the caller ---------------
+# The recipes no longer instruct anyone to source this asset, but sourcing
+# stays supported and a sourcing caller's shell is not always bash.
+# `cleared_dependency_run` declared `local status=0`, and `status`
+# is a read-only special parameter in zsh: reaching the declaration killed the
+# caller's whole session, swallowing every command queued behind it until the
+# harness timed out. The asset now refuses at the top of the file instead, so
+# the probe below asserts the caller survives the refusal. Skipped with a
+# printed notice where zsh is not installed -- the ubuntu CI leg carries none
+# -- rather than silently passing, which would read as coverage it does not
+# have; the macOS leg and any zsh-equipped workstation run it for real.
+if command -v zsh >/dev/null; then
+	zsh_probe=$SCRATCH/zsh-refusal.sh
+	{
+		printf 'source %q\n' \
+			"$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh"
+		printf 'reconcile_cleared_dependencies plan owner/repo\n'
+		printf 'printf "SENTINEL_REACHED\\n"\n'
+	} >"$zsh_probe"
+	set +e
+	zsh "$zsh_probe" >"$SCRATCH/zsh-refusal.out" 2>"$SCRATCH/zsh-refusal.err"
+	set -e
+	rg -q 'SENTINEL_REACHED' "$SCRATCH/zsh-refusal.out" ||
+		fail 'the zsh refusal killed the caller instead of returning'
+	rg -q 'requires bash' "$SCRATCH/zsh-refusal.err" ||
+		fail 'the zsh refusal did not name bash as the requirement'
+	rg -q 'command not found' "$SCRATCH/zsh-refusal.err" ||
+		fail 'the guard did not stop the recipe from being defined'
+else
+	printf 'cleared-dependencies-test: zsh not installed; interpreter-guard case skipped\n'
+fi
 printf 'cleared-dependencies-test: pass\n'

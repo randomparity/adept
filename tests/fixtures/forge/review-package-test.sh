@@ -14,14 +14,14 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=SCRIPTDIR/../../../scripts/test-fixture-helpers.sh
+. "$SCRIPT_DIR/../../../scripts/test-fixture-helpers.sh"
+
 # Hooks export repository-local Git variables that override `git -C`. Clear
 # Git's complete reported set before any fixture repository is discovered.
-while IFS= read -r variable; do
-	[ -n "$variable" ] || continue
-	unset "$variable"
-done < <(git rev-parse --local-env-vars)
+clear_git_env
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # The suite lives in tests/fixtures/ so it is excluded from the installed
 # payload; the script it exercises ships under skills/.
 SCRIPT="$SCRIPT_DIR/../../../skills/forge/scripts/review-package"
@@ -29,14 +29,15 @@ WORKSPACE="$SCRIPT_DIR/../../../skills/forge/scripts/sdd-workspace"
 
 passed=0
 failed=0
-workdir=$(mktemp -d "${TMPDIR:-/tmp}/review-package-test.XXXXXX")
-trap 'rm -rf "$workdir"' EXIT
+fixture_init review-package-test
 
 ok() {
 	passed=$((passed + 1))
 	printf '  ok   %s\n' "$1"
 }
 
+# Shadows the helper's fail deliberately: this suite reports every case and
+# totals at the end rather than exiting on the first failure.
 fail() {
 	failed=$((failed + 1))
 	printf '  FAIL %s: %s\n' "$1" "$2"
@@ -51,7 +52,7 @@ fail() {
 # equal what sdd-workspace prints.
 new_repo() {
 	local dir
-	dir=$(cd "$(mktemp -d "$workdir/repo.XXXXXX")" && pwd -P)
+	dir=$(cd "$(mktemp -d "$SCRATCH/repo.XXXXXX")" && pwd -P)
 	git -C "$dir" init -q
 	git -C "$dir" config user.email test@example.com
 	git -C "$dir" config user.name 'Test'
@@ -241,6 +242,70 @@ case_bad_base_writes_nothing() {
 	ok "$name"
 }
 
+case_empty_range_exits_nonzero() {
+	local name='an empty range exits nonzero'
+	local repo
+	repo=$(new_repo)
+	# Both endpoints the same revision: zero commits between them.
+	expect_error "$name" "$repo" 2 HEAD~1 HEAD~1 "$repo/out.diff" && ok "$name"
+}
+
+case_empty_range_writes_nothing() {
+	local name='an empty range writes no package'
+	local repo out status=0
+	repo=$(new_repo)
+	out="$repo/out.diff"
+	(cd "$repo" && "$SCRIPT" HEAD HEAD "$out" >/dev/null 2>&1) || status=$?
+	if [ "$status" -eq 0 ]; then
+		fail "$name" 'exited 0 on an empty range'
+		return
+	fi
+	if [ -e "$out" ]; then
+		fail "$name" 'a package was written for an empty range'
+		return
+	fi
+	ok "$name"
+}
+
+# A destination the shell cannot create or write used to print a success line
+# with an empty byte count and exit 0, because the group's failed redirection
+# does not stop the script under `set -e`. These pin the closed failure: a
+# non-zero status, stderr only -- expect_error's stdout emptiness is what
+# forbids the old 'wrote ...' line -- and no package file.
+case_unwritable_destination() {
+	local name='an unwritable destination exits nonzero'
+	local repo dir
+	repo=$(new_repo)
+	# chmod 555 does not stop root, so there the denial cannot be produced and
+	# the case would prove nothing; skip it the way tracker-test does.
+	if [[ $(id -u) -eq 0 ]]; then
+		printf 'review-package-test: skip unwritable destination; running as root, which chmod 555 does not deny\n'
+		return
+	fi
+	fixture_scratch review-package-locked
+	dir="$FIXTURE_SCRATCH/locked"
+	mkdir "$dir"
+	chmod 555 "$dir"
+	# The if, not `&&`, so a red run keeps the suite's report-everything shape.
+	if expect_error "$name" "$repo" 3 HEAD~1 HEAD "$dir/out.diff"; then
+		ok "$name"
+	fi
+	chmod 755 "$dir"
+}
+
+case_nonexistent_destination_dir() {
+	local name='a destination in a nonexistent directory exits nonzero'
+	local repo out
+	repo=$(new_repo)
+	out="$repo/no-such-dir/out.diff"
+	if expect_error "$name" "$repo" 3 HEAD~1 HEAD "$out"; then
+		ok "$name"
+	fi
+	if [ -e "$out" ]; then
+		fail "$name" 'a package was written under a missing directory'
+	fi
+}
+
 printf 'review-package\n\n'
 case_writes_named_outfile
 case_package_carries_its_sections
@@ -252,5 +317,9 @@ case_unresolvable_base
 case_unresolvable_head
 case_bad_base_writes_nothing
 
+case_empty_range_exits_nonzero
+case_empty_range_writes_nothing
+case_unwritable_destination
+case_nonexistent_destination_dir
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

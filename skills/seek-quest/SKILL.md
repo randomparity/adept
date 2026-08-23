@@ -6,9 +6,8 @@ description: "Rank the status:ready GitHub issue queue and recommend the next is
 
 Rank the `status:ready` GitHub issue queue and recommend the top candidate for
 `$quest`. **Read-only** — this skill writes nothing to GitHub, git, or the
-filesystem, exactly like `$divination`. It never invokes `$quest` or
-`$sort-board`; recommending and acting are separate explicit steps, and this
-skill only recommends.
+filesystem. It never invokes `$quest` or `$sort-board`; recommending and acting
+are separate explicit steps, and this skill only recommends.
 
 Input: an optional caller-supplied risk allowlist and/or effort allowlist
 (e.g. "risk:night-safe only", "effort S or M"). No input narrows nothing.
@@ -47,6 +46,12 @@ Input: an optional caller-supplied risk allowlist and/or effort allowlist
 
 6. **Eligibility filter — occupancy and blocked-dependency.** Apply these
    signals to what remains from Step 5:
+   - Fetch quest claims once:
+     `skills/quest-log/assets/tracker.sh claim-list --target <owner/name>`.
+     Drop any candidate whose issue number appears, reported as `claim
+     quest-claim/<N>` — no liveness judgment: a stale claim is repaired by
+     `$resurrection`, and a dropped candidate is only a recommendation away.
+     A `claim-list` failure stops the sweep per the fail-stop rule below.
    - Drop any issue whose `assignees` array is non-empty.
    - Fetch branches once: `git ls-remote --heads origin` (or `git branch -a`
      if no `origin` remote is configured). For each surviving candidate
@@ -125,7 +130,8 @@ Input: an optional caller-supplied risk allowlist and/or effort allowlist
 
 ## Hard constraints
 
-- `gh`, `git ls-remote`/`git branch`, and `Read` only — no `gh issue edit`,
+- `gh`, `git ls-remote`/`git branch`, the read-only `claim-list` tracker
+  operation, and `Read` only — no `gh issue edit`,
   no comments, no labels, no branches created, no file writes, no invoking
   `$quest` or `$sort-board`.
 - Explicit `--json` fields on every `gh` read; no unbounded `gh issue list`

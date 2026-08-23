@@ -1,15 +1,15 @@
 # shellcheck shell=bash
 #
-# Scaffold shared by the scripts/*-test.sh suites. Sourced, never executed, so
-# it carries no shebang and is not itself a suite.
+# Scaffold shared by the behaviour suites under scripts/ and tests/fixtures/
+# alike. Sourced, never executed, so it carries no shebang and is not itself a
+# suite.
 #
 # Every suite here builds disposable fixtures in a scratch directory and needs
 # the same three things around them: a directory that is removed however the
 # suite exits, a refusal to remove anything else, and a diagnostic carrying the
-# suite's name. Five suites under scripts/ had grown their own copy.
+# suite's name. Twelve suites had grown their own copy.
 #
-# The suites under tests/fixtures/ still carry theirs and are candidates for the
-# same treatment. Two groups are not. The check-records-test.sh pair cannot be:
+# Two groups stay out. The check-records-test.sh pair cannot join:
 # `just records` compares .github/scripts/ and skills/tome-of-lore/assets/ byte
 # for byte, and the two sit at different depths, so no single relative source
 # path resolves from both. The gates themselves -- check-skill-shape.sh,
@@ -72,18 +72,26 @@ fixture_scratch() { # prefix -- sets FIXTURE_SCRATCH
 # shell's exit status (checked on bash 3.2.57 and 5.3.15; without `set -e` it is
 # discarded instead). So `status` is set at both ends deliberately rather than
 # inherited from whatever the loop's last command returned -- writing the
-# removal as `[ -d "$path" ] && rm -R -- "$path"` would leave the trap returning
+# removal as `[ -d "$path" ] && rm -R -f -- "$path"` would leave the trap returning
 # 1 whenever the last path was already gone, reddening every clean run.
 #
 # Each entry is independent: one failure must not skip the entries after it,
 # because check-public-safety-test.sh registers a fixture inside the working
 # tree and it is always last.
 #
+# `-f` is load-bearing, not habit. A git fixture holds mode-444 objects, and
+# without `-f` rm prompts for an override on each one whenever it has a
+# terminal -- so the same suite passes under `just verify` and, run by hand from
+# a shell, hangs on the prompt or leaves the tree behind and reddens. `-f`
+# suppresses the prompt without granting write permission, so a directory that
+# genuinely cannot be emptied still fails and still reddens the suite.
+#
 # The prefix guard is unreachable by construction -- mktemp returns the template
 # it was handed, and fixture_scratch records that same template as the prefix --
-# so it is defence in depth on the one `rm -R` here, not a live check. The five
-# copies it replaces re-derived the prefix at cleanup time and compared it
-# against a variable suite code could reassign, which is what made theirs live.
+# so it is defence in depth on the one `rm` here, not a live check. Five of the
+# twelve copies it replaces re-derived the prefix at cleanup time and compared
+# it against a variable suite code could reassign, which is what made theirs
+# live; the other seven removed their scratch root with no guard at all.
 fixture_cleanup() {
 	local index=0 path prefix status=0
 	while [ "$index" -lt "${#fixture_scratch_paths[@]}" ]; do
@@ -92,7 +100,7 @@ fixture_cleanup() {
 		index=$((index + 1))
 		case $path in
 		"$prefix"*)
-			if [ -d "$path" ] && ! rm -R -- "$path"; then
+			if [ -d "$path" ] && ! rm -R -f -- "$path"; then
 				printf '%s: cleanup failed for %s\n' \
 					"$FIXTURE_LABEL" "$path" >&2
 				status=1

@@ -28,7 +28,12 @@ label_ensure:implemented
 comment_add:implemented
 state_set:implemented
 link_parent:implemented
-link_blocks:implemented"
+link_blocks:implemented
+claim_acquire:implemented
+claim_verify:implemented
+claim_release:implemented
+claim_recover:implemented
+claim_list:implemented"
 
 # Validates rather than echoes. A die inside $(github_target) would exit only
 # the command substitution's subshell, letting an empty target reach gh and be
@@ -36,14 +41,39 @@ link_blocks:implemented"
 # gh writes non-fatal material to stderr while exiting 0, so merging the streams
 # turns a release-update notice into the payload. GH_OUT is the value; GH_ERR is
 # read only to build a failure message.
+#
+# An unguarded `github_err_file=$(mktemp)` did not stop anything: it left the
+# variable empty, and the `2>` below then failed on the empty path and reported
+# a scratch file this host could not create as a gh call that failed -- a local
+# fault wearing the tracker's taxonomy. It dies as transport instead, which is
+# the class that says the call never reached the tracker and nothing was
+# written. mktemp's own diagnostic is discarded rather than relayed, because
+# stderr here is the single JSON error object callers parse and a bare line
+# beside it breaks that parse; the object below carries the reason instead.
+#
+# The removal is guarded for the reason every EXIT trap in this repository now
+# is: under the engine's `set -e` a trap's non-zero return becomes the process's
+# exit status, so an unremovable scratch file turned any clean operation into
+# exit 1 -- EXIT_USAGE, which tells the caller it passed bad arguments. Unlike
+# the gate scripts, this one cannot name the path it retained: tracker.sh's
+# stderr is a single JSON error object that callers parse, and a plain line
+# beside it would break the parse on a run that otherwise succeeded. The status
+# the run earned is the thing worth protecting here, so the removal is allowed
+# to fail quietly and nothing else changes.
 github_err_file=''
 GH_OUT=''
 GH_ERR=''
+# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
+github_cleanup() {
+	rm -f -- "$github_err_file" || :
+}
 github_run() { # gh-args...
 	local status=0
 	[[ -n $github_err_file ]] || {
-		github_err_file=$(mktemp)
-		trap 'rm -f -- "$github_err_file"' EXIT
+		github_err_file=$(mktemp 2>/dev/null) ||
+			die "$EXIT_TRANSPORT" transport \
+				'could not create a scratch file for the tracker command'
+		trap github_cleanup EXIT
 	}
 	GH_OUT=$(gh "$@" 2>"$github_err_file") || status=$?
 	GH_ERR=$(cat "$github_err_file")
@@ -483,7 +513,15 @@ profile_link_blocks() {
 	fi
 	body="$body
 Blocked by #$blocker"
-	tmp=$(mktemp)
+	# Guarded for the reason github_run's is, and dying before the edit rather
+	# than after it: an unguarded assignment exits on mktemp's own status, which
+	# is EXIT_USAGE here and would tell the caller its ids were malformed. The
+	# write has not happened yet, so transport -- the call never reached the
+	# tracker -- is the truthful class, and partial would wrongly claim it might
+	# have landed.
+	tmp=$(mktemp 2>/dev/null) ||
+		die "$EXIT_TRANSPORT" transport \
+			'could not create a scratch file for the dependency edit'
 	printf '%s\n' "$body" >"$tmp"
 	github_run issue edit "$blocked" --repo "$TRACKER_TARGET" --body-file "$tmp" ||
 		status=$?
@@ -491,4 +529,349 @@ Blocked by #$blocker"
 	rm -f -- "$tmp"
 	((status == 0)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 	printf '{}\n'
+}
+
+# --- quest claims ------------------------------------------------------------
+# The claim label grammar. Charsets are enumerated, not ranged, for the same
+# locale-collation reason as github_label_first above.
+github_claim_chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-'
+readonly github_claim_chars
+
+github_claim_validate_token() { # token
+	[[ $1 =~ ^[$github_claim_chars]+$ && ${#1} -le 32 ]] ||
+		die "$EXIT_USAGE" usage "claim token must be 1-32 chars of [A-Za-z0-9-]: $1"
+}
+
+github_claim_validate_producer() { # login
+	[[ $1 =~ ^[$github_claim_chars]+$ && ${#1} -le 39 ]] ||
+		die "$EXIT_USAGE" usage "claim producer must be a GitHub login: $1"
+}
+
+# Reads the claim label for an issue into CLAIM_STATE (absent|held|malformed)
+# and, when held, CLAIM_TOKEN/CLAIM_PRODUCER/CLAIM_AT. Returns 2 when the
+# store could not be read at all, leaving the error class to the caller:
+# acquire reports partial (its create may have landed), the others die
+# classified. Variables rather than stdout keep the caller's payload free.
+CLAIM_STATE=''
+CLAIM_TOKEN=''
+CLAIM_PRODUCER=''
+CLAIM_AT=''
+github_claim_read() { # issue
+	local issue=$1 status=0 desc f1 f2 f3 rest
+	CLAIM_STATE=''
+	CLAIM_TOKEN=''
+	CLAIM_PRODUCER=''
+	CLAIM_AT=''
+	github_run api "repos/$TRACKER_TARGET/labels/quest-claim%2F$issue" \
+		--jq '.description // ""' || status=$?
+	if ((status != 0)); then
+		local code class
+		read -r code class <<<"$(github_classify "$GH_ERR")"
+		if [[ $class == not-found ]]; then
+			CLAIM_STATE=absent
+			return 0
+		fi
+		return 2
+	fi
+	desc=$GH_OUT
+	f1='' f2='' f3='' rest=''
+	IFS=';' read -r f1 f2 f3 rest <<<"$desc"
+	# The epoch is bounded as well as digit-checked: eleven digits caps the
+	# value far below int64 overflow in later age arithmetic, and an epoch
+	# more than a day in the future is a hand-crafted claim meant to defeat
+	# the --older-than guard, not clock skew (skew is bounded at 300 s).
+	if [[ -n $rest || -z $f1 || -z $f2 || -z $f3 ]] ||
+		[[ ! $f1 =~ ^[$github_claim_chars]+$ || ${#f1} -gt 32 ]] ||
+		[[ ! $f2 =~ ^[$github_claim_chars]+$ || ${#f2} -gt 39 ]] ||
+		[[ ! $f3 =~ ^[0123456789]{1,11}$ ]] ||
+		((f3 > $(date -u +%s) + 86400)); then
+		CLAIM_STATE=malformed
+		return 0
+	fi
+	CLAIM_STATE=held
+	CLAIM_TOKEN=$f1
+	CLAIM_PRODUCER=$f2
+	CLAIM_AT=$f3
+}
+
+# Emits the conflict payload on stderr and exits EXIT_CONFLICT. Reads the
+# state github_claim_read left behind.
+github_claim_conflict() { # issue
+	local issue=$1
+	if [[ $CLAIM_STATE == malformed ]]; then
+		jq -n --arg i "$issue" \
+			'{error: "conflict",
+			  holder: {token: null, producer: null, at: null, malformed: true},
+			  message: ("foreign claim on issue " + $i + " has an unparseable description")}' >&2
+	else
+		jq -n --arg i "$issue" --arg t "$CLAIM_TOKEN" \
+			--arg p "$CLAIM_PRODUCER" --arg a "$CLAIM_AT" \
+			'{error: "conflict",
+			  holder: {token: $t, producer: $p, at: $a, malformed: false},
+			  message: ("live foreign claim on issue " + $i)}' >&2
+	fi
+	exit "$EXIT_CONFLICT"
+}
+
+# Parses the shared --token/--producer flags. Sets TOKEN and PRODUCER.
+github_claim_parse_owner() { # args...
+	TOKEN=''
+	PRODUCER=''
+	while (($#)); do
+		case $1 in
+		--token)
+			(($# >= 2)) || die "$EXIT_USAGE" usage '--token needs a value'
+			TOKEN=$2
+			shift 2
+			;;
+		--producer)
+			(($# >= 2)) || die "$EXIT_USAGE" usage '--producer needs a value'
+			PRODUCER=$2
+			shift 2
+			;;
+		*) die "$EXIT_USAGE" usage "unknown claim argument: $1" ;;
+		esac
+	done
+	github_claim_validate_token "$TOKEN"
+	github_claim_validate_producer "$PRODUCER"
+}
+
+profile_claim_acquire() {
+	github_require_target
+	(($# >= 1)) || die "$EXIT_USAGE" usage 'claim-acquire needs an issue id'
+	local issue=$1 status=0 epoch desc create_err
+	github_require_id "$issue" 'issue id'
+	shift
+	local TOKEN PRODUCER
+	github_claim_parse_owner "$@"
+	epoch=$(date -u +%s)
+	desc="$TOKEN;$PRODUCER;$epoch"
+	github_run label create "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+		--color 6b7280 --description "$desc" || status=$?
+	if ((status == 0)); then
+		jq -n --arg i "$issue" --arg t "$TOKEN" --arg p "$PRODUCER" --arg a "$epoch" \
+			'{claimed: true, issue: $i, token: $t, producer: $p, at: $a}'
+		return 0
+	fi
+	# Every create failure resolves by read-back, never by message text: the
+	# store's state is the only trustworthy discriminator between losing the
+	# race, winning but losing the response, and a create that genuinely
+	# failed. The create's own error is preserved across the read-back --
+	# GH_ERR belongs to whichever gh ran last.
+	create_err=$GH_ERR
+	local read_status=0
+	github_claim_read "$issue" || read_status=$?
+	if ((read_status != 0)); then
+		jq -Rrn --arg m "$GH_ERR" \
+			'{error: "partial", message: $m, partial: {stage: "read-back"}}' >&2
+		exit "$EXIT_PARTIAL"
+	fi
+	case $CLAIM_STATE in
+	held)
+		if [[ $CLAIM_TOKEN == "$TOKEN" ]]; then
+			jq -n --arg i "$issue" --arg t "$TOKEN" \
+				--arg p "$CLAIM_PRODUCER" --arg a "$CLAIM_AT" \
+				'{claimed: true, recovered: "self", issue: $i,
+				  token: $t, producer: $p, at: $a}'
+			return 0
+		fi
+		github_claim_conflict "$issue"
+		;;
+	malformed)
+		github_claim_conflict "$issue"
+		;;
+	absent)
+		github_die "$create_err"
+		;;
+	esac
+}
+
+profile_claim_verify() {
+	github_require_target
+	(($# >= 1)) || die "$EXIT_USAGE" usage 'claim-verify needs an issue id'
+	local issue=$1 now age
+	github_require_id "$issue" 'issue id'
+	shift
+	local TOKEN=''
+	while (($#)); do
+		case $1 in
+		--token)
+			(($# >= 2)) || die "$EXIT_USAGE" usage '--token needs a value'
+			TOKEN=$2
+			shift 2
+			;;
+		*) die "$EXIT_USAGE" usage "unknown claim-verify argument: $1" ;;
+		esac
+	done
+	github_claim_validate_token "$TOKEN"
+	github_claim_read "$issue" || github_die "$GH_ERR"
+	case $CLAIM_STATE in
+	absent)
+		die "$EXIT_NOT_FOUND" not-found "no claim on issue $issue"
+		;;
+	malformed)
+		github_claim_conflict "$issue"
+		;;
+	held)
+		if [[ $CLAIM_TOKEN == "$TOKEN" ]]; then
+			now=$(date -u +%s)
+			age=$((now - CLAIM_AT))
+			jq -n --argjson age "$age" '{held: true, age_seconds: $age}'
+			return 0
+		fi
+		github_claim_conflict "$issue"
+		;;
+	esac
+}
+
+profile_claim_release() {
+	github_require_target
+	(($# >= 1)) || die "$EXIT_USAGE" usage 'claim-release needs an issue id'
+	local issue=$1 status=0
+	github_require_id "$issue" 'issue id'
+	shift
+	local TOKEN=''
+	while (($#)); do
+		case $1 in
+		--token)
+			(($# >= 2)) || die "$EXIT_USAGE" usage '--token needs a value'
+			TOKEN=$2
+			shift 2
+			;;
+		*) die "$EXIT_USAGE" usage "unknown claim-release argument: $1" ;;
+		esac
+	done
+	github_claim_validate_token "$TOKEN"
+	github_claim_read "$issue" || github_die "$GH_ERR"
+	case $CLAIM_STATE in
+	absent)
+		printf '{}\n'
+		return 0
+		;;
+	malformed)
+		github_claim_conflict "$issue"
+		;;
+	held)
+		[[ $CLAIM_TOKEN == "$TOKEN" ]] || github_claim_conflict "$issue"
+		github_run label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+			--yes || status=$?
+		# A delete that landed with a lost response classifies transport; the
+		# re-run reads absent and returns {}.
+		((status == 0)) || github_die "$GH_ERR"
+		printf '{}\n'
+		;;
+	esac
+}
+
+profile_claim_recover() {
+	github_require_target
+	(($# >= 1)) || die "$EXIT_USAGE" usage 'claim-recover needs an issue id'
+	local issue=$1 older_than='' force=0 status=0 now age epoch desc
+	github_require_id "$issue" 'issue id'
+	shift
+	local TOKEN PRODUCER
+	while (($#)); do
+		case $1 in
+		--token)
+			(($# >= 2)) || die "$EXIT_USAGE" usage '--token needs a value'
+			TOKEN=$2
+			shift 2
+			;;
+		--producer)
+			(($# >= 2)) || die "$EXIT_USAGE" usage '--producer needs a value'
+			PRODUCER=$2
+			shift 2
+			;;
+		--older-than)
+			(($# >= 2)) || die "$EXIT_USAGE" usage '--older-than needs a value'
+			older_than=$2
+			shift 2
+			;;
+		--force)
+			force=1
+			shift
+			;;
+		*) die "$EXIT_USAGE" usage "unknown claim-recover argument: $1" ;;
+		esac
+	done
+	github_claim_validate_token "$TOKEN"
+	github_claim_validate_producer "$PRODUCER"
+	[[ -n $older_than || $force == 1 ]] ||
+		die "$EXIT_USAGE" usage 'claim-recover needs --older-than or --force'
+	if [[ -n $older_than && ! $older_than =~ ^[0123456789]+$ ]]; then
+		die "$EXIT_USAGE" usage "--older-than must be seconds: $older_than"
+	fi
+	github_claim_read "$issue" || github_die "$GH_ERR"
+	case $CLAIM_STATE in
+	held)
+		if ((force == 0)); then
+			now=$(date -u +%s)
+			age=$((now - CLAIM_AT))
+			((age >= older_than)) || github_claim_conflict "$issue"
+		fi
+		github_run label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+			--yes || status=$?
+		# Delete failed: the old claim stands untouched, and a retry matches
+		# the same guard.
+		((status == 0)) || github_die "$GH_ERR"
+		;;
+	malformed)
+		# No evaluable age: --older-than always refuses; only --force or a
+		# manual delete clears a malformed claim.
+		((force == 1)) || github_claim_conflict "$issue"
+		github_run label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+			--yes || status=$?
+		((status == 0)) || github_die "$GH_ERR"
+		;;
+	absent) : ;;
+	esac
+	epoch=$(date -u +%s)
+	desc="$TOKEN;$PRODUCER;$epoch"
+	status=0
+	github_run label create "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+		--color 6b7280 --description "$desc" || status=$?
+	if ((status != 0)); then
+		# Between delete and create the store may be absent; the caller
+		# re-runs claim-acquire, which takes the absent path.
+		jq -Rrn --arg m "$GH_ERR" \
+			'{error: "partial", message: $m, partial: {stage: "create"}}' >&2
+		exit "$EXIT_PARTIAL"
+	fi
+	jq -n --arg i "$issue" --arg t "$TOKEN" --arg p "$PRODUCER" --arg a "$epoch" \
+		'{claimed: true, recovered: "stale-or-forced", issue: $i,
+		  token: $t, producer: $p, at: $a}'
+}
+
+profile_claim_list() {
+	github_require_target
+	local out
+	github_run_checked api "repos/$TRACKER_TARGET/labels?per_page=100" \
+		--paginate \
+		--jq '.[] | select(.name | test("^quest-claim/[0-9]+$")) | {name, description}'
+	out=$GH_OUT
+	# Per-page output is a stream of {name, description} objects; slurp and
+	# map to the entry schema. A description failing any grammar check marks
+	# the whole entry malformed -- no partial parsing, so a bad field never
+	# rides beside good ones.
+	jq -s '
+		def grammar:
+			(. // "") | split(";") as $f
+			| ($f | length) == 3
+				and ($f[0] | test("^[A-Za-z0-9-]{1,32}$"))
+				and ($f[1] | test("^[A-Za-z0-9-]{1,39}$"))
+				and ($f[2] | test("^[0-9]{1,11}$"))
+				and ($f[2] | tonumber) <= (now + 86400);
+		[ .[]
+			| .name as $n
+			| if (.description | grammar) then
+				(.description | split(";")) as $f
+				| {issue: ($n | ltrimstr("quest-claim/")),
+				   token: $f[0], producer: $f[1], at: $f[2],
+				   malformed: false}
+			else
+				{issue: ($n | ltrimstr("quest-claim/")),
+				 token: null, producer: null, at: null,
+				 malformed: true}
+			end ]
+	' <<<"$out"
 }
