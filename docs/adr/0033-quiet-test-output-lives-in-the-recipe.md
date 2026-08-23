@@ -26,11 +26,12 @@ one `ok   <suite>` line per passing suite, and replays the complete captured out
 for the failing suite before exiting with that suite's status. A leading `-v`/`--verbose`
 argument restores today's streaming behavior. Positional substring patterns restrict which
 discovered suites run; patterns matching zero discovered suites exit non-zero naming the
-unmatched patterns, so a typo can never read as a green run over an empty set. Quiet mode
-prints a `run   <suite>` line to **stderr** as each suite starts, so a wedged suite is
-always nameable; the `ok   <suite>` stdout line is the completion marker. Every run —
-quiet or verbose, full or selected — reports exactly which suites executed, and the
-closing `test: N suites passed` counts them. No suite file changes.
+unmatched patterns, so a typo can never read as a green run over an empty set. Patterns
+are unioned into a deduplicated set: a suite matching several patterns executes exactly
+once. Quiet mode prints a `run   <suite>` line to **stderr** as each suite starts, so a
+wedged suite is always nameable; the `ok   <suite>` stdout line is the completion marker.
+Every run — quiet or verbose, full or selected — reports exactly which suites executed,
+and the closing `test: N suites passed` counts them. No suite file changes.
 
 ## Consequences
 
@@ -77,7 +78,11 @@ closing `test: N suites passed` counts them. No suite file changes.
   instead of a re-run, but the retained artifacts need a home, a retention rule, and
   cleanup the repo's no-residue conventions would have to govern — more moving parts than
   the `-v` re-run they replace, which pattern selection already bounds to seconds.
-- **Concurrent suite execution.** judgment: it would attack the wall-clock figure, but
-  parallel output complicates failure attribution — the exact problem quiet mode exists
-  to simplify — and the issue asks for quieter, narrower runs, not faster ones; pattern
-  selection already bounds the common re-run to seconds.
+- **Concurrent suite execution.** judgment: capture-and-replay already attributes failure
+  output per suite, so parallelism's remaining ground is speed — a cost (full-set wall
+  time in CI and push verification) the issue did not ask to fix, bought with added
+  orchestration complexity; pattern selection bounds the common interactive re-run to
+  seconds.
+- **A per-suite timeout** (`timeout <n> ./suite` around each capture). judgment: no suite
+  today exceeds a bounded runtime, a default ceiling risks killing slow-but-legitimate
+  fixture suites, and the stderr `run   <suite>` line names a wedge while it hangs.
