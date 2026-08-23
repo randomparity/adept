@@ -35,7 +35,7 @@ Evidence gathered before deciding:
 
 ## Decision
 
-Scope-out. The reasoning, the four grounds it rests on, the consequences, and the falsifiable
+Scope-out. The reasoning, the ground it rests on, the consequences, and the falsifiable
 revisit condition all live in ADR 0006 and are not restated here — a second copy is the drift
 problem `CLAUDE.md` exists to prevent.
 

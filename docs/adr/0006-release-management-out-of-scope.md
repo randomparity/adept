@@ -33,28 +33,19 @@ already means two other things in this tree — releasing an issue whose blocker
 (`$return-to-town`, `$sort-board`), and a protected `release/*` branch pattern
 (`$clear-map`) — and neither is a software release.
 
-One thing carries it: **the target repositories already own their release mechanics.** Checked
-across this account on 2026-08-12 — `bzr` publishes six tagged releases through `release.yml`
-and `publish-crates.yml`, with its policy written down in `RELEASING.md`; `kdive` runs
-`release.yml`, `release-image.yml` and `changelog-sync.yml`; `rusty-imap-mcp` runs
-`release.yml`. Each fires from its own CI on its own trigger, and each encodes its own
-versioning, changelog and publish policy. A skill here would duplicate workflows those
-repositories already run, and would have to re-encode per-repository policy that `$attunement`
-discovers at runtime anyway.
+One thing carries it: **no adept session has ever been asked to drive a release in a target
+repository.** The question this record settles has therefore never arisen in practice — it
+reaches adept only through this issue's hypothetical. Building a stage against a request that
+has never arrived would be the speculative feature the construction standards refuse, and the
+ground is chosen for standing still rather than for weight: it names no counts, cites no other
+repository, and changes only when the revisit condition below fires — which is exactly when
+this decision should be reopened.
 
-What is genuinely unobserved is narrower than "nobody releases": no adept session has been
-asked to *drive* one of those releases. That is an observation about sessions rather than a
-fact any artifact here can confirm, which is why it is the revisit condition's subject rather
-than the decision's ground.
-
-**Revisit condition.** Reopen this the first time an adept session is asked to drive a release
-in a target repository — the point at which there is a job to do rather than a mechanism to
-duplicate. Reopening is not building: one real request settles what an artifact would have to
-do, and whether that generalises is the superseding record's question. Nothing here will notice
-on its own: `$warding`'s staleness sweep selects records whose `## Status` reads `Open` and
-whose `review-by:` has passed, and an Accepted ADR carries neither, so no sweep reaches this
-record whatever profiles are enabled. A sighting is therefore worth a new issue citing this
-record.
+**Revisit condition.** Reopen this the first time an adept session is asked to drive a
+release in a target repository — the ground's negation, and the first moment a real job
+exists to design against. Nothing here notices the event on its own: `$warding`'s staleness
+sweep selects records whose `## Status` reads `Open` and whose `review-by:` has passed, an
+Accepted ADR carries neither, so a sighting is worth a new issue citing this record.
 
 ## Consequences
 
@@ -78,16 +69,22 @@ record.
 ## Considered & rejected
 
 - **Ship a `$release` skill now — tag, changelog, `gh release create`**, including the
-  deliberately minimal version alongside this record. The issue's first option. Rejected on the
-  ground above: the mechanics are already owned by each target repository's CI, so the skill
-  would duplicate them while re-encoding policy that differs per repository. A minimal one is
-  the worst case rather than the safe one, since it would encode one repository's defaults as
-  everyone's.
+  deliberately minimal version alongside this record. The issue's first option. Rejected on
+  the ground above: no session has ever asked for it, so its procedure would encode guesses
+  where one real request would settle the requirements. A minimal one is the worst case
+  rather than the safe one, since it would hard-code defaults nothing has chosen.
+- **Ship a skill that drives each target repository's own release recipe rather than
+  re-encoding policy** — tag when its workflow tags, publish when its CI publishes. This is
+  the scope-in variant that survives the duplication objection, so it is weighed on the
+  record's actual ground and still rejected: with no session having ever asked, there is no
+  recipe-following job to do, and the delegation it would formalise is already what the
+  Decision states a session does when handed such a request — status quo enforced, not a gap
+  filled.
 - **Write `references/release.md` instead of a skill.** This repository's other artifact type —
   a standard consulted rather than a procedure invoked — and the cheaper shape, carrying no
-  script pressure and no invocation surface. Rejected on the same ground, and more directly:
-  `bzr` and `rusty-imap-mcp` each already carry that document, as `RELEASING.md`, in the
-  repository it describes.
+  script pressure and no invocation surface. Rejected on the same ground: it documents a
+  procedure no session has been asked to run, so the saving is in the packaging, not the
+  content.
 - **Write the delegation into `$attunement` — have it discover the target's release recipe the
   way it discovers guardrail commands.** The cheapest scope-in, and the closest to what already
   happens. Rejected because it is already the status quo the Decision states, so it would buy
