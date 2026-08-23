@@ -49,6 +49,22 @@ just verify
 
 Run gates bare — no pipes that swallow an exit code, no `|| true`. A gate's exit status is the verdict.
 
+Unit tests support two refinements while iterating:
+
+- `just test <pattern>...` runs only the discovered suites whose path contains any
+  pattern as a substring — `just test plugin-version` runs
+  `scripts/check-plugin-version-test.sh` alone. Zero matches exits 1 naming the
+  patterns; a suite matching several patterns still runs once. Output is quiet by
+  default: a `run   <suite>` line on stderr as each suite starts, an `ok   <suite>`
+  line when it passes, and the first failing suite's complete output replayed on
+  stderr before the run stops with that suite's status.
+- `just test --verbose [<pattern>...]` restores the full streaming output — every
+  assertion line — for inspecting a failure or a suspiciously quiet pass (the quiet
+  default hides warnings a passing suite printed).
+
+Selection speeds up iteration; it never substitutes for `just verify` before shipping —
+CI and the pre-push hook always run the full suite set.
+
 `just plugin-check` runs `claude plugin validate ./ --strict`, which passes at exit 0 with no warnings. Any warning is a defect.
 
 `just version-check` runs `scripts/check-plugin-version.sh`. `.claude-plugin/plugin.json` declares a `version`, and **every change bumps it** — see [ADR 0022](docs/adr/0022-versioned-manifest-and-bump-gate.md). The field pins the plugin: the harness skips an update when the installed version matches the declared one, so a version left alone is a change that never reaches an installed copy, silently. The gate's three rules are that the version exists, that it is `MAJOR.MINOR.PATCH` with no prerelease or build suffix, and that it is strictly greater than the base ref's whenever the tree differs from `BASE_SHA` at all.
