@@ -31,6 +31,8 @@ quiet or verbose, full or selected — reports exactly which suites executed: th
 `ok   <suite>` lines are that report, and the closing `test: N suites passed` counts them.
 No suite file changes.
 
+## Consequences
+
 - The contract ("quiet default, verbose escape hatch, selection") is enforced in one file;
   adding a suite needs no awareness of verbosity. Suite authors keep printing freely.
 - A green quiet run hides warnings a verbose run would show; an agent inspecting a
