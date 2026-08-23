@@ -428,9 +428,14 @@ printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "second-test: pass\\n"\n'
 	>"$whole_suites/scripts/second-test.sh"
 chmod +x "$whole_suites/scripts/first-test.sh" "$whole_suites/scripts/second-test.sh"
 status=0
+# Verbose mode: the recipe's quiet default captures each suite's output and
+# replays it only on failure, so the stub's stdout proof would be swallowed on
+# a passing run. The stdin-closed property is a property of how the recipe
+# invokes suites -- `"./$suite" </dev/null` in both modes -- and verbose is
+# where per-suite output streams live, so that is where the proof is readable.
 out=$(PATH=$git_whole:$PATH "$just_real" \
 	--working-directory "$whole_suites" --justfile "$recipe_root/Justfile" \
-	test 2>&1) || status=$?
+	test --verbose 2>&1) || status=$?
 [ "$status" -eq 0 ] ||
 	fail "test: a discovery that completed did not pass the recipe: $out"
 printf '%s\n' "$out" | grep -q 'first-test: stdin is closed' ||
