@@ -69,37 +69,38 @@ Accepted ADR carries neither, so a sighting is worth a new issue citing this rec
 ## Considered & rejected
 
 - **Ship a `$release` skill now — tag, changelog, `gh release create`**, including the
-  deliberately minimal version alongside this record. The issue's first option. Rejected on
-  the ground above: no session has ever asked for it, so its procedure would encode guesses
-  where one real request would settle the requirements. A minimal one is the worst case
-  rather than the safe one, since it would hard-code defaults nothing has chosen.
+  deliberately minimal version alongside this record. The issue's first option. Rejected —
+  judgment: with no known request for adept to drive a release, its procedure would encode
+  guesses where one real request would settle the requirements. A minimal one is the worst
+  case rather than the safe one, since it would hard-code defaults nothing has chosen.
 - **Ship a skill that drives each target repository's own release recipe rather than
   re-encoding policy** — tag when its workflow tags, publish when its CI publishes. This is
   the scope-in variant that survives the duplication objection, so it is weighed on the
-  record's actual ground and still rejected: with no session having ever asked, there is no
-  recipe-following job to do, and the delegation it would formalise is already what the
-  Decision states a session does when handed such a request — status quo enforced, not a gap
-  filled.
+  record's actual ground and still rejected — judgment: with no recipe-following job ever
+  having arrived, formalising delegation that the Decision already states as ordinary
+  practice buys enforcement nothing has asked for — status quo enforced, not a gap filled.
 - **Write `references/release.md` instead of a skill.** This repository's other artifact type —
   a standard consulted rather than a procedure invoked — and the cheaper shape, carrying no
-  script pressure and no invocation surface. Rejected on the same ground: it documents a
-  procedure no session has been asked to run, so the saving is in the packaging, not the
-  content.
+  script pressure and no invocation surface. Rejected on the same ground — judgment: it
+  documents a procedure nothing has been asked to run, so the saving is in the packaging,
+  not the content.
 - **Write the delegation into `$attunement` — have it discover the target's release recipe the
   way it discovers guardrail commands.** The cheapest scope-in, and the closest to what already
-  happens. Rejected because it is already the status quo the Decision states, so it would buy
-  enforcement of a rule nothing has broken; and editing an existing skill is outside this
+  happens. Rejected — judgment: it is already the status quo the Decision states, so it would
+  buy enforcement of a rule nothing has broken; and editing an existing skill is outside this
   issue's scope. Worth revisiting if delegation ever needs to be enforced rather than assumed.
 - **Record the decision only as a line in `README.md` or `docs/cheatsheet.md`, with no record
-  here.** The issue's second option, and cheaper. Rejected because a line in a
+  here.** The issue's second option, and cheaper. Rejected — judgment: a line in a
   which-skill-do-I-run table carries the outcome without the reasoning that makes it a
   decision, and has nowhere to keep the revisit condition. The line itself was not rejected —
   the Consequences take it, pointing here.
 - **A post-merge verification skill only, dropping tagging and changelog.** The narrowest
-  scope-in. Rejected on the same ground, but it is the alternative closest to a real gap, and
-  the part of it that is adept's own is tracked as issue #65 rather than dismissed.
-- **A deferral record under `docs/debt/` rather than a record here.** Rejected because the
-  trigger here is an event — a session being asked — and `review-by:` fires on a date, so the
-  sweep would re-ask the question on an arbitrary day with no new evidence to answer it.
-- **Leave it undecided.** Rejected as the state the issue reports: the cost was never the
-  missing skill, but that a reader could not tell absence from oversight.
+  scope-in. Rejected — judgment: the same absence of any driving request, though this is the
+  alternative closest to a real gap, and the part of it that is adept's own is real:
+  verified: issue #65 tracks it against `$return-to-town`.
+- **A deferral record under `docs/debt/` rather than a record here.** Rejected — judgment:
+  the trigger here is an event — a session being asked — and `review-by:` fires on a date, so
+  the sweep would re-ask the question on an arbitrary day with no new evidence to answer it.
+- **Leave it undecided.** Rejected — verified: issue #50's body reports exactly this state,
+  a reader who cannot tell an omission from a decision; the cost was never the missing
+  skill, but the unreadability.

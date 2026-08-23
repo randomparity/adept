@@ -26,9 +26,12 @@ no blocked work.
 Evidence gathered before deciding:
 
 - No skill covers release, tagging, changelog, or deploy. The string `release` occurs in
-  `skills/return-to-town/SKILL.md`, `skills/sort-board/SKILL.md` and `skills/campaign/SKILL.md`
+  `skills/sort-board/SKILL.md`, `skills/campaign/SKILL.md` and `skills/return-to-town/SKILL.md`
   meaning *release a blocked issue*, and in `skills/clear-map/SKILL.md` meaning a protected
-  `release/*` branch pattern. Neither sense is a software release.
+  `release/*` branch pattern. `return-to-town` also warns that a publish, release tag or
+  deploy fired by a base-branch workflow runs *after* the merge — the post-merge residual
+  ADR 0006 tracks as issue #65. None of these is a pipeline stage that drives a software
+  release.
 - This repository has no git tags and no GitHub releases, and runs one workflow, `verify.yml`.
 - `$warding` reports dependency version drift and `$restock` merges Dependabot updates. Both
   read versions; neither publishes anything.
@@ -58,8 +61,7 @@ problem `CLAUDE.md` exists to prevent.
 | 1 | Issue #50 "Proposed approach" — decide scope-in or scope-out first | The Decision above, argued in ADR 0006 |
 | 2 | Issue #50 "Expected" — a stated decision that release management is out of scope for adept, **and why** | ADR 0006 `## Decision` and `## Considered & rejected` |
 | 3 | Issue #50 "Problem" — the omission must stop reading as a gap | ADR 0006 `## Context` names the ambiguity and closes it; the `README.md` pointer is what puts the answer where the reader looks |
-| 4 | Issue #50 "Proposed approach" — one PR | Four files, one PR, no code change |
-| 5 | `CLAUDE.md` "Verifying a change" | `just verify` green |
+| 4 | Issue #50 "Proposed approach" — one PR | Four files — the record, the `README.md` pointer, this spec, and the ADR 0022-mandated version bump in `.claude-plugin/plugin.json` — one PR, no code change |
 
 ## Guardrail interactions
 
@@ -69,10 +71,11 @@ problem `CLAUDE.md` exists to prevent.
   `Accepted (YYYY-MM-DD)`. It also warns `W-INDEX-TABLE` if a numbered-row table appears in
   `docs/adr/README.md` — which is why no index row is added: this repository's ADR index is the
   directory listing.
-- **`just public-safety`** forbids absolute checkout paths in plans and specs. None of the three
-  files carries one.
 - **`just shape-check`**, **`just plugin-check`**, **`just test`**, `lint`, `format-check`,
-  `actions-check` are unaffected: no skill directory, no shell, no manifest, no workflow changes.
+  `actions-check` are unaffected by the three documents: no skill directory, no shell, no
+  workflow changes. The manifest does change: `.claude-plugin/plugin.json` bumps its version,
+  which ADR 0022's gate requires of any tree change (rule 3: strictly greater than the base
+  ref's), and `plugin-check` validates the declared form.
 
 ## Testing
 
@@ -95,8 +98,10 @@ superseding record's question.
 
 The mitigation is weaker than it first reads, and the record says so rather than implying
 otherwise. Nothing in this repository watches for the trigger: those releases happen elsewhere,
-`$warding`'s review-by sweep reads `docs/debt/` rather than `docs/adr/`, and issue #50 closes
-with this change, so it is not a channel either. The record therefore names a new issue citing
+`$warding`'s staleness sweep reads the record directories the repository enables — here
+`docs/adr/` under the adr profile — but selects only `Open` records past their `review-by:`,
+which an Accepted ADR never is, and issue #50 closes with this change, so it is not a channel
+either. The record therefore names a new issue citing
 it as where a sighting goes. Building a counter would cost more than the risk it removes, so
 the residual is stated and accepted — which is also why the `README.md` pointer matters more
 than it looks: it is the only thing that puts the condition in front of a reader who was not
