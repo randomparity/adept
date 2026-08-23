@@ -10,10 +10,10 @@ The pipeline ends at merge and branch cleanup: `$quest` runs `$deliver`, then
 `$return-to-town`, and `$clear-map` sweeps what landed. Nothing in this tree tags a
 commit, writes a changelog, publishes release notes, deploys, or verifies a deployment.
 
-For this repository that much is settled.
-[ADR 0001](0001-distribution-via-plugin-marketplace.md) took the `version` field out of the
-manifests: updates track the git SHA, every push to `main` is an update, and there is no
-release to cut. The repository has no tags and no GitHub releases.
+For this repository that much is settled. [ADR 0001](0001-distribution-via-plugin-marketplace.md)
+kept release management out of adept itself, and [ADR 0022](0022-versioned-manifest-and-bump-gate.md)
+later revised it into a manifest `version` with a bump gate — but a bumped version is not a
+release: the repository still has no tag, no GitHub release, and nothing to cut one from.
 
 What was never stated is whether that reasoning extends to the *target* repositories the
 skills operate on. Those are not adept — one may publish a crate, another may ship images on

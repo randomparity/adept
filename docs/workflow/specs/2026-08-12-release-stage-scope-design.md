@@ -17,9 +17,11 @@ condition, and the line carries discoverability.
 
 ## The question, and why it is open
 
-`docs/adr/0001-distribution-via-plugin-marketplace.md` settled versioning for *this*
-repository — manifests carry no `version`, updates track the git SHA. `CLAUDE.md` repeats it.
-Neither says anything about the repositories the skills are pointed at, so the missing stage
+[ADR 0001](../../adr/0001-distribution-via-plugin-marketplace.md) kept release management out
+of *this* repository, and [ADR 0022](../../adr/0022-versioned-manifest-and-bump-gate.md)
+revised that into a manifest `version` with a bump gate — still no tag, no GitHub release,
+no release stage. Neither record says anything about the repositories the skills are pointed
+at, so the missing stage
 reads as an oversight rather than a decision. That is the defect issue #50 reports; it reports
 no blocked work.
 
