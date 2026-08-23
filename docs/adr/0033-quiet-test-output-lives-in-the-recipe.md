@@ -26,10 +26,11 @@ one `ok   <suite>` line per passing suite, and replays the complete captured out
 for the failing suite before exiting with that suite's status. A leading `-v`/`--verbose`
 argument restores today's streaming behavior. Positional substring patterns restrict which
 discovered suites run; patterns matching zero discovered suites exit non-zero naming the
-unmatched patterns, so a typo can never read as a green run over an empty set. Every run —
-quiet or verbose, full or selected — reports exactly which suites executed: the per-suite
-`ok   <suite>` lines are that report, and the closing `test: N suites passed` counts them.
-No suite file changes.
+unmatched patterns, so a typo can never read as a green run over an empty set. Quiet mode
+prints a `run   <suite>` line to **stderr** as each suite starts, so a wedged suite is
+always nameable; the `ok   <suite>` stdout line is the completion marker. Every run —
+quiet or verbose, full or selected — reports exactly which suites executed, and the
+closing `test: N suites passed` counts them. No suite file changes.
 
 ## Consequences
 
@@ -45,10 +46,10 @@ No suite file changes.
 ## Considered & rejected
 
 - **Per-suite verbosity plumbing** (a shared `ok`-reporting helper every suite calls).
-  judgment: the diff touches ~15 files including dozens of inline printf sites in the
-  byte-identical check-records twins (`just records` compares them byte for byte, so each
-  edit lands twice), all to achieve centrally what capture-and-replay achieves in one
-  recipe — cost without contract gain.
+  judgment: the diff touches all 19 executing suites plus the shared helper — dozens of
+  inline printf sites across heterogeneous scaffolding, several suites keeping their own
+  deliberately — to achieve centrally what capture-and-replay achieves in one recipe;
+  cost without contract gain.
 - **Environment-variable verbosity** (`TEST_VERBOSE=1`). judgment: the issue asks for a
   `-verbose` option, and an exported variable leaks into nested invocations — the managed
   pre-push hook re-runs `just verify` in an isolated worktree and would inherit surprise
@@ -62,3 +63,8 @@ No suite file changes.
 - **Selection only, leave the default output streaming.** judgment: it fixes wall-clock
   but leaves the dominant green-run noise untouched, so it does not meet the issue's
   minimize-default-output goal.
+- **Log capture** (`tee` each suite's output to a per-run log, print the quiet summary
+  plus the log path). judgment: inspection of a suspicious pass becomes a file read
+  instead of a re-run, but the retained artifacts need a home, a retention rule, and
+  cleanup the repo's no-residue conventions would have to govern — more moving parts than
+  the `-v` re-run they replace, which pattern selection already bounds to seconds.

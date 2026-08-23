@@ -28,12 +28,11 @@ conventions, and `fail()` writes to stderr. Nothing here may weaken that.
 
 All three behaviors live in the `Justfile` `test` recipe. No suite file changes.
 
-- **Quiet by default.** The recipe captures each suite's combined stdout+stderr. On
-  success it prints one line, `ok   <suite-path>`. On failure it prints the header, the
-  full captured output, and exits with the suite's own status (stop-on-first-failure
-  preserved).
-- **`--verbose` / `-v` restores today's behavior** exactly: streaming headers and full
-  per-suite output.
+- **Quiet by default.** The recipe prints a `run   <suite>` line to stderr as each suite
+  starts — a wedged suite is always nameable — then captures the suite's combined
+  stdout+stderr. On success it prints one stdout line, `ok   <suite-path>`. On failure it
+  prints the header, the full captured output, and exits with the suite's own status
+  (stop-on-first-failure preserved).
 - **Positional patterns select suites.** `just test plugin-version verify-push` runs only
   suites whose `git ls-files` path contains at least one pattern as a substring (OR
   semantics). Patterns apply after discovery and after the check-records-pair exclusion.
@@ -66,8 +65,8 @@ New suite `scripts/test-recipe-test.sh` (auto-discovered by the recipe itself) b
 disposable git fixture holding fake `*-test.sh` scripts and invokes the real Justfile via
 `just --justfile <repo>/Justfile --working-directory <fixture> test ...`. Cases:
 
-1. Quiet all-pass: one `ok` line per fake suite, no per-assertion lines, summary line,
-   exit 0.
+1. Quiet all-pass: one stderr `run` line per suite start, one `ok` stdout line per fake
+   suite, no per-assertion lines, summary line, exit 0.
 2. Quiet failure: passing suites listed `ok`, failing suite's captured output replayed,
    exit nonzero, later suites not run.
 3. Selection: a matching pattern runs only matching suites; multiple patterns OR; a
