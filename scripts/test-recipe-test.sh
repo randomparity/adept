@@ -144,6 +144,7 @@ refuses "$run_stdout" 'ok   scripts/' 'verbose does not synthesize ok lines'
 # Case 5: unknown option exits 64 with usage text.
 run_recipe "$verbose_root" -x
 [[ $run_status -eq 64 ]] || fail "unknown option: expected exit 64, got $run_status"
+assert_contains "$run_stderr" 'test: unknown option: -x' 'unknown option message'
 # Case 6: -v short form behaves like the long form (spec criterion 2 names
 # both spellings).
 run_recipe "$verbose_root" -v alpha
