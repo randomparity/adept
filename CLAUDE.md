@@ -65,6 +65,9 @@ Unit tests support two refinements while iterating:
 Selection speeds up iteration; it never substitutes for `just verify` before shipping —
 CI and the pre-push hook always run the full suite set.
 
+The recipe uses just's `[positional-arguments]` attribute, so it requires `just` ≥ 1.29
+(the release that added the attribute); older binaries fail at parse time.
+
 `just plugin-check` runs `claude plugin validate ./ --strict`, which passes at exit 0 with no warnings. Any warning is a defect.
 
 `just version-check` runs `scripts/check-plugin-version.sh`. `.claude-plugin/plugin.json` declares a `version`, and **every change bumps it** — see [ADR 0022](docs/adr/0022-versioned-manifest-and-bump-gate.md). The field pins the plugin: the harness skips an update when the installed version matches the declared one, so a version left alone is a change that never reaches an installed copy, silently. The gate's three rules are that the version exists, that it is `MAJOR.MINOR.PATCH` with no prerelease or build suffix, and that it is strictly greater than the base ref's whenever the tree differs from `BASE_SHA` at all.

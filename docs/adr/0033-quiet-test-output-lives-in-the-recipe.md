@@ -32,7 +32,11 @@ are unioned into a deduplicated set: a suite matching several patterns executes 
 once. Quiet mode prints a `run   <suite>` line to **stderr** as each suite starts, so a
 wedged suite is always nameable; the `ok   <suite>` stdout line is the completion marker.
 Every run — quiet or verbose, full or selected — reports exactly which suites executed,
-and the closing `test: N suites passed` counts them. No suite file changes.
+and the closing `test: N suites passed` counts them. No existing suite's printing or
+reporting behavior changes; this record's own diff moves one invocation site in
+`scripts/list-shell-sources-test.sh` from `test` to `test --verbose` (quiet capture
+swallows per-suite output on passing runs) and adds the proving fixture suite
+`scripts/test-recipe-test.sh`.
 
 ## Consequences
 

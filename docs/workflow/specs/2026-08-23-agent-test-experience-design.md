@@ -28,7 +28,11 @@ conventions, and `fail()` writes to stderr. Nothing here may weaken that.
 
 ## Decision
 
-All three behaviors live in the `Justfile` `test` recipe. No suite file changes.
+All three behaviors live in the `Justfile` `test` recipe. No existing suite's printing
+or reporting behavior changes; this change moves one invocation site in
+`scripts/list-shell-sources-test.sh` to `test --verbose` (quiet capture swallows
+per-suite output on passing runs) and adds the proving fixture suite
+`scripts/test-recipe-test.sh`.
 
 - **Quiet by default.** The recipe prints a `run   <suite>` line to stderr as each suite
   starts — a wedged suite is always nameable — then captures the suite's combined

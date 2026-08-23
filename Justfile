@@ -148,6 +148,10 @@ test *args:
     -v | --verbose)
       verbose=1
       ;;
+    '')
+      printf 'test: empty pattern\n' >&2
+      exit 64
+      ;;
     -*)
       printf 'test: unknown option: %s\n' "$arg" >&2
       exit 64
