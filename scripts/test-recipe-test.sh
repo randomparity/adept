@@ -145,6 +145,12 @@ refuses "$run_stdout" 'ok   scripts/' 'verbose does not synthesize ok lines'
 run_recipe "$verbose_root" -x
 [[ $run_status -eq 64 ]] || fail "unknown option: expected exit 64, got $run_status"
 assert_contains "$run_stderr" 'test: unknown option: -x' 'unknown option message'
+
+# Case 5b: an empty argument is a usage error too — it would otherwise
+# substring-match every discovered path and read as a selected green full run.
+run_recipe "$verbose_root" ''
+[[ $run_status -eq 64 ]] || fail "empty pattern: expected exit 64, got $run_status"
+assert_contains "$run_stderr" 'test: empty pattern' 'empty pattern message'
 # Case 6: -v short form behaves like the long form (spec criterion 2 names
 # both spellings).
 run_recipe "$verbose_root" -v alpha
