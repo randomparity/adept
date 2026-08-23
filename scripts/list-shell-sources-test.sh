@@ -428,15 +428,30 @@ printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "second-test: pass\\n"\n'
 	>"$whole_suites/scripts/second-test.sh"
 chmod +x "$whole_suites/scripts/first-test.sh" "$whole_suites/scripts/second-test.sh"
 status=0
+# The stdin-closed property is a property of how the recipe invokes suites --
+# `"./$suite" </dev/null` at both of its call sites -- and it is guarded at
+# both. Verbose mode streams per-suite output, so the stub's printed proof is
+# readable there; quiet mode captures output, so the same fixture is re-run
+# quietly and the guard is the exit status: the stub exits non-zero when its
+# stdin is readable, a failed suite fails the recipe in either mode, and a
+# dropped redirect would feed it the suite list itself.
 out=$(PATH=$git_whole:$PATH "$just_real" \
 	--working-directory "$whole_suites" --justfile "$recipe_root/Justfile" \
-	test 2>&1) || status=$?
+	test --verbose 2>&1) || status=$?
 [ "$status" -eq 0 ] ||
 	fail "test: a discovery that completed did not pass the recipe: $out"
 printf '%s\n' "$out" | grep -q 'first-test: stdin is closed' ||
 	fail "test: a suite was not run with its stdin closed: $out"
 printf '%s\n' "$out" | grep -qF 'test: 2 suites passed' ||
 	fail "test: the recipe did not run every discovered suite: $out"
+status=0
+out=$(PATH=$git_whole:$PATH "$just_real" \
+	--working-directory "$whole_suites" --justfile "$recipe_root/Justfile" \
+	test 2>&1) || status=$?
+[ "$status" -eq 0 ] ||
+	fail "test: a passing discovery did not pass quiet mode: $out"
+printf '%s\n' "$out" | grep -qF 'test: 2 suites passed' ||
+	fail "test: quiet mode did not report every discovered suite: $out"
 
 # --- scratch-file allocation and cleanup ------------------------------------
 # Both halves of the same defect: under the lister's `set -e` an unguarded

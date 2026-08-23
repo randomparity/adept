@@ -137,9 +137,30 @@ format-check:
   shfmt -d "${tabs[@]}"
   shfmt -i 2 -d "${two_space[@]}"
 
-test:
+[positional-arguments]
+test *args:
   #!/usr/bin/env bash
   set -euo pipefail
+  verbose=0
+  patterns=()
+  for arg in "$@"; do
+    case $arg in
+    -v | --verbose)
+      verbose=1
+      ;;
+    '')
+      printf 'test: empty pattern\n' >&2
+      exit 64
+      ;;
+    -*)
+      printf 'test: unknown option: %s\n' "$arg" >&2
+      exit 64
+      ;;
+    *)
+      patterns+=("$arg")
+      ;;
+    esac
+  done
   # Captured rather than read from a process substitution, for the reason the
   # lint recipe above gives. The count floor below catches only a discovery
   # that returned nothing at all; a `git ls-files` that emits some paths and
@@ -173,19 +194,43 @@ test:
       continue
       ;;
     esac
-    printf '== %s\n' "$suite"
-    # The loop's stdin is the suite list, so a suite that read stdin would
-    # swallow the suites queued behind it and truncate the run to another
-    # green partial pass.
-    "./$suite" </dev/null
+    if ((${#patterns[@]})); then
+      matched=0
+      for pattern in "${patterns[@]}"; do
+        case $suite in
+        *"$pattern"*)
+          matched=1
+          break
+          ;;
+        esac
+      done
+      ((matched)) || continue
+    fi
+    if ((verbose)); then
+      printf '== %s\n' "$suite"
+      "./$suite" </dev/null
+    else
+      printf 'run   %s\n' "$suite" >&2
+      status=0
+      output=$("./$suite" </dev/null 2>&1) || status=$?
+      if ((status != 0)); then
+        printf '== %s\n' "$suite" >&2
+        printf '%s\n' "$output" >&2
+        exit "$status"
+      fi
+      printf 'ok   %s\n' "$suite"
+    fi
     count=$((count + 1))
   done <"$suites"
   if ((count == 0)); then
-    printf 'test: no suites discovered\n' >&2
+    if ((${#patterns[@]})); then
+      printf 'test: no suite matches: %s\n' "${patterns[*]}" >&2
+    else
+      printf 'test: no suites discovered\n' >&2
+    fi
     exit 1
   fi
   printf 'test: %s suites passed\n' "$count"
-
 shape-check:
   ./scripts/check-skill-shape.sh
 
