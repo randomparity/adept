@@ -31,15 +31,20 @@ All three behaviors live in the `Justfile` `test` recipe. No suite file changes.
 - **Quiet by default.** The recipe prints a `run   <suite>` line to stderr as each suite
   starts — a wedged suite is always nameable — then captures the suite's combined
   stdout+stderr. On success it prints one stdout line, `ok   <suite-path>`. On failure it
-  prints the header, the full captured output, and exits with the suite's own status
-  (stop-on-first-failure preserved).
+  prints the header and replays the complete captured output **to stderr**, then exits
+  with the suite's own status (stop-on-first-failure preserved). Replaying on stderr
+  keeps the stdout cap honest; the capture residuals ADR 0033 discloses apply here too:
+  replay preserves content but not live stdout/stderr interleaving, and an in-memory
+  capture buffers a wedged suite without bound until it exits or the run is interrupted.
 - **Positional patterns select suites.** `just test plugin-version verify-push` runs only
   suites whose `git ls-files` path contains at least one pattern as a substring (OR
-  semantics). Patterns apply after discovery and after the check-records-pair exclusion.
+  semantics). Patterns are unioned into a deduplicated set: a suite matching several
+  patterns executes exactly once. Patterns apply after discovery and after the
+  check-records-pair exclusion.
   When patterns are given and nothing matches, the recipe exits 1 naming the patterns;
   the existing no-suites-discovered floor still covers the no-pattern case.
-- **Unknown dash-arguments are rejected** with exit 2; positional arguments never start
-  with `-`.
+- **Unknown dash-arguments are rejected** with exit 64 (sysexits usage), distinct from
+  the recipe's infrastructure-failure exit 2; positional arguments never start with `-`.
 
 Exit semantics are unchanged in every mode: the recipe's status is still the verdict,
 the summary line still reads `test: N suites passed`, and CI (`just ci` → `just verify`)
@@ -54,40 +59,46 @@ output filter, and why the flag is CLI rather than environment.
 
 | Condition | Behavior |
 |---|---|
-| Suite fails | Header + full captured output replayed; exit = suite's status; later suites do not run |
+| Suite fails | Header + full captured output replayed on stderr; exit = suite's status; later suites do not run |
 | Pattern matches no suite | `test: no suite matches: <patterns>` on stderr, exit 1 |
 | No suites discovered at all | Existing message, exit 1 |
-| Unknown option (`-x`, `--wat`) | `test: unknown option: <arg>` on stderr, exit 2 |
+| Unknown option (`-x`, `--wat`) | `test: unknown option: <arg>` on stderr, exit 64 (usage); the recipe's infrastructure failures keep exit 2 |
 
 ## Testing and verification
 
 New suite `scripts/test-recipe-test.sh` (auto-discovered by the recipe itself) builds a
 disposable git fixture holding fake `*-test.sh` scripts and invokes the real Justfile via
-`just --justfile <repo>/Justfile --working-directory <fixture> test ...`. Cases:
+`just --justfile <repo>/Justfile --working-directory <fixture> test ...`. The fixture
+initializes its own git repository with local `user.name`/`user.email` (committer
+identity is not assumed from the host), tracks the fake suites before invoking `just`
+(discovery reads `git ls-files`), and runs with the shared fixture isolation
+(`clear_git_env`) so outer-repo config cannot reach it. Cases:
 
 1. Quiet all-pass: one stderr `run` line per suite start, one `ok` stdout line per fake
    suite, no per-assertion lines, summary line, exit 0.
 2. Quiet failure: passing suites listed `ok`, failing suite's captured output replayed,
    exit nonzero, later suites not run.
-3. Selection: a matching pattern runs only matching suites; multiple patterns OR; a
-   non-matching pattern exits 1 and names the patterns.
+3. Selection: a matching pattern runs only matching suites; multiple patterns OR and
+   deduplicate (a suite matching two patterns runs once); a non-matching pattern exits 1
+   and names the patterns.
 4. `--verbose`: headers and full output stream exactly as before.
-5. Unknown option exits 2.
+5. Unknown option exits 64 with the usage message.
 
 Guardrails: `just verify` green; version bump PATCH (no skill added or renamed; tooling
 behavior + docs).
 
 ## Acceptance criteria
 
-1. `just test` default output carries at most one line per suite plus the summary; a
-   failing suite replays its complete combined output and stops the run with the suite's
-   status.
+1. `just test` default output carries at most one stdout line per suite plus the summary;
+   a failing suite replays its complete combined output on stderr and stops the run with
+   the suite's status.
 2. `just test -v` and `just test --verbose` reproduce the pre-change streaming behavior.
-3. `just test <pattern>...` runs exactly the suites whose path contains any pattern;
-   zero matches exits 1 naming the patterns.
+3. `just test <pattern>...` runs exactly the suites whose path contains any pattern,
+   each matching suite exactly once; zero matches exits 1 naming the patterns.
 4. Suite exit statuses decide the recipe verdict in all modes; no mode can turn a failed
    suite green.
 5. CLAUDE.md documents the modes and gives selection guidance (selected suites while
-   iterating, full `just verify` before shipping, `--verbose` when inspecting failures).
+   iterating, full `just verify` before shipping, `--verbose` when inspecting failures
+   or when a green run's silence looks suspicious — quiet mode hides warnings).
 6. `scripts/test-recipe-test.sh` covers cases 1–5 above and passes under `just test`.
 7. `just verify` green; plugin version bumped.
