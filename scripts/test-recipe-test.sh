@@ -25,7 +25,8 @@ run_recipe() { # root [args...]
 	shift
 	local err_path="$SCRATCH/stderr.$$.$RANDOM"
 	run_status=0
-	run_stdout=$(just --justfile "$justfile" --working-directory "$root" test "$@" 2>"$err_path") || run_status=$?
+	run_stdout=$(just --justfile "$justfile" --working-directory "$root" \
+		test "$@" 2>"$err_path") || run_status=$?
 	run_stderr=$(cat "$err_path")
 	rm -f -- "$err_path"
 }
