@@ -43,7 +43,10 @@ closing `test: N suites passed` counts them. No suite file changes.
 - CI and the managed pre-push hook keep running the full set unflagged; nothing about
   their verdict path changes.
 - Replayed failure output preserves content but not the live interleaving of stdout and
-  stderr (one merged capture stream); order-sensitive diagnosis reruns the suite directly.
+  stderr (one merged capture stream); order-sensitive diagnosis reruns the suite
+  directly. Capture is in-memory (command substitution), leaving no scratch residue; the
+  accepted residual is that a wedged or chatty suite buffers without bound until it exits
+  or the run is interrupted — the stderr `run   <suite>` line names the suspect.
 
 ## Considered & rejected
 
@@ -53,11 +56,13 @@ closing `test: N suites passed` counts them. No suite file changes.
   convention — to achieve centrally what capture-and-replay achieves in one recipe;
   cost without contract gain.
 - **Environment-variable verbosity** (`TEST_VERBOSE=1`).
-  verified: an exported variable reaches the managed pre-push hook's isolated re-run —
-  the hook chain is `git push` → `scripts/verify-push.sh` → `just ci` → `just verify` in
-  a detached worktree (documented in CLAUDE.md, "Verifying a change") — so ambient
-  verbosity would surface in push output. The issue asks for a `-verbose` option, and a
-  flag is invoked state rather than ambient state.
+  verified: the push-time re-run chain is `git push` → `scripts/pre-push-hook` →
+  `scripts/verify-push.sh` (`git worktree add --detach`, then `just ci`) → `just verify`
+  → the test recipe.
+  judgment: ambient exported state propagates through that inherited environment, so a
+  developer's `TEST_VERBOSE` would surface as surprise verbosity in push output; the
+  issue asks for a `-verbose` option, and a flag is invoked state rather than ambient
+  state.
 - **Streaming filter** (pipe live output through a matcher that drops `ok` lines).
   judgment: it must classify prose lines to work, so a suite whose summary line drifts
   gets misclassified silently; capture-and-replay classifies by exit status only.
