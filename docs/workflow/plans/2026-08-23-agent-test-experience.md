@@ -403,3 +403,19 @@ No further commit is expected in this task unless the sweep found something.
 Single PR revert restores prior behavior wholesale; the recipe change is contained in
 one recipe plus one additive suite and one doc section. No data, schema, or external
 state.
+
+## Implementation deltas (as shipped)
+
+Two deviations from the snippets above, both discovered during Task 1 and applied
+without contract change:
+
+1. The recipe needed the `[positional-arguments]` attribute. Without it, just 1.58.0
+   does not deliver variadic parameters to a shebang recipe at all (`$@` is empty), so
+   neither patterns nor `-v/--verbose` could reach the script. With the attribute,
+   flags after the recipe name pass through verbatim (`just test -v` reaches the
+   recipe). A bare `--` argument is tolerated and skipped, per standard CLI convention,
+   since `just test -- -v` delivers it as a literal token.
+2. `new_fixture_repo` takes explicit `suite=exit-status` arguments instead of always
+   writing alpha/beta/gamma: the all-pass and verbose fixtures need only passing suites,
+   and Case 1's expected summary is `test: 2 suites passed`. The dedupe case asserts
+   gamma's `ok` line appears exactly once via `grep -c`.
