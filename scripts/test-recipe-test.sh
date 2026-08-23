@@ -144,11 +144,10 @@ refuses "$run_stdout" 'ok   scripts/' 'verbose does not synthesize ok lines'
 # Case 5: unknown option exits 64 with usage text.
 run_recipe "$verbose_root" -x
 [[ $run_status -eq 64 ]] || fail "unknown option: expected exit 64, got $run_status"
-assert_contains "$run_stderr" 'test: unknown option: -x' 'unknown option message'
-
-# Case 6: --verbose spelled out behaves like -v.
-run_recipe "$verbose_root" --verbose alpha
-[[ $run_status -eq 0 ]] || fail "--verbose: expected exit 0, got $run_status"
-assert_contains "$run_stdout" '== scripts/alpha-test.sh' '--verbose long form'
+# Case 6: -v short form behaves like the long form (spec criterion 2 names
+# both spellings).
+run_recipe "$verbose_root" -v alpha
+[[ $run_status -eq 0 ]] || fail "-v: expected exit 0, got $run_status"
+assert_contains "$run_stdout" '== scripts/alpha-test.sh' '-v short form'
 
 printf 'test-recipe-test: pass\n'

@@ -148,9 +148,6 @@ test *args:
     -v | --verbose)
       verbose=1
       ;;
-    --)
-      continue
-      ;;
     -*)
       printf 'test: unknown option: %s\n' "$arg" >&2
       exit 64

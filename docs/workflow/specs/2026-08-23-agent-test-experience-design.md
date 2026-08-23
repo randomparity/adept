@@ -12,14 +12,16 @@ per-assertion output with an explicit flag. CLAUDE.md documents when to use each
 
 `just test` discovers every `*-test.sh` under `git ls-files`, skips the byte-identical
 check-records pair (they run inside `git-fixture-isolation-test.sh`), prints a `== <suite>`
-header before each, streams the suite's full output, and stops on the first failure. A
-full run is 19 suites / ~4.5 minutes / ~150 lines. Two agent-experience problems:
+header before each, streams the suite's full output, and stops on the first failure. At
+authoring time (2026-08-23, this change's base) a full run was 19 suites / ~4.8 minutes /
+~150 lines. Two agent-experience problems:
 
 1. **No selection.** Verifying one change means re-running all 19 suites; there is no way
    to run only the suite that covers it.
 2. **Volume without signal.** Per-assertion `ok` lines dominate the output on every run,
    including the common all-green case where the only facts that matter are which suites
    ran and whether any failed.
+
 
 The failure path is already good: every suite reports diagnostics through its own
 conventions, and `fail()` writes to stderr. Nothing here may weaken that.

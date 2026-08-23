@@ -2,15 +2,16 @@
 
 ## Status
 
-Proposed
+Accepted (2026-08-23)
 
 ## Context
 
-Discovery (`git ls-files -- '*-test.sh'`) yields 21 paths; the recipe deliberately skips
-both byte-identical check-records twins — those run under `just records` and inside
-`git-fixture-isolation-test.sh` — so 19 suites execute, streaming each one's full output
-behind a `== <suite>` header. Agents iterating on the repository pay two costs: the just
-recipes offer no subset selection (every change re-runs all 19 suites; a direct
+At authoring time (`git ls-files -- '*-test.sh'`) discovery yielded 21 paths; the recipe
+deliberately skips both byte-identical check-records twins — those run under
+`just records` and inside `git-fixture-isolation-test.sh` — so 19 suites executed,
+streaming each one's full output behind a `== <suite>` header.
+Agents iterating on the repository pay two costs: the just recipes offer no subset
+selection (every change re-runs all suites; a direct
 `./scripts/<suite>` invocation exists but bypasses the recipe's discovery and summary),
 and the default output is dominated by per-assertion `ok` lines that carry no information
 on a green run. Every non-twin suite sources the shared `test-fixture-helpers.sh`
