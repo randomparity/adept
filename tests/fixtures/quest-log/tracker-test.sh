@@ -1086,4 +1086,37 @@ assert_exit 0 "$status" 'resolve with a CRLF declaration'
 [[ $(cat "$sandbox/out") == github ]] ||
 	fail "CRLF declaration resolved to '$(cat "$sandbox/out")'"
 
+# --- sourcing the github profile under zsh does not kill the caller ---------
+# `status` is a read-only special parameter in zsh: reaching any
+# `local status=0` in the profile killed a zsh caller's whole session.
+# tracker.sh runs bash today, so nothing sources the profile into zsh; the
+# exposure is a future entry point that does (#206). Skipped with a printed
+# notice where zsh is not installed -- the ubuntu CI leg carries none --
+# rather than silently passing, which would read as coverage it does not
+# have; the macOS leg and any zsh-equipped workstation run it for real.
+if command -v zsh >/dev/null; then
+	zsh_probe=$sandbox/zsh-profile.sh
+	{
+		# shellcheck disable=SC2016 # probe body is shell text for zsh to
+		printf 'PATH=%q:$PATH\n' "$sandbox/bin"
+		printf 'export TRACKER_TARGET=example/repo\n'
+		printf 'TRACKER_TARGET=example/repo GH_CALL_LOG=%q\n' "$sandbox/calls"
+		printf 'export TRACKER_TARGET GH_CALL_LOG\n'
+		# shellcheck disable=SC2016 # probe body is shell text for zsh to
+		printf ': >"$GH_CALL_LOG"\n'
+		printf 'source %q\n' "$assets/profiles/github.sh"
+		printf 'profile_label_ensure status:zsh-probe cccccc probe label\n'
+		printf 'profile_label_edit 101 --add status:in-progress\n'
+		printf 'profile_state_set 101 closed\n'
+		printf 'printf "SENTINEL_REACHED\\n"\n'
+	} >"$zsh_probe"
+	set +e
+	zsh "$zsh_probe" >"$sandbox/zsh-profile.out" 2>"$sandbox/zsh-profile.err"
+	set -e
+	rg -q 'SENTINEL_REACHED' "$sandbox/zsh-profile.out" ||
+		fail 'the profile read-only local killed the zsh caller instead of returning'
+else
+	printf 'tracker-test: zsh not installed; profile read-only-local case skipped\n'
+fi
+
 printf 'tracker-test: all assertions passed\n'
