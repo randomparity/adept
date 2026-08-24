@@ -68,16 +68,16 @@ github_cleanup() {
 	rm -f -- "$github_err_file" || :
 }
 github_run() { # gh-args...
-	local status=0
+	local rc=0
 	[[ -n $github_err_file ]] || {
 		github_err_file=$(mktemp 2>/dev/null) ||
 			die "$EXIT_TRANSPORT" transport \
 				'could not create a scratch file for the tracker command'
 		trap github_cleanup EXIT
 	}
-	GH_OUT=$(gh "$@" 2>"$github_err_file") || status=$?
+	GH_OUT=$(gh "$@" 2>"$github_err_file") || rc=$?
 	GH_ERR=$(cat "$github_err_file")
-	return "$status"
+	return "$rc"
 }
 
 # For the paths whose only failure handling is "classify and die". The write
@@ -298,7 +298,7 @@ profile_search() {
 # tenant has no undo.
 profile_create() {
 	github_require_target
-	local title='' body_file='' parent='' status=0 out url
+	local title='' body_file='' parent='' rc=0 out url
 	local -a labels=()
 	while (($#)); do
 		case $1 in
@@ -341,12 +341,12 @@ profile_create() {
 	fi
 	[[ -z $parent ]] || args+=(--parent "$parent")
 
-	github_run "${args[@]}" || status=$?
+	github_run "${args[@]}" || rc=$?
 	out=$GH_OUT
 	url=$(printf '%s\n' "$out" |
 		rg -o 'https://[^/[:space:]]+/[^/[:space:]]+/[^/[:space:]]+/issues/[0-9]+' |
 		tail -n 1 || true)
-	if ((status != 0)); then
+	if ((rc != 0)); then
 		# A failure that cannot have written is not partial. Reporting an
 		# auth or not-found error as "the write may have landed" tells an
 		# operator an issue exists when none does.
@@ -376,7 +376,7 @@ profile_create() {
 profile_label_edit() {
 	github_require_target
 	(($# >= 1)) || die "$EXIT_USAGE" usage 'label-edit needs an issue id'
-	local id=$1 status=0 out
+	local id=$1 rc=0 out
 	github_require_id "$id" 'issue id'
 	shift
 	local -a args=(issue edit "$id" --repo "$TRACKER_TARGET")
@@ -398,9 +398,9 @@ profile_label_edit() {
 		*) die "$EXIT_USAGE" usage "unknown label-edit argument: $1" ;;
 		esac
 	done
-	github_run "${args[@]}" || status=$?
+	github_run "${args[@]}" || rc=$?
 	out=$GH_OUT
-	if ((status != 0)); then
+	if ((rc != 0)); then
 		# partial names what was requested, so a caller can repair rather than
 		# guess which half of the delta landed.
 		jq -Rrn --arg m "$GH_ERR" \
@@ -418,11 +418,11 @@ profile_label_edit() {
 profile_label_ensure() {
 	github_require_target
 	(($# >= 3)) || die "$EXIT_USAGE" usage 'label-ensure needs a name, colour and description'
-	local name=$1 color=$2 description=$3 status=0 out
+	local name=$1 color=$2 description=$3 rc=0 out
 	github_run label create "$name" --repo "$TRACKER_TARGET" --color "$color" \
-		--description "$description" || status=$?
+		--description "$description" || rc=$?
 	out=$GH_OUT
-	((status == 0)) && {
+	((rc == 0)) && {
 		printf '{}\n'
 		return 0
 	}
@@ -441,30 +441,30 @@ profile_label_ensure() {
 profile_comment_add() {
 	github_require_target
 	(($# >= 2)) || die "$EXIT_USAGE" usage 'comment-add needs an issue id and a body file'
-	local id=$1 body_file=$2 status=0 out
+	local id=$1 body_file=$2 rc=0 out
 	github_require_id "$id" 'issue id'
 	[[ -f $body_file && -s $body_file ]] ||
 		die "$EXIT_USAGE" usage "body file must be a populated regular file: $body_file"
 	github_run issue comment "$id" --repo "$TRACKER_TARGET" \
-		--body-file "$body_file" || status=$?
+		--body-file "$body_file" || rc=$?
 	out=$GH_OUT
-	((status == 0)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
+	((rc == 0)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 	printf '{}\n'
 }
 
 profile_state_set() {
 	github_require_target
 	(($# >= 2)) || die "$EXIT_USAGE" usage 'state-set needs an issue id and a state'
-	local id=$1 state=$2 status=0 out verb
+	local id=$1 state=$2 rc=0 out verb
 	github_require_id "$id" 'issue id'
 	case $state in
 	open) verb=reopen ;;
 	closed) verb=close ;;
 	*) die "$EXIT_USAGE" usage "state must be open or closed: $state" ;;
 	esac
-	github_run issue "$verb" "$id" --repo "$TRACKER_TARGET" || status=$?
+	github_run issue "$verb" "$id" --repo "$TRACKER_TARGET" || rc=$?
 	out=$GH_OUT
-	((status == 0)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
+	((rc == 0)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 	printf '{}\n'
 }
 
@@ -494,7 +494,7 @@ profile_link_parent() {
 profile_link_blocks() {
 	github_require_target
 	(($# >= 2)) || die "$EXIT_USAGE" usage 'link-blocks needs a blocker and a blocked id'
-	local blocker=$1 blocked=$2 body status=0 out='' tmp
+	local blocker=$1 blocked=$2 body rc=0 out='' tmp
 	# The blocker is also spliced into the regular expression below.
 	github_require_id "$blocker" 'blocker id'
 	github_require_id "$blocked" 'blocked id'
@@ -524,10 +524,10 @@ Blocked by #$blocker"
 			'could not create a scratch file for the dependency edit'
 	printf '%s\n' "$body" >"$tmp"
 	github_run issue edit "$blocked" --repo "$TRACKER_TARGET" --body-file "$tmp" ||
-		status=$?
+		rc=$?
 	out=$GH_OUT
 	rm -f -- "$tmp"
-	((status == 0)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
+	((rc == 0)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 	printf '{}\n'
 }
 
@@ -557,14 +557,14 @@ CLAIM_TOKEN=''
 CLAIM_PRODUCER=''
 CLAIM_AT=''
 github_claim_read() { # issue
-	local issue=$1 status=0 desc f1 f2 f3 rest
+	local issue=$1 rc=0 desc f1 f2 f3 rest
 	CLAIM_STATE=''
 	CLAIM_TOKEN=''
 	CLAIM_PRODUCER=''
 	CLAIM_AT=''
 	github_run api "repos/$TRACKER_TARGET/labels/quest-claim%2F$issue" \
-		--jq '.description // ""' || status=$?
-	if ((status != 0)); then
+		--jq '.description // ""' || rc=$?
+	if ((rc != 0)); then
 		local code class
 		read -r code class <<<"$(github_classify "$GH_ERR")"
 		if [[ $class == not-found ]]; then
@@ -639,7 +639,7 @@ github_claim_parse_owner() { # args...
 profile_claim_acquire() {
 	github_require_target
 	(($# >= 1)) || die "$EXIT_USAGE" usage 'claim-acquire needs an issue id'
-	local issue=$1 status=0 epoch desc create_err
+	local issue=$1 rc=0 epoch desc create_err
 	github_require_id "$issue" 'issue id'
 	shift
 	local TOKEN PRODUCER
@@ -647,8 +647,8 @@ profile_claim_acquire() {
 	epoch=$(date -u +%s)
 	desc="$TOKEN;$PRODUCER;$epoch"
 	github_run label create "quest-claim/$issue" --repo "$TRACKER_TARGET" \
-		--color 6b7280 --description "$desc" || status=$?
-	if ((status == 0)); then
+		--color 6b7280 --description "$desc" || rc=$?
+	if ((rc == 0)); then
 		jq -n --arg i "$issue" --arg t "$TOKEN" --arg p "$PRODUCER" --arg a "$epoch" \
 			'{claimed: true, issue: $i, token: $t, producer: $p, at: $a}'
 		return 0
@@ -727,7 +727,7 @@ profile_claim_verify() {
 profile_claim_release() {
 	github_require_target
 	(($# >= 1)) || die "$EXIT_USAGE" usage 'claim-release needs an issue id'
-	local issue=$1 status=0
+	local issue=$1 rc=0
 	github_require_id "$issue" 'issue id'
 	shift
 	local TOKEN=''
@@ -754,10 +754,10 @@ profile_claim_release() {
 	held)
 		[[ $CLAIM_TOKEN == "$TOKEN" ]] || github_claim_conflict "$issue"
 		github_run label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
-			--yes || status=$?
+			--yes || rc=$?
 		# A delete that landed with a lost response classifies transport; the
 		# re-run reads absent and returns {}.
-		((status == 0)) || github_die "$GH_ERR"
+		((rc == 0)) || github_die "$GH_ERR"
 		printf '{}\n'
 		;;
 	esac
@@ -766,7 +766,7 @@ profile_claim_release() {
 profile_claim_recover() {
 	github_require_target
 	(($# >= 1)) || die "$EXIT_USAGE" usage 'claim-recover needs an issue id'
-	local issue=$1 older_than='' force=0 status=0 now age epoch desc
+	local issue=$1 older_than='' force=0 rc=0 now age epoch desc
 	github_require_id "$issue" 'issue id'
 	shift
 	local TOKEN PRODUCER
@@ -810,27 +810,27 @@ profile_claim_recover() {
 			((age >= older_than)) || github_claim_conflict "$issue"
 		fi
 		github_run label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
-			--yes || status=$?
+			--yes || rc=$?
 		# Delete failed: the old claim stands untouched, and a retry matches
 		# the same guard.
-		((status == 0)) || github_die "$GH_ERR"
+		((rc == 0)) || github_die "$GH_ERR"
 		;;
 	malformed)
 		# No evaluable age: --older-than always refuses; only --force or a
 		# manual delete clears a malformed claim.
 		((force == 1)) || github_claim_conflict "$issue"
 		github_run label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
-			--yes || status=$?
-		((status == 0)) || github_die "$GH_ERR"
+			--yes || rc=$?
+		((rc == 0)) || github_die "$GH_ERR"
 		;;
 	absent) : ;;
 	esac
 	epoch=$(date -u +%s)
 	desc="$TOKEN;$PRODUCER;$epoch"
-	status=0
+	rc=0
 	github_run label create "quest-claim/$issue" --repo "$TRACKER_TARGET" \
-		--color 6b7280 --description "$desc" || status=$?
-	if ((status != 0)); then
+		--color 6b7280 --description "$desc" || rc=$?
+	if ((rc != 0)); then
 		# Between delete and create the store may be absent; the caller
 		# re-runs claim-acquire, which takes the absent path.
 		jq -Rrn --arg m "$GH_ERR" \

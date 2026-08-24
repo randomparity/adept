@@ -1086,4 +1086,66 @@ assert_exit 0 "$status" 'resolve with a CRLF declaration'
 [[ $(cat "$sandbox/out") == github ]] ||
 	fail "CRLF declaration resolved to '$(cat "$sandbox/out")'"
 
+# --- sourcing the github profile under zsh does not kill the caller ---------
+# `status` is a read-only special parameter in zsh: reaching any
+# `local status=0` in the profile killed a zsh caller's whole session.
+# The probe drives every function that declares a renamed local, so a
+# reversion in any one of them fails here rather than shipping.
+# tracker.sh runs bash today, so nothing sources the profile into zsh; the
+# exposure is a future entry point that does (#206). Skipped with a printed
+# notice where zsh is not installed -- the ubuntu CI leg carries none --
+# rather than silently passing, which would read as coverage it does not
+# have; the macOS leg and any zsh-equipped workstation run it for real.
+if command -v zsh >/dev/null; then
+	# The probe gets its own success-path stub rather than reusing the shared
+	# $sandbox/bin one: whichever stub the last case above left installed is
+	# an implementation detail, and a probe running through failure paths
+	# would pin the error machinery instead of the declarations under test.
+	zsh_epoch=$(date -u +%s)
+	mkdir -p "$sandbox/zsh-bin"
+	cat >"$sandbox/zsh-bin/gh" <<FAKE_GH
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ \$1 == api ]]; then
+	printf 'probetoken;probeuser;$zsh_epoch\n'
+	exit 0
+fi
+if [[ \$1 == issue ]]; then
+	case " \$* " in
+	*" body "*) printf 'a body with no link\n' ;;
+	*) printf 'https://github.com/example/repo/issues/102\n' ;;
+	esac
+	exit 0
+fi
+exit 0
+FAKE_GH
+	chmod +x "$sandbox/zsh-bin/gh"
+	printf 'body\n' >"$sandbox/zsh-body.md"
+	zsh_probe=$sandbox/zsh-profile.sh
+	{
+		# shellcheck disable=SC2016 # probe body is shell text for zsh to
+		printf 'PATH=%q:$PATH\n' "$sandbox/zsh-bin"
+		printf 'export TRACKER_TARGET=example/repo\n'
+		printf 'source %q\n' "$assets/profiles/github.sh"
+		printf 'profile_label_ensure status:zsh-probe cccccc probe label\n'
+		printf 'profile_label_edit 101 --add status:in-progress\n'
+		printf 'profile_state_set 101 closed\n'
+		printf 'profile_create --title T --body-file %q\n' \
+			"$sandbox/zsh-body.md"
+		printf 'profile_comment_add 101 %q\n' "$sandbox/zsh-body.md"
+		printf 'profile_link_blocks 7 101\n'
+		printf 'profile_claim_acquire 101 --token probetoken --producer probeuser\n'
+		printf 'profile_claim_release 101 --token probetoken\n'
+		printf 'profile_claim_recover 101 --force --token probetoken --producer probeuser\n'
+		printf 'printf "SENTINEL_REACHED\\n"\n'
+	} >"$zsh_probe"
+	set +e
+	zsh "$zsh_probe" >"$sandbox/zsh-profile.out" 2>"$sandbox/zsh-profile.err"
+	set -e
+	rg -q 'SENTINEL_REACHED' "$sandbox/zsh-profile.out" ||
+		fail 'the profile read-only local killed the zsh caller instead of returning'
+else
+	printf 'tracker-test: zsh not installed; profile read-only-local case skipped\n'
+fi
+
 printf 'tracker-test: all assertions passed\n'
