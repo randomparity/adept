@@ -6,168 +6,114 @@ Accepted (2026-08-25)
 
 ## Context
 
-Issue #234 asks for a GitHub-hosted website for adept, built from `README.md`, carrying a
-feature list, what distinguishes adept from other workflow tools, and a quick start. The
-operator scoped the site to two pages: the README-derived landing page and
-`docs/cheatsheet.md`.
+Issue #234 asks for a GitHub-hosted website built from `README.md`, carrying a feature list,
+what distinguishes adept from other workflow tools, and a quick start. The operator scoped it
+to two pages: the README-derived landing page and `docs/cheatsheet.md`.
 
 GitHub Pages offers two source modes. *Deploy from a branch* points Pages at a branch and a
-root — either `/` or `/docs` — and GitHub runs Jekyll over everything it finds there.
-*Deploy from GitHub Actions* publishes whatever artifact a workflow uploads.
+root — `/` or `/docs` — and GitHub runs Jekyll over everything it finds there. *Deploy from
+GitHub Actions* publishes whatever artifact a workflow uploads.
 
-The choice matters more here than in an ordinary repository, because this one is a plugin
-and both harnesses copy the **whole** tree into their plugin cache. Every tracked Markdown
-file is therefore a live candidate page under a branch source, and there are a lot of them:
-at `bdcc640`, `git ls-files '*.md' | wc -l` reports 141, of which 28 are `skills/*/SKILL.md`
-files that already carry YAML front matter, and 104 sit under `docs/` — ADRs, specs, plans,
-and benchmarks the operator's scope decision excludes from this site.
+The branch modes are unusable here, and the reason is this repository's shape: it is a plugin,
+and both harnesses copy the **whole** tree into their plugin cache. At `bdcc640`,
+`git ls-files '*.md' | wc -l` reports 141 tracked Markdown files. Every one of them would
+render as a page, because `jekyll-optional-front-matter` sits in the `github-pages` gem's
+`DEFAULT_PLUGINS` and exists precisely to render Markdown that carries no front matter.
 
 `README.md` also has to stay the single source for the landing page. CLAUDE.md's
-instruction-file rule — two documents stating the same thing is the drift problem this
-project spent real effort removing — binds a second copy of the landing prose exactly as it
-binds a second `AGENTS.md`.
+instruction-file rule — two documents stating the same thing is the drift problem this project
+spent real effort removing — binds a second copy of the landing prose exactly as it binds a
+second `AGENTS.md`.
+
+`randomparity/bzr` already publishes a Pages site of this shape, and it is the reference this
+record follows.
 
 ## Decision
 
-**Pages source is GitHub Actions, and the workflow publishes a staged directory assembled
-from named sources.** Nothing reaches the site because it happens to be in the repository.
+**Pages source is GitHub Actions, and one workflow renders two named files into a site
+directory.** Nothing reaches the site because it happens to be in the repository.
 
-1. `scripts/build-site.sh <output-dir>` assembles the staged site from tracked files:
-   `site/_config.yml`, `README.md` → `index.md`, `docs/cheatsheet.md` → `cheatsheet.md`,
-   and the two images under `docs/assets/` → `assets/`. It injects the Jekyll front matter
-   each staged page needs and rewrites the links that only make sense inside the
-   repository. It writes only into the output directory and never edits a tracked file.
-2. **Publication is default-closed.** Only the paths that script names can reach the site.
-   A new skill, a new ADR, a new top-level directory publishes nothing until someone edits
-   the script and its suite — the opposite of an exclusion list, where the same events
-   publish by default and the leak is silent.
-3. Rendering is `actions/jekyll-build-pages` with `jekyll-theme-cayman`. The action carries
-   the `github-pages` gem set, so this repository gains no `Gemfile`, no lockfile, and no
-   vendored CSS. **`site/_config.yml` carries the project-page base path** —
-   `baseurl: /adept` and `url: https://randomparity.github.io` — because the renderer will
-   not derive one: `jekyll-build-pages`'s `entrypoint.sh` at v1.0.13 runs
-   `github-pages build` with no base-URL argument, and `GitHubPages::Configuration` sets
-   neither `url` nor `baseurl` in its `DEFAULTS` or `OVERRIDES`, so the value has to reach
-   the staged config from somewhere. It is a literal here rather than derived; the
-   alternative is weighed below. `site/_config.yml` also names the theme explicitly, since
-   that same `DEFAULTS` hash would otherwise select `jekyll-theme-primer`.
-4. **Pages is enabled once, out of band, by an operator with admin, before the pull request
-   merges** — so the first workflow run on `main` is green rather than red on a setting.
-   The workflow does not enable it, but it does keep `actions/configure-pages` as its first
-   build step: with `enablement` left off, that step is what turns a missing setting into an
-   error naming it, which is the recovery path if the ordering above is missed. A run that
-   failed that way is re-run with `workflow_dispatch` once the setting exists.
+1. `.github/workflows/pages.yml` builds `_site` inline: copy `docs/assets/` and
+   `site/style.css`, run `pandoc` twice against `README.md` and `docs/cheatsheet.md` through
+   `site/template.html`, assert the outputs, upload, deploy.
+2. **Rendering is `pandoc` with a template and stylesheet this repository owns**, not Jekyll
+   with a GitHub theme. The template supplies the site's navigation, so neither page depends
+   on the other's prose to be reachable.
+3. **The build job runs on `pull_request` as well as `push`**, and only the deploy job is
+   gated with `if: github.event_name != 'pull_request'`. The site build is therefore
+   exercised on every branch before it can reach `main`.
+4. **Repository-relative links are absolutised at build time**, in one `perl` expression:
+   `docs/cheatsheet.md` becomes `cheatsheet.html`, and every remaining relative target becomes
+   a `blob/main` URL — excluding `docs/assets/`, which is copied to the path `README.md`
+   already names and therefore resolves unchanged on both GitHub and the site. A post-build
+   check fails the job on any relative `href` or `src` the rewrite did not resolve.
+5. **Pages is enabled once, out of band, by an operator with admin, before the pull request
+   merges**, so the first run on `main` is green. The workflow does not enable it:
+   `actions/configure-pages`' `enablement` input requires a token other than `GITHUB_TOKEN`,
+   and this repository holds no secrets.
 
 ## Consequences
 
-- Adding a page to the site is an edit to `scripts/build-site.sh` and its suite, not a
-  settings change. That is the intended cost: the page set is reviewable in a diff.
-- The staged copy is where site-only concerns live — front matter, the stripped leading H1
-  the theme's header would otherwise duplicate, and rewritten links. Rewriting has two
-  cases, not one: a link whose target is itself a staged page becomes that page's site path,
-  and only the remaining repository-relative links become GitHub blob URLs. The first case
-  is currently one link — `README.md`'s pointer to `docs/cheatsheet.md`, which is the
-  landing page's only route to the other half of the site, and which the theme does not
-  replace with navigation of its own. None of this lands in `README.md`, which stays
-  readable on GitHub and inside the plugin cache.
-- The link rewriting is a real behaviour with a real failure mode, so the decision requires
-  it to be testable and tested: `scripts/build-site-test.sh` under `just test`, and a
-  `site-check` recipe joining `just verify`, where a `README.md` link to a path that no
-  longer exists goes red before it reaches the site as a 404. That coverage stops at links
-  the sources write. The theme emits its own stylesheet through Jekyll's `relative_url`
-  filter, so a wrong or missing `baseurl` produces a page that builds green and renders
-  unstyled, and no local gate sees it — that one is checked by loading the deployed page.
+- The whole site build is one workflow file plus `site/template.html` and `site/style.css`.
+  There is no site generator, no `Gemfile`, no `_config.yml`, no base-path configuration, and
+  no staging script to test — decision 3 puts the build itself under review on every PR.
+- This repository owns the stylesheet. Nothing about the site's appearance changes upstream,
+  and nothing themes it for us either: the CSS is ours to maintain.
+- `README.md` keeps its relative links, which is what a reader inside the plugin cache needs —
+  `docs/adr/0001-…md` is a local file there, not a URL. Decision 4 is the one line that buys
+  that.
+- Adding a page is an edit to the workflow's build step. That is the intended cost: the page
+  set is reviewable in a diff, and a new skill, ADR, or top-level directory publishes nothing.
+- Three pinned third-party action references (`actions/checkout`,
+  `actions/upload-pages-artifact`, `actions/deploy-pages`) plus `pandoc` from the runner's apt
+  repository. This repository has no `.github/dependabot.yml`, so nothing automated tracks
+  those pins — tracked as #236, and off this change's surface.
 - Reachability is observed rather than asserted: `actions/deploy-pages` outputs the deployed
-  `page_url`, which is the record that the site is up, and a deploy that fails is a red run
-  on `main` for whoever merged to read. No smoke-test workflow is added — two static pages
-  do not earn one.
-- The repository gains three pinned third-party action references
-  (`actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`) plus
-  `actions/jekyll-build-pages`. Each is a supply-chain surface, watched by `$restock` and by
-  whoever reads the workflow — this repository has no `.github/dependabot.yml`, so nothing
-  automated tracks these pins, and adding one is a prerequisite for that which this change
-  does not carry. `zizmor` audits the workflow's `pages: write` and `id-token: write`
-  grants. The fourth reference is pinned less than the other three and the difference is
-  worth stating: its `action.yml` at v1.0.13 is a Docker action pulling the mutable tag
-  `ghcr.io/actions/jekyll-build-pages:v1.0.13`, so a SHA pin fixes the action and not the
-  image behind it. Accepted for a two-page static build with no secrets in the job; no
-  machinery is added for it.
-- The first deployment cannot succeed until an operator enables Pages. That is a documented
-  one-time step, and a workflow run that fails on it names the missing setting rather than
-  publishing a half-site — verified from `actions/configure-pages` at v6.0.0, whose
-  `findOrCreatePagesSite` raises "Please verify that the repository has Pages enabled and
-  configured to build using GitHub Actions" and rethrows when `enablement` is off, before
-  any artifact is uploaded.
-- The theme is GitHub's, not this repository's, and its version is resolved inside the
-  action's image rather than by anything here — a `jekyll-theme-cayman` release does not
-  reach the site on its own. The appearance changes when the pinned
-  `actions/jekyll-build-pages` reference is bumped, which arrives as a reviewable pull
-  request, or when the image behind that pinned tag is rebuilt upstream, which does not.
-  The second path is the residual the bullet above accepts. Accepted here too: the
-  alternative is CSS nobody wants to own.
-- The staged landing page embeds both README images verbatim — 4,535,676 bytes together at
-  `bdcc640` — so the page a newcomer is sent to weighs about 4.5 MB before a byte of theme
-  CSS. The build adds no image handling either way: the images are reduced once, by hand, or
-  not at all. Reducing them is a change to the assets themselves, tracked as #237, not a
-  change to this decision.
+  `page_url`, and a failed deploy is a red run on `main` for whoever merged to read. No
+  smoke-test workflow is added — two static pages do not earn one.
+- The landing page embeds both README images verbatim, 4,535,676 bytes together at `bdcc640`,
+  so it weighs about 4.5 MB before a byte of CSS. The build adds no image handling either way;
+  reducing them is a change to the assets themselves, tracked as #237.
 
 ## Considered & rejected
 
 - **Deploy from a branch with the repository root as the source, excluding the rest in
   `_config.yml`.** The cheapest to set up — no workflow at all. Rejected — verified: at
-  `bdcc640`, `git ls-files '*.md' | wc -l` reports 141 tracked Markdown files, 28 of them `SKILL.md`
-  files that already carry YAML front matter and would render as pages; an exclusion list
-  publishes every one of them by default and leaks silently the first time a directory is
-  added, which is the failure mode this repository's construction rules exist to refuse.
+  `bdcc640`, `git ls-files '*.md' | wc -l` reports 141 tracked Markdown files, and
+  `jekyll-optional-front-matter` in the `github-pages` gem's `DEFAULT_PLUGINS`
+  (`github/pages-gem`, `lib/github-pages/plugins.rb`) renders every one of them; an exclusion
+  list publishes them all by default and leaks silently the first time a directory is added.
 - **Deploy from a branch with `/docs` as the source.** Narrower, and needs no workflow.
-  Rejected — verified: at `bdcc640`, `git ls-files 'docs/*.md' 'docs/**/*.md' | wc -l` reports
-  104 files under `docs/`, comprising the ADRs, specs, plans, and benchmarks the operator's
-  scope decision excluded; the folder source publishes exactly the set that was ruled out.
-- **Keep the GitHub Actions source but stage inline in the workflow** — a handful of `run:`
-  steps doing the same copy, front-matter injection and link rewriting, with no
-  `scripts/build-site.sh`, no suite, and no `just` recipe. The variant this repository's
-  anatomy rules most directly demand be weighed, since a supporting file has to be argued
-  for. Rejected — judgment: a workflow step is exercised only when the workflow runs,
-  whatever triggers it, while a script is a thing `just verify` runs on every branch and a
-  fixture-driven suite can drive case by case. The link rewriting is the part with a failure
-  mode, and no arrangement of triggers gives an inline implementation the fixture coverage a
-  script gets for free.
-- **Derive the base path from `actions/configure-pages` rather than writing it into
-  `site/_config.yml`** — have `scripts/build-site.sh` take it as an argument and write it
-  into the staged config. Rejected — verified: at v6.0.0 that action does declare the
-  outputs this would consume (`base_url`, `origin`, `host`, `base_path`), so the
-  alternative is real rather than hypothetical; judgment: it makes the staged
-  configuration something only CI can produce, so `just site-check` would assemble a site
-  that differs from the deployed one in the one field whose failure the Consequences
-  already call silent-green. A literal is readable in a diff and reproducible on a
-  workstation. The cost accepted is a repository rename or transfer silently invalidating
-  it — a fork keeping the name is unaffected, since a project page's path is the
-  repository name.
-- **An orphan `gh-pages` branch as a deploy-from-a-branch source.** The alternative that
-  attacks this record's own two arguments hardest: it is default-closed by construction, so
-  the 141-file leak does not arise, and it needs no `pages: write`, no `id-token: write`,
-  and none of the four action references booked above as supply-chain surface. Rejected —
-  judgment: it puts generated output in git, where a reader cannot tell it from source and
-  no gate covers it, and it moves the sync problem from a reviewable script to a branch
-  someone has to remember to regenerate.
-- **Copy the landing prose into a site page and leave `README.md` alone.** Removes the
-  staging step entirely. Rejected — judgment: two documents stating the same thing is the
-  drift this project already paid to remove once, and the issue asks for the README itself
-  to be the basis for the site.
-- **Render with `pandoc` and a hand-written HTML template plus CSS.** Avoids Jekyll and
-  Ruby. Rejected — judgment: it trades a maintained theme for stylesheet and template
-  authorship this repository would then own forever, to produce the same two pages.
-- **Enable Pages from the workflow with `actions/configure-pages`'s `enablement: true`.**
-  Would remove the one-time manual step. Rejected — verified: that action's own `action.yml`
-  at v6.0.0 documents the input as requiring "a token other than `GITHUB_TOKEN`" — a PAT
-  with `repo` scope or a GitHub App; this repository holds no secrets and adding one to
-  spare a single setting click is a standing credential in exchange for a one-off.
-- **Publish the ADRs, specs, plans, and benchmarks under `docs/` as further site pages.**
-  Rejected — verified: the operator's scope decision recorded in the `WORK:SCOPE`
-  annotation on issue #234 excludes them, naming the landing page and the cheat sheet as
-  the whole site.
+  Rejected — verified: `README.md` is not under `docs/`, so that source cannot serve the
+  landing page at all, which is the issue's first completion criterion. The 104 Markdown files
+  it would serve instead are the ADRs, specs, plans and benchmarks the operator's scope
+  decision excluded, plus `docs/cheatsheet.md`.
+- **Render with Jekyll via `actions/jekyll-build-pages` and a GitHub Pages theme.** The
+  obvious choice, and the one this record first made. Rejected — verified: nothing in that
+  arrangement supplies a project page's base path, because
+  `jekyll-build-pages`' `entrypoint.sh` at v1.0.13 runs `github-pages build` with no base-URL
+  argument and `GitHubPages::Configuration` sets neither `url` nor `baseurl`, so the value must
+  be pinned by hand and a wrong one builds green and renders unstyled; and the theme's version
+  is resolved inside `ghcr.io/actions/jekyll-build-pages:v1.0.13`, a mutable tag no SHA pin
+  reaches. `pandoc` with an owned template has neither property.
+- **Stage the site with a `scripts/build-site.sh` and a fixture suite rather than inline
+  workflow steps.** The variant this repository's anatomy rules demand be weighed, since a
+  supporting file has to be argued for. Rejected — verified: `randomparity/bzr`'s
+  `.github/workflows/site.yml` builds its site on `pull_request` and gates only the deploy
+  step, so inline steps are exercised on every branch; the coverage a script was going to buy
+  is available without one, and decision 4's post-build check asserts the part with a failure
+  mode.
+- **Write `README.md`'s in-repository links as absolute `blob/main` URLs, as
+  `randomparity/bzr` does, and drop the rewrite entirely.** The simplest option of all, and
+  the reason bzr's build needs no link handling: all 48 links in its `README.md` are already
+  absolute. Rejected — judgment: adept's `README.md` ships inside every plugin cache, where a
+  relative link resolves to the file sitting next to it and an absolute one sends the reader
+  to the network for a file they already have.
+- **Copy the landing prose into a site page and leave `README.md` alone.** Removes the rewrite
+  and the pandoc step. Rejected — judgment: two documents stating the same thing is the drift
+  this project already paid to remove once, and the issue asks for the README itself to be the
+  basis for the site.
 - **Do nothing — GitHub already renders `README.md` and `docs/cheatsheet.md`.** The null
-  option, and it is not nothing: both files are readable today at their blob URLs. Rejected
-  — judgment: a blob URL is a file listing with prose in it, and the issue asks for a
-  landing page a newcomer can be sent to, which is a different artifact from the file that
-  happens to contain the same words.
+  option, and it is not nothing: both are readable today at their blob URLs. Rejected —
+  judgment: a blob URL is a file listing with prose in it, and the issue asks for a landing
+  page a newcomer can be sent to.
