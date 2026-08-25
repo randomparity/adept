@@ -43,14 +43,19 @@ Two further measurements, neither of which the issue mentions, shape the design.
 **A token is not connectivity.** With a token present and the API unreachable, zizmor does
 not fall back to the offline subset — it exits 1 with `fatal: no audit was performed`.
 
-**A token does not decide the mode by itself.** `ZIZMOR_OFFLINE` and
-`ZIZMOR_NO_ONLINE_AUDITS` each override a present token: the run completes offline at exit
-0, and — unlike the tokenless default above — prints no `WARN` at all. Anything reading
-only the token variables would announce "online mode" over that run.
+**A token does not decide the mode by itself.** `ZIZMOR_OFFLINE=true` and
+`ZIZMOR_NO_ONLINE_AUDITS=true` each override a present token: the run completes offline at
+exit 0, and — unlike the tokenless default above — prints no `WARN` at all. Anything
+reading only the token variables would announce "online mode" over that run. Their value,
+not their presence, is what zizmor reads: `ZIZMOR_OFFLINE=false` selects online.
 
-The audits at stake are named rather than described: per <https://docs.zizmor.sh/audits/>,
-the ones marked "Works offline: ❌" are `impostor-commit`, `known-vulnerable-actions`,
-`ref-confusion`, and `typosquat-uses`.
+The audits at stake are measured from the binary rather than taken from the published
+table. `zizmor --offline -vv --no-progress .github/workflows/` on this host logs
+`skipping <audit>: can't run without a GitHub API token` for `impostor-commit`,
+`known-vulnerable-actions`, `ref-confusion`, `stale-action-refs`, and
+`ref-version-mismatch`. `typosquat-uses` is scheduled offline and is *not* among them, and
+<https://docs.zizmor.sh/audits/> does not list `ref-version-mismatch` as online-only — so
+where the page and the binary disagree, this spec follows the binary the gate runs.
 
 ## Requirements
 
@@ -119,34 +124,54 @@ Inputs are forwarded to zizmor unchanged. Zero arguments is a usage fault, exit 
 status `list-shell-sources.sh` and `check-ripgrep-config.sh` already reserve for "this
 script could not run at all", as against a verdict about what it scanned.
 
-**Mode discovery.** Five environment variables decide zizmor's mode, and the script tests
-all five, in this order:
+**Mode discovery.** Five environment variables decide zizmor's mode, and the script reads
+all five *in zizmor's own vocabulary* — the two mode controls are clap booleans whose
+**value** is the instruction, not their presence.
 
-| # | variable | effect when non-empty |
-|---|---|---|
-| 1 | `ZIZMOR_OFFLINE` | offline; condition is this variable |
-| 2 | `ZIZMOR_NO_ONLINE_AUDITS` | offline; condition is this variable |
-| 3 | `GH_TOKEN` | online; source is this variable |
-| 4 | `GITHUB_TOKEN` | online; source is this variable |
-| 5 | `ZIZMOR_GITHUB_TOKEN` | online; source is this variable |
+Resolution order:
 
-Rows 3–5 are zizmor's own documented discovery order for `--gh-token` (`zizmor --help`,
+| # | variable | `true` | `false` | anything else, empty included |
+|---|---|---|---|---|
+| 1 | `ZIZMOR_OFFLINE` | offline; reported condition | falls through | exit 2, named |
+| 2 | `ZIZMOR_NO_ONLINE_AUDITS` | offline; reported condition | falls through | exit 2, named |
+
+| # | variable | non-empty | empty | unset |
+|---|---|---|---|---|
+| 3 | `GH_TOKEN` | online; reported source | removed from the child env | falls through |
+| 4 | `GITHUB_TOKEN` | online; reported source | removed from the child env | falls through |
+| 5 | `ZIZMOR_GITHUB_TOKEN` | online; reported source | removed from the child env | falls through |
+
+Falling through all five gives offline with the three token names as the condition.
+
+Rows 3–5 are zizmor's documented discovery order for `--gh-token` (`zizmor --help`,
 Network Options: `[env: GH_TOKEN or GITHUB_TOKEN or ZIZMOR_GITHUB_TOKEN]`). Rows 1–2 are
-the mode controls documented under the same heading — `--offline [env: ZIZMOR_OFFLINE=]`
-and `--no-online-audits [env: ZIZMOR_NO_ONLINE_AUDITS=]`. An empty value counts as unset;
-an exported-but-empty `GH_TOKEN` is not a token.
+the mode controls under the same heading — `--offline [env: ZIZMOR_OFFLINE=]` and
+`--no-online-audits [env: ZIZMOR_NO_ONLINE_AUDITS=]`, both `[possible values: true, false]`.
 
-**Rows 1–2 outrank the token, and omitting them would be a defect.** Verified on this
-host: with either exported, a run carrying a valid token completes offline at exit 0 and
-prints no `WARN` at all. A script that inferred the mode from the token alone would
-announce "online mode" over a run that audited no provenance — worse than the status quo,
-because the run would then be unaudited *and labelled audited*, and the label is the whole
-product of this change. Reading three of the five variables that decide the mode is a
-second opinion that drifts from zizmor's; reading all five is not.
+Three measurements on this host fix these semantics, and getting any of them wrong is a
+defect rather than a detail:
 
-The mode variables are reported, never unset. Silently overriding an operator who asked to
-stay offline is the same class of defect as the silent degrade this change closes, and
-there is no flag to assert online mode over them — `zizmor --offline=false` errors.
+- `ZIZMOR_OFFLINE=true` with a valid token completes **offline** at exit 0, printing no
+  `WARN`. A script inferring the mode from the token alone would announce "online mode"
+  over a run that audited no provenance — worse than the status quo, because the run would
+  then be unaudited *and labelled audited*, and the label is this change's whole product.
+- `ZIZMOR_OFFLINE=false` with a token goes **online**. A presence test would force
+  `--offline` and report the operator's own variable as the cause of a mode they asked
+  against — the "cause the observation does not carry" defect ADR 0025 decision 2 forbids.
+- An empty or non-boolean value is a usage error, not an ignorable one: `GH_TOKEN=` exits 2
+  with `GitHub token cannot be empty` *even with `--offline` on argv*, `ZIZMOR_OFFLINE=`
+  exits 2 with `a value is required`, and `ZIZMOR_OFFLINE=0` with `invalid value '0'`.
+
+Hence rows 1–2 exit 2 with the variable and the accepted values named, rather than
+announcing a mode the run will never enter; and an empty *token* variable is removed from
+the child's environment, which is what makes "an empty value is not a token" true by
+construction instead of asserted. Removing an empty variable is not the override rejected
+below: an empty string carries no instruction.
+
+A `true` mode variable is reported, never unset. Silently overriding an operator who asked
+to stay offline is the same class of defect as the silent degrade this change closes, and
+there is no flag to assert online mode over them — `zizmor --offline=false` errors with
+`unexpected value 'false' for '--offline'`.
 
 **There is deliberately no fallback to `gh auth token`.** A token is not connectivity:
 `gh auth token` is a keyring read that contacts nothing, so it yields a token on a machine
@@ -182,8 +207,8 @@ environment is what selects online mode, verified above.
 **Offline path.** The script prints two lines, then runs `zizmor --offline`:
 
 ```
-zizmor: offline mode (--offline); ZIZMOR_OFFLINE is set
-zizmor: offline mode (--offline); ZIZMOR_NO_ONLINE_AUDITS is set
+zizmor: offline mode (--offline); ZIZMOR_OFFLINE=true
+zizmor: offline mode (--offline); ZIZMOR_NO_ONLINE_AUDITS=true
 zizmor: offline mode (--offline); no API token: GH_TOKEN, GITHUB_TOKEN and
   ZIZMOR_GITHUB_TOKEN are all unset or empty
 zizmor: pin provenance was NOT audited — a well-formed 40-character SHA that is
@@ -191,11 +216,22 @@ zizmor: pin provenance was NOT audited — a well-formed 40-character SHA that i
   passes this run
 ```
 
-Three conditions, each with a different response — unset `ZIZMOR_OFFLINE`, unset
-`ZIZMOR_NO_ONLINE_AUDITS`, or export a token. That is exactly the case ADR 0025 decision 2
-covers: one observation ("the run was offline") with several causes calling for different
-responses, so the line carries what discriminates them. The condition reports the variable
-observed and asserts nothing about why it was set.
+Three conditions, each with a different response — set `ZIZMOR_OFFLINE=false` or unset it,
+likewise `ZIZMOR_NO_ONLINE_AUDITS`, or export a token. That is exactly the case ADR 0025
+decision 2 covers: one observation ("the run was offline") with several causes calling for
+different responses, so the line carries what discriminates them. The condition reports
+the variable and value observed and asserts nothing about why they were set.
+
+"or empty" in the third condition is accurate because the script has already removed any
+empty token variable from the child's environment, so empty and unset genuinely reach
+zizmor the same way.
+
+**Usage-error path.** A mode variable holding neither `true` nor `false` exits 2 before
+any mode is announced:
+
+```
+run-zizmor: ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false)
+```
 
 The second line states the consequence. A gate that says only "offline" leaves a reader
 to know which audits that costs; the whole issue is that the cost was invisible.
@@ -367,10 +403,16 @@ the scratch directory, and exits with a status the case chooses.
 | `GH_TOKEN` set to the empty string, `GITHUB_TOKEN` set | empty is not a token; announces `GITHUB_TOKEN` |
 | all three set to the empty string | announces offline, exit 0 |
 | all three unset | announces offline, `--offline` in argv, condition names all three variables, exit 0 |
-| `ZIZMOR_OFFLINE` set **and** `GH_TOKEN` set | announces **offline**, condition names `ZIZMOR_OFFLINE`, `--offline` in argv |
-| `ZIZMOR_NO_ONLINE_AUDITS` set **and** `GH_TOKEN` set | announces offline, condition names `ZIZMOR_NO_ONLINE_AUDITS` |
-| both mode variables set | condition names `ZIZMOR_OFFLINE` (first in order) |
-| mode variables set to the empty string, `GH_TOKEN` set | empty is not set; announces online |
+| `ZIZMOR_OFFLINE=true` **and** `GH_TOKEN` set | announces **offline**, condition names `ZIZMOR_OFFLINE=true`, `--offline` in argv |
+| `ZIZMOR_NO_ONLINE_AUDITS=true` **and** `GH_TOKEN` set | announces offline, condition names `ZIZMOR_NO_ONLINE_AUDITS=true` |
+| both mode variables `true` | condition names `ZIZMOR_OFFLINE` (first in order) |
+| `ZIZMOR_OFFLINE=false`, `GH_TOKEN` set | falls through; announces **online** naming `GH_TOKEN` |
+| `ZIZMOR_OFFLINE=false`, no token | falls through; announces offline with the no-token condition |
+| `ZIZMOR_OFFLINE=0` | exit 2, message names the variable and `true or false`; zizmor never runs |
+| `ZIZMOR_OFFLINE` set to the empty string | exit 2, same message |
+| `ZIZMOR_NO_ONLINE_AUDITS=maybe` | exit 2, same message |
+| `GH_TOKEN` empty, others unset | announces offline; the stub sees `GH_TOKEN` **absent** from its environment |
+| `GH_TOKEN` empty, `GITHUB_TOKEN` set | announces online naming `GITHUB_TOKEN`; the stub sees `GH_TOKEN` absent |
 | offline path | prints the "pin provenance was NOT audited" consequence line |
 | online path | the stub inherits the token variable unchanged, so zizmor reads it itself |
 | `GH_HOST` set on the online path | the online line names the host |
@@ -408,6 +450,11 @@ Each behaviour has a triggering case, including every error path, per `CLAUDE.md
 - With a token exported, a failed API call fails the gate hard rather than degrading. That
   applies to CI too: an API outage can redden the required `verify` check for a reason
   unrelated to the pull request. Recorded in ADR 0036 as an accepted residual.
+- The required check now depends on state outside this repository. `stale-action-refs`,
+  `ref-version-mismatch`, and `known-vulnerable-actions` resolve against upstream
+  repositories and the advisory database, so `verify` can newly fail on a re-run of an
+  unchanged commit when a tag moves or an advisory is published. That is what the audits
+  are for, and it is also a way for an unrelated pull request to go red.
 - One new script and one new suite. By the repository's anatomy rules these are gate
   scripts under `scripts/`, not skill files, so rules 1 and 2 do not bind them; rule 3
   holds — the script runs and exits.
