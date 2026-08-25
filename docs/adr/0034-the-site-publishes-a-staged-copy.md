@@ -41,11 +41,13 @@ directory.** Nothing reaches the site because it happens to be in the repository
 2. **Rendering is `pandoc` with a template and stylesheet this repository owns**, not Jekyll
    with a GitHub theme. The template supplies the site's navigation, so neither page depends
    on the other's prose to be reachable.
-3. **The build job runs on `pull_request` as well as `push`**, and only the deploy job is
-   gated with `if: github.event_name != 'pull_request'`. Both triggers carry the same `paths`
-   filter, so the build is exercised on every pull request that touches its own inputs —
-   `README.md`, `docs/cheatsheet.md`, `docs/assets/`, `site/`, or the workflow — which is
-   every pull request that could break it.
+3. **The build job runs on every `pull_request` to `main` and every `push` to it**, with no
+   `paths` filter, and only the deploy job is gated with
+   `if: github.event_name != 'pull_request'`. The filter was deliberately removed: decision 4's
+   link-existence check is what stops a moved or deleted file from publishing a 404, and the
+   change that moves such a file is exactly the change a site-scoped filter would skip — the
+   guard would be off for the only edits that can trip it. The cost of always running is one
+   apt install and two `pandoc` invocations.
 4. **Repository-relative links are absolutised at build time**, in one `perl` expression, and
    the rewrite refuses a target that does not exist. A relative link is relative to the file
    that wrote it, so every target is **first** resolved against its source's own directory, and
@@ -68,6 +70,10 @@ directory.** Nothing reaches the site because it happens to be in the repository
      through; requiring none is one rule that holds for all of them.
    - *After rendering*: each page must exceed a size floor a page of bare template chrome
      cannot clear, because `test -s` cannot tell a rendered page from one whose body is gone.
+   Each scan captures its own exit status rather than branching on it directly: `grep` exits 1
+   for "no matches" and greater than 1 for a scan that could not run, and `if grep …` reads both
+   as clean — [ADR 0005](0005-scan-faults-are-reported-not-collapsed.md) decision 1. Every
+   assertion names what failed, rather than exiting 1 silently.
    - *After rendering*: every relative `href` and `src` in the built pages must name a file
      that is actually in `_site`. Testing existence rather than matching permitted path shapes
      is what makes this cover the class — an asset whose type the copy step skipped, one in a

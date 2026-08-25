@@ -4,25 +4,19 @@ name: Pages
 # gated to non-pull-request events. That is what lets this site have no staging
 # script and no unit suite: the build itself is the thing under review, on every
 # branch, before it can reach main. See ADR 0034.
+#
+# Deliberately no `paths:` filter. The build's link-existence check is what stops
+# a moved or deleted file from publishing a 404, and the change that moves such a
+# file is exactly the change a site-scoped path filter would skip -- so the guard
+# would be off for the only edits that can trip it. The cost of running always is
+# one apt install and two pandoc invocations.
 on:
   push:
     branches:
       - main
-    paths:
-      - 'README.md'
-      - 'docs/cheatsheet.md'
-      - 'docs/assets/**'
-      - 'site/**'
-      - '.github/workflows/pages.yml'
   pull_request:
     branches:
       - main
-    paths:
-      - 'README.md'
-      - 'docs/cheatsheet.md'
-      - 'docs/assets/**'
-      - 'site/**'
-      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -63,6 +57,11 @@ jobs:
           # pandoc's status, and pandoc succeeds on empty input.
           set -o pipefail
 
+          die() {
+            echo "::error::$1" >&2
+            exit 1
+          }
+
           # The raw-HTML gate, and it runs before anything is rendered. pandoc's
           # gfm reader passes raw HTML straight through -- measured on 3.10.2,
           # `-f gfm-raw_html` does not suppress it -- so the only honest control
@@ -78,10 +77,19 @@ jobs:
           # <https://example.com>, and on an HTML comment. The answer then is to
           # rewrite the line, or to exclude that shape on purpose -- not to go
           # back to a denylist of tag names.
-          if grep -nE '<[a-zA-Z/!]' README.md docs/cheatsheet.md; then
-            echo "::error::raw HTML in a site source" >&2
-            exit 1
-          fi
+          # grep's status is captured rather than branched on directly: it exits
+          # 1 for "no matches" and greater than 1 for a scan that could not run,
+          # and `if grep ...` reads both as clean. ADR 0005 decision 1.
+          raw_status=0
+          raw_hits=$(grep -nE '<[a-zA-Z/!]' README.md docs/cheatsheet.md) || raw_status=$?
+          case $raw_status in
+          0)
+            printf '%s\n' "$raw_hits" >&2
+            die 'raw HTML in a site source'
+            ;;
+          1) ;;
+          *) die "raw-HTML scan could not run (grep exit $raw_status)" ;;
+          esac
 
           mkdir -p _site/docs/assets
           # Image types only, rather than `cp -r docs/assets`. That directory is
@@ -123,14 +131,19 @@ jobs:
           # fails, and pipefail carries that failure past pandoc.
           absolutise() {
             PREFIX="$2" perl -pe '
-              # Code blocks are not prose. A fenced or indented example
-              # containing ](...) is sample text, and rewriting it would publish
-              # a corrupted example -- so track fenced state and skip both.
+              # Fenced blocks are tracked exactly. The indentation test is
+              # cruder than its name suggests and is stated as what it is: any
+              # line starting with four spaces or a tab is left alone, which
+              # catches indented code blocks and also nested list items -- so a
+              # repository-relative link must not be written at that indent.
+              # A ](...) inside an example is sample text; rewriting it would
+              # publish a corrupted example.
               if (/^\s*(?:```|~~~)/) { $fence = !$fence }
               elsif (!$fence && !/^(?: {4}|\t)/) {
-                s{\]\(([^)]+)\)}{
+                s{\]\(([^\s)]+)((?:\s+"[^"]*")?)\)}{
                   my $t = $1;
-                  if ($t =~ m{^(?:https?://|\#|mailto:)}) { "]($t)" }
+                  my $title = $2;
+                  if ($t =~ m{^(?:https?://|\#|mailto:)}) { "]($t$title)" }
                   else {
                     my $f = "$ENV{PREFIX}$t";
                     $f =~ s{^\./}{};
@@ -139,10 +152,10 @@ jobs:
                     # blob URL that 404s on the published page, and no later
                     # assertion can tell it from a good one.
                     -e $f or die "link target does not exist: $f\n";
-                    $f eq "docs/cheatsheet.md" ? "](cheatsheet.html)"
-                      : $f eq "README.md" ? "](index.html)"
-                      : $f =~ m{^docs/assets/} ? "]($f)"
-                      : "]($ENV{BLOB}/$f)"
+                    $f eq "docs/cheatsheet.md" ? "](cheatsheet.html$title)"
+                      : $f eq "README.md" ? "](index.html$title)"
+                      : $f =~ m{^docs/assets/} ? "]($f$title)"
+                      : "]($ENV{BLOB}/$f$title)"
                   }
                 }gex;
               }
@@ -167,11 +180,6 @@ jobs:
           # Every assertion names what failed. A bare `test` that exits 1 tells
           # the operator only that the step went red, on the step that does the
           # most work in this workflow.
-          die() {
-            echo "::error::$1" >&2
-            exit 1
-          }
-
           test -s _site/index.html || die 'index.html is empty or missing'
           test -s _site/cheatsheet.html || die 'cheatsheet.html is empty or missing'
           test -s _site/style.css || die 'style.css was not copied'
@@ -196,6 +204,14 @@ jobs:
           # `docs/assets/` would pass every one of them green.
           #
           # -h keeps grep from prefixing the filename onto the match.
+          link_status=0
+          attrs=$(grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html) ||
+            link_status=$?
+          case $link_status in
+          0 | 1) ;;
+          *) die "link scan could not run (grep exit $link_status)" ;;
+          esac
+
           missing=0
           while IFS= read -r attr; do
             target=${attr#*\"}
@@ -208,8 +224,8 @@ jobs:
               echo "::error::built page links $target, which is not in _site" >&2
               missing=1
             fi
-          done <<<"$(grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html)"
-          [ "$missing" -eq 0 ]
+          done <<<"$attrs"
+          [ "$missing" -eq 0 ] || die 'the built site links files that are not in _site'
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

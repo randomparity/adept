@@ -77,15 +77,8 @@ name: Pages
 on:
   push:
     branches: [main]
-    paths: &site-paths
-      - 'README.md'
-      - 'docs/cheatsheet.md'
-      - 'docs/assets/**'
-      - 'site/**'
-      - '.github/workflows/pages.yml'
   pull_request:
     branches: [main]
-    paths: *site-paths
   workflow_dispatch:
 
 permissions:
@@ -99,8 +92,11 @@ concurrency:
   cancel-in-progress: false
 ```
 
-YAML anchors are written out in full in the real file rather than aliased; `actionlint` reads
-the workflow, and a duplicated five-line path list is cheaper to read than an anchor.
+**No `paths:` filter, deliberately.** The build's link-existence check is what stops a moved or
+deleted file from publishing a 404, and the change that moves such a file is exactly the change
+a site-scoped path filter would skip — the guard would be off for the only edits that can trip
+it, and the 404 would surface later on an unrelated pull request. Running always costs one apt
+install and two `pandoc` invocations.
 
 Two jobs:
 
@@ -153,9 +149,13 @@ called as `absolutise README.md ''` and `absolutise docs/cheatsheet.md 'docs/'`.
 
 **`absolutise` makes one decision per link**, in this order:
 
-0. Lines inside a fenced or indented code block are skipped entirely. A `](…)` in an example is
-   sample text; rewriting it would publish a corrupted example.
-1. A target beginning `http://`, `https://`, `#`, or `mailto:` is left alone.
+0. Fenced code blocks are tracked exactly and skipped, because a `](…)` in an example is sample
+   text and rewriting it would publish a corrupted example. Alongside that, any line indented
+   four spaces or a tab is left alone — a cruder test than its name suggests, since it also
+   covers nested list items, so a repository-relative link must not be written at that indent.
+1. A target beginning `http://`, `https://`, `#`, or `mailto:` is left alone. A Markdown link
+   title — `](path "Title")` — is valid GFM, and is preserved rather than parsed as part of the
+   path.
 2. Otherwise the target is **resolved against the source's own directory** — `$PREFIX$target`,
    with a leading `./` stripped — and every remaining test applies to that resolved path.
 3. **The resolved path must exist**, or the rewrite dies and the build goes red naming it.
@@ -388,8 +388,8 @@ What proves this change is:
 
 | # | Proof | Where |
 |---|---|---|
-| 1 | The five `test -s` assertions and the two size floors pass | `build` job, every PR touching the site's inputs |
-| 2 | No unresolved relative link survives the rewrite | `build` job's link `grep`, every PR touching the site's inputs |
+| 1 | The five `test -s` assertions and the two size floors pass | `build` job, every PR to `main` |
+| 2 | No unresolved relative link survives the rewrite | `build` job's link `grep`, every PR to `main` |
 | 2a | Neither source carries a raw HTML tag | `build` job's pre-render gate, same trigger |
 | 3 | `actionlint` and `zizmor` accept `pages.yml` | `just actions-check`, local and CI |
 | 4 | `just verify` stays green | local and CI |
