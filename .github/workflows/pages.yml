@@ -74,18 +74,24 @@ jobs:
           #
           # perl rather than sed: rule 2 needs a negative lookahead, which GNU
           # sed's ERE cannot express. perl is on every GitHub-hosted runner.
+          #
+          # A relative link is relative to the file that wrote it, so the second
+          # argument is the source's own directory. Passing it is what keeps a
+          # link added to docs/cheatsheet.md later from resolving against the
+          # repository root and producing a blob URL that is absolute, wrong,
+          # and invisible to the check below.
           absolutise() {
-            perl -pe '
+            PREFIX="$2" perl -pe '
               s{\]\(docs/cheatsheet\.md\)}{](cheatsheet.html)}g;
-              s{\]\((?!https?://|#|mailto:|docs/assets/|cheatsheet\.html)([^)]+)\)}{]($ENV{BLOB}/$1)}g;
+              s{\]\((?!https?://|#|mailto:|docs/assets/|cheatsheet\.html)([^)]+)\)}{]($ENV{BLOB}/$ENV{PREFIX}$1)}g;
             ' "$1"
           }
 
-          absolutise README.md |
+          absolutise README.md '' |
             pandoc -f gfm -t html5 --template site/template.html \
               --metadata title="adept" \
               --output _site/index.html
-          absolutise docs/cheatsheet.md |
+          absolutise docs/cheatsheet.md 'docs/' |
             pandoc -f gfm -t html5 --template site/template.html \
               --metadata title="adept — skill cheat sheet" \
               --output _site/cheatsheet.html

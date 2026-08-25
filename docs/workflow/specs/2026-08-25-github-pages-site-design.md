@@ -46,10 +46,12 @@ and a stylesheet into `_site`, renders `README.md` and `CHANGELOG.md` through
 supporting files are `site/template.html` (1,041 bytes) and `site/style.css` (2,392 bytes).
 There is no script and no site generator.
 
-One difference decides what adept has to add. Every one of the 48 links in bzr's `README.md` is
-already an absolute URL, so its build needs no link handling at all. Nine of adept's ten are
-relative, so adept adds one rewrite step — and keeps them relative, because `README.md` ships
-inside every plugin cache, where a relative link resolves to the file next to it.
+One difference decides what adept has to add. Of the 48 Markdown links in bzr's `README.md`, 32
+are absolute and 16 are same-page anchors — none repository-relative — so its build needs no
+link handling at all. Nine of adept's ten are relative, so adept adds one rewrite step — and
+keeps them relative, because `README.md` ships inside every plugin cache, where a relative link
+resolves to the file next to it. bzr's two relative asset paths are `src="docs/assets/…"`
+attributes, handled by copying `docs/assets` — the mechanism adept uses for its images too.
 
 ## Decision
 
@@ -130,23 +132,35 @@ Written out per page rather than looped, in fact — two pandoc invocations are 
 clearer than the loop that would generalise them. Each is:
 
 ```sh
-perl -pe '<the two substitutions below>' <source> \
+absolutise <source> <source-directory-prefix> \
   | pandoc -f gfm -t html5 --template site/template.html \
       --metadata title="<title>" --output _site/<page>.html
 ```
 
+called as `absolutise README.md ''` and `absolutise docs/cheatsheet.md 'docs/'`.
+
 **The two substitutions**, in one `perl -pe` expression, in this order:
 
 1. `](docs/cheatsheet.md)` → `](cheatsheet.html)` — the site's other page.
-2. `](<target>)` → `](https://github.com/randomparity/adept/blob/main/<target>)` for every
-   target that does not begin with `http://`, `https://`, `#`, `mailto:`, `docs/assets/`, or
-   `cheatsheet.html`.
+2. `](<target>)` → `](https://github.com/randomparity/adept/blob/main/<prefix><target>)` for
+   every target that does not begin with `http://`, `https://`, `#`, `mailto:`,
+   `docs/assets/`, or `cheatsheet.html`.
 
 `perl` rather than `sed` because rule 2 needs a negative lookahead, which GNU `sed`'s ERE has
-no way to express; `perl` is present on every GitHub-hosted runner image. `docs/assets/` is
-excluded because those files are copied to `_site/docs/` — the same relative path `README.md`
-already writes — so image references resolve unchanged on GitHub and on the site alike, and
-absolutising them would turn an `<img src>` into a blob page that serves HTML.
+no way to express; `perl` is present on every GitHub-hosted runner image.
+
+`<prefix>` is the source file's own directory, and it is what makes rule 2 correct for a file
+that is not at the repository root. A relative link is relative to the file that wrote it, so
+`](adr/0001.md)` in `docs/cheatsheet.md` means `docs/adr/0001.md`. Without the prefix it would
+absolutise to `blob/main/adr/0001.md` — a URL that is absolute, wrong, and invisible to the
+post-build check below, which only sees links that stayed relative. The cheat sheet carries no
+links today, so this is a trap being closed rather than a bug being fixed; the exclusion list
+in rule 2 is still written from the repository root, which is `README.md`'s perspective, so a
+`](assets/x.png)` added to the cheat sheet would be absolutised rather than left alone.
+
+`docs/assets/` is excluded because those files are copied to `_site/docs/` — the same relative
+path `README.md` already writes — so image references resolve unchanged on GitHub and on the
+site alike, and absolutising one would turn an `<img src>` into a blob page that serves HTML.
 
 **Assertions**, after both renders — the step's whole verification, and the reason it does not
 need a suite:
@@ -302,12 +316,13 @@ files from it. The site discloses nothing a clone does not.
 
 There is no unit suite, and that is the design rather than an omission: the build is a workflow
 step, it runs on every pull request touching the site's inputs, and it asserts its own outputs.
+What that gives up is running the build on a workstation: iterating on it costs a push.
 What proves this change is:
 
 | # | Proof | Where |
 |---|---|---|
-| 1 | The five `test -s` assertions pass | `build` job, every PR |
-| 2 | No unresolved relative link survives the rewrite | `build` job's `grep`, every PR |
+| 1 | The five `test -s` assertions pass | `build` job, every PR touching the site's inputs |
+| 2 | No unresolved relative link survives the rewrite | `build` job's `grep`, every PR touching the site's inputs |
 | 3 | `actionlint` and `zizmor` accept `pages.yml` | `just actions-check`, local and CI |
 | 4 | `just verify` stays green | local and CI |
 | 5 | Both pages render, styled, with working navigation and images | loading the deployed site after the first `main` run |
