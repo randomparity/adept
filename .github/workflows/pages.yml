@@ -1,0 +1,126 @@
+name: Pages
+
+# The build runs on pull requests as well as pushes, and only the deploy job is
+# gated to non-pull-request events. That is what lets this site have no staging
+# script and no unit suite: the build itself is the thing under review, on every
+# branch, before it can reach main. See ADR 0034.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'README.md'
+      - 'docs/cheatsheet.md'
+      - 'docs/assets/**'
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'README.md'
+      - 'docs/cheatsheet.md'
+      - 'docs/assets/**'
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Pull-request builds get their own group so a PR cannot cancel or queue behind
+# the deployment of main, and deployments never interleave with each other.
+concurrency:
+  group: >-
+    ${{ github.event_name == 'pull_request'
+        && format('pages-pr-{0}', github.event.pull_request.number)
+        || 'pages' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Unpinned deliberately, as in randomparity/bzr: this renders Markdown to
+      # HTML in a job holding no secrets, and pinning an apt version against a
+      # rolling runner image breaks on image updates more often than it protects.
+      - name: Install pandoc # zizmor: ignore[adhoc-packages]
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+
+      - name: Build the site
+        env:
+          BLOB: https://github.com/randomparity/adept/blob/main
+        run: |
+          mkdir -p _site/docs
+          cp -r docs/assets _site/docs/assets
+          cp site/style.css _site/style.css
+
+          # Two substitutions, in order. The cheat sheet is the site's other
+          # page, so its link becomes a site path; every other repository-
+          # relative target becomes a blob URL, because README.md keeps relative
+          # links for the reader holding a plugin cache rather than a browser.
+          #
+          # docs/assets/ is excluded because those files are copied above to the
+          # very path README.md already writes, so image references resolve
+          # unchanged in both places -- and absolutising one would turn an <img>
+          # into a blob page that serves HTML.
+          #
+          # perl rather than sed: rule 2 needs a negative lookahead, which GNU
+          # sed's ERE cannot express. perl is on every GitHub-hosted runner.
+          absolutise() {
+            perl -pe '
+              s{\]\(docs/cheatsheet\.md\)}{](cheatsheet.html)}g;
+              s{\]\((?!https?://|#|mailto:|docs/assets/|cheatsheet\.html)([^)]+)\)}{]($ENV{BLOB}/$1)}g;
+            ' "$1"
+          }
+
+          absolutise README.md |
+            pandoc -f gfm -t html5 --template site/template.html \
+              --metadata title="adept" \
+              --output _site/index.html
+          absolutise docs/cheatsheet.md |
+            pandoc -f gfm -t html5 --template site/template.html \
+              --metadata title="adept — skill cheat sheet" \
+              --output _site/cheatsheet.html
+
+          test -s _site/index.html
+          test -s _site/cheatsheet.html
+          test -s _site/style.css
+          test -s _site/docs/assets/adept-logo-grimoire.png
+          test -s _site/docs/assets/adept-quest-map.png
+
+          # The assertion that bites. Anything the rewrite failed to resolve is
+          # a link that would 404 on the published site, and it fails here, on a
+          # pull request, instead. -h keeps grep from prefixing the filename,
+          # which would defeat the leading quote in the second pattern.
+          if grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html |
+            grep -vE '"(https?://|#|mailto:|index\.html|cheatsheet\.html|style\.css|docs/assets/)'; then
+            echo "::error::unresolved relative link in the built site" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
