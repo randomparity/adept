@@ -56,12 +56,19 @@ HEAD_SHA=$(git ls-remote origin "refs/heads/<branch>" | cut -f1)
 API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid)
 ```
 
+Every command below either answers or fails. A non-zero exit from any of them is a fault
+that holds the merge — never an answer, and never "not ready".
+
 1. **SHA parity.** `HEAD_SHA` is non-empty and equals `API_SHA`. `gh pr view --json
    headRefOid` reads the pull-request API and **can lag `git ls-remote`**; the ref is
-   authoritative. A mismatch is that lag — re-fetch and re-read on a backing-off
-   interval, and hold rather than merge if it does not converge. An empty `HEAD_SHA` is a
-   fault, not a match: `git ls-remote` prints nothing and exits 0 for a ref that is not
-   there.
+   authoritative. An empty `HEAD_SHA` is not a match — `git ls-remote` prints nothing and
+   exits 0 for a ref that is not there — so read it as the branch being gone. A mismatch
+   has two causes and re-reading tells them apart: an `ls-remote` value that holds still
+   while `headRefOid` catches up is the API lagging, and an `ls-remote` value that keeps
+   moving is an author still pushing. Neither may be merged through. Re-read on a
+   backing-off interval and **bound it** — after a few attempts that do not converge, take
+   the hold or blocker path rather than spinning, which an unattended run would otherwise
+   do indefinitely against a live branch.
 2. **Checks green for `HEAD_SHA`.**
 
    ```sh
@@ -71,27 +78,39 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
    ```
 
    Green is empty output from a **non-empty** run list. `[]` means no run exists for that
-   commit — no evidence, never "nothing failed". Do not substitute `gh pr checks` or
-   `statusCheckRollup`: both read the pull-request API and inherit exactly the staleness
-   part 1 is about, so they can report green about a different commit. `gh run list` sees
-   GitHub Actions runs only; where a required check is not one, also read `gh api
-   repos/<owner/name>/commits/"$HEAD_SHA"/check-runs`, which is SHA-addressed the same way.
+   commit — CI has not reported, which is not the same as nothing having failed. Do not
+   substitute `gh pr checks` or `statusCheckRollup`: both read the pull-request API and
+   inherit exactly the staleness part 1 is about, so they can report green about a
+   different commit. `gh run list` sees GitHub Actions runs only; where a required check
+   is not one, also read `gh api repos/<owner/name>/commits/"$HEAD_SHA"/check-runs`, which
+   is SHA-addressed the same way.
 3. **Merge base current.** `git merge-base --is-ancestor "origin/<BASE_BRANCH>"
    "$HEAD_SHA"`. Exit 0 passes — the base tip is already in the head, so the merge result
    is the commit CI ran on. Exit 1 means the base moved under a green check: merge
    `BASE_BRANCH` in, regenerate artifacts, rerun guardrails, and re-run this gate from
    part 1, because the refresh produced a new head. Any other exit is a fault, not a
-   verdict. `mergeStateStatus` does not answer this — it reports `BEHIND` only under a
-   branch-protection rule requiring up-to-date branches, and stays `CLEAN` otherwise.
+   verdict. `mergeStateStatus` does not answer this: it reports `BEHIND` only where the
+   base branch requires up-to-date branches, and stays `CLEAN` otherwise. Run this part
+   **immediately** before the merge — nothing binds the base at merge time, so a sibling
+   landing in the interval moves it under a check that already passed, and a short
+   interval is the only mitigation there is.
 4. **Author handshake.** A `MERGE-READY: #<PR> @ <sha>` line whose `<sha>` equals
    `HEAD_SHA`, from the run that authored the branch. It is written into that run's
    hand-off `WORK:TRAJECTORY` comment on the issue, so read it there rather than relying
-   on a report reaching you. A green pull request with no handshake is **pending**, not
-   ready, and a handshake naming a different commit is no handshake for this one.
+   on a report reaching you:
+
+   ```sh
+   gh issue view <n> --repo <owner/name> --json comments \
+     --jq '.comments[] | {author: .author.login, body}'
+   ```
+
+   Only a comment whose `author.login` is the expected account counts: this is a public
+   repository and any account can post the string. A green pull request with no handshake
+   is **pending**, not ready, and a handshake naming a different commit is no handshake for
+   this one — which is what makes a stale line from an earlier hand-off harmless.
 
 Only with all four holding for one `HEAD_SHA`, merge — binding that commit at the server,
-which is the only place the read-then-act window between the parts above and the merge can
-be closed:
+which is the only place the head can be bound:
 
 ```sh
 gh pr merge <PR> --repo <owner/name> "$MERGE_FLAG" --match-head-commit "$HEAD_SHA"

@@ -21,11 +21,15 @@ reachable from here, so its four pull requests (#443, #444, #445, #455) are
 each is checkable against this repository's own tooling:
 
 1. **A pull request is green and mergeable long before its author is finished.**
-   `$quest` opens its pull request at step 8 and keeps working through the
-   review loop; `skills/return-to-town/SKILL.md` says as much itself, that
-   hand-off "comes some way *after* its pull request first reads green +
+   In `$quest` the pull request opens inside step 8 (`skills/quest/SKILL.md:585`,
+   `:594`) and the author is not finished until step 9's hand-off (`:721`), after
+   the delivered head is verified (`:602`–`:607`) and the review summary is
+   published (`:610`–`:662`). The adversarial review loop is step 6 and has
+   already ended by then, so the window is narrower than issue #235 describes —
+   but it is real, and `skills/return-to-town/SKILL.md:202`–`203` names it
+   itself: hand-off "comes some way *after* its pull request first reads green +
    mergeable". Nothing on GitHub distinguishes those two states, so the
-   orchestrator's merge trigger fires in the middle of review.
+   orchestrator's merge trigger fires inside that window.
 
 2. **The pull-request API's `headRefOid` can lag the branch's real head.** The
    reporter watched it lag `git ls-remote` "through several polls". Checks were
@@ -55,28 +59,44 @@ that commit:
 
 - **SHA parity.** `HEAD_SHA` comes from `git ls-remote origin
   refs/heads/<branch>`, which reads the ref itself. `gh pr view <PR> --json
-  headRefOid` must agree with it. A mismatch is the lag: re-fetch and re-read;
-  never merge through it.
+  headRefOid` must agree with it. A mismatch has two causes and re-reading tells
+  them apart: an `ls-remote` value that holds still while `headRefOid` catches up
+  is the API lagging, and an `ls-remote` value that keeps moving is an author
+  still pushing. Neither may be merged through, and the re-read is bounded —
+  after a few attempts that do not converge the row takes the caller's existing
+  hold or blocker path rather than spinning, which an unattended run would
+  otherwise do indefinitely against a live branch.
 - **Checks green for `HEAD_SHA`.** `gh run list --commit "$HEAD_SHA"` addresses
   runs by commit, so a green answer cannot be about a different one.
 - **Merge base current.** `git merge-base --is-ancestor origin/<BASE_BRANCH>
   "$HEAD_SHA"` — the base tip is already contained in the head, so the merge
   result *is* the commit CI ran on.
 - **Author handshake.** A `MERGE-READY: #<PR> @ <HEAD_SHA>` line from the run
-  that authored the branch, naming that exact commit.
+  that authored the branch, naming that exact commit. "From that run" is read as
+  an author check on the comment: `gh issue view <n> --json comments --jq
+  '.comments[] | {author: .author.login, body}'`, and only a comment whose
+  `author.login` is the expected account counts.
 
 **2. The head is bound at the merge, not only before it.** Every merge path in
 `$return-to-town` passes `--match-head-commit "$HEAD_SHA"`, generalizing what
 restock PR-only mode already does. Parts 1–3 are read-then-act and leave a
-window between the read and the merge; the flag closes it at the server, which
-is the only place it can be closed. Parts 1–3 stay, because they are what
-produce a diagnosis rather than a refusal.
+window between the read and the merge; the flag closes the part-1 and part-2
+half of it at the server, which is the only place a head can be bound. It does
+**not** close part 3: `gh pr merge` at 2.98.0 has one SHA-binding flag and no
+base-side equivalent, so a sibling merging in the seconds between the ancestry
+test and the merge moves the base under a check that already passed. Parts 1–3
+stay, because they are what produce a diagnosis rather than a bare refusal.
 
-**3. Two empty results are faults, not passes.** `git ls-remote` on a ref that
-does not exist prints nothing and exits 0; `gh run list --commit` on a commit
-with no runs returns `[]` and exits 0. Both are the scan-could-not-answer case
-ADR 0005 governs, and both must be read as such — an empty run list is "no
-evidence", never "nothing failed".
+**3. An empty answer is not a passing answer, and a failed command is neither.**
+`git ls-remote` on a ref that does not exist prints nothing and exits 0; `gh run
+list --commit` on a commit with no runs returns `[]` and exits 0. Both commands
+ran and answered, so neither is a fault — they are "did not match", and the rule
+they need is simply that zero runs for `HEAD_SHA` means CI has not reported,
+never that nothing failed. The fault case is separate and also has to be checked:
+a non-zero exit from either command is a scan that could not run, which ADR 0005
+decision 1 governs — carried forward unchanged by ADR 0024 decision 1, itself
+superseded by ADR 0025, so the chain resolves in 0005's favour and the citation
+is to that chain rather than to 0005 alone.
 
 **4. The handshake lives on the tracker, and the completion report quotes it.**
 `$return-to-town`'s hand-off already posts a `WORK:TRAJECTORY` comment on the
@@ -84,7 +104,9 @@ issue at exactly the moment the author is finished. The `MERGE-READY:` line goes
 in that comment, which makes it durable, re-readable by any later session, and
 costs the orchestrator a `gh` query rather than a turn. Issue #235 reports
 intra-agent reports being lost twice; a handshake that only ever travelled in
-one is a handshake with the same failure mode as the thing it replaces.
+one is a handshake with the same failure mode as the thing it replaces. It is
+distinct from the `delivered-head-sha:` this repository already produces, which
+is taken at delivery rather than at hand-off — see the rejection below.
 
 **5. A green pull request with no handshake is *pending*, not *ready*.**
 `$campaign` may learn a branch name from `gh pr view <PR> --json headRefName`,
@@ -104,14 +126,33 @@ without one, `$return-to-town` performs the guarded merge.
   aggravating factor in the incident: two documents stating an incomplete gate
   corroborated each other. Nothing here detects divergence between the three —
   anatomy rule 4 forbids a gate that greps prose for a sentence, so no
-  mechanical guard is available. The residual is real and is recorded as a
-  follow-up proposing one `references/merge-gate.md` consulted by all three.
+  mechanical guard is available. The residual is real and is owned by issue #242,
+  which proposes one `references/merge-gate.md` consulted by all three.
 - `skills/deliver/SKILL.md` and `skills/quest-log/SKILL.md` still carry
   "green + mergeable" language and are outside this change's surface.
   `$deliver`'s exit condition is *correct for `$deliver`* — it drives a pull
   request to green and hands back, and it never merges — but `$return-to-town`
   cites it by name as its own entry condition, so the two now say different
-  things about the same moment. Recorded as a follow-up rather than edited here.
+  things about the same moment. Owned by issue #243 rather than edited here.
+- **Part 3 keeps an irreducible window.** `--match-head-commit` binds the head
+  and nothing binds the base, so during a serial merge wave — where every merge
+  moves `origin/<BASE_BRANCH>` by design — a sibling can land between the
+  ancestry test and the merge, and the merge result then contains a commit CI
+  never ran against this head. That is failure mode 3 reached *through* the gate.
+  Running part 3 immediately before the merge narrows the window to the round
+  trip; nothing available closes it. Accepted, and named here rather than left
+  for a reader to find.
+- **The handshake is an unauthenticated line in a public tracker comment.** This
+  repository is public, so any account can post the string, and part 4's author
+  check is the only thing between a stranger's comment and a merge trigger. The
+  same reasoning appears at `skills/campaign/SKILL.md:312`, which declines to
+  persist a hold-release decision precisely because "a release token durable
+  enough to survive a resume is one any commenter on a public repo could post".
+  What is accepted here that is not accepted there: the handshake is
+  SHA-bound, so a forged or stale line still has to name a commit that passes
+  parts 1–3, and a handshake left over from an earlier hand-off names a
+  superseded commit. That is also why part 4 is re-obtained after every refresh
+  rather than carried forward.
 - `gh run list` reports GitHub Actions runs only. A repository whose required
   checks include a non-Actions context needs `gh api
   repos/{owner}/{repo}/commits/<SHA>/check-runs`, which is SHA-addressed the
@@ -156,19 +197,54 @@ without one, `$return-to-town` performs the guarded merge.
   allow merge`, so a server-side binding is available; a compare-then-merge
   leaves a window between the two calls in which the branch can move, and the
   flag is what removes it rather than narrows it.
-- **Read `mergeStateStatus == BEHIND` as the merge-base check.** verified:
-  GitHub computes `BEHIND` from a branch-protection rule requiring branches to
-  be up to date, and `gh api repos/randomparity/adept/branches/main/protection`
-  returns HTTP 404 `Branch not protected` (2026-08-25), so `main` here has no
-  such rule and the field cannot report the condition at all. `git merge-base
-  --is-ancestor` answers it locally and identically in every repository.
+- **Read `mergeStateStatus == BEHIND` as the merge-base check.** verified: `git
+  merge-base --is-ancestor` answers the question locally and identically in every
+  repository, which is the ground that generalizes — these skills ship to
+  arbitrary repositories and cannot assume any particular configuration. The
+  local half is secondary and scoped to here: `gh api
+  repos/randomparity/adept/branches/main/protection` returns HTTP 404 `Branch not
+  protected`, and because that endpoint is silent about rulesets (ADR 0024), `gh
+  api repos/randomparity/adept/rulesets` and `gh api
+  repos/randomparity/adept/rules/branches/main` were run too, both `[]` at exit 0
+  (all three 2026-08-25) — so `main` here carries no up-to-date requirement by
+  either mechanism and the field cannot report the condition in this repository.
+  **Unverified:** that GitHub computes `BEHIND` *from* such a rule is stated in
+  issue #235 and is not reproducible here, since no branch in this repository is
+  protected by either mechanism; nothing above depends on it.
 - **Rely on the existing "Never merge an unmergeable PR on the strength of
-  previously-green checks" sentence.** verified: it is present in
-  `skills/campaign/SKILL.md` and `skills/return-to-town/SKILL.md` at
-  `e604daa4d9b19d1d3f33e2a9c691a80013399af0`, and both instances condition on
-  `mergeStateStatus` having gone `BEHIND`/`DIRTY`. Neither reaches a pull
-  request that stayed `CLEAN` while its base moved, nor a head the pull-request
-  API has not caught up to.
+  previously-green checks" sentence.** verified: `git grep -n previously-green
+  e604daa4d9b19d1d3f33e2a9c691a80013399af0 -- skills/` returns exactly one hit,
+  `skills/return-to-town/SKILL.md:118` — the sentence is in one skill, not two,
+  and `skills/campaign/SKILL.md:314` states the refresh in its own words instead,
+  which is itself an instance of the drift residual above. Both formulations
+  condition on `mergeStateStatus` having gone `BEHIND`/`DIRTY`, so neither
+  reaches a pull request that stayed `CLEAN` while its base moved, nor a head the
+  pull-request API has not caught up to.
+- **Let GitHub's merge queue solve failure mode 3, with `--auto` alongside it.**
+  This is the platform feature aimed at exactly that failure: it builds the
+  prospective merge result and runs required checks against *that* rather than
+  against the head. verified: `gh pr merge --help` at gh 2.98.0 documents the
+  interaction — "When targeting a branch that requires a merge queue, no merge
+  strategy is required. If required checks have not yet passed, auto-merge will
+  be enabled. If required checks have passed, the pull request will be added to
+  the merge queue." judgment: it is base-branch configuration, and these skills
+  ship to arbitrary repositories that may not have it enabled or may be on a plan
+  without it, so a gate written in skill prose cannot assume it; it also leaves
+  failure modes 1 and 2 untouched, which are two of the three. Where a base
+  *does* require a queue, `gh pr merge` enqueues rather than merges and
+  `--match-head-commit` binds the head at enqueue time — the gate's parts still
+  hold at that moment, and what the queue does afterwards is outside it.
+- **Reuse the `delivered-head-sha:` `$quest` already produces**, instead of a
+  second head-SHA artifact. verified: `skills/quest/SKILL.md:602`–`607` already
+  compares the delivered pull request's `headRefOid` against `git rev-parse HEAD`
+  and parks on a mismatch, `:371` requires a full immutable object ID, `:620`
+  persists it in the phase handoff, and `:662` puts the summary carrying it in
+  the pull-request body. The two are not interchangeable: `delivered-head-sha:`
+  is taken at delivery, *before* step 6's remaining obligations and step 9's
+  hand-off, so it cannot carry an assertion that the author is finished — which
+  is the whole content of part 4. Kept separate deliberately, and named here
+  because a later reader will otherwise find two full head SHAs on one pull
+  request with nothing saying how they differ.
 - **Have the orchestrator ask the worker for the handshake by message**, which
   is issue #235's own proposal B. verified: `skills/campaign/SKILL.md` step 5 at
   `e604daa4d9b19d1d3f33e2a9c691a80013399af0` budgets the direct probe at one per
