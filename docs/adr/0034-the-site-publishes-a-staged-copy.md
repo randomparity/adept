@@ -18,9 +18,9 @@ root — either `/` or `/docs` — and GitHub runs Jekyll over everything it fin
 The choice matters more here than in an ordinary repository, because this one is a plugin
 and both harnesses copy the **whole** tree into their plugin cache. Every tracked Markdown
 file is therefore a live candidate page under a branch source, and there are a lot of them:
-`git ls-files '*.md' | wc -l` reports 141, of which 28 are `skills/*/SKILL.md` files that
-already carry YAML front matter, and 104 sit under `docs/` — ADRs, specs, plans, and
-benchmarks the operator's scope decision excludes from this site.
+at `bdcc640`, `git ls-files '*.md' | wc -l` reports 141, of which 28 are `skills/*/SKILL.md`
+files that already carry YAML front matter, and 104 sit under `docs/` — ADRs, specs, plans,
+and benchmarks the operator's scope decision excludes from this site.
 
 `README.md` also has to stay the single source for the landing page. CLAUDE.md's
 instruction-file rule — two documents stating the same thing is the drift problem this
@@ -45,7 +45,9 @@ from named sources.** Nothing reaches the site because it happens to be in the r
    the `github-pages` gem set, so this repository gains no `Gemfile`, no lockfile, and no
    vendored CSS.
 4. **Pages is enabled once, out of band, by an operator with admin.** The workflow does not
-   enable it.
+   enable it, but it does keep `actions/configure-pages` as its first build step — with
+   `enablement` left off, that step is what turns a missing setting into an error naming it,
+   and it is the only reason the step is there, since it feeds nothing into the Jekyll build.
 
 ## Consequences
 
@@ -61,26 +63,56 @@ from named sources.** Nothing reaches the site because it happens to be in the r
 - The repository gains three pinned third-party action references
   (`actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`) plus
   `actions/jekyll-build-pages`. Each is a supply-chain surface `$restock` and Dependabot now
-  track, and `zizmor` audits the workflow's `pages: write` and `id-token: write` grants.
+  track, and `zizmor` audits the workflow's `pages: write` and `id-token: write` grants. The
+  fourth is pinned less than the other three and the difference is worth stating: its
+  `action.yml` at v1.0.13 is a Docker action pulling the mutable tag
+  `ghcr.io/actions/jekyll-build-pages:v1.0.13`, so a SHA pin fixes the action and not the
+  image behind it, and Dependabot watches the reference rather than the tag. Accepted for a
+  two-page static build with no secrets in the job; no machinery is added for it.
 - The first deployment cannot succeed until an operator enables Pages. That is a documented
   one-time step, and a workflow run that fails on it names the missing setting rather than
-  publishing a half-site.
-- The theme is GitHub's, not this repository's, so the site's appearance changes when
-  GitHub updates `jekyll-theme-cayman`. Accepted: the alternative is CSS nobody here wants
-  to own.
+  publishing a half-site — verified from `actions/configure-pages` at v6.0.0, whose
+  `findOrCreatePagesSite` raises "Please verify that the repository has Pages enabled and
+  configured to build using GitHub Actions" and rethrows when `enablement` is off, before
+  any artifact is uploaded.
+- The theme is GitHub's, not this repository's, and it is frozen at the version the pinned
+  `actions/jekyll-build-pages` reference carries — a cayman release does not reach the site
+  on its own. The appearance changes only when that pin is bumped, which arrives as a
+  reviewable pull request. Accepted: the alternative is CSS nobody here wants to own.
+- The staged landing page embeds both README images verbatim — 4,535,676 bytes together at
+  `bdcc640` — so the page a newcomer is sent to weighs about 4.5 MB before a byte of theme
+  CSS. Accepted here rather than managed by a resizing step in the build script, which would
+  add an image toolchain to a two-page site. Reducing it is a README change in the
+  implementation, not a change to this decision.
 
 ## Considered & rejected
 
 - **Deploy from a branch with the repository root as the source, excluding the rest in
-  `_config.yml`.** The cheapest to set up — no workflow at all. Rejected — verified:
-  `git ls-files '*.md' | wc -l` reports 141 tracked Markdown files, 28 of them `SKILL.md`
+  `_config.yml`.** The cheapest to set up — no workflow at all. Rejected — verified: at
+  `bdcc640`, `git ls-files '*.md' | wc -l` reports 141 tracked Markdown files, 28 of them `SKILL.md`
   files that already carry YAML front matter and would render as pages; an exclusion list
   publishes every one of them by default and leaks silently the first time a directory is
   added, which is the failure mode this repository's construction rules exist to refuse.
 - **Deploy from a branch with `/docs` as the source.** Narrower, and needs no workflow.
-  Rejected — verified: `git ls-files 'docs/*.md' 'docs/**/*.md' | wc -l` reports 104 files under
-  `docs/`, comprising the ADRs, specs, plans, and benchmarks the operator's scope decision
-  excluded; the folder source publishes exactly the set that was ruled out.
+  Rejected — verified: at `bdcc640`, `git ls-files 'docs/*.md' 'docs/**/*.md' | wc -l` reports
+  104 files under `docs/`, comprising the ADRs, specs, plans, and benchmarks the operator's
+  scope decision excluded; the folder source publishes exactly the set that was ruled out.
+- **Keep the GitHub Actions source but stage inline in the workflow** — a handful of `run:`
+  steps doing the same copy, front-matter injection and link rewriting, with no
+  `scripts/build-site.sh`, no suite, and no `just` recipe. The variant this repository's
+  anatomy rules most directly demand be weighed, since a supporting file has to be argued
+  for. Rejected — judgment: the workflow fires only on `push` to `main`, so inline steps are
+  first exercised after the merge that would break the site, while a script is a thing
+  `just verify` runs on every branch and a suite can drive with fixtures — the link
+  rewriting is the part with a failure mode, and it is exactly the part inline staging
+  leaves untested.
+- **An orphan `gh-pages` branch as a deploy-from-a-branch source.** The alternative that
+  attacks this record's own two arguments hardest: it is default-closed by construction, so
+  the 141-file leak does not arise, and it needs no `pages: write`, no `id-token: write`,
+  and none of the four action references booked above as supply-chain surface. Rejected —
+  judgment: it puts generated output in git, where a reader cannot tell it from source and
+  no gate covers it, and it moves the sync problem from a reviewable script to a branch
+  someone has to remember to regenerate.
 - **Copy the landing prose into a site page and leave `README.md` alone.** Removes the
   staging step entirely. Rejected — judgment: two documents stating the same thing is the
   drift this project already paid to remove once, and the issue asks for the README itself

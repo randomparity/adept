@@ -80,15 +80,19 @@ writes only inside it; it never modifies a tracked file.
 | `docs/assets/adept-logo-grimoire.png` | `<out>/assets/adept-logo-grimoire.png` |
 | `docs/assets/adept-quest-map.png` | `<out>/assets/adept-quest-map.png` |
 
-**Transformations**, applied to the two staged Markdown pages in this order:
+**Transformations**, applied to both staged Markdown pages, in this order:
 
-1. **Leading H1 removal, `index.md` only.** If the first line of `README.md` is an ATX H1,
-   that line and any blank line following it are dropped. The theme's header renders the
-   site title above the page content, so an unmodified `README.md` would show "adept"
-   twice. `cheatsheet.md` keeps its H1 (`# Skill cheat sheet`), which distinguishes the page
-   from the site title rather than repeating it.
-2. **Front matter injection.** Each staged page gains a three-line front-matter block
-   naming `layout: default` and the page's `title`, which becomes the browser tab title.
+1. **The leading H1 becomes the page title and leaves the body.** The first line of each
+   source must be an ATX H1; that line and any blank line following it are dropped, and its
+   text becomes the page's front-matter `title`. `jekyll-theme-cayman`'s `default` layout
+   renders `{{ page.title | default: site.title }}` as the page header's `<h1>`, so a body
+   H1 that survives staging is rendered twice — once by the theme and once by the page. The
+   rule is uniform across both pages for that reason: it is a property of the theme, not of
+   `README.md`. A source whose first line is not an H1 is a content finding (exit 1) naming
+   the file, because the page would otherwise publish under the site title with no heading
+   of its own.
+2. **Front matter injection.** Each staged page gains a front-matter block naming
+   `layout: default` and the `title` taken from step 1.
 3. **Link rewriting**, applied to every `](target)` occurrence, first match wins:
    1. `docs/cheatsheet.md` → `cheatsheet.html` — the other page of this site.
    2. `docs/assets/<file>` → `assets/<file>` — staged alongside.
@@ -146,9 +150,16 @@ concurrency:
 ```
 
 - **`build`** (`permissions: contents: read`) — checkout with `persist-credentials: false`,
-  run `./scripts/build-site.sh ./_site-src`, render with `actions/jekyll-build-pages`
-  (`source: ./_site-src`, `destination: ./_site`), upload with
+  `actions/configure-pages`, run `./scripts/build-site.sh ./_site-src`, render with
+  `actions/jekyll-build-pages` (`source: ./_site-src`, `destination: ./_site`), upload with
   `actions/upload-pages-artifact` (`path: ./_site`).
+
+  `configure-pages` feeds nothing into the Jekyll build — `jekyll-build-pages`'s
+  `entrypoint.sh` at v1.0.13 runs `github-pages build --source … --destination …` and takes
+  no base-URL argument, which is why `baseurl` lives in `_config.yml`. It is in the workflow
+  for one reason: with `enablement` left off, it is the step that turns an unenabled Pages
+  setting into an error naming it, before anything is uploaded. Anyone tempted to delete it
+  as inert should read that sentence first.
 - **`deploy`** (`needs: build`, `permissions: pages: write, id-token: write`,
   `environment: github-pages`) — `actions/deploy-pages` and nothing else. It checks out no
   code and runs none of this repository's own.
@@ -208,6 +219,11 @@ The stale counts go, and they go by removal rather than correction: a grouped li
 skills is the feature list the issue asks for *and* it drops the number that was wrong.
 ADR 0006's Consequences require README's workflow section to keep its pointer to that
 record; the restructure keeps it, in the section describing the pipeline.
+
+Both existing images stay, and both stay embedded. `ls -l docs/assets/` at `bdcc640` reports
+1,354,415 and 3,181,261 bytes, so the landing page carries 4,535,676 bytes of PNG before
+theme CSS. ADR 0034 accepts that rather than adding an image toolchain to a two-page site;
+reducing it is a separate change to the assets themselves, filed as follow-up work.
 
 No prose gate is added. Anatomy rule 4 forbids one, and a list that names every skill can
 still fall behind the directory — a structural check that `skills/<name>/` is named in the
@@ -284,13 +300,14 @@ Cases:
 |---|---|
 | 1 | A well-formed fixture stages exactly the expected file set and no more |
 | 2 | `README.md`'s leading H1 and its following blank line are dropped from `index.md` |
-| 3 | `docs/cheatsheet.md`'s H1 survives in `cheatsheet.md` |
+| 3 | The same happens to `docs/cheatsheet.md`, and each page's `title` is the H1 it lost |
 | 4 | Front matter is prepended to both pages and names `layout: default` |
 | 5 | `](docs/cheatsheet.md)` becomes `](cheatsheet.html)` |
 | 6 | `](docs/assets/x.png)` becomes `](assets/x.png)` |
 | 7 | `](docs/adr/0001-x.md)` becomes the `blob/main` URL |
 | 8 | `](https://…)`, `](#frag)`, and `](mailto:…)` are left alone |
 | 9 | A link to an untracked path exits 1 and names the source file and the target |
+| 9a | A source whose first line is not an H1 exits 1 and names the source file |
 | 10 | A missing source file exits 2 |
 | 11 | A non-empty output directory exits 2 and leaves it untouched |
 | 12 | No argument, and more than one argument, exit 2 |
