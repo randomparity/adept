@@ -52,14 +52,21 @@ if (($# == 0)); then
 	exit 2
 fi
 
-# Reported and ignored rather than acted on. Returns 0 when the value selects
-# offline, 1 when it does not -- including the malformed case, which warns first.
+# Returns 0 when the value selects offline, 1 when it does not -- including the
+# malformed case, which warns first.
+#
+# The warning says "selects no mode here" rather than "ignoring it" because
+# ignoring is not something this gate can promise. An explicit --offline on argv
+# shadows ZIZMOR_OFFLINE, so a malformed value there really is inert; nothing
+# shadows --no-online-audits, so a malformed ZIZMOR_NO_ONLINE_AUDITS still makes
+# zizmor exit 2 after this line has been printed. One wording that is true of both
+# beats a per-variable branch for the sake of one word.
 selects_offline() { # name value
 	case $2 in
 	true) return 0 ;;
 	false) return 1 ;;
 	*)
-		printf '%s: %s=%s is not a value zizmor accepts (true or false); ignoring it\n' \
+		printf '%s: %s=%s is not a value zizmor accepts (true or false); it selects no mode here, and zizmor may still reject it\n' \
 			"$LABEL" "$1" "$2" >&2
 		return 1
 		;;
@@ -143,8 +150,16 @@ fi
 # something -- a documented route to a green gate over an unaudited pin. A usage
 # error (2) is not offered it either: the offline subset does not fix a malformed
 # variable.
+#
+# The wording leads with the diagnosis and scopes the remedy to a local run,
+# because CI is where a token is always set and so where status 1 is most likely.
+# On a runner the only way to act on "set ZIZMOR_OFFLINE=true" is to edit
+# verify.yml or the Justfile, which turns the five provenance audits off for good
+# -- and it would arrive on a red required check, where the pressure to make it
+# green is highest. That is the same bad advice the status-14 case is excluded to
+# avoid, one step removed.
 if [[ $mode == online ]] && ((status == 1)); then
-	say 'the online audits could not run; set ZIZMOR_OFFLINE=true for the offline subset' >&2
+	say 'the online audits could not run: an API or token fault, not a reason to disable them. For a local offline run, set ZIZMOR_OFFLINE=true' >&2
 fi
 
 exit "$status"

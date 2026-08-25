@@ -174,7 +174,7 @@ ok 'ZIZMOR_OFFLINE=false without a token still reports the no-token condition'
 
 run 0 ZIZMOR_OFFLINE=0
 assert_status 'malformed, no token' 0 "$RUN_STATUS"
-assert_contains 'malformed, no token' "$RUN_OUTPUT" 'ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false); ignoring it'
+assert_contains 'malformed, no token' "$RUN_OUTPUT" 'ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false); it selects no mode here'
 assert_contains 'malformed, no token' "$RUN_OUTPUT" 'no API token'
 ok 'a malformed ZIZMOR_OFFLINE warns, then falls through, and zizmor still runs'
 
@@ -209,7 +209,7 @@ ok 'the online line omits the host clause when GH_HOST is unset'
 
 run 1 GH_TOKEN=t1
 assert_status 'tool failure' 1 "$RUN_STATUS"
-assert_contains 'tool failure' "$RUN_OUTPUT" 'the online audits could not run; set ZIZMOR_OFFLINE=true'
+assert_contains 'tool failure' "$RUN_OUTPUT" 'the online audits could not run: an API or token fault, not a reason to disable them'
 ok 'a tool failure is re-raised and draws the hint'
 
 run 14 GH_TOKEN=t1

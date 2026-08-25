@@ -242,7 +242,8 @@ about and then ignored for mode selection; the mode line follows as usual, and z
 own parser has the last word:
 
 ```
-run-zizmor: ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false); ignoring it
+run-zizmor: ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false); it selects no mode
+  here, and zizmor may still reject it
 ```
 
 **Online-failure hint.** Online mode is the only mode that can fail, and `actions-check`
@@ -252,7 +253,8 @@ prints the response after it, so the red path carries a remedy as the offline co
 do:
 
 ```
-run-zizmor: the online audits could not run; set ZIZMOR_OFFLINE=true for the offline subset
+run-zizmor: the online audits could not run: an API or token fault, not a reason to
+  disable them. For a local offline run, set ZIZMOR_OFFLINE=true
 ```
 
 **The condition is `status == 1`, never "non-zero".** Findings exit 14, and offering this
@@ -353,7 +355,12 @@ Boundaries this design **adds**:
   verify` runs — gate scripts, `prek` hooks, `shellcheck`, `shfmt`, `actionlint`,
   `zizmor`, the npm-installed Claude CLI — inherits it.
 - **B2 — token egress to a third-party binary.** With a token in the environment, zizmor
-  sends it to `api.github.com` as an API credential.
+  sends it as an API credential to **the host `GH_HOST` names, defaulting to
+  `api.github.com`** — zizmor honours that variable as `--gh-hostname`. This is the first
+  path on which this repository's gate sends a credential off the machine at all: the
+  recipe previously ran `zizmor --offline`, which forbids all online operations. The
+  destination is therefore chosen by ambient input, which is why it is named here rather
+  than left implicit.
 
 Boundaries this design **widens**: none.
 
@@ -387,12 +394,26 @@ workstation credential is never read, so the design adds no workstation boundary
 - **B1, same-repository branch.** `permissions: contents: read` bounds the token to
   reading this public repository. A collaborator who can push a branch can already do
   strictly more than that token permits.
-- **B2, egress.** The script never holds the value: it tests the five mode variables for
-  emptiness and lets zizmor read the environment it already inherits, so the token appears
-  in no argv the script builds and in nothing the script prints. `run-zizmor.sh` prints
-  the *name* of the source variable only, and the suite asserts the value is absent from
-  the script's output. Beyond that, this design trusts zizmor with a credential it is
-  designed to receive — `--gh-token` is its documented interface.
+- **B2, egress.** Two controls, for the two halves of the boundary.
+
+  *The credential itself:* the script never holds the value. It tests the five mode
+  variables for emptiness and lets zizmor read the environment it already inherits, so the
+  token appears in no argv the script builds and in nothing the script prints.
+  `run-zizmor.sh` prints the *name* of the source variable only, and the suite asserts the
+  value is absent from the script's output. Beyond that, this design trusts zizmor with a
+  credential it is designed to receive — `--gh-token` is its documented interface.
+
+  *The destination:* the only control is visibility. `run-zizmor.sh` names `GH_HOST` on the
+  online mode line whenever it is set, so a run pointed somewhere unexpected says so in the
+  log it fails in. There is deliberately no allowlist or validation: that would be a second
+  opinion on zizmor's own configuration — the drift this design exists to avoid — and it
+  would cost more than the risk it removes. Reachability is narrow. In CI `GH_HOST` is
+  unset and nothing in the diff sets it, and an actor who could set it there already
+  controls the tree `just ci` executes, which is B1's problem and judged there. On a
+  workstation it is the developer's own configuration, and online mode requires them to
+  export a token themselves, so the worst case is misdelivering one's own credential to
+  one's own configured host — with the symptom the design already predicts, a hard `fatal`
+  naming an audit. No untrusted actor gains a capability.
 
 ### Explicitly out of scope
 
@@ -405,6 +426,10 @@ workstation credential is never read, so the design adds no workstation boundary
   public content is worth a rate-limit bump.
 - **A workstation whose `gh` credential is already compromised.** Out of reach of a gate,
   and out of this design's reach in particular — it never reads that credential.
+- **An exported token sent to a `GH_HOST` the developer configured.** Accepted. The gate
+  names the host on the online line and does not validate it, per B2's control list above;
+  the residual is a developer misdelivering their own credential to their own configured
+  host, which fails hard rather than silently.
 - **An exported token with an unreachable API.** Verified on this host: zizmor exits 1
   with `fatal: no audit was performed`, and the gate re-raises that status. Deliberately
   not mitigated. A reachability probe or a retry wrapper would grow the design past what

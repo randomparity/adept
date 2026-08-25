@@ -75,6 +75,13 @@ names the mode and the condition before the scan runs.** `actions-check` invokes
   — and a gate that refused where zizmor would have run is the second opinion this
   decision exists to avoid. It is also what keeps `ZIZMOR_OFFLINE=1` green on the offline
   path, where it is green today.
+
+  Measurement 3's shadowing applies to `ZIZMOR_OFFLINE` alone. Nothing shadows
+  `--no-online-audits`, so a malformed `ZIZMOR_NO_ONLINE_AUDITS` still makes zizmor exit 2
+  after the gate has printed its warning and its mode line. The warning therefore says the
+  value "selects no mode here, and zizmor may still reject it" rather than claiming the
+  gate ignored it — ignoring is not an outcome this gate controls for that variable, and
+  one wording true of both beats a per-variable branch for the sake of one word.
 - Then `GH_TOKEN`, `GITHUB_TOKEN`, `ZIZMOR_GITHUB_TOKEN` — zizmor's documented order for
   `--gh-token`. The first with a non-empty value selects online and is the reported source.
 - A token variable that is set but **empty** is removed from the child's environment. An
@@ -106,7 +113,8 @@ an online run exits with zizmor's **tool-failure** status the gate prints the re
 it:
 
 ```
-run-zizmor: the online audits could not run; set ZIZMOR_OFFLINE=true for the offline subset
+run-zizmor: the online audits could not run: an API or token fault, not a reason to
+  disable them. For a local offline run, set ZIZMOR_OFFLINE=true
 ```
 
 **Keyed on tool failure alone — status 1 — never on "non-zero".** Measurement 4 is why:
@@ -216,10 +224,14 @@ unauthenticated, at a lower rate limit.
   rejected for causing, on a strictly larger set of machines. It also inherits `gh`'s
   configured host, which zizmor does not share.
 - **Fail `actions-check` when no token is present.** verified: settled by the operator
-  before design, and no other gate consults the network or a credential — scanning every
-  gate script for one (`rg --no-config -e '\bgh\b|curl|wget|api\.github|GH_TOKEN|GITHUB_TOKEN|https?://' scripts/*.sh .github/scripts/check-records.sh`,
-  on this branch) returns exactly one hit, the `gh[pousr]_` *pattern literal* inside
-  `check-public-safety.sh`'s secret-detection list.
+  before design, and no gate other than the one this change adds consults the network or a
+  credential. Scanning the gate scripts that predate this change —
+  `rg --no-config -e '\bgh\b|curl|wget|api\.github|GH_TOKEN|GITHUB_TOKEN|https?://' scripts/check-*.sh scripts/list-shell-sources.sh scripts/verify-push.sh scripts/test-fixture-helpers.sh .github/scripts/check-records.sh`
+  — returns exactly one line, the `gh[pousr]_` *pattern literal* at
+  `check-public-safety.sh:42`, which is a secret-detection pattern rather than a call. The
+  same result comes from `scripts/*.sh` on `main`; on this branch that wider glob also
+  matches `run-zizmor.sh` and its suite, which are this change's own token-emptiness tests,
+  so the narrower path list above is the form that reproduces.
 - **Use `--no-online-audits` on the offline path.** judgment: see Decision 2, which states
   the grounds and quotes `zizmor --help` for them.
 - **Write the mode selection inline in the `actions-check` recipe.** verified:
