@@ -55,7 +55,8 @@ checkable in *this* repository:
    itself, that hand-off "comes some way *after* its pull request first reads
    green + mergeable". Nothing on GitHub distinguishes those two states, so the
    orchestrator's merge trigger fires inside that window. **This is the shape the
-   incident above exhibits, and the only one it does.**
+   incident above exhibits, and the only one it does** — parts 1, 2 and 3 would
+   each have passed that merge, and exist for shapes 2 and 3.
 
 2. **The pull-request API's `headRefOid` can lag the branch's real head.**
    Reported, not exhibited by the incident above — and it needs no observation to
@@ -73,13 +74,6 @@ checkable in *this* repository:
 The meta-cause is one thing: the precondition is written as a property of
 reported pull-request state, and it needs to be a property of a specific commit
 plus an explicit statement from whoever authored that commit.
-
-**What the evidence supports, stated plainly.** Part 4 with decision 5 answers
-shape 1, the one the incident exhibits. Parts 1, 2 and 3 would each have *passed*
-that merge — the head was current, its checks were green, the base had not
-moved — and they are there for shapes 2 and 3, which rest on the general facts
-above rather than on the report. Nobody should read the incident as evidence
-for them.
 
 `$return-to-town` already holds most of the answer and applies it to one caller.
 Its restock PR-only mode compares the observed head against `$EXPECTED_HEAD_SHA`
@@ -111,23 +105,27 @@ evaluated `$EXPECTED_HEAD_SHA` rather than a merge-time read.
   path `$deliver` step 3 already defines for driving a pull request to green,
   not a new number this record invents. When it expires the row holds rather than
   spinning, which an unattended run would otherwise do indefinitely against a
-  live branch. **This part is a diagnosis
-  and pre-empt device, not a safety property.** `HEAD_SHA`'s authority is the
-  ref, every other part keys on it, and decision 2 binds it at the server — so
-  part 1 buys legibility, not safety, at the cost of occasionally parking a
-  correct row in an unattended run. Accepted at that price.
+  live branch. `HEAD_SHA`'s authority is the ref, so part 1 buys legibility
+  rather than safety — accepted at the cost of occasionally parking a correct
+  row.
 - **Checks green for `HEAD_SHA`.** `gh run list --commit "$HEAD_SHA"` addresses
   runs by commit, so a green answer cannot be about a different one. `conclusion`
   is not two-valued, so the partition is over its vocabulary rather than over
   `!= success`, and it has four outcomes:
   - **green** — a non-empty list in which every run is `status: completed` at
     `conclusion: success`, `skipped`, or `neutral`. The last two are ordinary and
-    non-blocking: a path-filtered or conditional workflow reports `skipped` on
-    every commit that does not touch its paths, and treating that as failure
-    would deadlock the gate on the most common configuration there is;
+    non-blocking: a workflow whose jobs are all gated off by an `if:` condition
+    produces a run that completes `skipped`, and treating that as failure would
+    block on a configuration that is doing exactly what it was written to do;
   - **not yet** — no run for `HEAD_SHA`, *or* any run not yet at `status:
     completed`. A commit pushed seconds ago returns exactly this. Wait on the
-    same caller budget part 1 uses, then take the hold path under this name;
+    same caller budget part 1 uses, then take the hold path under this name.
+    **A commit that every workflow's `paths` filter excludes lands here and never
+    leaves:** a filtered-away workflow creates no run at all, so there is nothing
+    to complete. Decision 3's not-applicable test cannot separate that from a
+    repository whose runs are merely late — both are an empty list in a
+    repository that does have workflows — so it is the bound that catches it, and
+    the hold names a commit no workflow will ever report on;
   - **failed** — `failure` or `timed_out`;
   - **held under its own name** — `cancelled`, `action_required`, `stale`, or
     `startup_failure`. None of these is a verdict about the code, and reporting
@@ -190,38 +188,45 @@ evaluated `$EXPECTED_HEAD_SHA` rather than a merge-time read.
   **The expected account is established outside the comment channel**, or the
   check is circular: a stranger who may post a `MERGE-READY:` line may equally
   post a complete-looking `WORK:TRAJECTORY` block, name themselves the hand-off's
-  author, and attest for themselves. So `author.login` must equal the pull
-  request's own author — `gh pr view <PR> --json author --jq .author.login`,
-  which GitHub attests — or an account with write permission (`gh api
-  repos/{owner}/{repo}/collaborators/<login>/permission`), *in addition to*
-  having posted the latest complete block. SHA-binding is no help against this
-  one: `HEAD_SHA` is the public head of a public pull request, so a forged line
-  naming it passes parts 1–3 by construction.
+  author, and attest for themselves. So the permitted set is closed, and it is
+  written as one rule rather than parallel arms, because a merging run ordinarily
+  *does* hold write permission and a bare write-permission arm would readmit it
+  by the side door. `author.login` counts when, in addition to having posted the
+  selected block, it is:
 
-  The one other permitted author is the merging run itself, where it created the
-  head by refreshing a stale base — its own `gh api user --jq .login`. Those are
-  the only two producers of a `HEAD_SHA`. **The second is derivative and never
-  original:** a
-  merging run may attest only for a head it produced by refreshing a head that
-  already carried a valid author handshake. A row reaching part 3 with no author
-  handshake for its current head takes the hold path — it does not take the
-  refresh path and then attest to its own work, which would let the refresh mint
-  the very handshake decision 5 requires and reopen failure mode 1 through the
-  gate. Consequences records what the permitted case still costs.
+  - the pull request's own author (`gh pr view <PR> --json author --jq
+    .author.login`, which GitHub attests) or an account with write permission
+    (`gh api repos/{owner}/{repo}/collaborators/<login>/permission`) — **and is
+    not the merging run's own `gh api user --jq .login`**; or
+  - the merging run's own login, **and** the head it names was produced by that
+    run refreshing a head which already carried a valid author handshake.
+
+  SHA-binding is no help against a forgery: `HEAD_SHA` is the public head of a
+  public pull request, so a forged line naming it passes parts 1–3 by
+  construction.
+
+  The second arm is the self-attestation case, and it is **derivative and never
+  original**. A row reaching part 3 with no author handshake for its current head
+  takes the hold path — it does not take the refresh path and then attest to its
+  own work, which would let the refresh mint the very handshake decision 5
+  requires and reopen failure mode 1 through the gate. Consequences records what
+  this can and cannot actually enforce.
 
 **2. The head is bound at the merge, not only before it.** Every issue-backed
 merge path in `$return-to-town` passes `--match-head-commit "$HEAD_SHA"`,
 generalizing the binding restock PR-only mode already performs — that mode keeps
 binding its own `$EXPECTED_HEAD_SHA`, which is not `HEAD_SHA` and must not be
 replaced by it. Parts 1–3 are read-then-act and leave a window between the read
-and the merge; the flag closes the head half of it at the server, which is the
-only place a head can be bound. **Unverified:** which head GitHub compares the
-flag against — the ref, or the same pull-request field part 1 can find stale — is
-not reproducible without performing a merge, so it is not asserted here. If it is
-the ref, the flag is a complete head guard; if it is the field, it guards against
-a push the API has already seen and part 1 is what catches the rest. Part 1 earns
-its place either way, which is why nothing above depends on the answer. It does
-**not** close part 3: `gh pr merge` at
+and the merge; the flag binds the head at the server, which is the only place a
+head can be bound. **Unverified:** which head GitHub compares it against — the
+ref, or the same pull-request field part 1 can find stale — is not reproducible
+without performing a merge, so it is not asserted here, and the guarantee is
+stated conditionally. If GitHub compares the ref, the flag closes the head half
+of the window. If it compares the field, a push landing between part 1's read and
+the merge is caught by nothing, and that residual is accepted on the same footing
+as the base-side one below and for the same reason: no flag available closes it.
+Part 1 does not rescue that case — it is a read-then-act check and ran before the
+push. The flag does **not** close part 3 either: `gh pr merge` at
 2.98.0 has one SHA-binding flag and no base-side equivalent, so a sibling
 merging in the seconds between the ancestry test and the merge moves the base
 under a check that already passed. That residual is accepted and is the last
@@ -312,9 +317,13 @@ report quotes that line and it must not report green as terminal.
 - **After an orchestrator refresh, part 4 is self-attestation**, bounded by
   decision 1 to a head derived from one that already carried an author handshake.
   Within that bound, parts 1–3 plus `--match-head-commit` are the whole of the
-  gate for such a head — the author check cannot separate an orchestrator's
-  comment from a worker's under `$campaign`, where every agent writes through one
-  token. It defends against a third party, not against the merging run itself.
+  gate for such a head. **And under `$campaign` that bound is a convention, not a
+  check:** every dispatched agent writes through one token, so `author.login`
+  cannot tell the orchestrator's comment from its worker's, and nothing
+  mechanical distinguishes a derivative attestation from an original one. The
+  author check defends against a third party. Against the merging run itself only
+  the written rule does, which is why decision 1 states it as a rule rather than
+  relying on the query to enforce it.
 - **The handshake is a line in a public comment**, and part 4's author check is
   what stands between a stranger and a merge trigger — SHA-binding is not, since
   `HEAD_SHA` is public. The same hazard is why `skills/campaign/SKILL.md:312`
@@ -463,6 +472,18 @@ report quotes that line and it must not report green as terminal.
   reopening with #243, where the `$deliver` half is in scope; the two are
   complementary if it is, since draft state and a SHA-bound handshake answer
   different halves of "finished".
+- **Let the run that knows it is finished perform the merge**, instead of
+  handing a signal to an orchestrator that has to be told. This is the cheapest
+  way to close shape 1, because the run holding the knowledge and the run doing
+  the merge become the same run and no signal has to travel at all. verified:
+  the path exists — `skills/quest/SKILL.md:721` is "Hand Off, **or Merge if
+  Authorized**", and `:725` is what routes every `$campaign`-dispatched run away
+  from it. judgment: rejected because serial merge ordering, the base refresh
+  between siblings, and worktree cleanup are all orchestrator-owned and
+  cross-cutting — a worker merging when it happens to finish would reorder the
+  queue and refresh nothing. The rejection is scoped to dispatched runs: a
+  standalone `$quest` with operator authorization already merges itself, and
+  there the gate simply runs in the same turn that produced the handshake.
 - **Use `$campaign`'s existing observed-end-of-run rule as the author-finished
   signal**, instead of a handshake. verified: `skills/campaign/SKILL.md:316`
   already establishes the same proposition — "Refresh a `BEHIND` sibling only
