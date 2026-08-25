@@ -123,14 +123,28 @@ HTTPS remote, and a CI checkout, so the constant is pinned and its suite pins it
 title: adept
 description: Development-workflow skills for Claude Code and Codex, distributed as a plugin.
 theme: jekyll-theme-cayman
+url: https://randomparity.github.io
 baseurl: /adept
 ```
+
+Every line is load-bearing.
 
 `baseurl` is what makes the theme's own stylesheet resolve: `jekyll-theme-cayman`'s layout
 links its CSS through Jekyll's `relative_url` filter, which prepends `site.baseurl`. Left
 empty, the project page at `randomparity.github.io/adept/` would request the stylesheet
-from the domain root and render unstyled. `/adept` is correct for any fork that keeps the
-repository name, which is what a project page's path is built from.
+from the domain root and render unstyled — a build that goes green and a page that looks
+broken. Nothing supplies it for us: `jekyll-build-pages`'s `entrypoint.sh` at v1.0.13 runs
+`github-pages build --source … --destination …` with no base-URL argument, and the
+`github-pages` gem's `GitHubPages::Configuration` sets neither `url` nor `baseurl` in
+`DEFAULTS` or `OVERRIDES`. `/adept` is correct for any fork that keeps the repository name,
+which is what a project page's path is built from.
+
+`theme` is equally non-optional: that same `DEFAULTS` hash sets `theme` to
+`jekyll-theme-primer`, so omitting the line silently selects a different theme rather than
+none.
+
+`url` is what makes `jekyll-seo-tag`'s absolute URLs correct; the theme's own links go
+through `relative_url` and do not need it.
 
 ### `.github/workflows/pages.yml`
 
@@ -162,7 +176,9 @@ concurrency:
   as inert should read that sentence first.
 - **`deploy`** (`needs: build`, `permissions: pages: write, id-token: write`,
   `environment: github-pages`) — `actions/deploy-pages` and nothing else. It checks out no
-  code and runs none of this repository's own.
+  code and runs none of this repository's own. Its `page_url` output is the reachability
+  signal: that URL, on a green run, is the record that the site is up, and a failed deploy
+  is a red run on `main`.
 
 Every `uses:` is pinned to a full commit SHA with a version comment, the convention
 `verify.yml` already follows and `zizmor` audits under `just actions-check`. The staged
@@ -186,15 +202,21 @@ recipe edit, and `just test` discovers the suite by its `-test.sh` name.
 
 ### Enabling Pages
 
-One time, by an operator with admin on the repository:
+One time, by an operator with admin on the repository, **before this pull request merges**:
 
 ```sh
 gh api -X POST repos/randomparity/adept/pages -f build_type=workflow
 ```
 
+Order matters. Enabled first, the first run on `main` is green. Enabled afterwards, that
+run fails and leaves a red default branch that someone has to re-run by hand with
+`workflow_dispatch`. Enabling early is harmless: with no workflow yet, nothing deploys, and
+the site is a 404 until the first run.
+
 The workflow does not do this. `actions/configure-pages`'s `enablement` input requires a
 token other than `GITHUB_TOKEN`, and this repository holds no secrets — ADR 0034 records
-why that trade is refused. Until the setting exists, the `deploy` job fails naming it.
+why that trade is refused. If the ordering is missed, the `configure-pages` step fails
+naming the setting, before anything is uploaded.
 
 ### `README.md` restructure
 

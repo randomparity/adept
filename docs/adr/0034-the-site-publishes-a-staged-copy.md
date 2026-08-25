@@ -43,11 +43,19 @@ from named sources.** Nothing reaches the site because it happens to be in the r
    publish by default and the leak is silent.
 3. Rendering is `actions/jekyll-build-pages` with `jekyll-theme-cayman`. The action carries
    the `github-pages` gem set, so this repository gains no `Gemfile`, no lockfile, and no
-   vendored CSS.
-4. **Pages is enabled once, out of band, by an operator with admin.** The workflow does not
-   enable it, but it does keep `actions/configure-pages` as its first build step — with
-   `enablement` left off, that step is what turns a missing setting into an error naming it,
-   and it is the only reason the step is there, since it feeds nothing into the Jekyll build.
+   vendored CSS. **`site/_config.yml` carries the project-page base path** —
+   `baseurl: /adept` and `url: https://randomparity.github.io` — because nothing else in
+   this arrangement supplies one: `jekyll-build-pages`'s `entrypoint.sh` at v1.0.13 runs
+   `github-pages build` with no base-URL argument, and `GitHubPages::Configuration` sets
+   neither `url` nor `baseurl` in its `DEFAULTS` or `OVERRIDES`. It also names the theme
+   explicitly, since that same `DEFAULTS` hash would otherwise select
+   `jekyll-theme-primer`.
+4. **Pages is enabled once, out of band, by an operator with admin, before the pull request
+   merges** — so the first workflow run on `main` is green rather than red on a setting.
+   The workflow does not enable it, but it does keep `actions/configure-pages` as its first
+   build step: with `enablement` left off, that step is what turns a missing setting into an
+   error naming it, which is the recovery path if the ordering above is missed. A run that
+   failed that way is re-run with `workflow_dispatch` once the setting exists.
 
 ## Consequences
 
@@ -59,7 +67,14 @@ from named sources.** Nothing reaches the site because it happens to be in the r
 - The link rewriting is a real behaviour with a real failure mode, so the decision requires
   it to be testable and tested: `scripts/build-site-test.sh` under `just test`, and a
   `site-check` recipe joining `just verify`, where a `README.md` link to a path that no
-  longer exists goes red before it reaches the site as a 404.
+  longer exists goes red before it reaches the site as a 404. That coverage stops at links
+  the sources write. The theme emits its own stylesheet through Jekyll's `relative_url`
+  filter, so a wrong or missing `baseurl` produces a page that builds green and renders
+  unstyled, and no local gate sees it — that one is checked by loading the deployed page.
+- Reachability is observed rather than asserted: `actions/deploy-pages` outputs the deployed
+  `page_url`, which is the record that the site is up, and a deploy that fails is a red run
+  on `main` for whoever merged to read. No smoke-test workflow is added — two static pages
+  do not earn one.
 - The repository gains three pinned third-party action references
   (`actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`) plus
   `actions/jekyll-build-pages`. Each is a supply-chain surface, watched by `$restock` and by
@@ -86,9 +101,9 @@ from named sources.** Nothing reaches the site because it happens to be in the r
   alternative is CSS nobody wants to own.
 - The staged landing page embeds both README images verbatim — 4,535,676 bytes together at
   `bdcc640` — so the page a newcomer is sent to weighs about 4.5 MB before a byte of theme
-  CSS. Accepted here rather than managed by a resizing step in the build script, which would
-  add an image toolchain to a two-page site. Reducing it is a README change in the
-  implementation, not a change to this decision.
+  CSS. The build adds no image handling either way: the images are reduced once, by hand, or
+  not at all. Reducing them is a change to the assets themselves, tracked as #237, not a
+  change to this decision.
 
 ## Considered & rejected
 
@@ -106,11 +121,11 @@ from named sources.** Nothing reaches the site because it happens to be in the r
   steps doing the same copy, front-matter injection and link rewriting, with no
   `scripts/build-site.sh`, no suite, and no `just` recipe. The variant this repository's
   anatomy rules most directly demand be weighed, since a supporting file has to be argued
-  for. Rejected — judgment: a workflow step is exercised only when the workflow runs, on
-  `push` to `main` or a manual `workflow_dispatch`, while a script is a thing `just verify`
-  runs on every branch and a fixture-driven suite can drive case by case. The link rewriting
-  is the part with a failure mode, and no arrangement of triggers gives an inline
-  implementation the fixture coverage a script gets for free.
+  for. Rejected — judgment: a workflow step is exercised only when the workflow runs,
+  whatever triggers it, while a script is a thing `just verify` runs on every branch and a
+  fixture-driven suite can drive case by case. The link rewriting is the part with a failure
+  mode, and no arrangement of triggers gives an inline implementation the fixture coverage a
+  script gets for free.
 - **An orphan `gh-pages` branch as a deploy-from-a-branch source.** The alternative that
   attacks this record's own two arguments hardest: it is default-closed by construction, so
   the 141-file leak does not arise, and it needs no `pages: write`, no `id-token: write`,
