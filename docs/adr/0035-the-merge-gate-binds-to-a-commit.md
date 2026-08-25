@@ -53,9 +53,12 @@ reachable today only by `$restock`.
 
 ## Decision
 
-**1. One gate, four parts, checked immediately before every `gh pr merge`.** Its
-subject is a commit — `HEAD_SHA` below — and every part is a statement about
-that commit:
+**1. One gate, four parts, checked immediately before every issue-backed
+`gh pr merge`.** Its subject is a commit — `HEAD_SHA` below — and every part is
+a statement about that commit. `$return-to-town`'s restock PR-only mode is
+outside it, for the reasons in Consequences: a dependency pull request has no
+issue for part 4 and no `$quest` run authored it, and its head binding is the
+evaluated `$EXPECTED_HEAD_SHA` rather than a merge-time read.
 
 - **SHA parity.** `HEAD_SHA` comes from `git ls-remote origin
   refs/heads/<branch>`, which reads the ref itself. `gh pr view <PR> --json
@@ -71,15 +74,21 @@ that commit:
 - **Merge base current.** `git merge-base --is-ancestor origin/<BASE_BRANCH>
   "$HEAD_SHA"` — the base tip is already contained in the head, so the merge
   result *is* the commit CI ran on.
-- **Author handshake.** A `MERGE-READY: #<PR> @ <HEAD_SHA>` line from the run
-  that authored the branch, naming that exact commit. "From that run" is read as
-  an author check on the comment: `gh issue view <n> --json comments --jq
+- **Author handshake.** A `MERGE-READY: #<PR> @ <HEAD_SHA>` line naming that
+  exact commit, from whichever run produced it. "From that run" is read as an
+  author check on the comment: `gh issue view <n> --json comments --jq
   '.comments[] | {author: .author.login, body}'`, and only a comment whose
-  `author.login` is the expected account counts.
+  `author.login` is the expected account counts. The expected account is the one
+  that posted the issue's hand-off `WORK:TRAJECTORY` block — the same read
+  returns both — or, where the merging run created the head itself by refreshing
+  a stale base, its own `gh api user --jq .login`. Those are the only two
+  producers of a `HEAD_SHA`, and Consequences records what the second costs.
 
-**2. The head is bound at the merge, not only before it.** Every merge path in
-`$return-to-town` passes `--match-head-commit "$HEAD_SHA"`, generalizing what
-restock PR-only mode already does. Parts 1–3 are read-then-act and leave a
+**2. The head is bound at the merge, not only before it.** Every issue-backed
+merge path in `$return-to-town` passes `--match-head-commit "$HEAD_SHA"`,
+generalizing the binding restock PR-only mode already performs — that mode keeps
+binding its own `$EXPECTED_HEAD_SHA`, which is not `HEAD_SHA` and must not be
+replaced by it. Parts 1–3 are read-then-act and leave a
 window between the read and the merge; the flag closes the part-1 and part-2
 half of it at the server, which is the only place a head can be bound. It does
 **not** close part 3: `gh pr merge` at 2.98.0 has one SHA-binding flag and no
@@ -90,9 +99,15 @@ stay, because they are what produce a diagnosis rather than a bare refusal.
 **3. An empty answer is not a passing answer, and a failed command is neither.**
 `git ls-remote` on a ref that does not exist prints nothing and exits 0; `gh run
 list --commit` on a commit with no runs returns `[]` and exits 0. Both commands
-ran and answered, so neither is a fault — they are "did not match", and the rule
-they need is simply that zero runs for `HEAD_SHA` means CI has not reported,
-never that nothing failed. The fault case is separate and also has to be checked:
+ran and answered, so neither is a fault — but they answer different questions and
+need different rules. Zero runs for `HEAD_SHA` is a check outcome: CI has not
+reported, never that nothing failed. An empty `ls-remote` is a missing *subject* —
+`HEAD_SHA` is what all four parts are statements about, so there is nothing left
+to be about, and the ordinary cause is a head branch already deleted or renamed.
+That takes the blocker path immediately under that name, rather than entering
+part 1's re-read, where an empty value would otherwise be re-read as a lagging
+API until the budget ran out and the operator got the wrong diagnosis.
+The fault case is separate and also has to be checked:
 a non-zero exit from either command is a scan that could not run, which ADR 0005
 decision 1 governs — carried forward unchanged by ADR 0024 decision 1, itself
 superseded by ADR 0025, so the chain resolves in 0005's favour and the citation
@@ -142,6 +157,30 @@ without one, `$return-to-town` performs the guarded merge.
   Running part 3 immediately before the merge narrows the window to the round
   trip; nothing available closes it. Accepted, and named here rather than left
   for a reader to find.
+- **`$restock` is out of scope, and saying so is load-bearing.** ADR 0012 routes
+  each authorized dependency merge through `$return-to-town`, and
+  `skills/restock/SKILL.md:758`–`762` invokes it with `tracking mode: pr-only`,
+  passing the evaluated head — "Restock never invokes `gh pr merge`". A gate
+  stated over *every* merge path would break that mode twice: part 4 has no issue
+  to read and no `$quest` run to have authored the branch, and substituting a
+  merge-time `HEAD_SHA` for `$EXPECTED_HEAD_SHA` would invert the guard restock
+  depends on, since binding the *evaluated* head is what makes a force-push
+  between evaluation and merge come back as `MERGE_REFUSED` rather than merging
+  something nobody built. Decisions 1 and 2 are scoped to issue-backed merges for
+  exactly that reason.
+- **After an orchestrator refresh, part 4 is self-attestation.** When part 3
+  fails during a serial wave the orchestrator merges the base in itself, reruns
+  guardrails, and so creates the new head. No author run exists to re-issue the
+  handshake for it: `skills/campaign/SKILL.md:316` forecloses messaging a worker
+  that has handed off, and dispatching a fresh agent solely to emit a line is a
+  cost nothing here budgets. So the orchestrator posts the `MERGE-READY:` for the
+  head it made, and on that head part 4 attests to the party performing the
+  merge — parts 1–3 plus `--match-head-commit` are the whole of the gate there.
+  This is also why the author check cannot separate an orchestrator's comment
+  from a worker's under `$campaign`, where every agent writes through one token:
+  the check defends against a third party, not against the merging run itself.
+  Recorded rather than papered over, because a self-satisfying part 4 in the
+  multi-pull-request case is exactly the case that motivated the record.
 - **The handshake is an unauthenticated line in a public tracker comment.** This
   repository is public, so any account can post the string, and part 4's author
   check is the only thing between a stranger's comment and a merge trigger. The
@@ -236,15 +275,43 @@ without one, `$return-to-town` performs the guarded merge.
   hold at that moment, and what the queue does afterwards is outside it.
 - **Reuse the `delivered-head-sha:` `$quest` already produces**, instead of a
   second head-SHA artifact. verified: `skills/quest/SKILL.md:602`–`607` already
-  compares the delivered pull request's `headRefOid` against `git rev-parse HEAD`
-  and parks on a mismatch, `:371` requires a full immutable object ID, `:620`
-  persists it in the phase handoff, and `:662` puts the summary carrying it in
-  the pull-request body. The two are not interchangeable: `delivered-head-sha:`
-  is taken at delivery, *before* step 6's remaining obligations and step 9's
-  hand-off, so it cannot carry an assertion that the author is finished — which
-  is the whole content of part 4. Kept separate deliberately, and named here
-  because a later reader will otherwise find two full head SHAs on one pull
-  request with nothing saying how they differ.
+  compares the delivered pull request's `headRefOid` against `git rev-parse HEAD`,
+  parks on a mismatch, and persists that value in the `publication-in-progress`
+  handoff (also `:676`–`677`); `:371` requires a full immutable object ID; and
+  `:620` carries it as a field of the review summary, which
+  `skills/quest/scripts/publish-forge-review:230` posts as a pull-request
+  *comment* (`gh pr comment`). The two are not interchangeable:
+  `delivered-head-sha:` is taken at delivery, *before* step 6's remaining
+  obligations and step 9's hand-off, so it cannot carry an assertion that the
+  author is finished — which is the whole content of part 4. Kept separate
+  deliberately, and named here because the two full head SHAs end up on
+  different objects — one in a pull-request comment, one on the issue — where
+  nothing otherwise says how they differ.
+- **Carry the handshake on the pull request instead of the issue.** verified: it
+  would be cheaper on three axes — part 1 already calls `gh pr view <PR> --json
+  headRefOid`, so `comments` folds into that field list instead of a separate
+  `gh issue view`; it would sit beside the `delivered-head-sha:` summary that
+  `skills/quest/scripts/publish-forge-review:230` already posts there; and
+  `skills/return-to-town/SKILL.md:24` shows PR-carried `WORK:TRAJECTORY` blocks
+  already work in PR-only mode. judgment: rejected because
+  `skills/return-to-town/SKILL.md:73`–`74` already posts the hand-off
+  `WORK:TRAJECTORY` **on the issue** at precisely the moment the handshake is
+  true, so the issue placement rides an existing write and a pull-request comment
+  would be a new one; and `$campaign` drives from issues, reads them anyway, and
+  the issue outlives the pull request. Reconsider it with issue #242, which
+  reopens where the gate lives.
+- **Use `$campaign`'s existing observed-end-of-run rule as the author-finished
+  signal**, instead of a handshake. verified: `skills/campaign/SKILL.md:316`
+  already establishes the same proposition — "Refresh a `BEHIND` sibling only
+  once you have observed that agent's end of run — or once `git worktree list`
+  shows the branch checked out nowhere" — from harness state plus a local
+  command, with no tracker write and no author-identity question. judgment:
+  rejected on durability, which is the ground decision 4 rests on: an end-of-run
+  notification is harness state that does not survive a resumed campaign and
+  never reaches a host that did not dispatch the worker, while a comment is
+  re-readable by any later session. The two are complementary rather than
+  alternatives — that rule keeps governing when a worktree may be touched, and
+  this one governs when a commit may be merged.
 - **Have the orchestrator ask the worker for the handshake by message**, which
   is issue #235's own proposal B. verified: `skills/campaign/SKILL.md` step 5 at
   `e604daa4d9b19d1d3f33e2a9c691a80013399af0` budgets the direct probe at one per

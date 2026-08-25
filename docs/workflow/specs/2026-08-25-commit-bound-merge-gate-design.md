@@ -52,8 +52,15 @@ The shapes are checkable here:
    reported-not-verified wherever they appear. *(criterion 5)*
 6. **`--match-head-commit` is generalized to every `$return-to-town` merge path**, not
    only restock PR-only mode, so the head is bound at the server rather than compared
-   before the merge. *(necessary consequence of decision 1: parts 1–3 are read-then-act
+   before the merge. Which SHA it binds differs by mode: an issue-backed merge binds the
+   gate's `HEAD_SHA`, restock PR-only mode keeps binding the caller's
+   `$EXPECTED_HEAD_SHA`. *(necessary consequence of decision 1: parts 1–3 are read-then-act
    and leave a window the flag closes)*
+6a. **The gate as a whole governs issue-backed merges only.** Restock PR-only mode has no
+   issue for part 4 and no `$quest` run authored its branch, and re-reading its head at
+   merge time would invert the guard behind `MERGE_REFUSED` (ADR 0012 routes each
+   authorized dependency merge through `$return-to-town`;
+   `skills/restock/SKILL.md:758`–`762`). *(necessary consequence of decision 1)*
 7. **The handshake is written into the hand-off `WORK:TRAJECTORY` comment** that
    `$return-to-town`'s default path already posts, and the completion report quotes it.
    *(necessary consequence of criterion 2: a handshake the orchestrator cannot read is
@@ -74,11 +81,12 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
 ```
 
 1. **SHA parity** — `HEAD_SHA` non-empty and equal to `API_SHA`. An empty `HEAD_SHA` is
-   the branch being gone, not a match: `git ls-remote` prints nothing and exits 0 for a ref
-   that does not exist. A mismatch has two causes — a lagging API (`ls-remote` steady,
-   `headRefOid` catching up) or a live author (`ls-remote` moving) — and re-reading tells
-   them apart. Re-read on a backing-off interval and bound it: after a few reads that do
-   not converge, hold. Never merge through either.
+   the branch being gone, not a match and not a lag: `git ls-remote` prints nothing and
+   exits 0 for a ref that does not exist, so it takes the blocker path immediately rather
+   than entering the re-read. A mismatch between two real values has two causes — a lagging
+   API (`ls-remote` steady, `headRefOid` catching up) or a live author (`ls-remote` moving)
+   — and re-reading tells them apart. Re-read on a backing-off interval and bound it: after
+   a few reads that do not converge, hold. Never merge through either.
 2. **Checks green for that commit** —
 
    ```sh
@@ -100,7 +108,9 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
 4. **Author handshake** — a `MERGE-READY: #<PR> @ <sha>` line whose `<sha>` equals
    `HEAD_SHA`, read from the latest complete `WORK:TRAJECTORY` comment on the issue via
    `gh issue view <n> --json comments --jq '.comments[] | {author: .author.login, body}'`,
-   and counted only when `author.login` is the expected account.
+   and counted only when `author.login` is the expected account — the poster of the
+   hand-off block, or the merging run's own `gh api user --jq .login` for a head it
+   created by refreshing a stale base, which makes part 4 self-attestation there.
 
 Then, and only then:
 

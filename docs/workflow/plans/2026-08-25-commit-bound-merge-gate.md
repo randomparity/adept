@@ -61,14 +61,15 @@ that holds the merge — never an answer, and never "not ready".
 
 1. **SHA parity.** `HEAD_SHA` is non-empty and equals `API_SHA`. `gh pr view --json
    headRefOid` reads the pull-request API and **can lag `git ls-remote`**; the ref is
-   authoritative. An empty `HEAD_SHA` is not a match — `git ls-remote` prints nothing and
-   exits 0 for a ref that is not there — so read it as the branch being gone. A mismatch
-   has two causes and re-reading tells them apart: an `ls-remote` value that holds still
-   while `headRefOid` catches up is the API lagging, and an `ls-remote` value that keeps
-   moving is an author still pushing. Neither may be merged through. Re-read on a
-   backing-off interval and **bound it** — after a few attempts that do not converge, take
-   the hold or blocker path rather than spinning, which an unattended run would otherwise
-   do indefinitely against a live branch.
+   authoritative. An empty `HEAD_SHA` is not a match and not a lag: `git ls-remote` prints
+   nothing and exits 0 for a ref that is not there, so the head branch is gone — take the
+   blocker path immediately under that name rather than entering the re-read below. A
+   mismatch between two real values has two causes and re-reading tells them apart: an
+   `ls-remote` value that holds still while `headRefOid` catches up is the API lagging, and
+   an `ls-remote` value that keeps moving is an author still pushing. Neither may be merged
+   through. Re-read on a backing-off interval and **bound it** — after a few attempts that
+   do not converge, take the hold or blocker path rather than spinning, which an unattended
+   run would otherwise do indefinitely against a live branch.
 2. **Checks green for `HEAD_SHA`.**
 
    ```sh
@@ -105,9 +106,19 @@ that holds the merge — never an answer, and never "not ready".
    ```
 
    Only a comment whose `author.login` is the expected account counts: this is a public
-   repository and any account can post the string. A green pull request with no handshake
-   is **pending**, not ready, and a handshake naming a different commit is no handshake for
+   repository and any account can post the string. That account is the one that posted the
+   issue's hand-off `WORK:TRAJECTORY` block — the same read returns both — or, where you
+   created the head yourself by refreshing a stale base, your own `gh api user --jq .login`,
+   which makes part 4 self-attestation on that head and leaves parts 1–3 and
+   `--match-head-commit` carrying the gate. A green pull request with no handshake is
+   **pending**, not ready, and a handshake naming a different commit is no handshake for
    this one — which is what makes a stale line from an earlier hand-off harmless.
+
+**Scope.** This gate governs issue-backed merges. `$return-to-town`'s restock PR-only mode
+is outside it: a dependency pull request has no issue for part 4 and no `$quest` run
+authored it, and that mode keeps binding its caller-supplied `$EXPECTED_HEAD_SHA` — the
+head restock evaluated — rather than a merge-time read, because refusing a head that moved
+after evaluation is the behaviour its `MERGE_REFUSED` outcome depends on.
 
 Only with all four holding for one `HEAD_SHA`, merge — binding that commit at the server,
 which is the only place the head can be bound:
@@ -166,9 +177,12 @@ becomes
 
 ```markdown
 - **Every merge passes `--match-head-commit`**, not only restock PR-only mode — the gate
-  above ends in that invocation and there is no merge path here that skips it. In restock
-  PR-only mode `HEAD_SHA` is the caller's `$EXPECTED_HEAD_SHA`, already validated at
-  entry; never pass the synthetic local-integration commit as the pull-request head.
+  above ends in that invocation and there is no merge path here that skips it. What
+  differs by mode is the SHA it binds: an issue-backed merge binds the gate's `HEAD_SHA`,
+  and restock PR-only mode binds the caller's `$EXPECTED_HEAD_SHA` — the head restock
+  evaluated, already validated at entry, and deliberately *not* re-read here, since
+  refusing a head that moved after evaluation is what its `MERGE_REFUSED` outcome
+  depends on. Never pass the synthetic local-integration commit as the pull-request head.
 ```
 
 **Step 1.3 — put the handshake in the hand-off.** Under *Default: hand off, do not
