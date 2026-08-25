@@ -132,8 +132,8 @@ Resolution order:
 
 | # | variable | `true` | `false` | anything else, empty included |
 |---|---|---|---|---|
-| 1 | `ZIZMOR_OFFLINE` | offline; reported condition | falls through | exit 2, named |
-| 2 | `ZIZMOR_NO_ONLINE_AUDITS` | offline; reported condition | falls through | exit 2, named |
+| 1 | `ZIZMOR_OFFLINE` | offline; reported condition | falls through | warn, then fall through |
+| 2 | `ZIZMOR_NO_ONLINE_AUDITS` | offline; reported condition | falls through | warn, then fall through |
 
 | # | variable | non-empty | empty | unset |
 |---|---|---|---|---|
@@ -158,15 +158,24 @@ defect rather than a detail:
 - `ZIZMOR_OFFLINE=false` with a token goes **online**. A presence test would force
   `--offline` and report the operator's own variable as the cause of a mode they asked
   against — the "cause the observation does not carry" defect ADR 0025 decision 2 forbids.
-- An empty or non-boolean value is a usage error, not an ignorable one: `GH_TOKEN=` exits 2
-  with `GitHub token cannot be empty` *even with `--offline` on argv*, `ZIZMOR_OFFLINE=`
-  exits 2 with `a value is required`, and `ZIZMOR_OFFLINE=0` with `invalid value '0'`.
+- An empty or non-boolean value is rejected by zizmor — but only where zizmor still parses
+  the variable. `GH_TOKEN=` exits 2 with `GitHub token cannot be empty` *even with
+  `--offline` on argv*. `ZIZMOR_OFFLINE=0` exits 2 with `invalid value '0'` when no flag is
+  on argv, but exits **0** with `--offline` present, because the explicit flag shadows the
+  variable. A malformed `ZIZMOR_NO_ONLINE_AUDITS` is fatal either way — no flag shadows it.
+- The exit statuses are distinct: **0** clean, **1** tool failure, **2** usage error, and
+  **14** for a completed run reporting findings.
 
-Hence rows 1–2 exit 2 with the variable and the accepted values named, rather than
-announcing a mode the run will never enter; and an empty *token* variable is removed from
-the child's environment, which is what makes "an empty value is not a token" true by
-construction instead of asserted. Removing an empty variable is not the override rejected
-below: an empty string carries no instruction.
+Hence rows 1–2 **warn and fall through** rather than exiting. A malformed value is not a
+recognised instruction, so it selects no mode; the gate names it and lets zizmor's own
+parser accept or reject it. Exiting instead would refuse in a case where zizmor runs
+happily — a second opinion drifting from zizmor's, which is the defect this design exists
+to avoid — and it would turn `ZIZMOR_OFFLINE=1`, green on the offline path today, into a
+hard failure, regressing R6.
+
+An empty *token* variable is removed from the child's environment, which is what makes "an
+empty value is not a token" true by construction instead of asserted. Removing an empty
+variable is not the override rejected below: an empty string carries no instruction.
 
 A `true` mode variable is reported, never unset. Silently overriding an operator who asked
 to stay offline is the same class of defect as the silent degrade this change closes, and
@@ -226,25 +235,34 @@ the variable and value observed and asserts nothing about why they were set.
 empty token variable from the child's environment, so empty and unset genuinely reach
 zizmor the same way.
 
-**Usage-error path.** A mode variable holding neither `true` nor `false` exits 2 before
-any mode is announced:
+**Malformed mode value.** A mode variable holding neither `true` nor `false` is warned
+about and then ignored for mode selection; the mode line follows as usual, and zizmor's
+own parser has the last word:
 
 ```
-run-zizmor: ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false)
+zizmor: ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false); ignoring it
 ```
 
 **Online-failure hint.** Online mode is the only mode that can fail, and `actions-check`
 is in `verify`, which the managed pre-push hook re-runs — so a failed online audit blocks
-`git push`. When zizmor exits non-zero in online mode the script prints the response
-after it, so the red path carries a remedy exactly as the offline conditions do:
+`git push`. When an online run exits with zizmor's **tool-failure** status the script
+prints the response after it, so the red path carries a remedy as the offline conditions
+do:
 
 ```
-zizmor: the online audits failed; set ZIZMOR_OFFLINE=true to run the offline subset
+zizmor: the online audits could not run; set ZIZMOR_OFFLINE=true for the offline subset
 ```
 
-It prints only in online mode and only on a non-zero status, and it does not alter that
-status. It is a `printf` on a branch already being handled — not a retry, a timeout, or a
-reachability probe, all of which the ADR rejects.
+**The condition is `status == 1`, never "non-zero".** Findings exit 14, and offering this
+hint there would advise switching off the audit that just caught something — a documented
+route to a green gate over an unaudited pin. A usage error (2) is not offered it either,
+since the offline subset does not fix a malformed variable. A future zizmor that
+renumbers its statuses simply stops printing the hint, which is the safe direction to
+fail.
+
+It prints only in online mode, only on status 1, and does not alter that status. It is a
+`printf` on a branch already being handled — not a retry, a timeout, or a reachability
+probe, all of which the ADR rejects.
 
 The second line states the consequence. A gate that says only "offline" leaves a reader
 to know which audits that costs; the whole issue is that the cost was invisible.
@@ -421,9 +439,11 @@ the scratch directory, and exits with a status the case chooses.
 | both mode variables `true` | condition names `ZIZMOR_OFFLINE` (first in order) |
 | `ZIZMOR_OFFLINE=false`, `GH_TOKEN` set | falls through; announces **online** naming `GH_TOKEN` |
 | `ZIZMOR_OFFLINE=false`, no token | falls through; announces offline with the no-token condition |
-| `ZIZMOR_OFFLINE=0` | exit 2, message names the variable and `true or false`; zizmor never runs |
-| `ZIZMOR_OFFLINE` set to the empty string | exit 2, same message |
-| `ZIZMOR_NO_ONLINE_AUDITS=maybe` | exit 2, same message |
+| `ZIZMOR_OFFLINE=0`, no token | warns naming the variable and `true or false`, then announces offline; zizmor still runs |
+| `ZIZMOR_OFFLINE=0`, `GH_TOKEN` set | warns, then announces **online** — the malformed value selects nothing |
+| `ZIZMOR_OFFLINE` set to the empty string | warns, then falls through |
+| `ZIZMOR_NO_ONLINE_AUDITS=maybe` | warns, then falls through |
+| any valid mode value | no warning is printed |
 | `GH_TOKEN` empty, others unset | announces offline; the stub sees `GH_TOKEN` **absent** from its environment |
 | `GH_TOKEN` empty, `GITHUB_TOKEN` set | announces online naming `GITHUB_TOKEN`; the stub sees `GH_TOKEN` absent |
 | offline path | prints the "pin provenance was NOT audited" consequence line |
@@ -436,6 +456,8 @@ the scratch directory, and exits with a status the case chooses.
 | zizmor stub exits 1, online mode | the online-failure hint is printed; status is still 1 |
 | zizmor stub exits 1, offline mode | the online-failure hint is **not** printed |
 | zizmor stub exits 0, online mode | the online-failure hint is **not** printed |
+| zizmor stub exits **14**, online mode | the hint is **not** printed — findings must never draw "switch the audit off"; status is still 14 |
+| zizmor stub exits 2, online mode | the hint is **not** printed; status is still 2 |
 | any online case | the token value appears nowhere in the script's stdout or stderr |
 | no arguments | usage message, exit 2 |
 | inputs forwarded | argv ends with exactly the inputs given, in order |
