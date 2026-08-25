@@ -96,9 +96,12 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
    ```
 
    Empty output *and* a non-empty run list is green. `[]` means no run exists for that
-   commit — CI has not reported, which is not the same as nothing having failed. `gh run
-   list` sees GitHub Actions runs only; where a required check is not an Actions run, read
-   `gh api repos/<owner/name>/commits/"$HEAD_SHA"/check-runs` as well, which is
+   commit — CI has not reported, which is not the same as nothing having failed, and which
+   splits further: a run not yet started resolves, a repository with no workflows never
+   does. Establish the second (`gh api repos/<owner/name>/actions/workflows` empty beside an
+   empty `check-runs`) and record part 2 *not applicable*, or the gate deadlocks there. `gh
+   run list` sees GitHub Actions runs only; where a required check is not an Actions run,
+   read `gh api repos/<owner/name>/commits/"$HEAD_SHA"/check-runs` as well, which is
    SHA-addressed the same way.
 3. **Merge base current** — `git merge-base --is-ancestor "origin/<BASE_BRANCH>"
    "$HEAD_SHA"`. Exit 0 passes; exit 1 means the base moved, so merge `BASE_BRANCH` in,
@@ -110,7 +113,9 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
    `gh issue view <n> --json comments --jq '.comments[] | {author: .author.login, body}'`,
    and counted only when `author.login` is the expected account — the poster of the
    hand-off block, or the merging run's own `gh api user --jq .login` for a head it
-   created by refreshing a stale base, which makes part 4 self-attestation there.
+   created by refreshing a stale base, which makes part 4 self-attestation there. That
+   attestation is derivative only: permitted for a head refreshed from one that already
+   carried an author handshake, never for a row that never had one.
 
 Then, and only then:
 
@@ -132,6 +137,9 @@ A non-zero exit from any command above is a fault that holds the merge, never an
   (necessary consequence of G1)
 - **G3** `$quest`'s terminal state is the `MERGE-READY:` line. "PR is green" is not
   terminal and is not a merge trigger for any caller. (criterion 2, decision 7)
+- **G3a** A merging run may attest for a head only when that head descends from one that
+  already carried an author handshake. No row acquires a handshake by being refreshed.
+  (necessary consequence of criterion 2)
 - **G4** The handshake names a full 40-character SHA — the one `git ls-remote` returned —
   never an abbreviation and never `headRefOid`. (decision 4)
 - **G5** An empty `git ls-remote` result and an empty `gh run list` result are faults, not

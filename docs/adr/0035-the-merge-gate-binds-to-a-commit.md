@@ -68,12 +68,19 @@ evaluated `$EXPECTED_HEAD_SHA` rather than a merge-time read.
   still pushing. Neither may be merged through, and the re-read is bounded —
   after a few attempts that do not converge the row takes the caller's existing
   hold or blocker path rather than spinning, which an unattended run would
-  otherwise do indefinitely against a live branch.
+  otherwise do indefinitely against a live branch. **This part is a diagnosis
+  and pre-empt device, not a safety property.** `HEAD_SHA`'s authority comes from
+  `git ls-remote` alone; every other part keys on it, and decision 2 binds it at
+  the server, so dropping part 1 would not admit a wrong merge — it would turn a
+  legible hold into an opaque merge refusal. What it costs is stated in
+  Consequences: a transient lag can hold a correct row.
 - **Checks green for `HEAD_SHA`.** `gh run list --commit "$HEAD_SHA"` addresses
   runs by commit, so a green answer cannot be about a different one.
 - **Merge base current.** `git merge-base --is-ancestor origin/<BASE_BRANCH>
   "$HEAD_SHA"` — the base tip is already contained in the head, so the merge
-  result *is* the commit CI ran on.
+  result *is* the commit CI ran on. Run it immediately before the merge:
+  `--match-head-commit` binds the head and nothing binds the base, so the
+  interval is the exposure.
 - **Author handshake.** A `MERGE-READY: #<PR> @ <HEAD_SHA>` line naming that
   exact commit, from whichever run produced it. "From that run" is read as an
   author check on the comment: `gh issue view <n> --json comments --jq
@@ -82,26 +89,41 @@ evaluated `$EXPECTED_HEAD_SHA` rather than a merge-time read.
   that posted the issue's hand-off `WORK:TRAJECTORY` block — the same read
   returns both — or, where the merging run created the head itself by refreshing
   a stale base, its own `gh api user --jq .login`. Those are the only two
-  producers of a `HEAD_SHA`, and Consequences records what the second costs.
+  producers of a `HEAD_SHA`. **The second is derivative and never original:** a
+  merging run may attest only for a head it produced by refreshing a head that
+  already carried a valid author handshake. A row reaching part 3 with no author
+  handshake for its current head takes the hold path — it does not take the
+  refresh path and then attest to its own work, which would let the refresh mint
+  the very handshake decision 5 requires and reopen failure mode 1 through the
+  gate. Consequences records what the permitted case still costs.
 
 **2. The head is bound at the merge, not only before it.** Every issue-backed
 merge path in `$return-to-town` passes `--match-head-commit "$HEAD_SHA"`,
 generalizing the binding restock PR-only mode already performs — that mode keeps
 binding its own `$EXPECTED_HEAD_SHA`, which is not `HEAD_SHA` and must not be
-replaced by it. Parts 1–3 are read-then-act and leave a
-window between the read and the merge; the flag closes the part-1 and part-2
-half of it at the server, which is the only place a head can be bound. It does
-**not** close part 3: `gh pr merge` at 2.98.0 has one SHA-binding flag and no
-base-side equivalent, so a sibling merging in the seconds between the ancestry
-test and the merge moves the base under a check that already passed. Parts 1–3
-stay, because they are what produce a diagnosis rather than a bare refusal.
+replaced by it. Parts 1–3 are read-then-act and leave a window between the read
+and the merge; the flag closes the head half of it at the server, which is the
+only place a head can be bound. It does **not** close part 3: `gh pr merge` at
+2.98.0 has one SHA-binding flag and no base-side equivalent, so a sibling
+merging in the seconds between the ancestry test and the merge moves the base
+under a check that already passed. That residual is accepted and is the last
+word on it here; Consequences records the shape it takes in a serial wave.
 
 **3. An empty answer is not a passing answer, and a failed command is neither.**
 `git ls-remote` on a ref that does not exist prints nothing and exits 0; `gh run
 list --commit` on a commit with no runs returns `[]` and exits 0. Both commands
 ran and answered, so neither is a fault — but they answer different questions and
 need different rules. Zero runs for `HEAD_SHA` is a check outcome: CI has not
-reported, never that nothing failed. An empty `ls-remote` is a missing *subject* —
+reported, never that nothing failed. It is also two conditions, and `gh run list`
+cannot tell them apart: a commit whose runs have not started, which resolves, and
+a repository with no workflows at all, which never will. Establish the second
+once — no workflow files, or an empty `gh api
+repos/<owner/name>/actions/workflows` beside an empty `check-runs` for
+`HEAD_SHA` — and record part 2 as *not applicable* rather than not-yet, which is
+a terminating outcome. Without that, the gate deadlocks permanently in any
+repository with no automated checks, and these skills ship to arbitrary ones —
+the same generalization argument the merge-queue and `BEHIND` rejections below
+both turn on. An empty `ls-remote` is a missing *subject* —
 `HEAD_SHA` is what all four parts are statements about, so there is nothing left
 to be about, and the ordinary cause is a head branch already deleted or renamed.
 That takes the blocker path immediately under that name, rather than entering
@@ -149,14 +171,19 @@ without one, `$return-to-town` performs the guarded merge.
   request to green and hands back, and it never merges — but `$return-to-town`
   cites it by name as its own entry condition, so the two now say different
   things about the same moment. Owned by issue #243 rather than edited here.
-- **Part 3 keeps an irreducible window.** `--match-head-commit` binds the head
-  and nothing binds the base, so during a serial merge wave — where every merge
-  moves `origin/<BASE_BRANCH>` by design — a sibling can land between the
-  ancestry test and the merge, and the merge result then contains a commit CI
-  never ran against this head. That is failure mode 3 reached *through* the gate.
-  Running part 3 immediately before the merge narrows the window to the round
-  trip; nothing available closes it. Accepted, and named here rather than left
-  for a reader to find.
+- **Part 3 is ordinary to fail and impossible to fully close.** During a serial
+  merge wave every merge moves `origin/<BASE_BRANCH>` by design, so the next
+  sibling routinely fails it. The existing refresh — merge `BASE_BRANCH` in,
+  regenerate artifacts, rerun guardrails — clears it and produces a new
+  `HEAD_SHA`, so the gate re-runs from part 1 rather than resuming at part 4, and
+  the handshake is re-obtained because the old one named the old commit. What
+  survives all of that is a window: a sibling landing between the ancestry test
+  and the merge moves the base under a check that already passed, which is
+  failure mode 3 reached *through* the gate. Running part 3 immediately before
+  the merge narrows it to a round trip; nothing available closes it. Because it
+  is a local test, it also needs a current `origin/<BASE_BRANCH>` — a `git fetch
+  origin` belongs immediately before the gate, and a stale fetch makes part 3
+  pass wrongly.
 - **`$restock` is out of scope, and saying so is load-bearing.** ADR 0012 routes
   each authorized dependency merge through `$return-to-town`, and
   `skills/restock/SKILL.md:758`–`762` invokes it with `tracking mode: pr-only`,
@@ -176,11 +203,14 @@ without one, `$return-to-town` performs the guarded merge.
   cost nothing here budgets. So the orchestrator posts the `MERGE-READY:` for the
   head it made, and on that head part 4 attests to the party performing the
   merge — parts 1–3 plus `--match-head-commit` are the whole of the gate there.
-  This is also why the author check cannot separate an orchestrator's comment
-  from a worker's under `$campaign`, where every agent writes through one token:
-  the check defends against a third party, not against the merging run itself.
-  Recorded rather than papered over, because a self-satisfying part 4 in the
-  multi-pull-request case is exactly the case that motivated the record.
+  Decision 1 bounds this so it cannot become a bypass: the attestation is
+  derivative, permitted only for a head refreshed from one that already carried
+  an author handshake, so a row that never had one cannot acquire one by being
+  refreshed. What is genuinely given up is the case where an author's handshake
+  is one refresh old, and the reason it must be given up is that the author check
+  cannot separate an orchestrator's comment from a worker's under `$campaign`,
+  where every agent writes through one token: the check defends against a third
+  party, not against the merging run itself.
 - **The handshake is an unauthenticated line in a public tracker comment.** This
   repository is public, so any account can post the string, and part 4's author
   check is the only thing between a stranger's comment and a merge trigger. The
@@ -197,16 +227,12 @@ without one, `$return-to-town` performs the guarded merge.
   repos/{owner}/{repo}/commits/<SHA>/check-runs`, which is SHA-addressed the
   same way. The gate names both so the Actions-only reading is a choice rather
   than an oversight.
-- The merge-base part is a local ancestry test rather than a `mergeStateStatus`
-  reading, so it needs a current `origin/<BASE_BRANCH>` — a `git fetch origin`
-  belongs immediately before the gate, and a stale fetch makes part 3 pass
-  wrongly.
-- Part 3 failing is ordinary during a serial merge wave: every merge moves the
-  base and puts the next sibling behind it. The existing refresh — merge
-  `BASE_BRANCH` in, regenerate artifacts, rerun guardrails — is what clears it,
-  and it produces a new `HEAD_SHA`, so the gate is re-run from part 1 rather
-  than resumed at part 4. The handshake is re-obtained too: the author's
-  `MERGE-READY:` named the old commit.
+- **Part 1 can hold a correct row.** It carries no safety property — decision 1
+  says so — so its only failure mode is the one it introduces: a transient API
+  lag on a finished, green, handshaken row exhausts the bounded re-read and parks
+  it, in an unattended run with nobody to release it. Accepted, because the
+  alternative is an unexplained `--match-head-commit` refusal at the merge and
+  the same row parked with a worse diagnosis.
 - `--match-head-commit` turns the lag case from a silent wrong merge into a
   refused merge. That is a new failure the orchestrator sees, which is the
   intent; it is also a reason not to retry it blindly, since the refusal means
@@ -300,6 +326,30 @@ without one, `$return-to-town` performs the guarded merge.
   would be a new one; and `$campaign` drives from issues, reads them anyway, and
   the issue outlives the pull request. Reconsider it with issue #242, which
   reopens where the gate lives.
+- **Use GitHub's draft state as the author-finished signal**: `$deliver` opens
+  the pull request with `--draft`, hand-off runs `gh pr ready`, and the gate reads
+  `isDraft`. This is the platform's own answer to failure mode 1, and it is
+  better than a handshake on three of the grounds this record argues elsewhere —
+  it is a first-class field rather than a string any account can post, it is as
+  durable as a comment, and GitHub refuses to merge a draft server-side, which
+  would make failure mode 1 a refusal rather than a prose obligation. verified:
+  `gh pr create --draft`, `gh pr ready`, and the `isDraft` field are present at
+  gh 2.98.0, and `rg -n -i 'draft|isDraft' skills/{deliver,quest,return-to-town,campaign}/SKILL.md`
+  returns nothing — no part of this pipeline uses draft state today.
+  **Unverified:** that GitHub refuses a draft merge server-side is not
+  reproducible here, since confirming it would mean creating and merging a draft
+  pull request. Rejected on two grounds that do not depend on it. verified:
+  draft state names no commit, so `ready` cannot say *which* head the author
+  finished at — a push after `gh pr ready` leaves the pull request ready at a
+  commit nobody attested, which is failure mode 2 wearing a different label, and
+  SHA binding is the whole content of this record. verified: opening the pull
+  request as a draft is a `$deliver` change, and `skills/deliver/SKILL.md` is
+  outside this change's surface — issue #243 owns it. judgment: a repository whose
+  `pull_request` workflows filter drafts would leave part 2 with no runs until
+  `gh pr ready`, which interacts badly with decision 3's not-yet rule. Worth
+  reopening with #243, where the `$deliver` half is in scope; the two are
+  complementary if it is, since draft state and a SHA-bound handshake answer
+  different halves of "finished".
 - **Use `$campaign`'s existing observed-end-of-run rule as the author-finished
   signal**, instead of a handshake. verified: `skills/campaign/SKILL.md:316`
   already establishes the same proposition — "Refresh a `BEHIND` sibling only

@@ -69,7 +69,10 @@ that holds the merge — never an answer, and never "not ready".
    an `ls-remote` value that keeps moving is an author still pushing. Neither may be merged
    through. Re-read on a backing-off interval and **bound it** — after a few attempts that
    do not converge, take the hold or blocker path rather than spinning, which an unattended
-   run would otherwise do indefinitely against a live branch.
+   run would otherwise do indefinitely against a live branch. This part is a diagnosis and
+   pre-empt device, not a safety property: `HEAD_SHA`'s authority is the ref, every other
+   part keys on it, and the merge binds it — so a mismatch is held to turn an opaque merge
+   refusal into a legible one, at the cost of occasionally parking a correct row.
 2. **Checks green for `HEAD_SHA`.**
 
    ```sh
@@ -84,7 +87,11 @@ that holds the merge — never an answer, and never "not ready".
    inherit exactly the staleness part 1 is about, so they can report green about a
    different commit. `gh run list` sees GitHub Actions runs only; where a required check
    is not one, also read `gh api repos/<owner/name>/commits/"$HEAD_SHA"/check-runs`, which
-   is SHA-addressed the same way.
+   is SHA-addressed the same way. And separate "no run yet" from "no checks exist here":
+   if the repository has no workflow files — `gh api repos/<owner/name>/actions/workflows`
+   empty, and `check-runs` for `HEAD_SHA` empty too — record part 2 as **not applicable**
+   and move on. Left as not-yet it never resolves, and the gate deadlocks permanently in
+   any repository with no automated checks.
 3. **Merge base current.** `git merge-base --is-ancestor "origin/<BASE_BRANCH>"
    "$HEAD_SHA"`. Exit 0 passes — the base tip is already in the head, so the merge result
    is the commit CI ran on. Exit 1 means the base moved under a green check: merge
@@ -110,7 +117,12 @@ that holds the merge — never an answer, and never "not ready".
    issue's hand-off `WORK:TRAJECTORY` block — the same read returns both — or, where you
    created the head yourself by refreshing a stale base, your own `gh api user --jq .login`,
    which makes part 4 self-attestation on that head and leaves parts 1–3 and
-   `--match-head-commit` carrying the gate. A green pull request with no handshake is
+   `--match-head-commit` carrying the gate. **That self-attestation is derivative and never
+   original:** attest only for a head you produced by refreshing one that already carried a
+   valid author handshake. A row that reaches part 3 with no handshake for its current head
+   takes the hold path — never the refresh path followed by attesting to your own work,
+   which would let the refresh mint the handshake this part exists to require. A green pull
+   request with no handshake is
    **pending**, not ready, and a handshake naming a different commit is no handshake for
    this one — which is what makes a stale line from an earlier hand-off harmless.
 
