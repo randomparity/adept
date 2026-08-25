@@ -95,8 +95,15 @@ that holds the merge — never an answer, and never "not ready".
      --jq '.[] | select(.status != "completed" or .conclusion != "success")'
    ```
 
-   Green is a **non-empty** run list with empty output — every run `completed` and
-   `success`. That is *all* Actions runs for the commit, not the required set: required-ness
+   Partition on `conclusion`'s vocabulary, not on `!= success` — the `--jq` above is a
+   starting filter, not the rule. **Green** is a non-empty list in which every run is
+   `completed` at `success`, `skipped`, or `neutral`; `skipped` is what a path-filtered or
+   conditional workflow reports on every commit that misses its paths, so treating it as
+   failure deadlocks the gate on a very common configuration. **Not yet** is no run at all
+   *or* any run not yet `completed`. **Failed** is `failure` or `timed_out`. **Cancelled,
+   `action_required`, `stale`, and `startup_failure` hold under their own names** — none is a
+   verdict about the code. The set read is *all* Actions runs for the commit, not the
+   required set: required-ness
    belongs to a branch rule and is not SHA-addressable, so this is deliberately stricter
    than the "required checks are green" it replaces and will hold on an optional run the
    old wording ignored. Do not substitute `gh pr checks` or `statusCheckRollup`: both read
@@ -127,10 +134,13 @@ that holds the merge — never an answer, and never "not ready".
    landing in the interval moves it under a check that already passed, and a short
    interval is the only mitigation there is.
 4. **Author handshake.** A `MERGE-READY: #<PR> @ <sha>` line whose `<sha>` equals
-   `HEAD_SHA`, occurring as a **whole line** inside the **latest complete**
-   `WORK:TRAJECTORY` block on the issue — the block `$return-to-town`'s hand-off writes, so
+   `HEAD_SHA`, occurring as a **whole line** inside the latest complete
+   `WORK:TRAJECTORY` block **that carries such a line for `HEAD_SHA`** — not the latest
+   complete block simpliciter, because the park protocol writes that block type too and a
+   hold posted after a valid hand-off would otherwise revoke it. `$return-to-town`'s hand-off
+   is what writes the block, and it computes `HEAD_SHA` from `git ls-remote` at that moment;
    read it there rather than relying on a report reaching you. Use the quest-log skill's
-   read recipe, not an ad-hoc `jq` over every comment: a block missing its
+   selection rules, not an ad-hoc `jq` over every comment: a block missing its
    `TRAJECTORY:COMPLETE` sentinel is a write that died midway and counts as absent, and
    `last` is what implements latest-complete-wins.
 

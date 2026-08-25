@@ -111,9 +111,12 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
      --jq '.[] | select(.status != "completed" or .conclusion != "success")'
    ```
 
-   Empty output *and* a non-empty run list is green — every run `completed`/`success`, over
-   *all* Actions runs for the commit rather than the required set, since required-ness is
-   not SHA-addressable. `[]` means no run exists for that commit — CI has not reported,
+   Green is a non-empty list in which every run is `completed` at `success`, `skipped`, or
+   `neutral` — the partition is over `conclusion`'s vocabulary, not `!= success`, since
+   `skipped` is ordinary for a path-filtered workflow. `failure`/`timed_out` are failures;
+   `cancelled`, `action_required`, `stale`, and `startup_failure` hold under their own names.
+   The set read is *all* Actions runs for the commit rather than the required set, since
+   required-ness is not SHA-addressable. `[]` means no run exists for that commit — CI has not reported,
    which is not the same as nothing having failed, and which splits further: a run not yet
    started resolves (bound the wait, then hold), a repository with no workflows never does.
    Establish the second by a conjunctive test (`gh api repos/<owner/name>/actions/workflows`
@@ -129,8 +132,9 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
    new head. Any other exit is a fault, not a verdict. Run it immediately before the
    merge: nothing binds the base at merge time, so the interval is the exposure.
 4. **Author handshake** — a `MERGE-READY: #<PR> @ <sha>` line whose `<sha>` equals
-   `HEAD_SHA`, a whole line inside the latest **complete** `WORK:TRAJECTORY` block on the
-   issue, selected by the quest-log skill's rules (both whole-line markers, then `last`) so
+   `HEAD_SHA`, a whole line inside the latest complete `WORK:TRAJECTORY` block *that carries
+   such a line for `HEAD_SHA`* — not the latest complete block simpliciter, since the park
+   protocol writes that block type too and would otherwise revoke a valid handshake — selected by the quest-log skill's rules (both whole-line markers, then `last`) so
    a hand-off whose write died midway counts as absent — but over comment *objects*, not
    the bodies its recipe projects, since an author is needed. ADR 0035 states the query.
    The block's
