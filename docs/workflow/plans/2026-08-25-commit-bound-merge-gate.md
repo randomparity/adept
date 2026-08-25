@@ -9,15 +9,25 @@ one version bump. No executable code changes, no new gate, no new script, no new
 **Tech stack:** Markdown skill documents; `just` guardrails (bash 3.2 floor); `gh` 2.98.0
 and `git` for the invocations the prose spells out.
 
+> **Status: not executed.** An operator rescope on 2026-08-25 landed ADR 0035 and this plan
+> without running it, so no `SKILL.md` has been touched. **Issue #249** is the work item.
+> Two corrections were folded into the gate block below after the plan was first written and
+> are the ones an implementer is most likely to drop: part 2's rule for a run that exists but
+> has not finished, and part 3's `git fetch origin` being part of the check rather than
+> preparation for it. The version constraint below also changes on that pass — see Global
+> Constraints.
+
 ## Global Constraints
 
 - `BASE_BRANCH`: `main`. Branch `feat/merge-gate-sha-parity-235`, in a worktree outside
   the repository tree at `$WORK/../adept-worktrees/<branch>` per the quest
   worktree-placement rule.
 - Guardrails: `just verify` (full), `just commit-check` (per commit). Zero warnings.
-- Version bump required on every change (ADR 0022): `2.9.6` → `2.10.0`. MINOR, because
-  skills gain a capability. The value is pre-assigned by the dispatching campaign because
-  six sibling pull requests edit the same line; do not recompute it.
+- Version bump required on every change (ADR 0022). The ADR-only pass shipped `2.9.12`, a
+  PATCH — an ADR is neither a skill nor a `references/` entry, so nothing gained a
+  capability. **The implementation pass (#249) is a MINOR bump**, because the three skills
+  do gain one there. Values are assigned by the dispatching campaign when siblings share the
+  line; do not recompute one that was handed to you.
 - ADR number `0035` is pre-assigned. `0023` and `0027` stay unallocated
   (`docs/adr/README.md`). There is **no ADR index** — write the record file only; a table
   under `docs/adr/` raises `W-INDEX-TABLE`.

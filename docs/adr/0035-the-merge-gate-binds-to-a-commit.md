@@ -20,11 +20,30 @@ What narrows, for issue-backed merges only, is the consequence that an `OPEN`
 pull request's `mergeable`/`mergeStateStatus` is the last word before merging.
 
 Issue #235 reports three ways that gate passed over work that had not landed,
-during a `$campaign` run in `randomparity/hmc-mcp`. That repository is not
-reachable from here, so its four pull requests (#443, #444, #445, #455) are
-**reported, not verified** — the shapes below are what this record acts on. The
-*instruments* each shape is stated over are checkable here; shape 2's lag having
-actually occurred is reported, and the rejection list below marks it so:
+during a `$campaign` run in `randomparity/hmc-mcp`. That repository is readable
+with `gh`, and its pull requests were checked rather than taken on report
+(2026-08-25):
+
+- `gh pr view 445 --repo randomparity/hmc-mcp --json headRefOid,state` →
+  `af035a39f83e69c334302373cd2a6faea0fa78b3`, `MERGED`; and `gh api
+  repos/randomparity/hmc-mcp/pulls/445/commits` returns **exactly one commit**,
+  `af035a39`. The pull request merged at the only commit it ever recorded.
+- `gh pr view 454 --repo randomparity/hmc-mcp` → `MERGED`, titled "fix: land the
+  reviewed #363 fixes that PR #445 merged without". The recovery pull request
+  exists and says what it recovered.
+- #443, #444 and #455 are likewise `MERGED`, with #447 and #453 the recoveries
+  the issue names for the first two.
+
+So the *outcome* — a merge that dropped reviewed commits, recovered by a
+follow-up — is verified, not reported. **What stays unverified is the mechanism
+of shape 2:** that `headRefOid` lagged `git ls-remote` during the merge window.
+That is a transient API condition and no post-hoc query preserves it, so it
+remains the reporter's observation whatever the repository's reachability. The
+distinction matters because this record is append-only: an outcome anyone can
+re-check is a different kind of claim from a race nobody can re-observe.
+
+The shapes this record acts on, with the instruments each is stated over
+checkable in *this* repository:
 
 1. **A pull request is green and mergeable long before its author is finished.**
    In `$quest` the pull request opens inside step 8 (`skills/quest/SKILL.md:585`,
@@ -38,9 +57,12 @@ actually occurred is reported, and the rejection list below marks it so:
    orchestrator's merge trigger fires inside that window.
 
 2. **The pull-request API's `headRefOid` can lag the branch's real head.** The
-   reporter watched it lag `git ls-remote` "through several polls". Checks were
-   green *for the stale commit*, so `gh pr checks` returned an answer that was
-   literally true and completely misleading.
+   reporter watched it lag `git ls-remote` "through several polls" — the
+   unverifiable half above. What follows from it needs no observation: `gh pr
+   checks` and `statusCheckRollup` resolve their subject through the same
+   pull-request API, so whatever staleness that API has, they inherit, and a
+   green answer about a stale commit is literally true and completely
+   misleading.
 
 3. **Checks green on a branch head are not checks green on the merge result.**
    CI ran against whatever the base was at the time. `mergeStateStatus` does not
@@ -82,32 +104,55 @@ evaluated `$EXPECTED_HEAD_SHA` rather than a merge-time read.
   and pre-empt device, not a safety property.** `HEAD_SHA`'s authority comes from
   `git ls-remote` alone; every other part keys on it, and decision 2 binds it at
   the server, so dropping part 1 would not admit a wrong merge — it would turn a
-  legible hold into an opaque merge refusal. What it costs is stated in
-  Consequences: a transient lag can hold a correct row.
+  legible hold into an opaque merge refusal. Its one cost follows from that: a
+  transient lag can park a finished, green, handshaken row, in an unattended run
+  with nobody to release it. Accepted, because without part 1 the same row meets
+  the refusal instead and parks with a worse diagnosis.
 - **Checks green for `HEAD_SHA`.** `gh run list --commit "$HEAD_SHA"` addresses
-  runs by commit, so a green answer cannot be about a different one. Green is
-  every run at `status: completed` with `conclusion: success`, over a non-empty
-  list. That is **all** Actions runs for the commit, not the required set:
-  required-ness is a property of a branch rule and is not SHA-addressable, so
-  this part is strictly stronger than the "required checks are green" it
-  replaces and will hold on an optional run the old wording ignored. Decided,
-  not incidental. Like part 1, the not-yet case is bounded — after a bounded
-  wait with no run appearing for `HEAD_SHA`, take the caller's hold path under
-  that name rather than waiting indefinitely.
-- **Merge base current.** `git merge-base --is-ancestor origin/<BASE_BRANCH>
-  "$HEAD_SHA"` — the base tip is already contained in the head, so the merge
-  result *is* the commit CI ran on. Run it immediately before the merge:
+  runs by commit, so a green answer cannot be about a different one. Three
+  outcomes, and the middle one is the ordinary state at merge time:
+  - **green** — a non-empty list in which every run is `status: completed` with
+    `conclusion: success`;
+  - **not yet** — no run for `HEAD_SHA`, *or* any run not yet at `status:
+    completed`. A commit pushed seconds ago returns exactly this. Bound the wait
+    and then take the caller's hold path under that name;
+  - **failed** — a `completed` run at any conclusion other than `success`.
+
+  The set it reads is **all** Actions runs for the commit, not the required set:
+  required-ness belongs to a branch rule and is not SHA-addressable at all. So
+  this is stronger than the "required checks are green" it replaces *over Actions
+  runs* — it will hold on an optional run the old wording ignored — and weaker
+  outside them, because it cannot see a non-Actions required context. Where a
+  repository has those, `gh api repos/<owner/name>/commits/"$HEAD_SHA"/check-runs`
+  is the instrument, SHA-addressed the same way and read alongside.
+- **Merge base current.** `git fetch origin`, then `git merge-base --is-ancestor
+  origin/<BASE_BRANCH> "$HEAD_SHA"` — the base tip is already contained in the
+  head, so the merge result *is* the commit CI ran on. The fetch is part of the
+  check, not preparation for it: this is a local test against a
+  remote-tracking ref, and against a stale one it passes wrongly, which is the
+  failure the part exists to catch. Run both immediately before the merge —
   `--match-head-commit` binds the head and nothing binds the base, so the
-  interval is the exposure.
+  interval between this test and the merge is the exposure.
 - **Author handshake.** A `MERGE-READY: #<PR> @ <HEAD_SHA>` line naming that
   exact commit, occurring as a whole line inside the **latest complete**
-  `WORK:TRAJECTORY` block on the issue. The read is `$quest-log`'s own recipe,
-  cited rather than restated so the two cannot drift: select comments carrying
-  both whole-line markers and take `last`, extended with `.author.login`. Its
-  sentinel rule is what this part needs and a fresh `jq` over every comment would
-  discard — a block without its `TRAJECTORY:COMPLETE` sentinel is a write that
-  died midway and is treated as absent, so a half-written hand-off cannot supply
-  a handshake for the head it was about to attest.
+  `WORK:TRAJECTORY` block on the issue. The selection rules are `$quest-log`'s —
+  its *Recipe: read the latest complete annotation of a type* — and this part
+  needs them rather than a fresh `jq` over every comment: a block without its
+  `TRAJECTORY:COMPLETE` sentinel is a write that died midway and is treated as
+  absent, so a half-written hand-off cannot supply a handshake for the head it
+  was about to attest, and `last` is what implements latest-complete-wins.
+
+  One shape change is required and is the reason this record states it rather
+  than only citing it: that recipe selects over comment *bodies*
+  (`.comments[].body`), which cannot yield an author. Select over comment
+  *objects* instead, so the author and the body come off the same one:
+
+  ```sh
+  gh issue view <n> --json comments --jq '[.comments[]
+    | select(.body | test("(?m)^<!-- WORK:TRAJECTORY -->$")
+             and test("(?m)^<!-- TRAJECTORY:COMPLETE -->$"))]
+    | last | {author: .author.login, body}'
+  ```
 
   **The expected account is established outside the comment channel**, or the
   check is circular: a stranger who may post a `MERGE-READY:` line may equally
@@ -207,19 +252,13 @@ without one, `$return-to-town` performs the guarded merge.
   request to green and hands back, and it never merges — but `$return-to-town`
   cites it by name as its own entry condition, so the two now say different
   things about the same moment. Owned by issue #243 rather than edited here.
-- **Part 3 is ordinary to fail and impossible to fully close.** During a serial
-  merge wave every merge moves `origin/<BASE_BRANCH>` by design, so the next
-  sibling routinely fails it. The existing refresh — merge `BASE_BRANCH` in,
-  regenerate artifacts, rerun guardrails — clears it and produces a new
-  `HEAD_SHA`, so the gate re-runs from part 1 rather than resuming at part 4, and
-  the handshake is re-obtained because the old one named the old commit. What
-  survives all of that is a window: a sibling landing between the ancestry test
-  and the merge moves the base under a check that already passed, which is
-  failure mode 3 reached *through* the gate. Running part 3 immediately before
-  the merge narrows it to a round trip; nothing available closes it. Because it
-  is a local test, it also needs a current `origin/<BASE_BRANCH>` — a `git fetch
-  origin` belongs immediately before the gate, and a stale fetch makes part 3
-  pass wrongly.
+- **Part 3 is ordinary to fail.** During a serial merge wave every merge moves
+  `origin/<BASE_BRANCH>` by design, so the next sibling routinely fails it. The
+  existing refresh — merge `BASE_BRANCH` in, regenerate artifacts, rerun
+  guardrails — clears it and produces a new `HEAD_SHA`, so the gate re-runs from
+  part 1 rather than resuming at part 4, and the handshake is re-obtained because
+  the old one named the old commit. Decision 2 states the window that survives
+  even so.
 - **`$restock` keeps merging through `$return-to-town` and stays outside this
   gate** (ADR 0012; `skills/restock/SKILL.md:758`–`762`, `tracking mode:
   pr-only`, "Restock never invokes `gh pr merge`"). Decision 1's scoping is what
@@ -238,23 +277,21 @@ without one, `$return-to-town` performs the guarded merge.
   What is accepted here and not there is that a merge is gated on three further
   commit-bound facts, and that the account is pinned to the pull request's own
   author rather than to whoever last commented.
-- `gh run list` reports GitHub Actions runs only. A repository whose required
-  checks include a non-Actions context needs `gh api
-  repos/{owner}/{repo}/commits/<SHA>/check-runs`, which is SHA-addressed the
-  same way. The gate names both so the Actions-only reading is a choice rather
-  than an oversight.
-- **Part 1 can hold a correct row.** It carries no safety property — decision 1
-  says so — so its only failure mode is the one it introduces: a transient API
-  lag on a finished, green, handshaken row exhausts the bounded re-read and parks
-  it, in an unattended run with nobody to release it. Accepted, because the
-  alternative is an unexplained `--match-head-commit` refusal at the merge and
-  the same row parked with a worse diagnosis.
 - `--match-head-commit` turns the lag case from a silent wrong merge into a
   refused merge. That is a new failure the orchestrator sees, which is the
   intent; it is also a reason not to retry it blindly, since the refusal means
   the branch moved and the whole gate is stale.
-- The gate is prose in three skill files. Nothing enforces it, exactly as
-  ADR 0019 records of its own contract; enforcement is reading.
+- **This record lands ahead of its implementation.** `skills/campaign/SKILL.md`,
+  `skills/quest/SKILL.md`, and `skills/return-to-town/SKILL.md` are unchanged as
+  of this record: they still state the "green + mergeable" precondition its
+  Context quotes. The gate described here is therefore a decision in force and a
+  behaviour not yet present, and the two must not be confused — nothing in the
+  shipped skills does any of this yet. Issue #249 carries the implementation and
+  cites this record as its governing decision. Until it merges, a reader
+  comparing this record against the skills will find them disagreeing, and the
+  skills are what any harness actually executes.
+- Once implemented, the gate is prose in skill files. Nothing enforces it,
+  exactly as ADR 0019 records of its own contract; enforcement is reading.
 - This record is numbered 0035, assigned by the dispatching campaign. 0023 and
   0027 stay unallocated per `docs/adr/README.md`.
 
@@ -267,11 +304,25 @@ without one, `$return-to-town` performs the guarded merge.
   SHA-addressed by construction: run against `randomparity/adept` at
   `e604daa4d9b19d1d3f33e2a9c691a80013399af0` with gh 2.98.0 it returned exactly
   the two runs whose `headSha` is that commit, and against an all-zero SHA it
-  returned `[]`. The claim that `headRefOid` *did* lag in a real incident is
-  reported by issue #235 and **not verified from this repository**, which has
-  no access to `randomparity/hmc-mcp`; the rejection does not rest on it, since
-  a field that can only be as fresh as the API serving it is the weaker
-  instrument either way.
+  returned `[]`. **Unverified:** that `headRefOid` *did* lag during the incident
+  is the reporter's observation of a transient condition, and no post-hoc query
+  preserves it — Context verifies the incident's outcome but not this. The
+  rejection does not rest on it: a field that can only be as fresh as the API
+  serving it is the weaker instrument whether or not it has ever been observed
+  stale.
+- **Read part 2 through `gh api repos/{owner}/{repo}/commits/<SHA>/check-runs`
+  instead of `gh run list --commit`.** Both are SHA-addressed, so this one is not
+  rejected on the staleness ground above; it is the chosen instrument's closest
+  competitor. verified: run against `randomparity/adept` at
+  `e604daa4d9b19d1d3f33e2a9c691a80013399af0` with gh 2.98.0 it returned five
+  check runs — `verify`, `Deploy to GitHub Pages`, `Build site`, and two
+  `suite (…)` matrix legs — against the two workflow runs `gh run list` reported
+  for the same commit. judgment: `gh run list` is the better default because its
+  granularity matches how these workflows are configured and how a reader reasons
+  about them (one entry per workflow run, not one per job), and because it is a
+  first-class `gh` command rather than a raw API path. The cost is the coverage
+  gap named in part 2 — Actions runs only — which is why `check-runs` is kept as
+  the named supplement rather than dropped.
 - **Compare `headRefOid` against `git ls-remote`, then merge — no
   `--match-head-commit`.** verified: `gh pr merge --help` on gh 2.98.0 documents
   `--match-head-commit SHA  Commit SHA that the pull request head must match to

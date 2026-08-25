@@ -5,6 +5,11 @@ Spec for the four-part pre-merge gate and the SHA-bound merge-ready handshake th
 [ADR 0035](../../adr/0035-the-merge-gate-binds-to-a-commit.md). Charter: `WORK:SCOPE`
 token `q235-ee19d60c` on issue #235, interaction unattended.
 
+> **Status: designed, not implemented.** An operator rescope on 2026-08-25 landed ADR 0035
+> and these documents on their own, leaving the three `SKILL.md` files untouched. **Issue
+> #249** carries the implementation and this spec and its plan are what it builds from.
+> Nothing described below is in force in any shipped skill yet.
+
 ## Problem
 
 The documented merge precondition is "CI checks green + `mergeStateStatus`
