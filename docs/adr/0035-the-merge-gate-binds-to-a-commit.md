@@ -14,11 +14,17 @@ exit condition: required checks are green and the pull request is mergeable";
 `mergeStateStatus` is `CLEAN`/`MERGEABLE`". Every one of those is a property of
 what GitHub reports *now*, about a pull request rather than about a commit.
 
+ADR 0009 governs the first of those reads and is untouched here: its decision
+that `$return-to-town` interprets `state` before computed mergeability stands.
+What narrows, for issue-backed merges only, is the consequence that an `OPEN`
+pull request's `mergeable`/`mergeStateStatus` is the last word before merging.
+
 Issue #235 reports three ways that gate passed over work that had not landed,
 during a `$campaign` run in `randomparity/hmc-mcp`. That repository is not
 reachable from here, so its four pull requests (#443, #444, #445, #455) are
-**reported, not verified** — the shapes below are what this record acts on, and
-each is checkable against this repository's own tooling:
+**reported, not verified** — the shapes below are what this record acts on. The
+*instruments* each shape is stated over are checkable here; shape 2's lag having
+actually occurred is reported, and the rejection list below marks it so:
 
 1. **A pull request is green and mergeable long before its author is finished.**
    In `$quest` the pull request opens inside step 8 (`skills/quest/SKILL.md:585`,
@@ -61,8 +67,12 @@ issue for part 4 and no `$quest` run authored it, and its head binding is the
 evaluated `$EXPECTED_HEAD_SHA` rather than a merge-time read.
 
 - **SHA parity.** `HEAD_SHA` comes from `git ls-remote origin
-  refs/heads/<branch>`, which reads the ref itself. `gh pr view <PR> --json
-  headRefOid` must agree with it. A mismatch has two causes and re-reading tells
+  refs/heads/<branch>`, which reads the ref itself, so **the gate covers
+  same-repository heads**: a fork-based pull request's head is not in `origin` at
+  all, and `gh pr view <PR> --json isCrossRepository` identifies one ahead of
+  part 1 and gives it its own named blocker, rather than letting an empty
+  `ls-remote` reach decision 3 and be reported as a deleted branch. `gh pr view
+  <PR> --json headRefOid` must agree with `HEAD_SHA`. A mismatch has two causes and re-reading tells
   them apart: an `ls-remote` value that holds still while `headRefOid` catches up
   is the API lagging, and an `ls-remote` value that keeps moving is an author
   still pushing. Neither may be merged through, and the re-read is bounded —
@@ -75,21 +85,45 @@ evaluated `$EXPECTED_HEAD_SHA` rather than a merge-time read.
   legible hold into an opaque merge refusal. What it costs is stated in
   Consequences: a transient lag can hold a correct row.
 - **Checks green for `HEAD_SHA`.** `gh run list --commit "$HEAD_SHA"` addresses
-  runs by commit, so a green answer cannot be about a different one.
+  runs by commit, so a green answer cannot be about a different one. Green is
+  every run at `status: completed` with `conclusion: success`, over a non-empty
+  list. That is **all** Actions runs for the commit, not the required set:
+  required-ness is a property of a branch rule and is not SHA-addressable, so
+  this part is strictly stronger than the "required checks are green" it
+  replaces and will hold on an optional run the old wording ignored. Decided,
+  not incidental. Like part 1, the not-yet case is bounded — after a bounded
+  wait with no run appearing for `HEAD_SHA`, take the caller's hold path under
+  that name rather than waiting indefinitely.
 - **Merge base current.** `git merge-base --is-ancestor origin/<BASE_BRANCH>
   "$HEAD_SHA"` — the base tip is already contained in the head, so the merge
   result *is* the commit CI ran on. Run it immediately before the merge:
   `--match-head-commit` binds the head and nothing binds the base, so the
   interval is the exposure.
 - **Author handshake.** A `MERGE-READY: #<PR> @ <HEAD_SHA>` line naming that
-  exact commit, from whichever run produced it. "From that run" is read as an
-  author check on the comment: `gh issue view <n> --json comments --jq
-  '.comments[] | {author: .author.login, body}'`, and only a comment whose
-  `author.login` is the expected account counts. The expected account is the one
-  that posted the issue's hand-off `WORK:TRAJECTORY` block — the same read
-  returns both — or, where the merging run created the head itself by refreshing
-  a stale base, its own `gh api user --jq .login`. Those are the only two
-  producers of a `HEAD_SHA`. **The second is derivative and never original:** a
+  exact commit, occurring as a whole line inside the **latest complete**
+  `WORK:TRAJECTORY` block on the issue. The read is `$quest-log`'s own recipe,
+  cited rather than restated so the two cannot drift: select comments carrying
+  both whole-line markers and take `last`, extended with `.author.login`. Its
+  sentinel rule is what this part needs and a fresh `jq` over every comment would
+  discard — a block without its `TRAJECTORY:COMPLETE` sentinel is a write that
+  died midway and is treated as absent, so a half-written hand-off cannot supply
+  a handshake for the head it was about to attest.
+
+  **The expected account is established outside the comment channel**, or the
+  check is circular: a stranger who may post a `MERGE-READY:` line may equally
+  post a complete-looking `WORK:TRAJECTORY` block, name themselves the hand-off's
+  author, and attest for themselves. So `author.login` must equal the pull
+  request's own author — `gh pr view <PR> --json author --jq .author.login`,
+  which GitHub attests — or an account with write permission (`gh api
+  repos/{owner}/{repo}/collaborators/<login>/permission`), *in addition to*
+  having posted the latest complete block. SHA-binding is no help against this
+  one: `HEAD_SHA` is the public head of a public pull request, so a forged line
+  naming it passes parts 1–3 by construction.
+
+  The one other permitted author is the merging run itself, where it created the
+  head by refreshing a stale base — its own `gh api user --jq .login`. Those are
+  the only two producers of a `HEAD_SHA`. **The second is derivative and never
+  original:** a
   merging run may attest only for a head it produced by refreshing a head that
   already carried a valid author handshake. A row reaching part 3 with no author
   handshake for its current head takes the hold path — it does not take the
@@ -120,10 +154,12 @@ a repository with no workflows at all, which never will. Establish the second
 once — no workflow files, or an empty `gh api
 repos/<owner/name>/actions/workflows` beside an empty `check-runs` for
 `HEAD_SHA` — and record part 2 as *not applicable* rather than not-yet, which is
-a terminating outcome. Without that, the gate deadlocks permanently in any
-repository with no automated checks, and these skills ship to arbitrary ones —
-the same generalization argument the merge-queue and `BEHIND` rejections below
-both turn on. An empty `ls-remote` is a missing *subject* —
+a terminating outcome, determined per run and never persisted. Without it the
+gate deadlocks permanently in any repository with no automated checks, and these
+skills ship to arbitrary ones — the same generalization argument the merge-queue
+and `BEHIND` rejections below both turn on. That test does not cover every
+never-runs configuration and is not meant to; part 2's bound is what covers the
+rest. An empty `ls-remote` is a missing *subject* —
 `HEAD_SHA` is what all four parts are statements about, so there is nothing left
 to be about, and the ordinary cause is a head branch already deleted or renamed.
 That takes the blocker path immediately under that name, rather than entering
@@ -184,44 +220,24 @@ without one, `$return-to-town` performs the guarded merge.
   is a local test, it also needs a current `origin/<BASE_BRANCH>` — a `git fetch
   origin` belongs immediately before the gate, and a stale fetch makes part 3
   pass wrongly.
-- **`$restock` is out of scope, and saying so is load-bearing.** ADR 0012 routes
-  each authorized dependency merge through `$return-to-town`, and
-  `skills/restock/SKILL.md:758`–`762` invokes it with `tracking mode: pr-only`,
-  passing the evaluated head — "Restock never invokes `gh pr merge`". A gate
-  stated over *every* merge path would break that mode twice: part 4 has no issue
-  to read and no `$quest` run to have authored the branch, and substituting a
-  merge-time `HEAD_SHA` for `$EXPECTED_HEAD_SHA` would invert the guard restock
-  depends on, since binding the *evaluated* head is what makes a force-push
-  between evaluation and merge come back as `MERGE_REFUSED` rather than merging
-  something nobody built. Decisions 1 and 2 are scoped to issue-backed merges for
-  exactly that reason.
-- **After an orchestrator refresh, part 4 is self-attestation.** When part 3
-  fails during a serial wave the orchestrator merges the base in itself, reruns
-  guardrails, and so creates the new head. No author run exists to re-issue the
-  handshake for it: `skills/campaign/SKILL.md:316` forecloses messaging a worker
-  that has handed off, and dispatching a fresh agent solely to emit a line is a
-  cost nothing here budgets. So the orchestrator posts the `MERGE-READY:` for the
-  head it made, and on that head part 4 attests to the party performing the
-  merge — parts 1–3 plus `--match-head-commit` are the whole of the gate there.
-  Decision 1 bounds this so it cannot become a bypass: the attestation is
-  derivative, permitted only for a head refreshed from one that already carried
-  an author handshake, so a row that never had one cannot acquire one by being
-  refreshed. What is genuinely given up is the case where an author's handshake
-  is one refresh old, and the reason it must be given up is that the author check
-  cannot separate an orchestrator's comment from a worker's under `$campaign`,
-  where every agent writes through one token: the check defends against a third
-  party, not against the merging run itself.
-- **The handshake is an unauthenticated line in a public tracker comment.** This
-  repository is public, so any account can post the string, and part 4's author
-  check is the only thing between a stranger's comment and a merge trigger. The
-  same reasoning appears at `skills/campaign/SKILL.md:312`, which declines to
-  persist a hold-release decision precisely because "a release token durable
-  enough to survive a resume is one any commenter on a public repo could post".
-  What is accepted here that is not accepted there: the handshake is
-  SHA-bound, so a forged or stale line still has to name a commit that passes
-  parts 1–3, and a handshake left over from an earlier hand-off names a
-  superseded commit. That is also why part 4 is re-obtained after every refresh
-  rather than carried forward.
+- **`$restock` keeps merging through `$return-to-town` and stays outside this
+  gate** (ADR 0012; `skills/restock/SKILL.md:758`–`762`, `tracking mode:
+  pr-only`, "Restock never invokes `gh pr merge`"). Decision 1's scoping is what
+  makes that true, and part 4 is why it has to be.
+- **After an orchestrator refresh, part 4 is self-attestation**, bounded by
+  decision 1 to a head derived from one that already carried an author handshake.
+  Within that bound, parts 1–3 plus `--match-head-commit` are the whole of the
+  gate for such a head — the author check cannot separate an orchestrator's
+  comment from a worker's under `$campaign`, where every agent writes through one
+  token. It defends against a third party, not against the merging run itself.
+- **The handshake is a line in a public comment**, and part 4's author check is
+  what stands between a stranger and a merge trigger — SHA-binding is not, since
+  `HEAD_SHA` is public. The same hazard is why `skills/campaign/SKILL.md:312`
+  declines to persist a hold-release decision at all: "a release token durable
+  enough to survive a resume is one any commenter on a public repo could post."
+  What is accepted here and not there is that a merge is gated on three further
+  commit-bound facts, and that the account is pinned to the pull request's own
+  author rather than to whoever last commented.
 - `gh run list` reports GitHub Actions runs only. A repository whose required
   checks include a non-Actions context needs `gh api
   repos/{owner}/{repo}/commits/<SHA>/check-runs`, which is SHA-addressed the

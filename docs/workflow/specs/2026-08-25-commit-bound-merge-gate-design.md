@@ -83,7 +83,10 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
 1. **SHA parity** — `HEAD_SHA` non-empty and equal to `API_SHA`. An empty `HEAD_SHA` is
    the branch being gone, not a match and not a lag: `git ls-remote` prints nothing and
    exits 0 for a ref that does not exist, so it takes the blocker path immediately rather
-   than entering the re-read. A mismatch between two real values has two causes — a lagging
+   than entering the re-read. Because `HEAD_SHA` comes from `origin`, the gate covers
+   same-repository heads: `gh pr view <PR> --json isCrossRepository` identifies a fork head
+   ahead of part 1 and gives it its own blocker. A mismatch between two real values has
+   two causes — a lagging
    API (`ls-remote` steady, `headRefOid` catching up) or a live author (`ls-remote` moving)
    — and re-reading tells them apart. Re-read on a backing-off interval and bound it: after
    a few reads that do not converge, hold. Never merge through either.
@@ -95,11 +98,14 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
      --jq '.[] | select(.status != "completed" or .conclusion != "success")'
    ```
 
-   Empty output *and* a non-empty run list is green. `[]` means no run exists for that
-   commit — CI has not reported, which is not the same as nothing having failed, and which
-   splits further: a run not yet started resolves, a repository with no workflows never
-   does. Establish the second (`gh api repos/<owner/name>/actions/workflows` empty beside an
-   empty `check-runs`) and record part 2 *not applicable*, or the gate deadlocks there. `gh
+   Empty output *and* a non-empty run list is green — every run `completed`/`success`, over
+   *all* Actions runs for the commit rather than the required set, since required-ness is
+   not SHA-addressable. `[]` means no run exists for that commit — CI has not reported,
+   which is not the same as nothing having failed, and which splits further: a run not yet
+   started resolves (bound the wait, then hold), a repository with no workflows never does.
+   Establish the second (`gh api repos/<owner/name>/actions/workflows` empty beside an
+   empty `check-runs`) and record part 2 *not applicable* for this run, or the gate
+   deadlocks there. `gh
    run list` sees GitHub Actions runs only; where a required check is not an Actions run,
    read `gh api repos/<owner/name>/commits/"$HEAD_SHA"/check-runs` as well, which is
    SHA-addressed the same way.
@@ -109,12 +115,15 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
    new head. Any other exit is a fault, not a verdict. Run it immediately before the
    merge: nothing binds the base at merge time, so the interval is the exposure.
 4. **Author handshake** — a `MERGE-READY: #<PR> @ <sha>` line whose `<sha>` equals
-   `HEAD_SHA`, read from the latest complete `WORK:TRAJECTORY` comment on the issue via
-   `gh issue view <n> --json comments --jq '.comments[] | {author: .author.login, body}'`,
-   and counted only when `author.login` is the expected account — the poster of the
-   hand-off block, or the merging run's own `gh api user --jq .login` for a head it
-   created by refreshing a stale base, which makes part 4 self-attestation there. That
-   attestation is derivative only: permitted for a head refreshed from one that already
+   `HEAD_SHA`, a whole line inside the latest **complete** `WORK:TRAJECTORY` block on the
+   issue, read through the quest-log skill's own recipe (both whole-line markers, then
+   `last`) so a hand-off whose write died midway counts as absent. The block's
+   `author.login` must be the pull request's own author (`gh pr view <PR> --json author`)
+   or an account with write permission — pinned outside the comment channel, since anyone
+   who can post the handshake can post a hand-off block naming themselves its author. The
+   one other permitted author is the merging run's own `gh api user --jq .login` for a head
+   it created by refreshing a stale base, which makes part 4 self-attestation there; that
+   attestation is derivative only, permitted for a head refreshed from one that already
    carried an author handshake, never for a row that never had one.
 
 Then, and only then:
