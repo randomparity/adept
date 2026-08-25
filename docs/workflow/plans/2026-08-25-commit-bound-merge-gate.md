@@ -108,12 +108,17 @@ that holds the merge — never an answer, and never "not ready".
    `[]` means no run exists for that commit, and that is two conditions. A run not yet
    started resolves — **bound the wait** and take the hold path under that name if none
    appears, as part 1 does. A repository with no workflows never resolves: establish it
-   once (`gh api repos/<owner/name>/actions/workflows` empty beside an empty `check-runs`)
-   and record part 2 **not applicable** for this run, never persisted. Without that the
+   by a **conjunctive** test — `gh api repos/<owner/name>/actions/workflows` empty **and**
+   `check-runs` for `HEAD_SHA` empty — and record part 2 **not applicable** for this run,
+   never persisted. Both halves are required; either alone skips part 2 over a repository
+   whose checks are live but not Actions. Without that the
    gate deadlocks permanently wherever there are no automated checks.
-3. **Merge base current.** `git merge-base --is-ancestor "origin/<BASE_BRANCH>"
-   "$HEAD_SHA"`. Exit 0 passes — the base tip is already in the head, so the merge result
-   is the commit CI ran on. Exit 1 means the base moved under a green check: merge
+3. **Merge base current.** `git fetch origin`, then `git merge-base --is-ancestor
+   "origin/<BASE_BRANCH>" "$HEAD_SHA"`. The fetch is part of this check, not preparation
+   for it: this is a local test against a remote-tracking ref, and against a stale one it
+   passes wrongly — the exact failure the part exists to catch — so re-fetch here even
+   though the block opened with one. Exit 0 passes — the base tip is already in the head,
+   so the merge result is the commit CI ran on. Exit 1 means the base moved under a green check: merge
    `BASE_BRANCH` in, regenerate artifacts, rerun guardrails, and re-run this gate from
    part 1, because the refresh produced a new head. Any other exit is a fault, not a
    verdict. `mergeStateStatus` does not answer this: it reports `BEHIND` only where the

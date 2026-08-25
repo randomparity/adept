@@ -14,22 +14,29 @@ token `q235-ee19d60c` on issue #235, interaction unattended.
 
 The documented merge precondition is "CI checks green + `mergeStateStatus`
 `CLEAN`/`MERGEABLE`". It is a property of what GitHub reports about a pull request now,
-not of a commit. Issue #235 reports three ways it passed over reviewed work. The reported
-incidents are in `randomparity/hmc-mcp`, which is not reachable from this repository:
-they are evidence about shapes, **not verified facts**, and nothing below rests on them.
+not of a commit. Issue #235 reports three ways it passed over reviewed work, from a run in
+`randomparity/hmc-mcp` — which **is** readable with `gh`, contrary to what this design first
+assumed. Checked there on 2026-08-25: PR #445 merged at `af035a39`, its only recorded commit,
+and the two commits PR #454 restored were authored at `11:14:55Z` and `11:27:19Z` against a
+merge at `11:03:40Z`. They did not exist when the merge fired, so that incident exhibits
+shape 1 — merged before the author finished — and not the stale-head shape 2 the issue
+attributes it to. Shapes 2 and 3 stand on general facts about the instruments, not on the
+report.
 
-The shapes are checkable here:
+The shapes, with the instruments each is stated over checkable here:
 
 1. In `$quest` the pull request opens inside step 8 (`skills/quest/SKILL.md:585`, `:594`)
    and the author is not finished until step 9's hand-off (`:721`), after head verification
    (`:602`–`:607`) and review-summary publication (`:610`–`:662`). The review loop is
-   step 6 and has ended by then, so the window is narrower than issue #235 describes but
-   real: `skills/return-to-town/SKILL.md:202`–`203` says hand-off "comes some way *after*
-   its pull request first reads green + mergeable", and nothing on GitHub distinguishes
-   the two states.
+   step 6 and has ended by then. The window opens when the pull request opens and closes at
+   hand-off: `skills/return-to-town/SKILL.md:202`–`203` says hand-off "comes some way *after*
+   its pull request first reads green + mergeable", and nothing on GitHub distinguishes the
+   two states. This is the shape the incident above exhibits, and the only one it does.
 2. `gh pr view --json headRefOid` reads the pull-request API. `git ls-remote origin
    refs/heads/<branch>` reads the ref. When they disagree, checks queried through the
-   pull request are green *for the older commit*.
+   pull request are green *for the older commit*. Reported, not exhibited by the incident;
+   it needs no observation, since `gh pr checks` and `statusCheckRollup` resolve their
+   subject through that same API by construction.
 3. CI ran the branch head against whatever the base was then. `mergeStateStatus` reports
    `BEHIND` only where the base requires up-to-date branches; `main` in this repository
    requires nothing — `gh api repos/randomparity/adept/branches/main/protection` → HTTP 404
@@ -53,8 +60,9 @@ The shapes are checkable here:
 4. **The gate states that `headRefOid` can lag `git ls-remote`**, and takes `git
    ls-remote` as authoritative. *(criterion 4)*
 5. **ADR 0035 records the decision**, its consequences, and its rejected alternatives
-   with ADR 0019 evidence tags; the `randomparity/hmc-mcp` incidents are marked
-   reported-not-verified wherever they appear. *(criterion 5)*
+   with ADR 0019 evidence tags. The `randomparity/hmc-mcp` incident is verified by direct
+   `gh` reads; what is marked reported rather than verified is shape 2's mechanism, which
+   that incident does not exhibit. *(criterion 5)*
 6. **`--match-head-commit` is generalized to every `$return-to-town` merge path**, not
    only restock PR-only mode, so the head is bound at the server rather than compared
    before the merge. Which SHA it binds differs by mode: an issue-backed merge binds the
@@ -108,9 +116,10 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
    not SHA-addressable. `[]` means no run exists for that commit — CI has not reported,
    which is not the same as nothing having failed, and which splits further: a run not yet
    started resolves (bound the wait, then hold), a repository with no workflows never does.
-   Establish the second (`gh api repos/<owner/name>/actions/workflows` empty beside an
-   empty `check-runs`) and record part 2 *not applicable* for this run, or the gate
-   deadlocks there. `gh
+   Establish the second by a conjunctive test (`gh api repos/<owner/name>/actions/workflows`
+   empty **and** `check-runs` for `HEAD_SHA` empty) and record part 2 *not applicable* for
+   this run, or the gate deadlocks there; either half alone would skip part 2 over a
+   repository whose checks are live but not Actions. `gh
    run list` sees GitHub Actions runs only; where a required check is not an Actions run,
    read `gh api repos/<owner/name>/commits/"$HEAD_SHA"/check-runs` as well, which is
    SHA-addressed the same way.
@@ -121,8 +130,10 @@ API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid
    merge: nothing binds the base at merge time, so the interval is the exposure.
 4. **Author handshake** — a `MERGE-READY: #<PR> @ <sha>` line whose `<sha>` equals
    `HEAD_SHA`, a whole line inside the latest **complete** `WORK:TRAJECTORY` block on the
-   issue, read through the quest-log skill's own recipe (both whole-line markers, then
-   `last`) so a hand-off whose write died midway counts as absent. The block's
+   issue, selected by the quest-log skill's rules (both whole-line markers, then `last`) so
+   a hand-off whose write died midway counts as absent — but over comment *objects*, not
+   the bodies its recipe projects, since an author is needed. ADR 0035 states the query.
+   The block's
    `author.login` must be the pull request's own author (`gh pr view <PR> --json author`)
    or an account with write permission — pinned outside the comment channel, since anyone
    who can post the handshake can post a hand-off block naming themselves its author. The
