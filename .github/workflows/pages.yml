@@ -1,0 +1,264 @@
+name: Pages
+
+# The build runs on pull requests as well as pushes, and only the deploy job is
+# gated to non-pull-request events. That is what lets this site have no staging
+# script and no unit suite: the build itself is the thing under review, on every
+# branch, before it can reach main. See ADR 0034.
+#
+# Deliberately no `paths:` filter. The build's link-existence check is what stops
+# a moved or deleted file from publishing a 404, and the change that moves such a
+# file is exactly the change a site-scoped path filter would skip -- so the guard
+# would be off for the only edits that can trip it. The cost of running always is
+# one apt install and two pandoc invocations.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Pull-request builds get their own group so a PR cannot cancel or queue behind
+# the deployment of main, and deployments never interleave with each other.
+concurrency:
+  group: >-
+    ${{ github.event_name == 'pull_request'
+        && format('pages-pr-{0}', github.event.pull_request.number)
+        || 'pages' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Unpinned deliberately, as in randomparity/bzr: this renders Markdown to
+      # HTML in a job holding no secrets, and pinning an apt version against a
+      # rolling runner image breaks on image updates more often than it protects.
+      - name: Install pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+
+      - name: Build the site
+        env:
+          BLOB: https://github.com/randomparity/adept/blob/main
+        run: |
+          # pipefail so a failure in the rewrite stage cannot be masked by the
+          # pandoc that follows it. Without it the pipelines below report only
+          # pandoc's status, and pandoc succeeds on empty input.
+          set -o pipefail
+
+          die() {
+            echo "::error::$1" >&2
+            exit 1
+          }
+
+          # The raw-HTML gate, and it runs before anything is rendered. pandoc's
+          # gfm reader passes raw HTML straight through -- measured on 3.10.2,
+          # `-f gfm-raw_html` does not suppress it -- so the only honest control
+          # is that the sources contain none. This is an allowlist of zero rather
+          # than a denylist of tags: <script>, <base>, <meta http-equiv=refresh>,
+          # an SVG onbegin and every tag nobody has thought of are one rule.
+          # These pages are served from randomparity.github.io, an origin shared
+          # with every other project page under this account, so a script here is
+          # not scoped to this site.
+          #
+          # Caveat, deliberately: this also trips on a literal `<` followed by
+          # a letter inside a fenced code block, on a GFM autolink such as
+          # <https://example.com>, and on an HTML comment. The answer then is to
+          # rewrite the line, or to exclude that shape on purpose -- not to go
+          # back to a denylist of tag names.
+          # grep's status is captured rather than branched on directly: it exits
+          # 1 for "no matches" and greater than 1 for a scan that could not run,
+          # and `if grep ...` reads both as clean. ADR 0005 decision 1.
+          raw_status=0
+          raw_hits=$(grep -nE '<[a-zA-Z/!]' README.md docs/cheatsheet.md) || raw_status=$?
+          case $raw_status in
+          0)
+            printf '%s\n' "$raw_hits" >&2
+            die 'raw HTML in a site source'
+            ;;
+          1) ;;
+          *) die "raw-HTML scan could not run (grep exit $raw_status)" ;;
+          esac
+
+          mkdir -p _site/docs/assets
+          # Image types only, rather than `cp -r docs/assets`. That directory is
+          # served from the site origin, so copying it wholesale would publish
+          # whatever lands in it later -- an .html or an .svg is active content
+          # on a host shared with every other project page under this account.
+          #
+          # -maxdepth 1 keeps the copy flat and honest. Without it a file in a
+          # subdirectory would be flattened into _site/docs/assets/, and a page
+          # linking it at its real path would 404; with it the file is not copied
+          # and the link assertion below says so.
+          find docs/assets -maxdepth 1 -type f \
+            \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.webp' \) \
+            -exec cp {} _site/docs/assets/ \;
+          cp site/style.css _site/style.css
+
+          # One decision per link, in this order:
+          #   absolute, fragment, mailto  -> left alone
+          #   resolves to docs/cheatsheet.md -> the site's other page
+          #   resolves under docs/assets/ -> left relative; those files are
+          #     copied above to the path the page will ask for
+          #   anything else -> a blob URL, because README.md keeps relative
+          #     links for the reader holding a plugin cache, not a browser
+          #
+          # A relative link is relative to the file that wrote it, so every
+          # target is resolved against the source's own directory FIRST and each
+          # test above is applied to the resolved path. Testing the raw target
+          # instead would leave `](assets/x.png)` in the cheat sheet absolutised
+          # into a blob URL -- absolute, wrong, and invisible to the check below,
+          # which only sees links that stayed relative.
+          #
+          # perl rather than sed: this needs a lookahead and a conditional
+          # replacement, neither of which GNU sed's ERE can express. perl is on
+          # every GitHub-hosted runner.
+          #
+          # The redirect matters: `perl -pe ... "$1"` on a missing file warns and
+          # exits 0, so a renamed or deleted source would render a page of pure
+          # template chrome that every assertion below still passes. `< "$1"`
+          # fails, and pipefail carries that failure past pandoc.
+          absolutise() {
+            PREFIX="$2" perl -pe '
+              # Fenced blocks are tracked exactly. The indentation test is
+              # cruder than its name suggests and is stated as what it is: any
+              # line starting with four spaces or a tab is left alone, which
+              # catches indented code blocks and also nested list items -- so a
+              # repository-relative link must not be written at that indent.
+              # A ](...) inside an example is sample text; rewriting it would
+              # publish a corrupted example.
+              if (/^\s*(?:```|~~~)/) { $fence = !$fence }
+              elsif (!$fence && !/^(?: {4}|\t)/) {
+                s{\]\(([^\s)]+)((?:\s+"[^"]*")?)\)}{
+                  my $t = $1;
+                  my $title = $2;
+                  if ($t =~ m{^(?:https?://|\#|mailto:)}) { "]($t$title)" }
+                  else {
+                    # A fragment is not part of the filename. The link assertion
+                    # already strips one before its own existence test; without
+                    # the same treatment here, docs/cheatsheet.md#start-here
+                    # fails the build with a message naming a file that exists.
+                    my ($path, $frag) = $t =~ m{^([^#]*)(.*)$};
+                    my $f = "$ENV{PREFIX}$path";
+                    # Normalise before testing anything. `../README.md` is the
+                    # only correct way for docs/cheatsheet.md to name the README,
+                    # and unnormalised it is neither "README.md" nor under
+                    # docs/assets/, so it would fall through to a blob URL that
+                    # resolves -- a wrong link, or a broken image, with -e
+                    # passing because the dotted path exists on disk.
+                    $f =~ s{(?:^|/)\./}{/}g;
+                    $f =~ s{^/}{};
+                    1 while $f =~ s{(^|/)(?!\.\.(?:/|$))[^/]+/\.\./}{$1};
+                    # Every repository-relative target must exist. Without this
+                    # a link to a moved or deleted file becomes a well-formed
+                    # blob URL that 404s on the published page, and no later
+                    # assertion can tell it from a good one.
+                    -e $f or die "link target does not exist: $f\n";
+                    $f eq "docs/cheatsheet.md" ? "](cheatsheet.html$frag$title)"
+                      : $f eq "README.md" ? "](index.html$frag$title)"
+                      : $f =~ m{^docs/assets/} ? "]($f$frag$title)"
+                      : "]($ENV{BLOB}/$f$frag$title)"
+                  }
+                }gex;
+              }
+            ' <"$1"
+          }
+
+          # gfm, and raw HTML in the sources passes straight through it. Measured
+          # on pandoc 3.10.2: `-f gfm-raw_html` does NOT suppress it -- the
+          # commonmark-family reader emits `<script>alert(1)</script>` verbatim
+          # with the extension on or off -- so writing that flag here would put a
+          # control in the file that does not control anything. The assertion
+          # below is the control instead.
+          absolutise README.md '' |
+            pandoc -f gfm -t html5 --template site/template.html \
+              --metadata title="adept" \
+              --output _site/index.html
+          absolutise docs/cheatsheet.md 'docs/' |
+            pandoc -f gfm -t html5 --template site/template.html \
+              --metadata title="adept — skill cheat sheet" \
+              --output _site/cheatsheet.html
+
+          # Every assertion names what failed. A bare `test` that exits 1 tells
+          # the operator only that the step went red, on the step that does the
+          # most work in this workflow.
+          test -s _site/index.html || die 'index.html is empty or missing'
+          test -s _site/cheatsheet.html || die 'cheatsheet.html is empty or missing'
+          test -s _site/style.css || die 'style.css was not copied'
+          test -s _site/docs/assets/adept-logo-grimoire.png || die 'the logo was not copied'
+          test -s _site/docs/assets/adept-quest-map.png || die 'the quest map was not copied'
+
+          # A size floor as well as a non-empty check. The template alone is
+          # about 1 kB, so `test -s` cannot tell a rendered page from one whose
+          # body is gone; these numbers sit above the chrome and below either
+          # page's real size.
+          test "$(wc -c <_site/index.html)" -gt 3000 ||
+            die 'index.html is smaller than the template chrome; its body is missing'
+          test "$(wc -c <_site/cheatsheet.html)" -gt 3000 ||
+            die 'cheatsheet.html is smaller than the template chrome; its body is missing'
+
+          # The link assertion: every relative link in the built pages must name
+          # a file that is actually in _site. Testing existence rather than
+          # matching an allowlist of path shapes is what makes this cover the
+          # whole class -- an asset whose type the copy step skipped, one in a
+          # subdirectory it did not descend into, and a page that was never
+          # rendered all fail here, where a pattern that merely permitted
+          # `docs/assets/` would pass every one of them green.
+          #
+          # -h keeps grep from prefixing the filename onto the match.
+          link_status=0
+          attrs=$(grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html) ||
+            link_status=$?
+          case $link_status in
+          0 | 1) ;;
+          *) die "link scan could not run (grep exit $link_status)" ;;
+          esac
+
+          missing=0
+          while IFS= read -r attr; do
+            target=${attr#*\"}
+            target=${target%\"}
+            case $target in
+            "" | http://* | https://* | \#* | mailto:*) continue ;;
+            esac
+            target=${target%%#*}
+            if [ ! -e "_site/$target" ]; then
+              echo "::error::built page links $target, which is not in _site" >&2
+              missing=1
+            fi
+          done <<<"$attrs"
+          [ "$missing" -eq 0 ] || die 'the built site links files that are not in _site'
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    # A positive test on both. The event alone would admit a workflow_dispatch
+    # from any branch; the github-pages environment's deployment-branch policy
+    # blocks that today, but that policy is repository configuration no diff
+    # records, so the constraint is stated here where review can see it.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
