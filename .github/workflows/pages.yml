@@ -73,9 +73,11 @@ jobs:
           # with every other project page under this account, so a script here is
           # not scoped to this site.
           #
-          # Caveat, deliberately: a literal `<` followed by a letter inside a
-          # fenced code block trips this too. The answer then is to escape it, or
-          # to widen the pattern on purpose -- not to go back to a denylist.
+          # Caveat, deliberately: this also trips on a literal `<` followed by
+          # a letter inside a fenced code block, on a GFM autolink such as
+          # <https://example.com>, and on an HTML comment. The answer then is to
+          # rewrite the line, or to exclude that shape on purpose -- not to go
+          # back to a denylist of tag names.
           if grep -nE '<[a-zA-Z/!]' README.md docs/cheatsheet.md; then
             echo "::error::raw HTML in a site source" >&2
             exit 1
@@ -121,16 +123,29 @@ jobs:
           # fails, and pipefail carries that failure past pandoc.
           absolutise() {
             PREFIX="$2" perl -pe '
-              s{\]\(([^)]+)\)}{
-                my $t = $1;
-                if ($t =~ m{^(?:https?://|\#|mailto:)}) { "]($t)" }
-                else {
-                  my $f = "$ENV{PREFIX}$t";
-                  $f eq "docs/cheatsheet.md" ? "](cheatsheet.html)"
-                    : $f =~ m{^docs/assets/} ? "]($f)"
-                    : "]($ENV{BLOB}/$f)"
-                }
-              }gex;
+              # Code blocks are not prose. A fenced or indented example
+              # containing ](...) is sample text, and rewriting it would publish
+              # a corrupted example -- so track fenced state and skip both.
+              if (/^\s*(?:```|~~~)/) { $fence = !$fence }
+              elsif (!$fence && !/^(?: {4}|\t)/) {
+                s{\]\(([^)]+)\)}{
+                  my $t = $1;
+                  if ($t =~ m{^(?:https?://|\#|mailto:)}) { "]($t)" }
+                  else {
+                    my $f = "$ENV{PREFIX}$t";
+                    $f =~ s{^\./}{};
+                    # Every repository-relative target must exist. Without this
+                    # a link to a moved or deleted file becomes a well-formed
+                    # blob URL that 404s on the published page, and no later
+                    # assertion can tell it from a good one.
+                    -e $f or die "link target does not exist: $f\n";
+                    $f eq "docs/cheatsheet.md" ? "](cheatsheet.html)"
+                      : $f eq "README.md" ? "](index.html)"
+                      : $f =~ m{^docs/assets/} ? "]($f)"
+                      : "]($ENV{BLOB}/$f)"
+                  }
+                }gex;
+              }
             ' <"$1"
           }
 
@@ -149,18 +164,28 @@ jobs:
               --metadata title="adept — skill cheat sheet" \
               --output _site/cheatsheet.html
 
-          test -s _site/index.html
-          test -s _site/cheatsheet.html
-          test -s _site/style.css
-          test -s _site/docs/assets/adept-logo-grimoire.png
-          test -s _site/docs/assets/adept-quest-map.png
+          # Every assertion names what failed. A bare `test` that exits 1 tells
+          # the operator only that the step went red, on the step that does the
+          # most work in this workflow.
+          die() {
+            echo "::error::$1" >&2
+            exit 1
+          }
+
+          test -s _site/index.html || die 'index.html is empty or missing'
+          test -s _site/cheatsheet.html || die 'cheatsheet.html is empty or missing'
+          test -s _site/style.css || die 'style.css was not copied'
+          test -s _site/docs/assets/adept-logo-grimoire.png || die 'the logo was not copied'
+          test -s _site/docs/assets/adept-quest-map.png || die 'the quest map was not copied'
 
           # A size floor as well as a non-empty check. The template alone is
           # about 1 kB, so `test -s` cannot tell a rendered page from one whose
           # body is gone; these numbers sit above the chrome and below either
           # page's real size.
-          test "$(wc -c <_site/index.html)" -gt 3000
-          test "$(wc -c <_site/cheatsheet.html)" -gt 3000
+          test "$(wc -c <_site/index.html)" -gt 3000 ||
+            die 'index.html is smaller than the template chrome; its body is missing'
+          test "$(wc -c <_site/cheatsheet.html)" -gt 3000 ||
+            die 'cheatsheet.html is smaller than the template chrome; its body is missing'
 
           # The link assertion: every relative link in the built pages must name
           # a file that is actually in _site. Testing existence rather than

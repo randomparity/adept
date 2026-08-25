@@ -123,7 +123,7 @@ sits only on `deploy`, and no `pull_request` event ever reaches it.
 set -o pipefail
 
 mkdir -p _site/docs/assets
-find docs/assets -type f \
+find docs/assets -maxdepth 1 -type f \
   \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.webp' \) \
   -exec cp {} _site/docs/assets/ \;
 cp site/style.css _site/style.css
@@ -135,7 +135,10 @@ empty input — without it the rewrite stage's failure is masked by the renderer
 Image types only, rather than `cp -r docs/assets`. That directory is served from the site
 origin, so copying it wholesale would publish whatever lands in it later; an `.html` or an
 `.svg` dropped in is active content on a host shared with every other project page under this
-account, and it would need no workflow edit to get there.
+account, and it would need no workflow edit to get there. `-maxdepth 1` keeps the copy flat:
+without it a file in a subdirectory would be flattened into `_site/docs/assets/` and a page
+linking it at its real path would 404, where now it is simply not copied and the link
+assertion says so.
 
 Then one render per page, written out rather than looped — two invocations are shorter than the
 loop that would generalise them:
@@ -150,14 +153,20 @@ called as `absolutise README.md ''` and `absolutise docs/cheatsheet.md 'docs/'`.
 
 **`absolutise` makes one decision per link**, in this order:
 
+0. Lines inside a fenced or indented code block are skipped entirely. A `](…)` in an example is
+   sample text; rewriting it would publish a corrupted example.
 1. A target beginning `http://`, `https://`, `#`, or `mailto:` is left alone.
-2. Otherwise the target is **resolved against the source's own directory** — `$PREFIX$target` —
-   and every remaining test applies to that resolved path.
-3. Resolved to `docs/cheatsheet.md` → `cheatsheet.html`, the site's other page.
-4. Resolved under `docs/assets/` → left relative, because those files are copied to exactly
+2. Otherwise the target is **resolved against the source's own directory** — `$PREFIX$target`,
+   with a leading `./` stripped — and every remaining test applies to that resolved path.
+3. **The resolved path must exist**, or the rewrite dies and the build goes red naming it.
+   Without this a link to a moved or deleted file becomes a perfectly well-formed `blob/main`
+   URL that 404s on the published page, and no later assertion can tell it from a good one.
+4. Resolved to `docs/cheatsheet.md` → `cheatsheet.html`; resolved to `README.md` →
+   `index.html`. The two page mappings are symmetric so either page can link the other.
+5. Resolved under `docs/assets/` → left relative, because those files are copied to exactly
    that path and resolve unchanged on GitHub and on the site alike. Absolutising one would turn
    an `<img src>` into a blob page that serves HTML.
-5. Anything else → `https://github.com/randomparity/adept/blob/main/<resolved>`.
+6. Anything else → `https://github.com/randomparity/adept/blob/main/<resolved>`.
 
 Step 2 is the order that matters, and it is why the tests come after the prefix rather than
 before it. A relative link is relative to the file that wrote it: `](adr/0001.md)` in
@@ -187,14 +196,18 @@ if grep -nE '<[a-zA-Z/!]' README.md docs/cheatsheet.md; then
 fi
 
 # after both renders
-test -s _site/index.html
-test -s _site/cheatsheet.html
-test -s _site/style.css
-test -s _site/docs/assets/adept-logo-grimoire.png
-test -s _site/docs/assets/adept-quest-map.png
+die() { echo "::error::$1" >&2; exit 1; }
 
-test "$(wc -c <_site/index.html)" -gt 3000
-test "$(wc -c <_site/cheatsheet.html)" -gt 3000
+test -s _site/index.html || die 'index.html is empty or missing'
+test -s _site/cheatsheet.html || die 'cheatsheet.html is empty or missing'
+test -s _site/style.css || die 'style.css was not copied'
+test -s _site/docs/assets/adept-logo-grimoire.png || die 'the logo was not copied'
+test -s _site/docs/assets/adept-quest-map.png || die 'the quest map was not copied'
+
+test "$(wc -c <_site/index.html)" -gt 3000 ||
+  die 'index.html is smaller than the template chrome; its body is missing'
+test "$(wc -c <_site/cheatsheet.html)" -gt 3000 ||
+  die 'cheatsheet.html is smaller than the template chrome; its body is missing'
 
 missing=0
 while IFS= read -r attr; do
@@ -218,9 +231,10 @@ nothing. And an output-side denylist of element names is walked through by the n
 listed: `<base>`, `<meta http-equiv="refresh">`, an `onmouseenter`, an SVG `onbegin`. Requiring
 that the sources carry no tag at all is one rule that covers every one of them, and it is
 satisfiable today — `grep -nE '<[a-zA-Z/!]' README.md docs/cheatsheet.md` matches nothing. The
-caveat is deliberate and belongs in the comment: a literal `<` followed by a letter inside a
-fenced code block trips it too, and the answer then is to escape it or widen the pattern on
-purpose, not to return to a denylist.
+caveat is deliberate and belongs in the comment: it also trips on a literal `<` followed by a
+letter inside a fenced code block, on a GFM autolink such as `<https://example.com>`, and on an
+HTML comment. The answer then is to rewrite the line, or to exclude that shape on purpose, not
+to return to a denylist of tag names.
 
 The **size floor** is there because `test -s` cannot tell a rendered page from one whose body is
 gone: the template alone is about 1 kB. 3000 sits above the chrome and below either real page,
@@ -343,7 +357,8 @@ artifact the deploy job never consumes on a `pull_request` event. It is the same
 | Third-party code | Every `uses:` pinned to a full commit SHA. `zizmor` runs `--offline`, so it checks the pin's shape and not its provenance; the three new pins were resolved against their repositories by hand at review time (#239) | A moved tag does not change what runs; an impostor SHA is caught by review, not by the gate |
 | Build inputs | The step reads the five paths it names and writes only under `_site`; `pandoc` renders, it does not execute | A file added elsewhere cannot enter the build |
 | Published content | Two rendered HTML files, `style.css`, and the image-typed files directly under `docs/assets/` | A non-image, or anything in a subdirectory, is not copied — and a page linking it fails the link assertion rather than shipping a 404 |
-| Link resolution | Every relative `href`/`src` in the built pages must name a file present in `_site` | A broken link, an unstaged asset, or an unrendered page fails a PR rather than shipping |
+| Link resolution (relative) | Every relative `href`/`src` in the built pages must name a file present in `_site` | A broken link, an unstaged asset, or an unrendered page fails a PR rather than shipping |
+| Link resolution (absolutised) | The rewrite refuses a repository-relative target that does not exist, before turning it into a `blob/main` URL | A link to a moved or deleted file fails a PR rather than publishing a 404 |
 | Active content | Neither source may contain a raw HTML tag at all, checked before rendering | Raw HTML added to a source fails a PR rather than executing on an origin shared with every other project page under this account |
 | Concurrent deploys | `concurrency` group `pages`, `cancel-in-progress: false`, with PR builds on their own group | Two merges cannot interleave one deployment |
 

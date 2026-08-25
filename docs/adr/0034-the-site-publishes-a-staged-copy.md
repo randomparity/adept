@@ -46,15 +46,19 @@ directory.** Nothing reaches the site because it happens to be in the repository
    filter, so the build is exercised on every pull request that touches its own inputs —
    `README.md`, `docs/cheatsheet.md`, `docs/assets/`, `site/`, or the workflow — which is
    every pull request that could break it.
-4. **Repository-relative links are absolutised at build time**, in one `perl` expression.
-   A relative link is relative to the file that wrote it, so every target is **first** resolved
-   against its source's own directory, and every subsequent test is applied to the resolved
-   path: one that resolves to `docs/cheatsheet.md` becomes `cheatsheet.html`, one under
+4. **Repository-relative links are absolutised at build time**, in one `perl` expression, and
+   the rewrite refuses a target that does not exist. A relative link is relative to the file
+   that wrote it, so every target is **first** resolved against its source's own directory, and
+   every subsequent test applies to the resolved path: one resolving to `docs/cheatsheet.md`
+   becomes `cheatsheet.html`, one resolving to `README.md` becomes `index.html`, one under
    `docs/assets/` stays relative because those files are copied to exactly that path, and
-   anything else becomes a `blob/main` URL. Resolving first is what the order buys: testing the
-   raw target would leave `](assets/x.png)` in the cheat sheet absolutised into a blob URL —
-   absolute, wrong, and invisible to the checks below, which see only links that stayed
-   relative.
+   anything else becomes a `blob/main` URL — but only after the file is confirmed to exist.
+   Resolving first is what the order buys: testing the raw target would leave `](assets/x.png)`
+   in the cheat sheet absolutised into a blob URL, absolute and wrong. The existence check is
+   what makes a `blob/main` URL trustworthy at all: a link to a moved or deleted file
+   absolutises into a perfectly well-formed URL that 404s, and no later assertion can tell it
+   from a good one. Code blocks are skipped — fenced and indented alike — because a `](…)`
+   inside an example is sample text, and rewriting it would publish a corrupted example.
 5. **Three assertions, each an allowlist rather than a denylist.**
    - *Before rendering*: neither source may contain a raw HTML tag at all. `pandoc`'s `gfm`
      reader passes raw HTML straight into the output — measured on 3.10.2, `-f gfm-raw_html`
