@@ -6,64 +6,77 @@ Accepted (2026-08-25)
 
 ## Context
 
-`actions-check` runs `zizmor --offline .github/workflows/`. Offline mode disables every
-audit that needs the GitHub API, and those include the audits that check a pin's
-provenance: whether the 40-character SHA a `uses:` names is reachable in the repository it
-names, and whether the pinned revision is covered by a known advisory. Offline mode
-confirms a pin's *shape* and nothing else, so an impostor SHA borrowed from a fork is a
-well-formed pin. Five `uses:` pins are in the tree; the next bump — a hand edit, or
-Dependabot once #236 lands — would be checked by shape alone.
+`actions-check` runs `zizmor --offline .github/workflows/`. Offline mode disables the
+audits that check a pin's *provenance* — per <https://docs.zizmor.sh/audits/>, the audits
+marked "Works offline: ❌" are `impostor-commit`, `known-vulnerable-actions`,
+`ref-confusion`, and `typosquat-uses`. Offline mode confirms a pin's *shape* and nothing
+else, so an impostor SHA borrowed from a fork is a well-formed pin. Five `uses:` pins are
+in the tree; the next bump — a hand edit, or Dependabot once #236 lands — would be checked
+by shape alone.
 
 Issue #239 proposes dropping `--offline` so zizmor uses the API when a token is present.
-Measured on this workstation (arm64 macOS 25.6.0, zizmor 1.29.0), that alone is a poor
-fix: `env -u GH_TOKEN -u GITHUB_TOKEN -u ZIZMOR_GITHUB_TOKEN zizmor --no-progress
-.github/workflows/` exits 0 having audited nothing online, and announces the degrade only
-as a `WARN` line inside the tool's own log stream, among its `INFO` lines. The gate itself
-adds nothing, so a reader learns the mode only by knowing zizmor's log conventions, and
-learns *why* it chose that mode not at all — which is the discrimination
-[ADR 0025](0025-a-skip-reports-the-condition-not-the-cause.md) decision 2 requires a
-degrade to carry.
+That leaves the mode unreported: zizmor announces a tokenless degrade only as a `WARN`
+inside its own log stream, and the gate adds nothing, so a reader learns the mode by
+knowing zizmor's log conventions and learns the condition that chose it not at all — the
+discrimination [ADR 0025](0025-a-skip-reports-the-condition-not-the-cause.md) decision 2
+requires a degrade to carry.
 
 The operator settled the one design-changing question before this record was written: a
 machine with no token degrades to the offline subset and stays green, because no other
 gate here requires network or credentials. Failing without a token was considered and
 explicitly rejected.
 
-What the issue does not settle, and what decides the shape of the fix, is that **a token
-is not connectivity**. Reproduced on this host: with a token present and the API
-unreachable, zizmor does not fall back to the offline subset — it exits 1 with `fatal: no
-audit was performed`. Any design that makes online mode the *ambient* local default
-therefore turns `just verify` red on a plane, in a tunnel, during a GitHub API incident,
-and the morning a token expires.
+Two measurements on this workstation (arm64 macOS 25.6.0, zizmor 1.29.0) then decide the
+shape of the fix.
+
+**A token is not connectivity.** With a token present and the API unreachable, zizmor does
+not fall back to the offline subset — `GH_TOKEN=<value> GH_HOST=github.invalid.example
+zizmor --no-progress .github/workflows/` gives `fatal: no audit was performed`,
+`'artipacked' audit failed`, exit 1. So any design that makes online mode the *ambient*
+local default turns `just verify` red on a plane, during an API incident, and the morning
+a token expires.
+
+**A token does not decide the mode by itself.** `zizmor --help` documents two further mode
+controls under the same Network Options heading: `--offline [env: ZIZMOR_OFFLINE=]` and
+`--no-online-audits [env: ZIZMOR_NO_ONLINE_AUDITS=]`. With either exported, a run carrying
+a valid token completes offline, exit 0, printing no `WARN` at all — verified with
+`GH_TOKEN=<value> ZIZMOR_OFFLINE=true zizmor --no-progress .github/workflows/` and the
+same with `ZIZMOR_NO_ONLINE_AUDITS=true`. A gate that inferred its mode from the token
+alone would therefore print "online mode" over an unaudited run: worse than today, because
+today the run is merely unaudited and afterwards it would be unaudited and labelled
+audited.
 
 ## Decision
 
-**1. Mode is selected from an explicitly exported token, and the gate names the mode and
-the condition before the scan runs.** `actions-check` invokes `scripts/run-zizmor.sh`,
-which consults exactly the three variables zizmor itself documents for `--gh-token`, in
-zizmor's own order — `GH_TOKEN`, `GITHUB_TOKEN`, `ZIZMOR_GITHUB_TOKEN` (`zizmor --help`,
-Network Options). An empty value is not a token. There is no fallback to a credential
-store. It then prints one line, or two:
+**1. The mode is read from all five variables that decide it, and the gate names the mode
+and the condition before the scan runs.** `actions-check` invokes
+`scripts/run-zizmor.sh`, which tests, in order: `ZIZMOR_OFFLINE`,
+`ZIZMOR_NO_ONLINE_AUDITS`, then `GH_TOKEN`, `GITHUB_TOKEN`, `ZIZMOR_GITHUB_TOKEN` — the
+three token names in zizmor's own documented order. An empty value is not a value. The two
+mode variables outrank the token because they are an explicit instruction about the mode;
+a token merely makes online mode possible. There is no fallback to a credential store.
+
+The gate then prints one line, or two:
 
 ```
 zizmor: online mode; API token from GH_TOKEN
+zizmor: offline mode (--offline); ZIZMOR_OFFLINE is set
 zizmor: offline mode (--offline); no API token: GH_TOKEN, GITHUB_TOKEN and
   ZIZMOR_GITHUB_TOKEN are all unset or empty
 zizmor: pin provenance was NOT audited — ...
 ```
 
-Reading the same three names in the same order means the mode the gate announces is the
-mode zizmor would have chosen, rather than a second opinion that can drift from it. The
-offline condition names one observation with one response — export a token — so ADR 0025
-decision 2's requirement to carry a discriminator does not arise: that clause applies
-where a condition has several causes calling for different responses, and this one does
-not. zizmor's exit status is captured into a variable and re-raised, never piped and never
-`|| true`.
+Three offline conditions, each with its own response — unset `ZIZMOR_OFFLINE`, unset
+`ZIZMOR_NO_ONLINE_AUDITS`, or export a token — which is exactly the discriminator ADR 0025
+decision 2 requires where one observation has several causes calling for different
+responses. The online line also names `GH_HOST` when it is set, because that variable
+decides *which* API an online run talks to. zizmor's exit status is captured into a
+variable and re-raised, never piped and never `|| true`.
 
 Exporting a token is a deliberate act, which is what makes it a sound mode selector: the
-person who exports one has asked for online mode and for its network dependency. An
-ambient source — reading `gh`'s keyring — would impose that dependency on every developer
-who never chose it, which is the failure the Context measures.
+person who exports one has asked for online mode and its network dependency. An ambient
+source — reading `gh`'s keyring — would impose that dependency on every developer who
+never chose it.
 
 **2. The tokenless path passes `--offline`, not `--no-online-audits`.** `--offline`
 forbids all online operations; `--no-online-audits` is the documented weaker form that
@@ -79,78 +92,77 @@ passes identically.
 `.github/workflows/verify.yml` gains `GH_TOKEN: ${{ github.token }}` in its existing
 `env:` block. CI is where connectivity is assured and where the required check lives, so
 it is where the online audits belong. The job's `permissions: contents: read` is **not**
-widened and checkout's `persist-credentials: false` is **not** relaxed: the online audits
-read public repositories' refs and the public advisory database, and `contents: read` on
-this repository is the floor a usable `GITHUB_TOKEN` needs for that. The security-posture
-change is therefore that the token's *value* becomes visible to the `just ci` step, not
-that any permission grows. On a fork pull request GitHub makes `GITHUB_TOKEN` read-only
-regardless of the `permissions:` block, so the most a compromised gate script obtains is
-authenticated read access to a public repository — content the same actor can already read
+widened and checkout's `persist-credentials: false` is **not** relaxed. The
+security-posture change is therefore that the token's *value* becomes visible to the
+`just ci` step, not that any permission grows. On a fork pull request GitHub makes
+`GITHUB_TOKEN` read-only, so the most a compromised gate script obtains is authenticated
+read access to a public repository — content the same actor can already read
 unauthenticated, at a lower rate limit.
 
 ## Consequences
 
-- Every `actions-check` run states its mode, so a reader of a green gate learns whether
-  provenance was audited without knowing zizmor's defaults.
+- Every `actions-check` run states its mode and the condition that chose it, so a reader
+  of a green gate learns whether provenance was audited without knowing zizmor's defaults,
+  and an operator who wanted online mode and got offline learns which variable to change.
 - CI audits provenance on both runners, on every pull request. That is where a bad pin is
   caught before merge.
 - A workstation audits provenance only when someone exports a token. By default it runs
-  the offline subset and says so, twice. Provenance coverage is therefore CI's, and the
-  pre-push hook does not duplicate it — the coverage this record buys is one gate on the
-  merge path, not two.
-- `just verify` gains no ambient dependency on network or credentials: with no token
-  exported it is green with no network, exactly as today. The dependency arrives only with
-  an exported token, and then it is hard rather than graceful — verified on this host, a
-  token plus an unreachable API gives `fatal: no audit was performed` and exit 1, not a
-  degrade to offline. A developer who exports `GH_TOKEN` in a shell profile has opted into
-  a gate that reddens offline; the remedy is to unset it, and the offline line then says
-  so.
-- Residual, both directions. Nothing *fails* when CI degrades to offline: if the
-  `GH_TOKEN` line is removed or `github.token` stops resolving, CI prints the offline
-  condition and stays green, and the mode line is the whole mitigation — a log line,
-  weaker than a red check. In the other direction, with the token wired an API outage or a
-  revoked token fails `actions-check` hard, so the required `verify` check can redden for
-  a reason unrelated to the pull request, reporting a `fatal:` that names an audit rather
-  than the network.
-- The online line reports the token the script found, not that every online audit reached
-  the API. zizmor reports a per-audit online failure as a `WARN` in its own stream, so a
-  run can announce online mode, warn in the middle, and still finish green — the record's
-  own subject one level up. Stated here rather than engineered against; a post-scan
-  verification step would cost more than the residual is worth.
-- The gate never reads the token's value. Because the three sources are exactly the
-  variables zizmor already consults, the script tests only whether each is non-empty and
-  lets zizmor read the value itself — so no credential passes through the script, appears
-  in its argv, or can reach its output. Beyond that this decision trusts zizmor with a
-  credential its `--gh-token` interface exists to receive; a malicious zizmor release is
-  not addressed here, and the tool is installed unpinned from Homebrew alongside every
-  other gate tool.
-- Mode selection lives in a script rather than in the recipe body, which brings it under
+  the offline subset and says so, and stays green with no network, exactly as today.
+  Coverage is one gate on the merge path rather than two — the price of keeping the local
+  gate hermetic.
+- With a token exported the dependency is hard, not graceful: a failed API call gives
+  `fatal: no audit was performed` and exit 1. That applies to CI too, so an API outage or
+  a revoked token can redden the required `verify` check for a reason unrelated to the
+  pull request, reporting a `fatal:` that names an audit rather than the network. Accepted
+  in both directions: nothing *fails* if the `GH_TOKEN` line is later removed either — CI
+  would print the offline condition and stay green, and the mode line is the whole
+  mitigation.
+- `GH_HOST` is ambient and zizmor honours it as `--gh-hostname`. A developer with `GH_HOST`
+  exported for a GitHub Enterprise instance and a token for it gets the same hard `fatal`
+  from `just verify`. The online line names the host when it is set, so the message that
+  failed at least says where the run was pointed.
+- The online line reports the mode the run was launched in, not that every online audit
+  reached the API. zizmor reports a per-audit online failure as a `WARN` in its own
+  stream, so a run can announce online mode, warn in the middle, and finish green. Stated
+  rather than engineered against; a post-scan verification step would cost more than the
+  residual is worth.
+- The gate never reads a token's value. The five variables are ones zizmor already
+  consults, so the script tests each for emptiness and lets zizmor read the values itself
+  — no credential passes through the script, its argv, or its output.
+- Mode selection lives in a script rather than the recipe body, which brings it under
   `shellcheck`, `shfmt`, and a suite. It is a gate script under `scripts/`, so anatomy
   rules 1 and 2 do not bind it; rule 3 holds, as it runs and exits.
 
 ## Considered & rejected
 
-- **Drop `--offline` and change nothing else** — the issue's literal proposal. verified:
-  on this host, `env -u GH_TOKEN -u GITHUB_TOKEN -u ZIZMOR_GITHUB_TOKEN zizmor
-  --no-progress .github/workflows/` exits 0 reporting `No findings to report`, preceded by
-  ` WARN audit: zizmor: zizmor is running in offline mode by default`; the same command
-  with a token, and `zizmor --offline`, both print no such line. So the WARN does
-  distinguish an unaudited run — what it does not carry is the condition that chose the
-  mode, and it sits on stderr among `INFO` lines with nothing from the gate itself. A
-  reader learns the mode only by knowing zizmor's log conventions and learns the condition
-  not at all, which is what ADR 0025 decision 2 asks a degrade line to supply.
+- **Drop `--offline` and change nothing else** — the issue's literal proposal. verified: on
+  this host, `env -u GH_TOKEN -u GITHUB_TOKEN -u ZIZMOR_GITHUB_TOKEN zizmor --no-progress
+  .github/workflows/` exits 0 reporting `No findings to report`, preceded by ` WARN audit:
+  zizmor: zizmor is running in offline mode by default`; the same command with a token, and
+  `zizmor --offline`, print no such line. So the `WARN` does distinguish an unaudited run —
+  what it does not carry is the condition that chose the mode, and it appears only in the
+  tokenless default case, never when `ZIZMOR_OFFLINE` or `ZIZMOR_NO_ONLINE_AUDITS` sets the
+  mode explicitly (both verified above). A gate leaning on it would be silent in exactly
+  the case it most needs to speak.
+- **Select the mode from the token variables alone.** verified: the two mode variables
+  above override a present token, silently and with exit 0, so the gate would print "online
+  mode" over a run that audited no provenance. Reading three of the five variables that
+  decide the mode is a second opinion that drifts from zizmor's.
+- **Unset `ZIZMOR_OFFLINE` and `ZIZMOR_NO_ONLINE_AUDITS` on the online path** (`env -u`)
+  rather than reporting them. judgment: it silently overrides an operator who asked to stay
+  offline, which is the same class of defect as the silent degrade this record closes.
+  There is also no flag to assert online mode over them — `zizmor --offline=false` errors
+  with `unexpected value 'false' for '--offline'` — so reporting is the honest option.
 - **Fall back to `gh auth token` when no variable is set**, so a workstation audits
-  provenance without anyone exporting anything. verified: `gh auth token` is a keyring read
-  that contacts nothing, so it reports a token on a machine with no network; zizmor handed
-  a token it cannot use then exits 1 — `GH_TOKEN="$(gh auth token)" GH_HOST=github.invalid.example zizmor --no-progress .github/workflows/`
-  gives `fatal: no audit was performed`, `'artipacked' audit failed`, exit 1 (arm64 macOS,
-  zizmor 1.29.0). Since every developer who can push here has an authenticated `gh`, the
-  fallback would redden `just verify` and the pre-push hook for all of them whenever the
-  API is unreachable — the outcome the fail-without-a-token alternative was rejected for
-  causing, on a strictly larger set of machines. It also inherits `gh`'s configured host:
-  `gh auth token` without `--hostname` selects the default host, while zizmor defaults to
-  `--gh-hostname github.com`, so a developer configured for a GitHub Enterprise instance
-  would hand over a token that 401s into the same hard `fatal`.
+  provenance without anyone exporting anything. verified: `gh auth token` returns from the
+  keyring, so it reports a token on a machine with no network; zizmor handed a token it
+  cannot use exits 1 (the `fatal: no audit was performed` measurement in Context). Since
+  every developer who can push here has an authenticated `gh`, the fallback would redden
+  `just verify` and the pre-push hook for all of them whenever the API is unreachable — the
+  outcome the fail-without-a-token alternative was rejected for causing, on a strictly
+  larger set of machines. It also inherits `gh`'s configured host, which zizmor does not
+  share: `gh auth token` without `--hostname` selects `gh`'s default host while zizmor
+  defaults to `--gh-hostname github.com`.
 - **Fail `actions-check` when no token is present.** verified: the operator settled this
   before design. No other gate consults the network or a credential — scanning every gate
   script for one (`rg --no-config -e '\bgh\b|curl|wget|api\.github|GH_TOKEN|GITHUB_TOKEN|https?://' scripts/*.sh .github/scripts/check-records.sh`,
@@ -161,46 +173,50 @@ unauthenticated, at a lower rate limit.
   describes it as "a weaker version of `--offline`: instead of completely forbidding all
   online operations, it only disables audits that require connectivity." Its one added
   capability is auditing a remote `user/repo` input, which this gate never passes.
-- **Report only "offline" without the condition.** judgment: an operator reading it cannot
-  tell whether the gate found no token or was told to stay offline, which is the
-  discrimination ADR 0025 decision 2 requires a degrade line to carry.
+- **Report only "offline" without the condition.** judgment: with three causes calling for
+  three different responses, a bare "offline" leaves an operator unable to tell which one
+  applies — the discrimination ADR 0025 decision 2 exists to require.
 - **Write the mode selection inline in the `actions-check` recipe.** verified:
   `scripts/list-shell-sources.sh` classifies a tracked file as a shell source by a `.sh`
-  name or a bash shebang (`is_shell_source`, line 92), and `Justfile` is neither —
-  `scripts/check-ripgrep-config.sh` documents the same blind spot for its own scan — so an
-  inline branch would be unseen by `shellcheck` and `shfmt`. The `test` recipe discovers
-  suites as tracked `*-test.sh` paths (`git ls-files -z -- '*-test.sh'`, `Justfile:188`),
-  so an inline branch is also untestable, and the reporting behaviour is the whole subject
-  of this record.
+  name or a bash shebang (`is_shell_source`, line 89, with the `*.sh` case at line 92), and
+  `Justfile` is neither — `scripts/check-ripgrep-config.sh` documents the same blind spot
+  for its own scan — so an inline branch would be unseen by `shellcheck` and `shfmt`. The
+  `test` recipe discovers suites as tracked `*-test.sh` paths (`git ls-files -z --
+  '*-test.sh'`, `Justfile:188`), so an inline branch is also untestable, and the reporting
+  behaviour is the whole subject of this record.
 - **Restrict online mode to CI by detecting the runner** (a `$CI` or `$GITHUB_ACTIONS`
-  test) rather than by token presence. judgment: an exported token is a clearer and more
-  honest opt-in signal than sniffing the environment for a runner, it keeps one code path
-  instead of two, and it lets a developer reproduce CI's mode locally by exporting the
-  same variable CI sets.
-- **Read the token's value and pass it as `--gh-token <value>`, or re-export it.**
-  judgment: unnecessary once the sources are exactly the three variables zizmor reads
-  itself, and strictly worse — argv is readable through `ps` by other processes of the
-  same user, and any handling at all puts a credential somewhere it can be printed by
-  mistake. Testing the variables for emptiness needs no value.
-- **Widen the job's `permissions:` beyond `contents: read`.** verified: the online audits
-  read other public repositories' refs and the public advisory database; `contents: read`
-  on this repository is what makes `GITHUB_TOKEN` usable at all, and no documented zizmor
-  audit requires a scope on this repository beyond it. A widened grant would be a real
-  posture change bought for nothing.
-- **Relax checkout's `persist-credentials: false`.** verified: that setting governs
-  whether a credential is written into `.git/config` for later git commands; zizmor reads
-  a token from the environment and never through git, so the stricter setting is
-  untouched.
-- **Make CI fail when the gate runs offline** — a `ZIZMOR_REQUIRE_ONLINE` switch set on
-  the runner. judgment: a flag nobody asked for, guarding a removal that would be a visible
-  edit to `verify.yml` in a reviewed diff. The residual it would cover is recorded in
+  test). judgment: an exported token is a clearer opt-in than sniffing for a runner, it
+  keeps one code path, and it lets a developer reproduce CI's mode by exporting the same
+  variable CI sets.
+- **Read the token's value and pass `--gh-token <value>`, or re-export it.** judgment:
+  unnecessary once the sources are variables zizmor reads itself, and strictly worse — argv
+  is readable through `ps` by other processes of the same user, and any handling at all
+  puts a credential somewhere it can be printed by mistake.
+- **Scope `GH_TOKEN` to a dedicated `actions-check` step** instead of the `Verify` step
+  that runs the whole suite. judgment: the narrower blast radius is real, but buying it
+  means either running `actions-check` twice or splitting the guardrail recipe so CI
+  invokes it in pieces — and `CLAUDE.md` requires CI to invoke the project's recipe rather
+  than re-typed command strings, which a per-gate step would reintroduce. The exposure is a
+  read-only token on a public repository, to first-party reviewed code.
+- **Widen the job's `permissions:` beyond `contents: read`.** verified: the four online
+  audits named in Context read *other* repositories' refs and the GitHub Advisories
+  database (<https://docs.zizmor.sh/audits/>), none of which is a resource of this
+  repository, so no permission on this repository could enable them. `permissions:` is
+  therefore left exactly as it is.
+- **Relax checkout's `persist-credentials: false`.** judgment: that setting governs whether
+  a credential for *this* repository's remote is written into `.git/config`; zizmor
+  authenticates to the GitHub API from the environment, so nothing it does reads that
+  credential. Nothing to gain, a stricter setting to lose.
+- **Make CI fail when the gate runs offline** — a `ZIZMOR_REQUIRE_ONLINE` switch set on the
+  runner. judgment: a flag nobody asked for, guarding a removal that would be a visible edit
+  to `verify.yml` in a reviewed diff. The residual it would cover is recorded in
   Consequences instead.
 - **Add a reachability probe or a retry around the online run** so a token plus a dead API
-  degrades to offline instead of failing. judgment: it grows the design well past what this
-  decision governs, and it re-introduces the judgement call — how many retries, how long a
-  timeout — that a hard failure states plainly.
-- **Pin zizmor's version so its mode flags cannot drift.** judgment: the whole gate tool
-  set is installed unpinned from Homebrew by one step, and pinning one member of it is a
-  different decision about a different problem.
+  degrades instead of failing. judgment: it grows the design past what this decision
+  governs, and re-introduces the judgement call — how many retries, how long a timeout —
+  that a hard failure states plainly.
+- **Pin zizmor's version so its mode flags cannot drift.** judgment: the whole gate tool set
+  is installed unpinned from Homebrew by one step, and pinning one member is a different
+  decision about a different problem.
 - **Do nothing.** judgment: the audits the threat model credits do not run anywhere today,
   and the next pin bump is the one that would need them.
