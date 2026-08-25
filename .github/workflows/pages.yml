@@ -49,7 +49,7 @@ jobs:
       # Unpinned deliberately, as in randomparity/bzr: this renders Markdown to
       # HTML in a job holding no secrets, and pinning an apt version against a
       # rolling runner image breaks on image updates more often than it protects.
-      - name: Install pandoc # zizmor: ignore[adhoc-packages]
+      - name: Install pandoc
         run: |
           sudo apt-get update
           sudo apt-get install -y pandoc
@@ -63,12 +63,35 @@ jobs:
           # pandoc's status, and pandoc succeeds on empty input.
           set -o pipefail
 
+          # The raw-HTML gate, and it runs before anything is rendered. pandoc's
+          # gfm reader passes raw HTML straight through -- measured on 3.10.2,
+          # `-f gfm-raw_html` does not suppress it -- so the only honest control
+          # is that the sources contain none. This is an allowlist of zero rather
+          # than a denylist of tags: <script>, <base>, <meta http-equiv=refresh>,
+          # an SVG onbegin and every tag nobody has thought of are one rule.
+          # These pages are served from randomparity.github.io, an origin shared
+          # with every other project page under this account, so a script here is
+          # not scoped to this site.
+          #
+          # Caveat, deliberately: a literal `<` followed by a letter inside a
+          # fenced code block trips this too. The answer then is to escape it, or
+          # to widen the pattern on purpose -- not to go back to a denylist.
+          if grep -nE '<[a-zA-Z/!]' README.md docs/cheatsheet.md; then
+            echo "::error::raw HTML in a site source" >&2
+            exit 1
+          fi
+
           mkdir -p _site/docs/assets
           # Image types only, rather than `cp -r docs/assets`. That directory is
           # served from the site origin, so copying it wholesale would publish
           # whatever lands in it later -- an .html or an .svg is active content
           # on a host shared with every other project page under this account.
-          find docs/assets -type f \
+          #
+          # -maxdepth 1 keeps the copy flat and honest. Without it a file in a
+          # subdirectory would be flattened into _site/docs/assets/, and a page
+          # linking it at its real path would 404; with it the file is not copied
+          # and the link assertion below says so.
+          find docs/assets -maxdepth 1 -type f \
             \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.webp' \) \
             -exec cp {} _site/docs/assets/ \;
           cp site/style.css _site/style.css
@@ -139,28 +162,29 @@ jobs:
           test "$(wc -c <_site/index.html)" -gt 3000
           test "$(wc -c <_site/cheatsheet.html)" -gt 3000
 
-          # The link assertion. Anything the rewrite failed to resolve is a link
-          # that would 404 on the published site, and it fails here, on a pull
-          # request, instead. -h keeps grep from prefixing the filename, which
-          # would defeat the leading quote in the second pattern.
-          if grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html |
-            grep -vE '"(https?://|#|mailto:|index\.html|cheatsheet\.html|style\.css|docs/assets/)'; then
-            echo "::error::unresolved relative link in the built site" >&2
-            exit 1
-          fi
-
-          # The active-content assertion. These pages are served from
-          # randomparity.github.io, an origin shared with every other project
-          # page under this account, so a script here is not scoped to this site.
-          # Raw HTML in a source reaches the output verbatim (see above), and the
-          # link assertion cannot see it -- a <script> carries no href, and a
-          # <script src="https://..."> is an absolute URL the allowlist admits.
-          # Neither source contains a raw tag today; this is what keeps it true.
-          if grep -oihE '<(script|iframe|object|embed|form)\b|javascript:|\bon(error|load|click|mouseover|focus)=' \
-            _site/index.html _site/cheatsheet.html; then
-            echo "::error::active content in the built site" >&2
-            exit 1
-          fi
+          # The link assertion: every relative link in the built pages must name
+          # a file that is actually in _site. Testing existence rather than
+          # matching an allowlist of path shapes is what makes this cover the
+          # whole class -- an asset whose type the copy step skipped, one in a
+          # subdirectory it did not descend into, and a page that was never
+          # rendered all fail here, where a pattern that merely permitted
+          # `docs/assets/` would pass every one of them green.
+          #
+          # -h keeps grep from prefixing the filename onto the match.
+          missing=0
+          while IFS= read -r attr; do
+            target=${attr#*\"}
+            target=${target%\"}
+            case $target in
+            "" | http://* | https://* | \#* | mailto:*) continue ;;
+            esac
+            target=${target%%#*}
+            if [ ! -e "_site/$target" ]; then
+              echo "::error::built page links $target, which is not in _site" >&2
+              missing=1
+            fi
+          done <<<"$(grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html)"
+          [ "$missing" -eq 0 ]
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

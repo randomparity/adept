@@ -55,12 +55,20 @@ directory.** Nothing reaches the site because it happens to be in the repository
    raw target would leave `](assets/x.png)` in the cheat sheet absolutised into a blob URL —
    absolute, wrong, and invisible to the checks below, which see only links that stayed
    relative.
-5. **Two post-build assertions**, beyond the files being non-empty and above a size floor that
-   a page of bare template chrome cannot clear. The first fails on any relative `href` or `src`
-   the rewrite did not resolve. The second fails on active content — `<script>`, `<iframe>`,
-   an inline event handler, a `javascript:` URL — because raw HTML in a source reaches the
-   output verbatim and the first assertion cannot see it: a `<script>` carries no href, and a
-   `<script src="https://…">` is an absolute URL the allowlist admits.
+5. **Three assertions, each an allowlist rather than a denylist.**
+   - *Before rendering*: neither source may contain a raw HTML tag at all. `pandoc`'s `gfm`
+     reader passes raw HTML straight into the output — measured on 3.10.2, `-f gfm-raw_html`
+     does not suppress it — and these pages are served from `randomparity.github.io`, an origin
+     shared with every other project page under this account, so a script here is not scoped to
+     this site. Naming forbidden tags would be a denylist that the next unnamed tag walks
+     through; requiring none is one rule that holds for all of them.
+   - *After rendering*: each page must exceed a size floor a page of bare template chrome
+     cannot clear, because `test -s` cannot tell a rendered page from one whose body is gone.
+   - *After rendering*: every relative `href` and `src` in the built pages must name a file
+     that is actually in `_site`. Testing existence rather than matching permitted path shapes
+     is what makes this cover the class — an asset whose type the copy step skipped, one in a
+     subdirectory it did not descend into, and a link the rewrite resolved to a path that was
+     never staged all fail here, where a pattern permitting `docs/assets/` passed them.
 6. **Pages is enabled once, out of band, by an operator with admin, before the pull request
    merges**, so the first run on `main` is green. The workflow does not enable it:
    `actions/configure-pages`' `enablement` input requires a token other than `GITHUB_TOKEN`,

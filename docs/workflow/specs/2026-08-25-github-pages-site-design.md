@@ -176,10 +176,17 @@ would produce empty stdout, `pandoc` would substitute an empty `$body$`, and a p
 template chrome would be written that `test -s` still passes. The redirect fails instead, and
 `pipefail` carries that failure past `pandoc`.
 
-**Assertions**, after both renders — the step's whole verification, and the reason it does not
-need a suite:
+**Assertions.** One before rendering, three after — the step's whole verification, and the
+reason it does not need a suite:
 
 ```sh
+# before any render
+if grep -nE '<[a-zA-Z/!]' README.md docs/cheatsheet.md; then
+  echo "::error::raw HTML in a site source" >&2
+  exit 1
+fi
+
+# after both renders
 test -s _site/index.html
 test -s _site/cheatsheet.html
 test -s _site/style.css
@@ -189,39 +196,41 @@ test -s _site/docs/assets/adept-quest-map.png
 test "$(wc -c <_site/index.html)" -gt 3000
 test "$(wc -c <_site/cheatsheet.html)" -gt 3000
 
-if grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html |
-   grep -vE '"(https?://|#|mailto:|index\.html|cheatsheet\.html|style\.css|docs/assets/)'; then
-  echo "::error::unresolved relative link in the built site" >&2
-  exit 1
-fi
-
-if grep -oihE '<(script|iframe|object|embed|form)\b|javascript:|\bon(error|load|click|mouseover|focus)=' \
-   _site/index.html _site/cheatsheet.html; then
-  echo "::error::active content in the built site" >&2
-  exit 1
-fi
+missing=0
+while IFS= read -r attr; do
+  target=${attr#*\"}; target=${target%\"}
+  case $target in "" | http://* | https://* | \#* | mailto:*) continue ;; esac
+  target=${target%%#*}
+  if [ ! -e "_site/$target" ]; then
+    echo "::error::built page links $target, which is not in _site" >&2
+    missing=1
+  fi
+done <<<"$(grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html)"
+[ "$missing" -eq 0 ]
 ```
 
-The **size floor** is there because `test -s` cannot tell a rendered page from one whose body
-is gone: the template alone is about 1 kB. 3000 sits above the chrome and below either real
-page, which measure 12,033 and 9,589 bytes against the current sources.
+The **raw-HTML gate** is the control on active content, and it is an allowlist of zero rather
+than a denylist of tags. It has to be, for two reasons. `pandoc -f gfm` passes raw HTML from
+the source straight into the output, and `-f gfm-raw_html` does **not** suppress it — measured
+on pandoc 3.10.2, the commonmark-family reader emits `<script>alert(1)</script>` verbatim with
+the extension on or off, so writing that flag would put a control in the workflow that controls
+nothing. And an output-side denylist of element names is walked through by the next name nobody
+listed: `<base>`, `<meta http-equiv="refresh">`, an `onmouseenter`, an SVG `onbegin`. Requiring
+that the sources carry no tag at all is one rule that covers every one of them, and it is
+satisfiable today — `grep -nE '<[a-zA-Z/!]' README.md docs/cheatsheet.md` matches nothing. The
+caveat is deliberate and belongs in the comment: a literal `<` followed by a letter inside a
+fenced code block trips it too, and the answer then is to escape it or widen the pattern on
+purpose, not to return to a denylist.
 
-The **link assertion** lists every link the rewrite failed to resolve and fails the job, on a
-pull request, before the page could ship a 404. `grep -o` is given `-h` so the filename prefix
-does not defeat the leading `"` in the second pattern. Under `bash -e` the pipeline sits inside
-an `if` condition, where `-e` does not apply, so a clean run — where the second `grep` exits 1
-for no matches — passes rather than failing the step.
+The **size floor** is there because `test -s` cannot tell a rendered page from one whose body is
+gone: the template alone is about 1 kB. 3000 sits above the chrome and below either real page,
+which measure 12,033 and 9,589 bytes against the current sources.
 
-The **active-content assertion** is the control on raw HTML, and it exists because the obvious
-control does not work. `pandoc -f gfm` passes raw HTML from the source straight into the output,
-and `-f gfm-raw_html` does **not** suppress it: measured on pandoc 3.10.2, the
-commonmark-family reader emits `<script>alert(1)</script>` verbatim with the extension on or
-off. Writing that flag would put a control in the workflow that controls nothing. The link
-assertion cannot cover this either — a `<script>` carries no `href`, and a
-`<script src="https://…">` is an absolute URL its allowlist admits. These pages are served from
-`randomparity.github.io`, an origin shared with every other project page under this account, so
-a script here is not scoped to this site. Neither source contains a raw tag today; this is what
-keeps it true.
+The **link assertion** tests that each relative target exists in `_site`, rather than matching
+an allowlist of permitted path shapes. That difference is the whole value: an earlier version
+permitted anything under `docs/assets/`, which passed a link to an `.svg` the copy step does not
+copy and a link to a file in a subdirectory it does not descend into. Both now fail, verified by
+running the extracted build block against fixtures.
 
 ### `site/template.html`
 
@@ -326,15 +335,16 @@ artifact the deploy job never consumes on a `pull_request` event. It is the same
 
 | Boundary | Control | Fails how |
 |---|---|---|
-| Deployment trigger | `deploy` carries `if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'` | A fork PR cannot deploy |
+| Deployment trigger (fork PR) | `deploy` carries `if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'` | A fork PR cannot deploy |
+| Deployment trigger (same-repository branch) | The same `if:`, backed by the `github-pages` environment's deployment-branch policy — the `if:` alone is a line the pull request's own author can edit, so the environment is what holds while the workflow is itself under review | A branch build cannot deploy even if the workflow is edited to try |
 | Manual deploy (`workflow_dispatch`) | The same `github.ref` test, plus the `github-pages` environment's deployment-branch policy naming `main` (verified 2026-08-25) | A dispatch from another ref is blocked, in the diff and again at the environment |
 | Token scope | Workflow-level `contents: read`; `pages: write` and `id-token: write` on `deploy` alone, which runs no repository code | A compromised build step holds only read |
 | Checkout credentials | `persist-credentials: false` | No checkout token left in `.git/config` |
 | Third-party code | Every `uses:` pinned to a full commit SHA. `zizmor` runs `--offline`, so it checks the pin's shape and not its provenance; the three new pins were resolved against their repositories by hand at review time (#239) | A moved tag does not change what runs; an impostor SHA is caught by review, not by the gate |
 | Build inputs | The step reads the five paths it names and writes only under `_site`; `pandoc` renders, it does not execute | A file added elsewhere cannot enter the build |
-| Published content | Two rendered HTML files, `style.css`, and the image-typed files under `docs/assets/` | A non-image dropped into `docs/assets/` is not copied, so it is not served |
-| Link resolution | The post-build `grep` fails the job on any unresolved relative link | A broken link fails a PR rather than shipping |
-| Active content | A second `grep` fails the job on `<script>`, `<iframe>`, `<object>`, `<embed>`, `<form>`, an inline event handler, or a `javascript:` URL | Raw HTML added to a source fails a PR rather than executing on a shared origin |
+| Published content | Two rendered HTML files, `style.css`, and the image-typed files directly under `docs/assets/` | A non-image, or anything in a subdirectory, is not copied — and a page linking it fails the link assertion rather than shipping a 404 |
+| Link resolution | Every relative `href`/`src` in the built pages must name a file present in `_site` | A broken link, an unstaged asset, or an unrendered page fails a PR rather than shipping |
+| Active content | Neither source may contain a raw HTML tag at all, checked before rendering | Raw HTML added to a source fails a PR rather than executing on an origin shared with every other project page under this account |
 | Concurrent deploys | `concurrency` group `pages`, `cancel-in-progress: false`, with PR builds on their own group | Two merges cannot interleave one deployment |
 
 Every published byte is already public: this is a public repository and the sources are tracked
@@ -365,7 +375,7 @@ What proves this change is:
 |---|---|---|
 | 1 | The five `test -s` assertions and the two size floors pass | `build` job, every PR touching the site's inputs |
 | 2 | No unresolved relative link survives the rewrite | `build` job's link `grep`, every PR touching the site's inputs |
-| 2a | No active content reaches either page | `build` job's second `grep`, same trigger |
+| 2a | Neither source carries a raw HTML tag | `build` job's pre-render gate, same trigger |
 | 3 | `actionlint` and `zizmor` accept `pages.yml` | `just actions-check`, local and CI |
 | 4 | `just verify` stays green | local and CI |
 | 5 | Both pages render, styled, with working navigation and images | loading the deployed site after the first `main` run |
