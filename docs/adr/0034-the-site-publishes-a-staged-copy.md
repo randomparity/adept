@@ -44,12 +44,13 @@ from named sources.** Nothing reaches the site because it happens to be in the r
 3. Rendering is `actions/jekyll-build-pages` with `jekyll-theme-cayman`. The action carries
    the `github-pages` gem set, so this repository gains no `Gemfile`, no lockfile, and no
    vendored CSS. **`site/_config.yml` carries the project-page base path** —
-   `baseurl: /adept` and `url: https://randomparity.github.io` — because nothing else in
-   this arrangement supplies one: `jekyll-build-pages`'s `entrypoint.sh` at v1.0.13 runs
+   `baseurl: /adept` and `url: https://randomparity.github.io` — because the renderer will
+   not derive one: `jekyll-build-pages`'s `entrypoint.sh` at v1.0.13 runs
    `github-pages build` with no base-URL argument, and `GitHubPages::Configuration` sets
-   neither `url` nor `baseurl` in its `DEFAULTS` or `OVERRIDES`. It also names the theme
-   explicitly, since that same `DEFAULTS` hash would otherwise select
-   `jekyll-theme-primer`.
+   neither `url` nor `baseurl` in its `DEFAULTS` or `OVERRIDES`, so the value has to reach
+   the staged config from somewhere. It is a literal here rather than derived; the
+   alternative is weighed below. `site/_config.yml` also names the theme explicitly, since
+   that same `DEFAULTS` hash would otherwise select `jekyll-theme-primer`.
 4. **Pages is enabled once, out of band, by an operator with admin, before the pull request
    merges** — so the first workflow run on `main` is green rather than red on a setting.
    The workflow does not enable it, but it does keep `actions/configure-pages` as its first
@@ -62,8 +63,13 @@ from named sources.** Nothing reaches the site because it happens to be in the r
 - Adding a page to the site is an edit to `scripts/build-site.sh` and its suite, not a
   settings change. That is the intended cost: the page set is reviewable in a diff.
 - The staged copy is where site-only concerns live — front matter, the stripped leading H1
-  the theme's header would otherwise duplicate, links rewritten to GitHub blob URLs. None of
-  it lands in `README.md`, which stays readable on GitHub and inside the plugin cache.
+  the theme's header would otherwise duplicate, and rewritten links. Rewriting has two
+  cases, not one: a link whose target is itself a staged page becomes that page's site path,
+  and only the remaining repository-relative links become GitHub blob URLs. The first case
+  is currently one link — `README.md`'s pointer to `docs/cheatsheet.md`, which is the
+  landing page's only route to the other half of the site, and which the theme does not
+  replace with navigation of its own. None of this lands in `README.md`, which stays
+  readable on GitHub and inside the plugin cache.
 - The link rewriting is a real behaviour with a real failure mode, so the decision requires
   it to be testable and tested: `scripts/build-site-test.sh` under `just test`, and a
   `site-check` recipe joining `just verify`, where a `README.md` link to a path that no
@@ -126,6 +132,17 @@ from named sources.** Nothing reaches the site because it happens to be in the r
   fixture-driven suite can drive case by case. The link rewriting is the part with a failure
   mode, and no arrangement of triggers gives an inline implementation the fixture coverage a
   script gets for free.
+- **Derive the base path from `actions/configure-pages` rather than writing it into
+  `site/_config.yml`** — have `scripts/build-site.sh` take it as an argument and write it
+  into the staged config. Rejected — verified: at v6.0.0 that action does declare the
+  outputs this would consume (`base_url`, `origin`, `host`, `base_path`), so the
+  alternative is real rather than hypothetical; judgment: it makes the staged
+  configuration something only CI can produce, so `just site-check` would assemble a site
+  that differs from the deployed one in the one field whose failure the Consequences
+  already call silent-green. A literal is readable in a diff and reproducible on a
+  workstation. The cost accepted is a repository rename or transfer silently invalidating
+  it — a fork keeping the name is unaffected, since a project page's path is the
+  repository name.
 - **An orphan `gh-pages` branch as a deploy-from-a-branch source.** The alternative that
   attacks this record's own two arguments hardest: it is default-closed by construction, so
   the 141-file leak does not arise, and it needs no `pages: write`, no `id-token: write`,
