@@ -33,9 +33,11 @@ record follows.
 **Pages source is GitHub Actions, and one workflow renders two named files into a site
 directory.** Nothing reaches the site because it happens to be in the repository.
 
-1. `.github/workflows/pages.yml` builds `_site` inline: copy `docs/assets/` and
-   `site/style.css`, run `pandoc` twice against `README.md` and `docs/cheatsheet.md` through
-   `site/template.html`, assert the outputs, upload, deploy.
+1. `.github/workflows/pages.yml` builds `_site` inline: copy `site/style.css` and the image
+   files under `docs/assets/` — image types only, since that directory is served from the site
+   origin and copying it wholesale would publish whatever lands in it later — run `pandoc`
+   twice against `README.md` and `docs/cheatsheet.md` through `site/template.html`, assert the
+   outputs, upload, deploy.
 2. **Rendering is `pandoc` with a template and stylesheet this repository owns**, not Jekyll
    with a GitHub theme. The template supplies the site's navigation, so neither page depends
    on the other's prose to be reachable.
@@ -44,22 +46,31 @@ directory.** Nothing reaches the site because it happens to be in the repository
    filter, so the build is exercised on every pull request that touches its own inputs —
    `README.md`, `docs/cheatsheet.md`, `docs/assets/`, `site/`, or the workflow — which is
    every pull request that could break it.
-4. **Repository-relative links are absolutised at build time**, in one `perl` expression:
-   `docs/cheatsheet.md` becomes `cheatsheet.html`, and every remaining relative target becomes
-   a `blob/main` URL — excluding `docs/assets/`, which is copied to the path `README.md`
-   already names and therefore resolves unchanged on both GitHub and the site. A relative link
-   is relative to the file that wrote it, so each source is rewritten with its own directory
-   prefix; the `docs/assets/` exclusion is written from the repository root, which is
-   `README.md`'s perspective and not the cheat sheet's. A post-build check fails the job on
-   any relative `href` or `src` the rewrite did not resolve — it cannot see a link the rewrite
-   resolved to the wrong absolute URL, which is what the prefix exists to prevent.
-5. **Pages is enabled once, out of band, by an operator with admin, before the pull request
+4. **Repository-relative links are absolutised at build time**, in one `perl` expression.
+   A relative link is relative to the file that wrote it, so every target is **first** resolved
+   against its source's own directory, and every subsequent test is applied to the resolved
+   path: one that resolves to `docs/cheatsheet.md` becomes `cheatsheet.html`, one under
+   `docs/assets/` stays relative because those files are copied to exactly that path, and
+   anything else becomes a `blob/main` URL. Resolving first is what the order buys: testing the
+   raw target would leave `](assets/x.png)` in the cheat sheet absolutised into a blob URL —
+   absolute, wrong, and invisible to the checks below, which see only links that stayed
+   relative.
+5. **Two post-build assertions**, beyond the files being non-empty and above a size floor that
+   a page of bare template chrome cannot clear. The first fails on any relative `href` or `src`
+   the rewrite did not resolve. The second fails on active content — `<script>`, `<iframe>`,
+   an inline event handler, a `javascript:` URL — because raw HTML in a source reaches the
+   output verbatim and the first assertion cannot see it: a `<script>` carries no href, and a
+   `<script src="https://…">` is an absolute URL the allowlist admits.
+6. **Pages is enabled once, out of band, by an operator with admin, before the pull request
    merges**, so the first run on `main` is green. The workflow does not enable it:
    `actions/configure-pages`' `enablement` input requires a token other than `GITHUB_TOKEN`,
    and this repository holds no secrets. Nothing checks the ordering, and a pull request is
    green either way, because the deploy job does not run on one. If it is missed, the first
    push to `main` deploys nothing and leaves a red run; enabling Pages and re-running the
-   workflow is the whole fix.
+   workflow is the whole fix. Enabling Pages also creates the `github-pages` environment with
+   a deployment-branch policy naming `main`, which is load-bearing and not to be widened —
+   the deploy job's `github.ref` test states the same restriction inside the diff so that
+   review can see it and a settings edit cannot silently remove it.
 
 ## Consequences
 
@@ -80,10 +91,16 @@ directory.** Nothing reaches the site because it happens to be in the repository
   `.github/dependabot.yml`, so nothing automated tracks those pins — tracked as #236, and off
   this change's surface.
 - `pandoc` is installed unpinned from the runner's apt repository, which #236 would not cover
-  either way, and nothing asserts on what it renders beyond the files being non-empty. A
-  renderer change therefore reaches the published pages silently. Accepted rather than
-  answered with a golden-file test, on the same reasoning that declines a smoke test: two
-  static pages do not earn one.
+  either way. Decision 5's assertions bound what a renderer change can do silently — a page
+  cannot come back empty, shrink to chrome, carry an unresolved link, or gain active content —
+  but nothing pins the rendering itself, so a change in how `pandoc` formats a table or a code
+  block reaches the published page unremarked. Accepted rather than answered with a golden-file
+  test, on the same reasoning that declines a smoke test: two static pages do not earn one.
+- `zizmor` runs `--offline` in `just actions-check`, which confirms a pin's *shape* — a full
+  40-character SHA rather than a mutable tag — and not its provenance, because the audits that
+  check whether a SHA is reachable in the repository the `uses:` names need the API. All three
+  new pins were resolved against their repositories by hand at review time; the next bump gets
+  the offline subset unless that changes. Tracked as #239 rather than altering the gate here.
 - Reachability is observed rather than asserted: `actions/deploy-pages` outputs the deployed
   `page_url`, and a failed deploy is a red run on `main` for whoever merged to read. No
   smoke-test workflow is added — two static pages do not earn one.
@@ -119,7 +136,7 @@ directory.** Nothing reaches the site because it happens to be in the repository
   supporting file has to be argued for. Rejected — verified: `randomparity/bzr`'s
   `.github/workflows/site.yml` builds its site on `pull_request` and gates only the deploy
   step, so inline steps are reviewable before they can reach `main`; the coverage a script was
-  going to buy is available without one, and decision 4's post-build check asserts the part
+  going to buy is available without one, and decision 5's post-build assertions cover the parts
   with a failure mode. What the script would genuinely have bought, and what is given up with
   it, is running the build on a workstation: iterating on it costs a push.
 - **Write `README.md`'s in-repository links as absolute `blob/main` URLs, as

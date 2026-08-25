@@ -58,35 +58,65 @@ jobs:
         env:
           BLOB: https://github.com/randomparity/adept/blob/main
         run: |
-          mkdir -p _site/docs
-          cp -r docs/assets _site/docs/assets
+          # pipefail so a failure in the rewrite stage cannot be masked by the
+          # pandoc that follows it. Without it the pipelines below report only
+          # pandoc's status, and pandoc succeeds on empty input.
+          set -o pipefail
+
+          mkdir -p _site/docs/assets
+          # Image types only, rather than `cp -r docs/assets`. That directory is
+          # served from the site origin, so copying it wholesale would publish
+          # whatever lands in it later -- an .html or an .svg is active content
+          # on a host shared with every other project page under this account.
+          find docs/assets -type f \
+            \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.webp' \) \
+            -exec cp {} _site/docs/assets/ \;
           cp site/style.css _site/style.css
 
-          # Two substitutions, in order. The cheat sheet is the site's other
-          # page, so its link becomes a site path; every other repository-
-          # relative target becomes a blob URL, because README.md keeps relative
-          # links for the reader holding a plugin cache rather than a browser.
+          # One decision per link, in this order:
+          #   absolute, fragment, mailto  -> left alone
+          #   resolves to docs/cheatsheet.md -> the site's other page
+          #   resolves under docs/assets/ -> left relative; those files are
+          #     copied above to the path the page will ask for
+          #   anything else -> a blob URL, because README.md keeps relative
+          #     links for the reader holding a plugin cache, not a browser
           #
-          # docs/assets/ is excluded because those files are copied above to the
-          # very path README.md already writes, so image references resolve
-          # unchanged in both places -- and absolutising one would turn an <img>
-          # into a blob page that serves HTML.
+          # A relative link is relative to the file that wrote it, so every
+          # target is resolved against the source's own directory FIRST and each
+          # test above is applied to the resolved path. Testing the raw target
+          # instead would leave `](assets/x.png)` in the cheat sheet absolutised
+          # into a blob URL -- absolute, wrong, and invisible to the check below,
+          # which only sees links that stayed relative.
           #
-          # perl rather than sed: rule 2 needs a negative lookahead, which GNU
-          # sed's ERE cannot express. perl is on every GitHub-hosted runner.
+          # perl rather than sed: this needs a lookahead and a conditional
+          # replacement, neither of which GNU sed's ERE can express. perl is on
+          # every GitHub-hosted runner.
           #
-          # A relative link is relative to the file that wrote it, so the second
-          # argument is the source's own directory. Passing it is what keeps a
-          # link added to docs/cheatsheet.md later from resolving against the
-          # repository root and producing a blob URL that is absolute, wrong,
-          # and invisible to the check below.
+          # The redirect matters: `perl -pe ... "$1"` on a missing file warns and
+          # exits 0, so a renamed or deleted source would render a page of pure
+          # template chrome that every assertion below still passes. `< "$1"`
+          # fails, and pipefail carries that failure past pandoc.
           absolutise() {
             PREFIX="$2" perl -pe '
-              s{\]\(docs/cheatsheet\.md\)}{](cheatsheet.html)}g;
-              s{\]\((?!https?://|#|mailto:|docs/assets/|cheatsheet\.html)([^)]+)\)}{]($ENV{BLOB}/$ENV{PREFIX}$1)}g;
-            ' "$1"
+              s{\]\(([^)]+)\)}{
+                my $t = $1;
+                if ($t =~ m{^(?:https?://|\#|mailto:)}) { "]($t)" }
+                else {
+                  my $f = "$ENV{PREFIX}$t";
+                  $f eq "docs/cheatsheet.md" ? "](cheatsheet.html)"
+                    : $f =~ m{^docs/assets/} ? "]($f)"
+                    : "]($ENV{BLOB}/$f)"
+                }
+              }gex;
+            ' <"$1"
           }
 
+          # gfm, and raw HTML in the sources passes straight through it. Measured
+          # on pandoc 3.10.2: `-f gfm-raw_html` does NOT suppress it -- the
+          # commonmark-family reader emits `<script>alert(1)</script>` verbatim
+          # with the extension on or off -- so writing that flag here would put a
+          # control in the file that does not control anything. The assertion
+          # below is the control instead.
           absolutise README.md '' |
             pandoc -f gfm -t html5 --template site/template.html \
               --metadata title="adept" \
@@ -102,13 +132,33 @@ jobs:
           test -s _site/docs/assets/adept-logo-grimoire.png
           test -s _site/docs/assets/adept-quest-map.png
 
-          # The assertion that bites. Anything the rewrite failed to resolve is
-          # a link that would 404 on the published site, and it fails here, on a
-          # pull request, instead. -h keeps grep from prefixing the filename,
-          # which would defeat the leading quote in the second pattern.
+          # A size floor as well as a non-empty check. The template alone is
+          # about 1 kB, so `test -s` cannot tell a rendered page from one whose
+          # body is gone; these numbers sit above the chrome and below either
+          # page's real size.
+          test "$(wc -c <_site/index.html)" -gt 3000
+          test "$(wc -c <_site/cheatsheet.html)" -gt 3000
+
+          # The link assertion. Anything the rewrite failed to resolve is a link
+          # that would 404 on the published site, and it fails here, on a pull
+          # request, instead. -h keeps grep from prefixing the filename, which
+          # would defeat the leading quote in the second pattern.
           if grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html |
             grep -vE '"(https?://|#|mailto:|index\.html|cheatsheet\.html|style\.css|docs/assets/)'; then
             echo "::error::unresolved relative link in the built site" >&2
+            exit 1
+          fi
+
+          # The active-content assertion. These pages are served from
+          # randomparity.github.io, an origin shared with every other project
+          # page under this account, so a script here is not scoped to this site.
+          # Raw HTML in a source reaches the output verbatim (see above), and the
+          # link assertion cannot see it -- a <script> carries no href, and a
+          # <script src="https://..."> is an absolute URL the allowlist admits.
+          # Neither source contains a raw tag today; this is what keeps it true.
+          if grep -oihE '<(script|iframe|object|embed|form)\b|javascript:|\bon(error|load|click|mouseover|focus)=' \
+            _site/index.html _site/cheatsheet.html; then
+            echo "::error::active content in the built site" >&2
             exit 1
           fi
 
@@ -118,7 +168,11 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    if: github.event_name != 'pull_request'
+    # A positive test on both. The event alone would admit a workflow_dispatch
+    # from any branch; the github-pages environment's deployment-branch policy
+    # blocks that today, but that policy is repository configuration no diff
+    # records, so the constraint is stated here where review can see it.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:

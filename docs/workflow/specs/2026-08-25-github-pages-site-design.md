@@ -23,7 +23,8 @@ Two of its claims have gone stale — it says "27 skills" and "3 references" whe
 Of its ten Markdown links, nine are repository-relative: five ADRs, two images under
 `docs/assets/`, `docs/cheatsheet.md`, and `LICENSE`.
 
-GitHub Pages is off: `gh api repos/randomparity/adept/pages` returns 404. There is one
+GitHub Pages was off when this was designed: `gh api repos/randomparity/adept/pages`
+returned 404 on 2026-08-25, before the enabling step below was performed. There is one
 workflow, `.github/workflows/verify.yml`. There is no `CHANGELOG`, no git tag, and no GitHub
 release — [ADR 0006](../../adr/0006-release-management-out-of-scope.md) and
 [ADR 0001](../../adr/0001-distribution-via-plugin-marketplace.md) hold that ground, and this
@@ -106,7 +107,8 @@ Two jobs:
 - **`build`** — inherits `permissions: contents: read`. Checkout with
   `persist-credentials: false`, install `pandoc`, run the build step below, then
   `actions/upload-pages-artifact` with `path: _site`.
-- **`deploy`** — `needs: build`, `if: github.event_name != 'pull_request'`,
+- **`deploy`** — `needs: build`,
+  `if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'`,
   `permissions: {pages: write, id-token: write}`, `environment: {name: github-pages, url: <the
   deployment step's page_url>}`. It runs `actions/deploy-pages` and nothing else: no checkout,
   none of this repository's own code.
@@ -118,18 +120,25 @@ sits only on `deploy`, and no `pull_request` event ever reaches it.
 ### The build step
 
 ```sh
-mkdir -p _site/docs
-cp -r docs/assets _site/docs/assets
-cp site/style.css _site/style.css
+set -o pipefail
 
-for page in "README.md:index.html:adept" \
-            "docs/cheatsheet.md:cheatsheet.html:adept — skill cheat sheet"; do
-  ...
-done
+mkdir -p _site/docs/assets
+find docs/assets -type f \
+  \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.webp' \) \
+  -exec cp {} _site/docs/assets/ \;
+cp site/style.css _site/style.css
 ```
 
-Written out per page rather than looped, in fact — two pandoc invocations are shorter and
-clearer than the loop that would generalise them. Each is:
+`set -o pipefail` first, because every render below is a pipeline and `pandoc` succeeds on
+empty input — without it the rewrite stage's failure is masked by the renderer's success.
+
+Image types only, rather than `cp -r docs/assets`. That directory is served from the site
+origin, so copying it wholesale would publish whatever lands in it later; an `.html` or an
+`.svg` dropped in is active content on a host shared with every other project page under this
+account, and it would need no workflow edit to get there.
+
+Then one render per page, written out rather than looped — two invocations are shorter than the
+loop that would generalise them:
 
 ```sh
 absolutise <source> <source-directory-prefix> \
@@ -139,28 +148,33 @@ absolutise <source> <source-directory-prefix> \
 
 called as `absolutise README.md ''` and `absolutise docs/cheatsheet.md 'docs/'`.
 
-**The two substitutions**, in one `perl -pe` expression, in this order:
+**`absolutise` makes one decision per link**, in this order:
 
-1. `](docs/cheatsheet.md)` → `](cheatsheet.html)` — the site's other page.
-2. `](<target>)` → `](https://github.com/randomparity/adept/blob/main/<prefix><target>)` for
-   every target that does not begin with `http://`, `https://`, `#`, `mailto:`,
-   `docs/assets/`, or `cheatsheet.html`.
+1. A target beginning `http://`, `https://`, `#`, or `mailto:` is left alone.
+2. Otherwise the target is **resolved against the source's own directory** — `$PREFIX$target` —
+   and every remaining test applies to that resolved path.
+3. Resolved to `docs/cheatsheet.md` → `cheatsheet.html`, the site's other page.
+4. Resolved under `docs/assets/` → left relative, because those files are copied to exactly
+   that path and resolve unchanged on GitHub and on the site alike. Absolutising one would turn
+   an `<img src>` into a blob page that serves HTML.
+5. Anything else → `https://github.com/randomparity/adept/blob/main/<resolved>`.
 
-`perl` rather than `sed` because rule 2 needs a negative lookahead, which GNU `sed`'s ERE has
-no way to express; `perl` is present on every GitHub-hosted runner image.
+Step 2 is the order that matters, and it is why the tests come after the prefix rather than
+before it. A relative link is relative to the file that wrote it: `](adr/0001.md)` in
+`docs/cheatsheet.md` means `docs/adr/0001.md`, and `](assets/x.png)` there means
+`docs/assets/x.png`. Testing the raw target instead would absolutise both against the
+repository root — producing URLs that are absolute, wrong, and invisible to the link assertion
+below, which sees only links that stayed relative. The cheat sheet carries no Markdown links
+today, so this closes a trap rather than fixing a live bug.
 
-`<prefix>` is the source file's own directory, and it is what makes rule 2 correct for a file
-that is not at the repository root. A relative link is relative to the file that wrote it, so
-`](adr/0001.md)` in `docs/cheatsheet.md` means `docs/adr/0001.md`. Without the prefix it would
-absolutise to `blob/main/adr/0001.md` — a URL that is absolute, wrong, and invisible to the
-post-build check below, which only sees links that stayed relative. The cheat sheet carries no
-links today, so this is a trap being closed rather than a bug being fixed; the exclusion list
-in rule 2 is still written from the repository root, which is `README.md`'s perspective, so a
-`](assets/x.png)` added to the cheat sheet would be absolutised rather than left alone.
+`perl` rather than `sed`: this needs a lookahead and a conditional replacement, neither of which
+GNU `sed`'s ERE can express. `perl` is on every GitHub-hosted runner image.
 
-`docs/assets/` is excluded because those files are copied to `_site/docs/` — the same relative
-path `README.md` already writes — so image references resolve unchanged on GitHub and on the
-site alike, and absolutising one would turn an `<img src>` into a blob page that serves HTML.
+The source is fed as `perl -pe '…' <"$1"`, not as a filename argument. Measured on this host:
+`perl -pe 's/a/b/' missing-file` warns on stderr and **exits 0**, so a renamed or deleted source
+would produce empty stdout, `pandoc` would substitute an empty `$body$`, and a page of pure
+template chrome would be written that `test -s` still passes. The redirect fails instead, and
+`pipefail` carries that failure past `pandoc`.
 
 **Assertions**, after both renders — the step's whole verification, and the reason it does not
 need a suite:
@@ -172,18 +186,42 @@ test -s _site/style.css
 test -s _site/docs/assets/adept-logo-grimoire.png
 test -s _site/docs/assets/adept-quest-map.png
 
-if grep -ohE '(href|src)="[^"]*"' _site/*.html |
+test "$(wc -c <_site/index.html)" -gt 3000
+test "$(wc -c <_site/cheatsheet.html)" -gt 3000
+
+if grep -ohE '(href|src)="[^"]*"' _site/index.html _site/cheatsheet.html |
    grep -vE '"(https?://|#|mailto:|index\.html|cheatsheet\.html|style\.css|docs/assets/)'; then
   echo "::error::unresolved relative link in the built site" >&2
   exit 1
 fi
+
+if grep -oihE '<(script|iframe|object|embed|form)\b|javascript:|\bon(error|load|click|mouseover|focus)=' \
+   _site/index.html _site/cheatsheet.html; then
+  echo "::error::active content in the built site" >&2
+  exit 1
+fi
 ```
 
-The `grep -v` is the one that bites: it lists every link the rewrite failed to resolve and
-fails the job, on a pull request, before the page could ship a 404. `grep -o` is given `-h` so
-the filename prefix does not defeat the leading `"` in the second pattern. Under `bash -e` the
-pipeline sits inside an `if` condition, where `-e` does not apply, so a clean run — where the
-second `grep` exits 1 for no matches — passes rather than failing the step.
+The **size floor** is there because `test -s` cannot tell a rendered page from one whose body
+is gone: the template alone is about 1 kB. 3000 sits above the chrome and below either real
+page, which measure 12,033 and 9,589 bytes against the current sources.
+
+The **link assertion** lists every link the rewrite failed to resolve and fails the job, on a
+pull request, before the page could ship a 404. `grep -o` is given `-h` so the filename prefix
+does not defeat the leading `"` in the second pattern. Under `bash -e` the pipeline sits inside
+an `if` condition, where `-e` does not apply, so a clean run — where the second `grep` exits 1
+for no matches — passes rather than failing the step.
+
+The **active-content assertion** is the control on raw HTML, and it exists because the obvious
+control does not work. `pandoc -f gfm` passes raw HTML from the source straight into the output,
+and `-f gfm-raw_html` does **not** suppress it: measured on pandoc 3.10.2, the
+commonmark-family reader emits `<script>alert(1)</script>` verbatim with the extension on or
+off. Writing that flag would put a control in the workflow that controls nothing. The link
+assertion cannot cover this either — a `<script>` carries no `href`, and a
+`<script src="https://…">` is an absolute URL its allowlist admits. These pages are served from
+`randomparity.github.io`, an origin shared with every other project page under this account, so
+a script here is not scoped to this site. Neither source contains a raw tag today; this is what
+keeps it true.
 
 ### `site/template.html`
 
@@ -213,7 +251,9 @@ no dependencies.
 
 ### Enabling Pages
 
-One time, by an operator with admin, **before this pull request merges**:
+One time, by an operator with admin, **before this pull request merges**. **Performed
+2026-08-25**: `gh api repos/randomparity/adept/pages` now returns `build_type: workflow`,
+`status: null`, `html_url: https://randomparity.github.io/adept/`. The command was:
 
 ```sh
 gh api -X POST repos/randomparity/adept/pages -f build_type=workflow
@@ -271,7 +311,7 @@ executing in CI with the job's permissions.
 
 | Actor | Reaches | Trusted with |
 |---|---|---|
-| Anonymous internet | The published static site | Nothing. The site takes no input — no form, no query handling, no server-side code. |
+| Anonymous internet | The published static site | Nothing. The site takes no input — no form, no query handling, and no server-side code. That is not the same as no client-side code: raw HTML in a source would reach the page, which is what the active-content assertion exists to stop. |
 | Contributor without merge rights | A pull request, and the `build` job it triggers | Running the build under `contents: read`, with no path to the deploy job. |
 | Contributor with merge rights on `main` | What publishes | Everything. Merging now also publishes; that trust is placed deliberately. |
 | The pinned actions and `pandoc` | The job's token and the workspace | Their pinned revision, and no more. |
@@ -286,13 +326,15 @@ artifact the deploy job never consumes on a `pull_request` event. It is the same
 
 | Boundary | Control | Fails how |
 |---|---|---|
-| Deployment trigger | `deploy` carries `if: github.event_name != 'pull_request'` | A fork PR cannot deploy |
+| Deployment trigger | `deploy` carries `if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'` | A fork PR cannot deploy |
+| Manual deploy (`workflow_dispatch`) | The same `github.ref` test, plus the `github-pages` environment's deployment-branch policy naming `main` (verified 2026-08-25) | A dispatch from another ref is blocked, in the diff and again at the environment |
 | Token scope | Workflow-level `contents: read`; `pages: write` and `id-token: write` on `deploy` alone, which runs no repository code | A compromised build step holds only read |
 | Checkout credentials | `persist-credentials: false` | No checkout token left in `.git/config` |
-| Third-party code | Every `uses:` pinned to a full commit SHA, audited by `zizmor` | A moved tag does not change what runs |
+| Third-party code | Every `uses:` pinned to a full commit SHA. `zizmor` runs `--offline`, so it checks the pin's shape and not its provenance; the three new pins were resolved against their repositories by hand at review time (#239) | A moved tag does not change what runs; an impostor SHA is caught by review, not by the gate |
 | Build inputs | The step reads the five paths it names and writes only under `_site`; `pandoc` renders, it does not execute | A file added elsewhere cannot enter the build |
-| Published content | The page set is two named files | Nothing publishes that a reviewer did not add to the workflow |
+| Published content | Two rendered HTML files, `style.css`, and the image-typed files under `docs/assets/` | A non-image dropped into `docs/assets/` is not copied, so it is not served |
 | Link resolution | The post-build `grep` fails the job on any unresolved relative link | A broken link fails a PR rather than shipping |
+| Active content | A second `grep` fails the job on `<script>`, `<iframe>`, `<object>`, `<embed>`, `<form>`, an inline event handler, or a `javascript:` URL | Raw HTML added to a source fails a PR rather than executing on a shared origin |
 | Concurrent deploys | `concurrency` group `pages`, `cancel-in-progress: false`, with PR builds on their own group | Two merges cannot interleave one deployment |
 
 Every published byte is already public: this is a public repository and the sources are tracked
@@ -321,8 +363,9 @@ What proves this change is:
 
 | # | Proof | Where |
 |---|---|---|
-| 1 | The five `test -s` assertions pass | `build` job, every PR touching the site's inputs |
-| 2 | No unresolved relative link survives the rewrite | `build` job's `grep`, every PR touching the site's inputs |
+| 1 | The five `test -s` assertions and the two size floors pass | `build` job, every PR touching the site's inputs |
+| 2 | No unresolved relative link survives the rewrite | `build` job's link `grep`, every PR touching the site's inputs |
+| 2a | No active content reaches either page | `build` job's second `grep`, same trigger |
 | 3 | `actionlint` and `zizmor` accept `pages.yml` | `just actions-check`, local and CI |
 | 4 | `just verify` stays green | local and CI |
 | 5 | Both pages render, styled, with working navigation and images | loading the deployed site after the first `main` run |
