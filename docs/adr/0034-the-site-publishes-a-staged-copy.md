@@ -56,29 +56,34 @@ from named sources.** Nothing reaches the site because it happens to be in the r
 - The staged copy is where site-only concerns live — front matter, the stripped leading H1
   the theme's header would otherwise duplicate, links rewritten to GitHub blob URLs. None of
   it lands in `README.md`, which stays readable on GitHub and inside the plugin cache.
-- The link rewriting is a real behaviour with a real failure mode, so it is testable and
-  tested: `scripts/build-site-test.sh` runs under `just test`, and `just site` runs the
-  assembly under `just verify`, where a `README.md` link to a path that no longer exists
-  goes red before it reaches the site as a 404.
+- The link rewriting is a real behaviour with a real failure mode, so the decision requires
+  it to be testable and tested: `scripts/build-site-test.sh` under `just test`, and a
+  `site-check` recipe joining `just verify`, where a `README.md` link to a path that no
+  longer exists goes red before it reaches the site as a 404.
 - The repository gains three pinned third-party action references
   (`actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`) plus
-  `actions/jekyll-build-pages`. Each is a supply-chain surface `$restock` and Dependabot now
-  track, and `zizmor` audits the workflow's `pages: write` and `id-token: write` grants. The
-  fourth is pinned less than the other three and the difference is worth stating: its
-  `action.yml` at v1.0.13 is a Docker action pulling the mutable tag
+  `actions/jekyll-build-pages`. Each is a supply-chain surface, watched by `$restock` and by
+  whoever reads the workflow — this repository has no `.github/dependabot.yml`, so nothing
+  automated tracks these pins, and adding one is a prerequisite for that which this change
+  does not carry. `zizmor` audits the workflow's `pages: write` and `id-token: write`
+  grants. The fourth reference is pinned less than the other three and the difference is
+  worth stating: its `action.yml` at v1.0.13 is a Docker action pulling the mutable tag
   `ghcr.io/actions/jekyll-build-pages:v1.0.13`, so a SHA pin fixes the action and not the
-  image behind it, and Dependabot watches the reference rather than the tag. Accepted for a
-  two-page static build with no secrets in the job; no machinery is added for it.
+  image behind it. Accepted for a two-page static build with no secrets in the job; no
+  machinery is added for it.
 - The first deployment cannot succeed until an operator enables Pages. That is a documented
   one-time step, and a workflow run that fails on it names the missing setting rather than
   publishing a half-site — verified from `actions/configure-pages` at v6.0.0, whose
   `findOrCreatePagesSite` raises "Please verify that the repository has Pages enabled and
   configured to build using GitHub Actions" and rethrows when `enablement` is off, before
   any artifact is uploaded.
-- The theme is GitHub's, not this repository's, and it is frozen at the version the pinned
-  `actions/jekyll-build-pages` reference carries — a cayman release does not reach the site
-  on its own. The appearance changes only when that pin is bumped, which arrives as a
-  reviewable pull request. Accepted: the alternative is CSS nobody here wants to own.
+- The theme is GitHub's, not this repository's, and its version is resolved inside the
+  action's image rather than by anything here — a `jekyll-theme-cayman` release does not
+  reach the site on its own. The appearance changes when the pinned
+  `actions/jekyll-build-pages` reference is bumped, which arrives as a reviewable pull
+  request, or when the image behind that pinned tag is rebuilt upstream, which does not.
+  The second path is the residual the bullet above accepts. Accepted here too: the
+  alternative is CSS nobody wants to own.
 - The staged landing page embeds both README images verbatim — 4,535,676 bytes together at
   `bdcc640` — so the page a newcomer is sent to weighs about 4.5 MB before a byte of theme
   CSS. Accepted here rather than managed by a resizing step in the build script, which would
@@ -101,11 +106,11 @@ from named sources.** Nothing reaches the site because it happens to be in the r
   steps doing the same copy, front-matter injection and link rewriting, with no
   `scripts/build-site.sh`, no suite, and no `just` recipe. The variant this repository's
   anatomy rules most directly demand be weighed, since a supporting file has to be argued
-  for. Rejected — judgment: the workflow fires only on `push` to `main`, so inline steps are
-  first exercised after the merge that would break the site, while a script is a thing
-  `just verify` runs on every branch and a suite can drive with fixtures — the link
-  rewriting is the part with a failure mode, and it is exactly the part inline staging
-  leaves untested.
+  for. Rejected — judgment: a workflow step is exercised only when the workflow runs, on
+  `push` to `main` or a manual `workflow_dispatch`, while a script is a thing `just verify`
+  runs on every branch and a fixture-driven suite can drive case by case. The link rewriting
+  is the part with a failure mode, and no arrangement of triggers gives an inline
+  implementation the fixture coverage a script gets for free.
 - **An orphan `gh-pages` branch as a deploy-from-a-branch source.** The alternative that
   attacks this record's own two arguments hardest: it is default-closed by construction, so
   the 141-file leak does not arise, and it needs no `pages: write`, no `id-token: write`,
