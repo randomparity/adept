@@ -233,6 +233,19 @@ any mode is announced:
 run-zizmor: ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false)
 ```
 
+**Online-failure hint.** Online mode is the only mode that can fail, and `actions-check`
+is in `verify`, which the managed pre-push hook re-runs — so a failed online audit blocks
+`git push`. When zizmor exits non-zero in online mode the script prints the response
+after it, so the red path carries a remedy exactly as the offline conditions do:
+
+```
+zizmor: the online audits failed; set ZIZMOR_OFFLINE=true to run the offline subset
+```
+
+It prints only in online mode and only on a non-zero status, and it does not alter that
+status. It is a `printf` on a branch already being handled — not a retry, a timeout, or a
+reachability probe, all of which the ADR rejects.
+
 The second line states the consequence. A gate that says only "offline" leaves a reader
 to know which audits that costs; the whole issue is that the cost was invisible.
 
@@ -420,6 +433,9 @@ the scratch directory, and exits with a status the case chooses.
 | no `gh` on `PATH` | irrelevant to the outcome — the script never invokes `gh` |
 | zizmor stub exits 1 | the script exits 1 (a real finding still reddens the gate) |
 | zizmor stub exits 2 | the script exits 2 (a zizmor fault is not collapsed into a finding) |
+| zizmor stub exits 1, online mode | the online-failure hint is printed; status is still 1 |
+| zizmor stub exits 1, offline mode | the online-failure hint is **not** printed |
+| zizmor stub exits 0, online mode | the online-failure hint is **not** printed |
 | any online case | the token value appears nowhere in the script's stdout or stderr |
 | no arguments | usage message, exit 2 |
 | inputs forwarded | argv ends with exactly the inputs given, in order |

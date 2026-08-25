@@ -40,14 +40,16 @@ Three measurements then decide the shape of the fix. All are from this workstati
    zizmor --no-progress .github/workflows/` gives `fatal: no audit was performed`, exit 1.
    Online mode does not degrade when the API is unreachable; it fails.
 2. **A token does not decide the mode.** `zizmor --help` documents `--offline
-   [env: ZIZMOR_OFFLINE=]` and `--no-online-audits [env: ZIZMOR_NO_ONLINE_AUDITS=]`, both
-   with `[possible values: true, false]`. With `ZIZMOR_OFFLINE=true` a run carrying a
+   [env: ZIZMOR_OFFLINE=]` and `--no-online-audits [env: ZIZMOR_NO_ONLINE_AUDITS=]`; it
+   prints no value enumeration for either. With `ZIZMOR_OFFLINE=true` a run carrying a
    valid token completes offline at exit 0 printing no `WARN`; with `ZIZMOR_OFFLINE=false`
    the same run goes online. The *value* is the instruction, not the variable's presence.
-3. **An empty value is fatal, not ignorable.** `GH_TOKEN= zizmor --offline` exits 2 with
-   `invalid value '' for '--gh-token': GitHub token cannot be empty` — the explicit
-   `--offline` does not rescue it. `ZIZMOR_OFFLINE=` exits 2 with `a value is required`,
-   and `ZIZMOR_OFFLINE=0` with `invalid value '0'`.
+3. **An empty or non-boolean value is fatal, not ignorable.** `GH_TOKEN= zizmor --offline`
+   exits 2 with `invalid value '' for '--gh-token': GitHub token cannot be empty` — the
+   explicit `--offline` does not rescue it. `ZIZMOR_OFFLINE=` exits 2 with `a value is
+   required`, and `ZIZMOR_OFFLINE=0` with `invalid value '0' for '--offline'` followed by
+   `[possible values: true, false]`. That enumeration comes from clap's rejection path,
+   which is where the accepted vocabulary is stated.
 
 ## Decision
 
@@ -82,8 +84,20 @@ Three offline conditions, each with its own response — set `ZIZMOR_OFFLINE=fal
 it, likewise `ZIZMOR_NO_ONLINE_AUDITS`, or export a token — which is the discriminator ADR
 0025 decision 2 requires where one observation has several causes calling for different
 responses. The online line also names `GH_HOST` when set, since that decides which API an
-online run talks to. zizmor's exit status is captured into a variable and re-raised, never
-piped and never `|| true`.
+online run talks to.
+
+The online path carries a response too, and it is the path that matters most for one:
+online mode is the only mode that can fail, and `actions-check` is in `verify`, which the
+managed pre-push hook re-runs — so a developer on hotel wifi is blocked from pushing. When
+zizmor exits non-zero in online mode the gate prints the remedy after it:
+
+```
+zizmor: the online audits failed; set ZIZMOR_OFFLINE=true to run the offline subset
+```
+
+That is a printf on a path already being handled, not a retry or a reachability probe.
+zizmor's exit status is captured into a variable and re-raised, never piped and never
+`|| true`.
 
 **2. The offline path passes `--offline`, not `--no-online-audits`.** `--offline` forbids
 all online operations; `--no-online-audits` is the documented weaker form that disables
@@ -168,15 +182,13 @@ unauthenticated, at a lower rate limit.
   whenever the API is unreachable — the outcome the fail-without-a-token alternative was
   rejected for causing, on a strictly larger set of machines. It also inherits `gh`'s
   configured host, which zizmor does not share.
-- **Fail `actions-check` when no token is present.** verified: the operator settled this
-  before design. No other gate consults the network or a credential — scanning every gate
-  script for one (`rg --no-config -e '\bgh\b|curl|wget|api\.github|GH_TOKEN|GITHUB_TOKEN|https?://' scripts/*.sh .github/scripts/check-records.sh`,
-  on this branch) returns exactly one hit, and it is the `gh[pousr]_` *pattern literal*
-  inside `check-public-safety.sh`'s secret-detection list, not a call.
-- **Use `--no-online-audits` on the offline path.** verified: `zizmor --help` (1.29.0)
-  describes it as "a weaker version of `--offline`: instead of completely forbidding all
-  online operations, it only disables audits that require connectivity." Its one added
-  capability is auditing a remote `user/repo` input, which this gate never passes.
+- **Fail `actions-check` when no token is present.** verified: settled by the operator
+  before design, and no other gate consults the network or a credential — scanning every
+  gate script for one (`rg --no-config -e '\bgh\b|curl|wget|api\.github|GH_TOKEN|GITHUB_TOKEN|https?://' scripts/*.sh .github/scripts/check-records.sh`,
+  on this branch) returns exactly one hit, the `gh[pousr]_` *pattern literal* inside
+  `check-public-safety.sh`'s secret-detection list.
+- **Use `--no-online-audits` on the offline path.** judgment: see Decision 2, which states
+  the grounds and quotes `zizmor --help` for them.
 - **Write the mode selection inline in the `actions-check` recipe.** verified:
   `scripts/list-shell-sources.sh` classifies a shell source by a `.sh` name or a bash
   shebang (`is_shell_source`, line 89), and `Justfile` is neither —
@@ -196,8 +208,17 @@ unauthenticated, at a lower rate limit.
   that runs the whole suite. judgment: the narrower blast radius is real, but buying it
   means running `actions-check` twice or splitting the guardrail recipe so CI invokes it in
   pieces — and `CLAUDE.md` requires CI to invoke the project's recipe rather than re-typed
-  command strings. The exposure is a read-only token on a public repository, to
-  first-party reviewed code.
+  command strings, which a per-gate step would reintroduce. The exposure is not narrow: the
+  token reaches every binary `just verify` runs, the unpinned npm-installed Claude CLI that
+  `plugin-check` invokes included. What bounds it is `permissions: contents: read` and the
+  token being read-only on a public repository, not the callees being first-party.
+- **Run the online audits outside the required check** — a scheduled workflow, or a
+  separate non-required job — so the merge gate stays offline and deterministic and the
+  upstream-state residual above disappears. judgment: a provenance finding that arrives
+  after the merge is a bad pin already on `main`, which is the thing the audit exists to
+  prevent; catching it at the bump is the whole point of putting it on the gate. A
+  non-required job is also one people learn to ignore. The residual is preferred to that
+  latency, deliberately.
 - **Make CI fail when the gate runs offline**, or **probe reachability and retry** so a
   token plus a dead API degrades instead of failing. judgment: the first is a flag nobody
   asked for, guarding a removal that would be a visible edit to `verify.yml` in a reviewed
