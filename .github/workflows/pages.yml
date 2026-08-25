@@ -145,17 +145,30 @@ jobs:
                   my $title = $2;
                   if ($t =~ m{^(?:https?://|\#|mailto:)}) { "]($t$title)" }
                   else {
-                    my $f = "$ENV{PREFIX}$t";
-                    $f =~ s{^\./}{};
+                    # A fragment is not part of the filename. The link assertion
+                    # already strips one before its own existence test; without
+                    # the same treatment here, docs/cheatsheet.md#start-here
+                    # fails the build with a message naming a file that exists.
+                    my ($path, $frag) = $t =~ m{^([^#]*)(.*)$};
+                    my $f = "$ENV{PREFIX}$path";
+                    # Normalise before testing anything. `../README.md` is the
+                    # only correct way for docs/cheatsheet.md to name the README,
+                    # and unnormalised it is neither "README.md" nor under
+                    # docs/assets/, so it would fall through to a blob URL that
+                    # resolves -- a wrong link, or a broken image, with -e
+                    # passing because the dotted path exists on disk.
+                    $f =~ s{(?:^|/)\./}{/}g;
+                    $f =~ s{^/}{};
+                    1 while $f =~ s{(^|/)(?!\.\.(?:/|$))[^/]+/\.\./}{$1};
                     # Every repository-relative target must exist. Without this
                     # a link to a moved or deleted file becomes a well-formed
                     # blob URL that 404s on the published page, and no later
                     # assertion can tell it from a good one.
                     -e $f or die "link target does not exist: $f\n";
-                    $f eq "docs/cheatsheet.md" ? "](cheatsheet.html$title)"
-                      : $f eq "README.md" ? "](index.html$title)"
-                      : $f =~ m{^docs/assets/} ? "]($f$title)"
-                      : "]($ENV{BLOB}/$f$title)"
+                    $f eq "docs/cheatsheet.md" ? "](cheatsheet.html$frag$title)"
+                      : $f eq "README.md" ? "](index.html$frag$title)"
+                      : $f =~ m{^docs/assets/} ? "]($f$frag$title)"
+                      : "]($ENV{BLOB}/$f$frag$title)"
                   }
                 }gex;
               }

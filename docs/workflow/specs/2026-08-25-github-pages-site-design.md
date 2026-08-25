@@ -155,14 +155,23 @@ called as `absolutise README.md ''` and `absolutise docs/cheatsheet.md 'docs/'`.
    covers nested list items, so a repository-relative link must not be written at that indent.
 1. A target beginning `http://`, `https://`, `#`, or `mailto:` is left alone. A Markdown link
    title — `](path "Title")` — is valid GFM, and is preserved rather than parsed as part of the
-   path.
-2. Otherwise the target is **resolved against the source's own directory** — `$PREFIX$target`,
-   with a leading `./` stripped — and every remaining test applies to that resolved path.
+   path. So is a trailing `#fragment`: it is split off before anything else, and re-attached to
+   whatever the path maps to.
+2. Otherwise the target is **resolved against the source's own directory** — `$PREFIX$path` —
+   and then **normalised**: `./` dropped, `X/../` collapsed. Every remaining test applies to
+   that normalised path. Normalising matters as much as prefixing: `../README.md` is the only
+   correct repository-relative way for `docs/cheatsheet.md` to name the README, and
+   `docs/../README.md` matches neither page mapping nor the assets rule, so it would fall
+   through to a `blob/main` URL that GitHub serves with a 200 — a link that leaves the site, or
+   an `<img src>` pointing at a page of HTML. `-e` does not catch it, because the dotted path
+   exists on disk.
 3. **The resolved path must exist**, or the rewrite dies and the build goes red naming it.
    Without this a link to a moved or deleted file becomes a perfectly well-formed `blob/main`
    URL that 404s on the published page, and no later assertion can tell it from a good one.
 4. Resolved to `docs/cheatsheet.md` → `cheatsheet.html`; resolved to `README.md` →
-   `index.html`. The two page mappings are symmetric so either page can link the other.
+   `index.html`, with any fragment re-attached. The two page mappings are symmetric so either
+   page can link the other — verified for `](../README.md)` from the cheat sheet, which is the
+   spelling that makes symmetry real rather than nominal.
 5. Resolved under `docs/assets/` → left relative, because those files are copied to exactly
    that path and resolve unchanged on GitHub and on the site alike. Absolutising one would turn
    an `<img src>` into a blob page that serves HTML.
