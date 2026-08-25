@@ -86,11 +86,11 @@ names the mode and the condition before the scan runs.** `actions-check` invokes
 The gate then prints one line, or two:
 
 ```
-zizmor: online mode; API token from GH_TOKEN
-zizmor: offline mode (--offline); ZIZMOR_OFFLINE=true
-zizmor: offline mode (--offline); no API token: GH_TOKEN, GITHUB_TOKEN and
+run-zizmor: online mode; API token from GH_TOKEN
+run-zizmor: offline mode (--offline); ZIZMOR_OFFLINE=true
+run-zizmor: offline mode (--offline); no API token: GH_TOKEN, GITHUB_TOKEN and
   ZIZMOR_GITHUB_TOKEN are all unset or empty
-zizmor: pin provenance was NOT audited — ...
+run-zizmor: pin provenance was NOT audited: ...
 ```
 
 Three offline conditions, each with its own response — set `ZIZMOR_OFFLINE=false` or unset
@@ -106,7 +106,7 @@ an online run exits with zizmor's **tool-failure** status the gate prints the re
 it:
 
 ```
-zizmor: the online audits could not run; set ZIZMOR_OFFLINE=true for the offline subset
+run-zizmor: the online audits could not run; set ZIZMOR_OFFLINE=true for the offline subset
 ```
 
 **Keyed on tool failure alone — status 1 — never on "non-zero".** Measurement 4 is why:

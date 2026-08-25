@@ -146,7 +146,9 @@ Falling through all five gives offline with the three token names as the conditi
 Rows 3–5 are zizmor's documented discovery order for `--gh-token` (`zizmor --help`,
 Network Options: `[env: GH_TOKEN or GITHUB_TOKEN or ZIZMOR_GITHUB_TOKEN]`). Rows 1–2 are
 the mode controls under the same heading — `--offline [env: ZIZMOR_OFFLINE=]` and
-`--no-online-audits [env: ZIZMOR_NO_ONLINE_AUDITS=]`, both `[possible values: true, false]`.
+`--no-online-audits [env: ZIZMOR_NO_ONLINE_AUDITS=]`. `--help` prints no value
+enumeration for either; `[possible values: true, false]` comes from clap rejecting an
+invalid one.
 
 Three measurements on this host fix these semantics, and getting any of them wrong is a
 defect rather than a detail:
@@ -201,8 +203,8 @@ argv.
 **Online path.** The script prints one line, then runs zizmor with no mode flag:
 
 ```
-zizmor: online mode; API token from GH_TOKEN
-zizmor: online mode; API token from GH_TOKEN; GH_HOST=ghe.example.com
+run-zizmor: online mode; API token from GH_TOKEN
+run-zizmor: online mode; API token from GH_TOKEN; GH_HOST=ghe.example.com
 ```
 
 The second form is printed when `GH_HOST` is non-empty. That variable is ambient and
@@ -216,11 +218,11 @@ environment is what selects online mode, verified above.
 **Offline path.** The script prints two lines, then runs `zizmor --offline`:
 
 ```
-zizmor: offline mode (--offline); ZIZMOR_OFFLINE=true
-zizmor: offline mode (--offline); ZIZMOR_NO_ONLINE_AUDITS=true
-zizmor: offline mode (--offline); no API token: GH_TOKEN, GITHUB_TOKEN and
+run-zizmor: offline mode (--offline); ZIZMOR_OFFLINE=true
+run-zizmor: offline mode (--offline); ZIZMOR_NO_ONLINE_AUDITS=true
+run-zizmor: offline mode (--offline); no API token: GH_TOKEN, GITHUB_TOKEN and
   ZIZMOR_GITHUB_TOKEN are all unset or empty
-zizmor: pin provenance was NOT audited — a well-formed 40-character SHA that is
+run-zizmor: pin provenance was NOT audited: a well-formed 40-character SHA that is
   unreachable in the repository its `uses:` names, or that a known advisory covers,
   passes this run
 ```
@@ -240,7 +242,7 @@ about and then ignored for mode selection; the mode line follows as usual, and z
 own parser has the last word:
 
 ```
-zizmor: ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false); ignoring it
+run-zizmor: ZIZMOR_OFFLINE=0 is not a value zizmor accepts (true or false); ignoring it
 ```
 
 **Online-failure hint.** Online mode is the only mode that can fail, and `actions-check`
@@ -250,7 +252,7 @@ prints the response after it, so the red path carries a remedy as the offline co
 do:
 
 ```
-zizmor: the online audits could not run; set ZIZMOR_OFFLINE=true for the offline subset
+run-zizmor: the online audits could not run; set ZIZMOR_OFFLINE=true for the offline subset
 ```
 
 **The condition is `status == 1`, never "non-zero".** Findings exit 14, and offering this

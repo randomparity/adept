@@ -95,9 +95,24 @@ jobs:
           # version already installed leaves npm's tree satisfied and the binary
           # still missing, which is a different fault wearing the same symptom.
           claude --version
+      # GH_TOKEN is what puts `just actions-check` into zizmor's online mode, so
+      # the pin-provenance audits -- impostor-commit, ref-confusion,
+      # known-vulnerable-actions, stale-action-refs, ref-version-mismatch -- run
+      # here rather than nowhere. CI is where connectivity is assured and where
+      # the required check lives.
+      #
+      # `permissions:` above is deliberately NOT widened for this and stays
+      # `contents: read`: those audits resolve other repositories' refs and the
+      # advisory database, neither of which is a resource of this repository.
+      # What the line changes is that the token's value is visible to the whole
+      # `just ci` step; on a fork pull request GitHub makes it read-only, so the
+      # worst it grants is authenticated read of a public repository. Checkout's
+      # `persist-credentials: false` is likewise untouched -- that governs a
+      # credential in .git/config, and zizmor reads the environment. See ADR 0036.
       - name: Verify
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: just ci
 
   # A matrix renames its checks to `job (axis)`, so the bare `verify` context that

@@ -267,7 +267,10 @@ plugin-check:
 
 actions-check:
   actionlint
-  zizmor --offline .github/workflows/
+  # Mode selection and mode reporting live in the script, not here: a Justfile
+  # recipe body is invisible to list-shell-sources.sh, so an inline branch would
+  # be unseen by shellcheck and shfmt and could carry no suite. See ADR 0036.
+  ./scripts/run-zizmor.sh .github/workflows/
 
 commit-check: lint format-check public-safety
 
