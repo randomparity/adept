@@ -208,9 +208,23 @@ run-zizmor: online mode; API token from GH_TOKEN; GH_HOST=ghe.example.com
 ```
 
 The second form is printed when `GH_HOST` is non-empty. That variable is ambient and
-zizmor honours it as `--gh-hostname`, so it decides *which* API an online run talks to; a
-developer configured for a GitHub Enterprise instance otherwise gets a hard failure whose
-message names an audit rather than the host. `GH_HOST` is a hostname, not a credential.
+zizmor honours it as `--gh-hostname`, so it decides *which* API an online run talks to.
+The clause states that destination *before* the scan. A failure does eventually name the
+host — measured on this host, `GH_HOST=github.invalid.example` gives a `fatal` whose
+headline names the audit (`'artipacked' audit failed`) and whose causal chain names
+`https://github.invalid.example/...` — but only inside a stack a reader has to reach.
+Naming it up front is what makes the mode line describe the run rather than the intent.
+`GH_HOST` is a hostname, not a credential, so it is safe to print.
+
+An exported-but-empty `GH_HOST` is read the same way as the other variables, with
+`${VAR+set}`: an empty hostname is a value zizmor uses and fails on, not an absent one, so
+the clause prints `GH_HOST=` for it rather than staying silent about the pointing most
+likely to confuse.
+
+That `artipacked` was the failing audit is worth recording: it is **not** one of the five
+online-only audits, so with a token present zizmor takes audits outside that set onto the
+network too. The five are what a token *buys*; they are not the full extent of what a dead
+API costs.
 
 No flag is passed on this path because zizmor has no `--online`: a token in the
 environment is what selects online mode, verified above.

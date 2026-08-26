@@ -123,9 +123,14 @@ fi
 
 if [[ $mode == online ]]; then
 	# GH_HOST decides which API an online run talks to, and zizmor honours it as
-	# --gh-hostname. A token exported for a GitHub Enterprise instance otherwise
-	# fails with a message naming an audit rather than the host.
-	if [[ -n ${GH_HOST:-} ]]; then
+	# --gh-hostname. Naming it here puts the destination in front of the operator
+	# before the scan, rather than only inside a failure's causal chain.
+	#
+	# ${VAR+set}, for the reason given above: an exported-but-empty GH_HOST is a
+	# value zizmor uses and fails on -- it builds https:///... -- not an absent
+	# one, so the clause has to print for it too. Reading it as ${GH_HOST:-} would
+	# stay silent about the one pointing most likely to confuse.
+	if [[ -n ${GH_HOST+set} ]]; then
 		say "online mode; API token from $token_source; GH_HOST=$GH_HOST"
 	else
 		say "online mode; API token from $token_source"

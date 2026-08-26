@@ -170,10 +170,16 @@ unauthenticated, at a lower rate limit.
   mitigation.
 - `GH_HOST` is ambient and zizmor honours it as `--gh-hostname`, so a developer configured
   for a GitHub Enterprise instance gets the same hard `fatal`. The online line names the
-  host when set, so the message at least says where the run was pointed.
+  host, so the destination is stated before the scan rather than only inside a failure's
+  causal chain — which does name it, contrary to a weaker claim an earlier draft made: the
+  headline names the audit, the chain names the URL.
 - The online line reports the mode the run was launched in, not that every audit reached
   the API; zizmor reports a per-audit online failure as a `WARN` in its own stream. Stated
   rather than engineered against.
+- **A token pulls more than the five online-only audits onto the network.** With
+  `GH_HOST` pointed at an unresolvable host, the audit that failed was `artipacked`, which
+  runs offline and is not among the five. So the five are what a token buys, not the limit
+  of what an unreachable API can break.
 - The gate never reads a token's value — it tests each variable for emptiness and lets
   zizmor read the values itself, so no credential passes through the script, its argv, or
   its output.

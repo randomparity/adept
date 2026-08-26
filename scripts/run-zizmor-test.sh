@@ -93,10 +93,16 @@ ok() { # message
 
 # -- mode selection from the token variables --
 
+# The online argv is pinned exactly, not merely checked for the absence of
+# --offline. A negative assertion passes a mutant that adds --no-online-audits,
+# --min-severity high, --no-exit-codes, or -o, each of which disables online
+# auditing while the gate still announces "online mode" -- unaudited AND labelled
+# audited, which the design calls worse than the status quo it replaces.
 run 0 GH_TOKEN=t1
 assert_contains 'GH_TOKEN online' "$RUN_OUTPUT" 'online mode; API token from GH_TOKEN'
-assert_lacks 'GH_TOKEN online' "$RUN_ARGV" '--offline'
-ok 'GH_TOKEN selects online and passes no mode flag'
+[[ $RUN_ARGV == '.github/workflows/' ]] ||
+	fail "GH_TOKEN online: expected argv '.github/workflows/', got '$RUN_ARGV'"
+ok 'GH_TOKEN selects online and zizmor is invoked with the inputs alone'
 
 run 0 GITHUB_TOKEN=t2
 assert_contains 'GITHUB_TOKEN online' "$RUN_OUTPUT" 'API token from GITHUB_TOKEN'
@@ -143,6 +149,29 @@ ok 'an empty variable is skipped and the next one selects online'
 run 0 GH_TOKEN=t1
 assert_contains 'token forwarded' "$RUN_ENV" 'GH_TOKEN=<set:t1>'
 ok 'a real token reaches zizmor unchanged, for zizmor to read itself'
+
+# All three names, not just GH_TOKEN. Each is separately fatal to zizmor when
+# exported empty -- measured on 1.29.0, `GITHUB_TOKEN= zizmor --offline` exits 2
+# with `invalid value '' for '--github-token'`, and ZIZMOR_GITHUB_TOKEN gives the
+# same against --zizmor-github-token -- so a removal dropped for one of them
+# turns a green tokenless gate into exit 2 after the mode line has printed.
+run 0 GITHUB_TOKEN=
+assert_status 'empty GITHUB_TOKEN' 0 "$RUN_STATUS"
+assert_contains 'empty GITHUB_TOKEN' "$RUN_OUTPUT" 'offline mode (--offline); no API token'
+assert_lacks 'empty GITHUB_TOKEN' "$RUN_ENV" 'GITHUB_TOKEN=<set:>'
+ok 'an exported-but-empty GITHUB_TOKEN is removed before zizmor sees it'
+
+run 0 ZIZMOR_GITHUB_TOKEN=
+assert_status 'empty ZIZMOR_GITHUB_TOKEN' 0 "$RUN_STATUS"
+assert_contains 'empty ZIZMOR_GITHUB_TOKEN' "$RUN_OUTPUT" 'offline mode (--offline); no API token'
+assert_lacks 'empty ZIZMOR_GITHUB_TOKEN' "$RUN_ENV" 'ZIZMOR_GITHUB_TOKEN=<set:>'
+ok 'an exported-but-empty ZIZMOR_GITHUB_TOKEN is removed before zizmor sees it'
+
+run 0 GH_TOKEN= GITHUB_TOKEN= ZIZMOR_GITHUB_TOKEN=
+assert_status 'all three empty' 0 "$RUN_STATUS"
+assert_contains 'all three empty' "$RUN_OUTPUT" 'offline mode (--offline); no API token'
+assert_lacks 'all three empty' "$RUN_ENV" '<set:>'
+ok 'all three empty at once gives offline at exit 0, with none forwarded'
 
 # -- the mode variables outrank a token, by value --
 
@@ -205,6 +234,13 @@ run 0 GH_TOKEN=t1
 assert_lacks 'GH_HOST absent' "$RUN_OUTPUT" 'GH_HOST'
 ok 'the online line omits the host clause when GH_HOST is unset'
 
+# An exported-but-empty GH_HOST is a value zizmor uses and fails on, not an
+# absent one, so the clause must print for it -- otherwise the one pointing most
+# likely to confuse is the one the line stays silent about.
+run 0 GH_TOKEN=t1 GH_HOST=
+assert_contains 'GH_HOST empty' "$RUN_OUTPUT" 'GH_HOST='
+ok 'an exported-but-empty GH_HOST is still named on the online line'
+
 # -- the status is re-raised, and the hint fires only on tool failure --
 
 run 1 GH_TOKEN=t1
@@ -264,5 +300,19 @@ RUN_ARGV=$(cat "$argv_file")
 [[ $RUN_ARGV == '--offline one/ two/' ]] ||
 	fail "forwarding: expected '--offline one/ two/', got '$RUN_ARGV'"
 ok 'every input is forwarded, in order, after the mode flag'
+
+RUN_STATUS=0
+: >"$argv_file"
+RUN_OUTPUT=$(
+	env -u ZIZMOR_OFFLINE -u ZIZMOR_NO_ONLINE_AUDITS \
+		-u GITHUB_TOKEN -u ZIZMOR_GITHUB_TOKEN -u GH_HOST \
+		PATH="$stub_dir:$PATH" ZIZMOR_STUB_ARGV="$argv_file" \
+		ZIZMOR_STUB_ENV="$env_file" ZIZMOR_STUB_STATUS=0 \
+		GH_TOKEN=t1 "$gate" one/ two/ 2>&1
+) || RUN_STATUS=$?
+RUN_ARGV=$(cat "$argv_file")
+[[ $RUN_ARGV == 'one/ two/' ]] ||
+	fail "online forwarding: expected 'one/ two/', got '$RUN_ARGV'"
+ok 'the online path forwards the inputs with no flag of any kind'
 
 printf 'run-zizmor-test: all cases passed\n'
