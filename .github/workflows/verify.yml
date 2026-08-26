@@ -113,7 +113,22 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           GH_TOKEN: ${{ github.token }}
-        run: just ci
+        # The guard asserts the one precondition CI's whole provenance coverage
+        # rests on. A workstation is offline by default and says so, so this
+        # runner is the only place the five online audits execute; if
+        # `github.token` ever resolves empty -- a repository or organization
+        # setting, a platform change, or this line lost in a conflict resolution
+        # -- run-zizmor.sh would report the offline condition and exit 0, and the
+        # required check would stay green with no provenance audited anywhere.
+        # That is the defect this change removes, relocated one level up, so it
+        # gets a red rather than a log line nobody reads. It re-types no gate
+        # command; `just ci` is still the recipe.
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            printf 'verify: github.token resolved empty; the zizmor online audits would not run\n' >&2
+            exit 1
+          fi
+          just ci
 
   # A matrix renames its checks to `job (axis)`, so the bare `verify` context that
   # branch protection requires would stop reporting and every PR would sit BLOCKED

@@ -133,6 +133,14 @@ That is a printf on a path already being handled, not a retry or a reachability 
 zizmor's exit status is captured into a variable and re-raised unchanged, never piped and
 never `|| true`; the hint does not alter it.
 
+A `true` `ZIZMOR_NO_ONLINE_AUDITS` is executed as `--offline`, which is the *stronger* of
+the two controls the operator asked for. The mode line discloses the substitution — it
+names the variable that chose the mode next to the flag that was passed — and the two are
+equivalent for this gate, because the sole capability `--no-online-audits` has over
+`--offline` is auditing a remote `user/repo` slug and this gate's only input is a local
+directory. Worth stating rather than leaving to a reader to notice, since a future change
+that let the gate take a remote input would make the difference behavioural.
+
 **2. The offline path passes `--offline`, not `--no-online-audits`.** `--offline` forbids
 all online operations; `--no-online-audits` is the documented weaker form that disables
 connectivity-dependent audits while still permitting online operations. The requirement is
@@ -168,10 +176,16 @@ unauthenticated, at a lower rate limit.
   re-run of an unchanged commit — a tag moved, an advisory published. That is the point of
   the audits, and it is also a way for an unrelated pull request to go red. Accepted.
 - With a token exported the dependency is hard, not graceful: a failed API call gives
-  `fatal: no audit was performed` and exit 1, in CI as much as locally. Accepted in both
-  directions — nothing *fails* if the `GH_TOKEN` line is later removed either, since CI
-  would print the offline condition and stay green, and the mode line is the whole
-  mitigation.
+  `fatal: no audit was performed` and exit 1, in CI as much as locally.
+- **CI fails rather than degrading when its token is empty.** The `Verify` step asserts
+  `GH_TOKEN` is non-empty before `just ci`. Without it, a `github.token` that resolved
+  empty — a repository or organization setting, a platform change, or the `env:` line lost
+  in a conflict resolution — would put the runner on the offline path, print the
+  no-token condition, and exit 0: the required check green with the five audits running
+  nowhere, since a workstation is offline by default. That is this record's own subject one
+  level up, and a log line is too weak a mitigation for it. Deliberate removal of the
+  wiring stays visible in a reviewed diff; the guard covers the silent case, which is the
+  one a diff does not show.
 - `GH_HOST` is ambient and zizmor honours it as `--gh-hostname`, so a developer configured
   for a GitHub Enterprise instance gets the same hard `fatal`. The online line names the
   host, so the destination is stated before the scan rather than only inside a failure's
@@ -289,16 +303,17 @@ unauthenticated, at a lower rate limit.
   prevent; catching it at the bump is the whole point of putting it on the gate. A
   non-required job is also one people learn to ignore. The residual is preferred to that
   latency, deliberately.
-- **Make CI fail when the gate runs offline** — a `ZIZMOR_REQUIRE_ONLINE` switch on the
-  runner. judgment: a flag nobody asked for. It guards two different losses and is a poor
-  fit for both. Deliberate removal of the `GH_TOKEN` line is a visible edit to
-  `verify.yml` in a reviewed diff, so the switch adds nothing there. Silent loss — GitHub
-  changing what `github.token` yields, or a repository setting that empties it — is the
-  real gap, and there the switch would only convert a silent degrade into a red required
-  check on an unrelated pull request. What covers it instead is that the mode line is in
-  every run's log and names the condition, so the offline line appearing on a CI run is
-  the signal, and `verify.yml` is small enough that its token wiring is read whenever the
-  workflow is touched. Weaker than a gate, and stated as such in Consequences.
+- **A `ZIZMOR_REQUIRE_ONLINE` switch honoured by `run-zizmor.sh`**, as the way to catch a
+  CI run that silently stopped auditing. judgment: the concern is real and is answered
+  instead by the workflow-side guard in Decision 3 — three lines asserting the token is
+  non-empty, at the one place that precondition is set. The switch would put a new flag in
+  the gate's contract for every caller to learn, and would make the script responsible for
+  a policy only CI holds. An earlier draft rejected the whole idea on the ground that it
+  "would only convert a silent degrade into a red required check on an unrelated pull
+  request"; that ground does not survive, because this record already accepts a red on an
+  unrelated pull request when a tag moves or an advisory lands. Red-because-the-audit-worked
+  and red-because-the-audit-stopped interrupt the same people, and only the second means
+  coverage is gone.
 - **Probe reachability and retry** so a token plus a dead API degrades instead of failing.
   judgment: it re-introduces the judgement call — how many retries, how long a timeout —
   that a hard failure states plainly, and it grows the design past what this decision

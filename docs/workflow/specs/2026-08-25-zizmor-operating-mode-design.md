@@ -321,6 +321,14 @@ is the local `.github/workflows/` directory.
 that runs now (R6): the audits that pass today pass identically, and the change to that
 path is the two lines printed above it.
 
+One consequence to state rather than leave implicit: when `ZIZMOR_NO_ONLINE_AUDITS=true`
+selects the mode, the gate still passes `--offline`, so the operator's request for the
+weaker control is executed as the stronger one. The mode line discloses it by naming the
+variable beside the flag, and the two are equivalent here because
+`--no-online-audits`'s only extra capability is auditing a remote `user/repo` slug, which
+this gate never passes. A future change that let the gate take a remote input would make
+the difference behavioural.
+
 ### CI receives a token
 
 **Decision: yes.** `.github/workflows/verify.yml` gains one line in the `Verify` step's
@@ -370,7 +378,9 @@ Boundaries this design **adds**:
   `zizmor`, the npm-installed Claude CLI — inherits it.
 - **B2 — token egress to a third-party binary.** With a token in the environment, zizmor
   sends it as an API credential to **the host `GH_HOST` names, defaulting to
-  `api.github.com`** — zizmor honours that variable as `--gh-hostname`. This is the first
+  `github.com`** — the GitHub Server Hostname zizmor derives its API and git endpoints
+  from (`zizmor --help` 1.29.0: `--gh-hostname ... [env: GH_HOST=] [default: github.com]`),
+  not an API host given directly — zizmor honours that variable as `--gh-hostname`. This is the first
   path on which this repository's gate sends a credential off the machine at all: the
   recipe previously ran `zizmor --offline`, which forbids all online operations. The
   destination is therefore chosen by ambient input, which is why it is named here rather
