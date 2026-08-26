@@ -288,6 +288,24 @@ while IFS= read -r name; do
 	fi
 done <"$names"
 
+# Rule 7: every skill name is referenced in README.md, as a backtick-wrapped
+# token. Same inventory-vs-reference shape as rule 6, pointed at README.md
+# instead of at docs/cheatsheet.md -- a skill that never reaches the README
+# feature list is otherwise silent until a reader stumbles on it. Membership
+# only, no wording, table-shape, or grouping assertion: nothing here reads
+# which section a name sits under or how its row is phrased.
+require_readable "$names" 'the rule 7 skill-name list'
+while IFS= read -r name; do
+	readme_status=0
+	rg --no-config -qF -- "\`$name\`" "$root/README.md" || readme_status=$?
+	if [ "$readme_status" -gt 1 ]; then
+		fault "scanning README.md failed (rg exit $readme_status)"
+	fi
+	if [ "$readme_status" -eq 1 ]; then
+		report "$name: not referenced in README.md"
+	fi
+done <"$names"
+
 if [ "$status" -eq 0 ]; then
 	printf 'check-skill-shape: %s skills, all rules pass\n' "$count" ||
 		fault 'could not write the summary line'
