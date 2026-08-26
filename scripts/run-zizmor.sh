@@ -52,6 +52,23 @@ if (($# == 0)); then
 	exit 2
 fi
 
+# Inputs only. A zizmor mode flag passed here would reach zizmor on argv after the
+# mode line had already been printed, and argv wins: measured on 1.29.0,
+# `GH_TOKEN=<value> run-zizmor.sh --offline .github/workflows/` announces "online
+# mode" and then skips all five provenance audits -- unaudited and labelled
+# audited, which is the state this script exists to prevent. The gate itself only
+# ever passes local paths, so rejecting every `-*` costs nothing; zizmor's `-`
+# stdin form is not used here either.
+for argument in "$@"; do
+	case $argument in
+	-*)
+		printf '%s: usage: run-zizmor.sh <input>...; the mode flags are this script'"'"'s to choose, not the caller'"'"'s: %s\n' \
+			"$LABEL" "$argument" >&2
+		exit 2
+		;;
+	esac
+done
+
 # Returns 0 when the value selects offline, 1 when it does not -- including the
 # malformed case, which warns first.
 #

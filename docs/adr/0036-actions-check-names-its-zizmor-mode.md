@@ -150,10 +150,17 @@ does not — auditing a remote `user/repo` input — this gate never uses. `--of
 the flag in the recipe today, so the offline invocation is unchanged and every audit that
 passes now passes identically.
 
-**3. CI receives a token, at the permission it already has.** The `Verify` step in
-`.github/workflows/verify.yml` gains `GH_TOKEN: ${{ github.token }}` in its existing
-`env:` block. CI is where connectivity is assured and where the required check lives, so
-it is where the online audits belong. The job's `permissions: contents: read` is **not**
+**3. CI receives a token, at the permission it already has, and fails closed without one.**
+The `Verify` step in `.github/workflows/verify.yml` gains `GH_TOKEN: ${{ github.token }}`
+in its existing `env:` block, plus a guard ahead of `just ci` that exits 1 when that
+variable is unset or empty. CI is where connectivity is assured and where the required
+check lives, so it is where the online audits belong — and because a workstation is
+offline by default, CI is the *only* place they run, which is why the precondition is
+asserted rather than assumed. The guard has two arms because an unset variable and an
+empty one call for opposite fixes: unset means the `env:` wiring is gone and the repair is
+in this file, empty means `github.token` itself resolved empty and the repair is in
+repository or organization settings. It re-types no gate command; `just ci` is still the
+recipe. The job's `permissions: contents: read` is **not**
 widened and checkout's `persist-credentials: false` is **not** relaxed. The
 security-posture change is therefore that the token's *value* becomes visible to the
 `just ci` step, not that any permission grows. On a fork pull request GitHub makes
@@ -303,17 +310,21 @@ unauthenticated, at a lower rate limit.
   prevent; catching it at the bump is the whole point of putting it on the gate. A
   non-required job is also one people learn to ignore. The residual is preferred to that
   latency, deliberately.
-- **A `ZIZMOR_REQUIRE_ONLINE` switch honoured by `run-zizmor.sh`**, as the way to catch a
-  CI run that silently stopped auditing. judgment: the concern is real and is answered
-  instead by the workflow-side guard in Decision 3 — three lines asserting the token is
-  non-empty, at the one place that precondition is set. The switch would put a new flag in
-  the gate's contract for every caller to learn, and would make the script responsible for
-  a policy only CI holds. An earlier draft rejected the whole idea on the ground that it
-  "would only convert a silent degrade into a red required check on an unrelated pull
-  request"; that ground does not survive, because this record already accepts a red on an
-  unrelated pull request when a tag moves or an advisory lands. Red-because-the-audit-worked
-  and red-because-the-audit-stopped interrupt the same people, and only the second means
-  coverage is gone.
+- **A `ZIZMOR_REQUIRE_ONLINE` switch honoured by `run-zizmor.sh`**, as a general assertion
+  that a CI run really went online. judgment: it would put a new flag in the gate's
+  contract for every caller to learn, and make the script responsible for a policy only CI
+  holds. Note precisely what is and is not covered without it. Decision 3's guard closes
+  the **empty-token** route to a silently-unaudited green check, and that is the route with
+  a mechanical trigger. It does **not** assert the run went online, so the
+  variable-rename route in the residual above passes straight through it: a renamed token
+  variable leaves `GH_TOKEN` non-empty, satisfies the guard, and still yields an offline
+  run at exit 0. That half stays recorded rather than engineered against, and this bullet
+  is not a claim of full coverage. An earlier draft also rejected the idea on the ground
+  that it "would only convert a silent degrade into a red required check on an unrelated
+  pull request"; that ground does not survive, because this record already accepts a red on
+  an unrelated pull request when a tag moves or an advisory lands.
+  Red-because-the-audit-worked and red-because-the-audit-stopped interrupt the same people,
+  and only the second means coverage is gone.
 - **Probe reachability and retry** so a token plus a dead API degrades instead of failing.
   judgment: it re-introduces the judgement call — how many retries, how long a timeout —
   that a hard failure states plainly, and it grows the design past what this decision

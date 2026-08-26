@@ -313,6 +313,27 @@ assert_status 'no arguments' 2 "$RUN_STATUS"
 assert_contains 'no arguments' "$RUN_OUTPUT" 'usage: run-zizmor.sh'
 ok 'no arguments is a usage fault at exit 2'
 
+# A mode flag on argv beats the mode this script resolved and announced, so the
+# script refuses one rather than printing a line that the run then contradicts.
+for flag in --offline --no-online-audits -o --min-severity; do
+	RUN_STATUS=0
+	: >"$argv_file"
+	RUN_OUTPUT=$(
+		env -u ZIZMOR_OFFLINE -u ZIZMOR_NO_ONLINE_AUDITS \
+			-u GH_TOKEN -u GITHUB_TOKEN -u ZIZMOR_GITHUB_TOKEN \
+			PATH="$stub_dir:$PATH" ZIZMOR_STUB_ARGV="$argv_file" \
+			ZIZMOR_STUB_ENV="$env_file" ZIZMOR_STUB_STATUS=0 \
+			"$gate" "$flag" .github/workflows/ 2>&1
+	) || RUN_STATUS=$?
+	assert_status "flag $flag" 2 "$RUN_STATUS"
+	assert_contains "flag $flag" "$RUN_OUTPUT" 'usage: run-zizmor.sh'
+	[[ -z $(cat "$argv_file") ]] ||
+		fail "flag $flag: zizmor was invoked despite the usage fault"
+	assert_lacks "flag $flag" "$RUN_OUTPUT" 'online mode'
+	assert_lacks "flag $flag" "$RUN_OUTPUT" 'offline mode'
+done
+ok 'a mode flag among the inputs is refused at exit 2, before any mode is announced'
+
 RUN_STATUS=0
 : >"$argv_file"
 RUN_OUTPUT=$(

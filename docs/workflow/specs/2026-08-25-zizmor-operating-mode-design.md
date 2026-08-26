@@ -332,15 +332,33 @@ the difference behavioural.
 ### CI receives a token
 
 **Decision: yes.** `.github/workflows/verify.yml` gains one line in the `Verify` step's
-existing `env:` block:
+existing `env:` block, and a guard ahead of `just ci` that fails the job when that
+variable is unset or empty:
 
 ```yaml
       - name: Verify
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           GH_TOKEN: ${{ github.token }}
-        run: just ci
+        run: |
+          if [ -z "${GH_TOKEN+set}" ]; then
+            printf 'verify: GH_TOKEN is unset in this step; ...\n' >&2
+            exit 1
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            printf 'verify: GH_TOKEN is set but empty; ...\n' >&2
+            exit 1
+          fi
+          just ci
 ```
+
+The guard exists because CI is the *only* place the online audits run — a workstation is
+offline by default — so a green required check is the sole signal that provenance was
+audited at all. Without it, a `github.token` that resolved empty would put the runner on
+the offline path at exit 0 and the check would stay green with no coverage anywhere. Two
+arms rather than one because unset and empty call for opposite repairs: unset means the
+`env:` wiring is missing and the fix is in this file; empty means `github.token` resolved
+empty and the fix is in repository or organization settings. It re-types no gate command.
 
 **Minimum permission: the job's existing `permissions: contents: read`, unchanged.** The
 online audits read public repositories' git refs and the public advisory database through
@@ -418,6 +436,13 @@ workstation credential is never read, so the design adds no workstation boundary
 - **B1, same-repository branch.** `permissions: contents: read` bounds the token to
   reading this public repository. A collaborator who can push a branch can already do
   strictly more than that token permits.
+- **B1, coverage assurance — a workflow-side control this design adds.** The `Verify`
+  step's guard fails the job when `GH_TOKEN` is unset or empty. This is *not* a mitigation
+  of B1's egress risk; it protects the opposite property — that a green required check
+  really does mean the provenance audits ran. It closes the empty-token route to a
+  silently-unaudited green. It does not assert the run went online, so the
+  variable-rename residual recorded in ADR 0036 passes through it; that half stays
+  accepted rather than engineered against.
 - **B2, egress.** Two controls, for the two halves of the boundary.
 
   *The credential itself:* the script never holds the value. It tests the five mode

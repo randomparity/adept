@@ -123,9 +123,22 @@ jobs:
         # That is the defect this change removes, relocated one level up, so it
         # gets a red rather than a log line nobody reads. It re-types no gate
         # command; `just ci` is still the recipe.
+        #
+        # Two arms, not one. `-z` alone cannot tell an unset variable from an
+        # empty one, and those call for opposite responses: unset means the
+        # `GH_TOKEN:` line above is gone and the fix is one line in this file,
+        # while set-and-empty means `github.token` itself resolved empty and the
+        # fix is in repository or organization settings. Reporting one cause for
+        # both would send the second reader on the first reader's investigation,
+        # on a red check that blocks every merge. `${VAR+set}` is the same idiom
+        # scripts/run-zizmor.sh uses for the same distinction (ADR 0025).
         run: |
+          if [ -z "${GH_TOKEN+set}" ]; then
+            printf 'verify: GH_TOKEN is unset in this step; the GH_TOKEN: github.token wiring is missing from the env: block above, so the zizmor online audits would not run\n' >&2
+            exit 1
+          fi
           if [ -z "$GH_TOKEN" ]; then
-            printf 'verify: github.token resolved empty; the zizmor online audits would not run\n' >&2
+            printf 'verify: GH_TOKEN is set but empty; github.token resolved empty, so the zizmor online audits would not run\n' >&2
             exit 1
           fi
           just ci
