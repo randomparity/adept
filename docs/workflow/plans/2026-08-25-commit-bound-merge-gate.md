@@ -197,7 +197,7 @@ never retry the merge on the stale reads.
 | `skills/quest/SKILL.md` | the gate at step 9; the terminal `MERGE-READY:` line |
 | `docs/adr/0035-the-merge-gate-binds-to-a-commit.md` | committed in the design commit |
 | `docs/workflow/specs/2026-08-25-commit-bound-merge-gate-design.md` | committed in the design commit |
-| `.claude-plugin/plugin.json` | `2.9.6` → `2.10.0`, committed in the design commit |
+| `.claude-plugin/plugin.json` | `2.9.6` → `2.9.12` on the ADR-only pass; a MINOR bump on #249 |
 
 ## Task 1 — `$return-to-town` states the gate and binds every merge
 
@@ -419,7 +419,8 @@ gate: anatomy rule 4 forbids committing it, and nothing in the repository assert
 Expect exit 0. On a workstation the version gate checks only its first two rules and says
 so; `BASE_SHA` is CI's to supply.
 
-**Step 5.2.** Confirm `.claude-plugin/plugin.json` reads `"version": "2.10.0"` and that no
+**Step 5.2.** Confirm `.claude-plugin/plugin.json` reads the version assigned for the pass
+you are on — `2.9.12` shipped with the ADR — and that no
 file under `docs/adr/` other than `0035-the-merge-gate-binds-to-a-commit.md` was added or
 changed: `git diff --name-only main...HEAD -- docs/adr/`.
 

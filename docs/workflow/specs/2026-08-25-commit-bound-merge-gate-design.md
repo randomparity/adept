@@ -186,7 +186,7 @@ one three-valued command: 0 contained, 1 base moved, anything else a fault.
 | `skills/campaign/SKILL.md` | the gate in step 6; the handshake prohibition; `headRefName` permitted for recording, forbidden as a merge trigger |
 | `skills/quest/SKILL.md` | the gate at step 9; the terminal `MERGE-READY:` line; "PR is green" is not terminal |
 | `docs/adr/0035-the-merge-gate-binds-to-a-commit.md` | the decision record |
-| `.claude-plugin/plugin.json` | version 2.9.6 → 2.10.0 (MINOR; skills gain a capability) |
+| `.claude-plugin/plugin.json` | version 2.9.6 → 2.9.12 on the ADR-only pass (PATCH); the #249 implementation pass is a MINOR bump |
 
 ## Error handling
 
