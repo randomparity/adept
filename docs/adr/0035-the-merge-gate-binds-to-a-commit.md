@@ -195,8 +195,9 @@ evaluated `$EXPECTED_HEAD_SHA` rather than a merge-time read.
   ```
 
   It pipes to `jq` rather than using `gh --jq`, which takes one expression and
-  rejects `--arg` — verified at gh 2.98.0, where the flag form exits with
-  `accepts 1 arg(s), received 4`.
+  has no `--arg`. Verified at gh 2.98.0, where both orderings fail and fail
+  differently: `--jq --arg …` exits with `accepts 1 arg(s), received 4`, and
+  `--arg … --jq` with `unknown flag: --arg`.
 
   The three skills carry that object form inline under issue #249; reconciling
   `$quest-log`'s own recipe to it belongs to issue #243, which already owns that
@@ -279,11 +280,19 @@ to be about, and the ordinary cause is a head branch already deleted or renamed.
 That takes the blocker path immediately under that name, rather than entering
 part 1's re-read, where an empty value would otherwise be re-read as a lagging
 API until the budget ran out and the operator got the wrong diagnosis.
-The fault case is separate and also has to be checked:
-a non-zero exit from either command is a scan that could not run, which ADR 0005
-decision 1 governs — carried forward unchanged by ADR 0024 decision 1, itself
-superseded by ADR 0025, so the chain resolves in 0005's favour and the citation
-is to that chain rather than to 0005 alone.
+The fault case is separate and covers **every** command in the gate, not just
+those two. A non-zero exit from `git ls-remote`, from `gh run list`, from
+`gh pr view`, or from part 3's `git fetch origin` is a scan that could not run,
+which ADR 0005 decision 1 governs — carried forward unchanged by ADR 0024
+decision 1, itself superseded by ADR 0025, so the chain resolves in 0005's
+favour and the citation is to that chain rather than to 0005 alone. Part 3's
+`git merge-base --is-ancestor` is the one command with three answers rather than
+two: exit 0 is contained, exit 1 is a moved base, and **any other exit is a
+fault** — collapsing that third case into "base moved" would send a row to a
+refresh it does not need. The fetch matters most of all here, because its
+failure is silent in the wrong direction: an unnoticed fetch fault leaves a
+stale `origin/<BASE_BRANCH>` and part 3 then passes wrongly, which is the exact
+condition the part exists to catch.
 
 **4. The handshake lives on the tracker, and the completion report quotes it.**
 `$return-to-town`'s hand-off already posts a `WORK:TRAJECTORY` comment on the
@@ -368,6 +377,14 @@ report quotes that line and it must not report green as terminal.
   cites this record as its governing decision. Until it merges, a reader
   comparing this record against the skills will find them disagreeing, and the
   skills are what any harness actually executes.
+- **ADR 0009 carries no supersession banner, deliberately.** This record narrows
+  one of its *consequences* — that an `OPEN` pull request's computed mergeability
+  is the last word before merging — and leaves its decision untouched: 0009 says
+  `$return-to-town` interprets `state` before `mergeable`/`mergeStateStatus`, and
+  that still holds and is still how the gate's caller enters. A banner marks a
+  decision that no longer governs, which is not the case here, so the asymmetry
+  with the 0005/0024/0025 chain is intended rather than an omission. Recorded so
+  a reader meeting that chain does not read the missing banner as an oversight.
 - Once implemented, the gate is prose in skill files. Nothing enforces it,
   exactly as ADR 0019 records of its own contract; enforcement is reading.
 - This record is numbered 0035, assigned by the dispatching campaign. 0023 and
@@ -500,6 +517,22 @@ report quotes that line and it must not report green as terminal.
   reopening with #243, where the `$deliver` half is in scope; the two are
   complementary if it is, since draft state and a SHA-bound handshake answer
   different halves of "finished".
+- **Ship part 4 and `--match-head-commit` alone, and defer parts 1–3 until a
+  shape-2 or shape-3 failure is actually observed.** This is the narrowest gate
+  the evidence compels, and it deserves an answer because Context concedes the
+  premise: the one incident this record can check exhibits shape 1 only, and
+  parts 1, 2 and 3 would each have passed that merge. verified: no shape-2 or
+  shape-3 failure is observed anywhere in the evidence available here — the
+  `randomparity/hmc-mcp` queries in Context establish shape 1 and nothing more.
+  judgment: rejected, and the ground is that the two remaining shapes do not need
+  an incident to be real. Shape 2 follows from which API resolves a check's
+  subject — `gh pr checks` and `statusCheckRollup` read the pull-request API by
+  construction, so they can only ever be as fresh as it is. Shape 3 follows from
+  how CI schedules relative to a base branch that keeps moving, which a serial
+  merge wave guarantees. A gate deferred until each has produced a loss is a gate
+  that acquires its parts by paying for them, and the two parts in question cost
+  three `gh` and `git` reads against a merge that is irreversible. Waiting is the
+  more expensive option, not the cheaper one.
 - **Let the run that knows it is finished perform the merge**, instead of
   handing a signal to an orchestrator that has to be told. This is the cheapest
   way to close shape 1, because the run holding the knowledge and the run doing

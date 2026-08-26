@@ -152,7 +152,10 @@ Then, and only then:
 gh pr merge <PR> --repo <owner/name> "$MERGE_FLAG" --match-head-commit "$HEAD_SHA"
 ```
 
-A non-zero exit from any command above is a fault that holds the merge, never an answer.
+A non-zero exit from any command above is a fault that holds the merge, never an answer —
+including part 3's `git fetch origin`, whose silent failure leaves a stale
+`origin/<BASE_BRANCH>` and makes part 3 pass wrongly. `git merge-base --is-ancestor` is the
+one three-valued command: 0 contained, 1 base moved, anything else a fault.
 
 ## Normative guarantees
 

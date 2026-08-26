@@ -66,8 +66,11 @@ HEAD_SHA=$(git ls-remote origin "refs/heads/<branch>" | cut -f1)
 API_SHA=$(gh pr view <PR> --repo <owner/name> --json headRefOid --jq .headRefOid)
 ```
 
-Every command below either answers or fails. A non-zero exit from any of them is a fault
-that holds the merge — never an answer, and never "not ready".
+Every command below either answers or fails. A non-zero exit from any of them — `git
+ls-remote`, `gh pr view`, `gh run list`, `git fetch` — is a fault that holds the merge, never
+an answer and never "not ready". The one command with three answers is part 3's
+`git merge-base --is-ancestor`: exit 0 contained, exit 1 base moved, **any other exit a
+fault**.
 
 1. **SHA parity.** `HEAD_SHA` is non-empty and equals `API_SHA`. `gh pr view --json
    headRefOid` reads the pull-request API and **can lag `git ls-remote`**; the ref is
