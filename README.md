@@ -160,6 +160,16 @@ nothing automated asserts on prose.
 
 MIT — see [LICENSE](LICENSE).
 
+### Image provenance
+
+The logo and quest-map artwork were generated with OpenAI's image-generation tooling.
+The smaller copies displayed in this README may not retain the C2PA Content Credentials
+embedded in the source files. The credential-bearing
+[original logo](docs/assets/adept-logo-grimoire-original.png) and
+[original quest map](docs/assets/adept-quest-map-original.png) are retained alongside the
+optimized copies. [ADR 0037](docs/adr/0037-preserve-original-image-provenance.md) records
+the policy for future derivatives.
+
 Every skill here is first-party expression, measured rather than assumed.
 [ADR 0003](docs/adr/0003-close-the-upstream-attribution.md) records the numbers, what the
 check found, and the one measured technical idiom it leaves excluded. The method is
