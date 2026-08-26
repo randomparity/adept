@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # Fixture suite for scripts/check-skill-shape.sh. Each fixture is a scratch
-# directory holding a minimal skills/*/SKILL.md tree, a docs/cheatsheet.md,
-# and a scripts/reserved-skill-names.txt -- the three inputs the gate reads --
-# so the suite exercises the gate without depending on this repository's own
-# skill inventory or cheat sheet.
+# directory holding a minimal skills/*/SKILL.md tree, a docs/cheatsheet.md, a
+# README.md, and a scripts/reserved-skill-names.txt -- the four inputs the
+# gate reads -- so the suite exercises the gate without depending on this
+# repository's own skill inventory, cheat sheet, or README.
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=SCRIPTDIR/test-fixture-helpers.sh
@@ -37,6 +37,15 @@ SKILL
 |---|---|
 | `example-skill` | A minimal fixture skill |
 SHEET
+	cat >"$root/README.md" <<'DOC'
+# Fixture repo
+
+## What ships
+
+| Group | What's in it |
+|---|---|
+| **Example** | `example-skill` does a minimal fixture thing |
+DOC
 	printf '%s\n' "$root"
 }
 
@@ -101,6 +110,10 @@ cat >>"$documented_root/docs/cheatsheet.md" <<'SHEET'
 
 See `newly-documented` for details, mentioned only in this sentence.
 SHEET
+cat >>"$documented_root/README.md" <<'DOC'
+
+See `newly-documented` for details, mentioned only in this sentence.
+DOC
 assert_passes 'documented skill, prose mention' "$documented_root"
 
 # Case 4: wording elsewhere in the cheat sheet changes beside an
@@ -144,6 +157,16 @@ cat >"$collision_root/docs/cheatsheet.md" <<'SHEET'
 | `quest-log` | Substring-collision fixture |
 | `seek-quest` | Substring-collision fixture |
 SHEET
+cat >"$collision_root/README.md" <<'DOC'
+# Fixture repo
+
+## What ships
+
+| Group | What's in it |
+|---|---|
+| **Example** | `example-skill` does a minimal fixture thing |
+| **Collision** | `quest`, `quest-log`, and `seek-quest` are substring-collision fixtures |
+DOC
 assert_passes 'substring-adjacent names, all documented' "$collision_root"
 
 # Case 6: same three names, but the *shorter* name (`quest`) is left
@@ -378,6 +401,7 @@ assert_gate 'fault outranks finding, finding still printed' 2 \
 # not to one cases 8 and 9 deliberately left behind under $SCRATCH.
 real_sort=$(command -v sort)
 real_sed=$(command -v sed)
+real_rg=$(command -v rg)
 
 probe_case() { # name shim-command shim-body fixture expected-fragment
 	local name=$1 shim_command=$2 shim_body=$3 fixture=$4 expected=$5
@@ -489,5 +513,72 @@ else
 chmod 000 \"\$TMPDIR\"/check-skill-shape.*/names" \
 		rule12-input-unreadable 'the rule 1 and 2 skill-name list could not be read'
 fi
+
+# Cases 25-27 cover rule 7 -- the new rule this suite adds, pointed at
+# README.md instead of docs/cheatsheet.md. Same inventory-vs-reference shape
+# as rule 6's cases 2-3 and case 22, so these follow that pattern directly
+# rather than re-deriving it.
+
+# Case 25: a skill directory documented in the cheat sheet (so rule 6 passes)
+# but never mentioned in README.md -- the gap this rule exists to catch. The
+# cheat-sheet mention isolates rule 7's own verdict from rule 6's.
+readme_missing_root=$(new_baseline readme-missing)
+mkdir -p "$readme_missing_root/skills/undocumented-in-readme"
+cat >"$readme_missing_root/skills/undocumented-in-readme/SKILL.md" <<'SKILL'
+---
+name: undocumented-in-readme
+description: "A fixture skill with no README mention."
+---
+# Undocumented In Readme
+SKILL
+cat >>"$readme_missing_root/docs/cheatsheet.md" <<'SHEET'
+| `undocumented-in-readme` | Documented in the cheat sheet, not in README |
+SHEET
+assert_fails 'skill missing from README' "$readme_missing_root" \
+	'undocumented-in-readme: not referenced in README.md'
+
+# Case 26: the same shape, but mentioned as a backtick-wrapped token in
+# ordinary README prose rather than the feature table -- proving the check is
+# membership against the whole document, not position inside the "What ships"
+# table.
+readme_prose_root=$(new_baseline readme-prose)
+mkdir -p "$readme_prose_root/skills/mentioned-in-prose"
+cat >"$readme_prose_root/skills/mentioned-in-prose/SKILL.md" <<'SKILL'
+---
+name: mentioned-in-prose
+description: "A fixture skill mentioned only in README prose."
+---
+# Mentioned In Prose
+SKILL
+cat >>"$readme_prose_root/docs/cheatsheet.md" <<'SHEET'
+| `mentioned-in-prose` | Documented in the cheat sheet too |
+SHEET
+cat >>"$readme_prose_root/README.md" <<'DOC'
+
+See `mentioned-in-prose` for details, mentioned only in this sentence.
+DOC
+assert_passes 'skill documented via README prose' "$readme_prose_root"
+
+# Case 27: rule 7's own require_readable guard on $names, the third loop to
+# read that file (after rules 1-2 and rule 6). Case 22's sed shim cannot be
+# reused here: it unlinks $names during rule 4's collation, which is *before*
+# rule 6 re-reads $names, so that shim trips rule 6's guard first. This shim
+# instead hooks rg -- the command rule 6's own per-skill loop calls -- and
+# waits for the one call that targets docs/cheatsheet.md (the baseline
+# fixture has a single skill, so rule 6 makes exactly one such call). Real rg
+# runs first so rule 6's own verdict is unaffected; only afterwards does the
+# shim unlink $names, once rule 6 already holds the file descriptor for its
+# own already-open read. Rule 7's fresh `require_readable "$names"` is what
+# then finds the path gone.
+probe_case 'rule 7 list cannot be read' rg \
+	"rg_status=0
+\"$real_rg\" \"\$@\" || rg_status=\$?
+case \"\$*\" in
+*docs/cheatsheet.md*)
+	rm -f \"\$TMPDIR\"/check-skill-shape.*/names
+	;;
+esac
+exit \"\$rg_status\"" \
+	rule7-input-fault 'the rule 7 skill-name list could not be read'
 
 printf 'check-skill-shape-test: ok\n'
