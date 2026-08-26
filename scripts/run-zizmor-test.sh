@@ -184,6 +184,22 @@ run 0 ZIZMOR_NO_ONLINE_AUDITS=true GH_TOKEN=t1
 assert_contains 'ZIZMOR_NO_ONLINE_AUDITS=true' "$RUN_OUTPUT" 'ZIZMOR_NO_ONLINE_AUDITS=true'
 ok 'ZIZMOR_NO_ONLINE_AUDITS=true beats a present token'
 
+# The two offline conditions compete here, and the reported one must be the
+# variable rather than the missing token. Getting it backwards would tell an
+# operator to export a token, which cannot change the mode while their own
+# ZIZMOR_OFFLINE still wins -- a cause the observation does not carry, which is
+# the failure ADR 0025 decision 2 forbids and this change exists to remove.
+run 0 ZIZMOR_OFFLINE=true
+assert_status 'mode var, no token' 0 "$RUN_STATUS"
+assert_contains 'mode var, no token' "$RUN_OUTPUT" 'offline mode (--offline); ZIZMOR_OFFLINE=true'
+assert_lacks 'mode var, no token' "$RUN_OUTPUT" 'no API token'
+ok 'a mode variable is reported ahead of the missing token when both would apply'
+
+run 0 ZIZMOR_NO_ONLINE_AUDITS=true
+assert_contains 'sibling, no token' "$RUN_OUTPUT" 'offline mode (--offline); ZIZMOR_NO_ONLINE_AUDITS=true'
+assert_lacks 'sibling, no token' "$RUN_OUTPUT" 'no API token'
+ok 'the sibling mode variable is likewise reported ahead of the missing token'
+
 run 0 ZIZMOR_OFFLINE=true ZIZMOR_NO_ONLINE_AUDITS=true GH_TOKEN=t1
 assert_contains 'both mode vars' "$RUN_OUTPUT" 'ZIZMOR_OFFLINE=true'
 assert_lacks 'both mode vars' "$RUN_OUTPUT" 'ZIZMOR_NO_ONLINE_AUDITS=true'
@@ -252,7 +268,6 @@ ok 'a tool failure is re-raised and draws the hint'
 # for a missing directory, and a zizmor.yml that fails to load. The hint must
 # therefore not assert which of those happened -- that is the cause-not-carried
 # defect ADR 0025 decision 2 forbids, and the one this change exists to remove.
-assert_lacks 'hint names no cause' "$RUN_OUTPUT" 'an API or token fault, not a reason'
 case $RUN_OUTPUT in
 *'If it is an API or token fault'*) ;;
 *) fail 'hint names no cause: expected the remedy to be offered conditionally' ;;
@@ -261,22 +276,22 @@ ok 'the hint offers its remedy conditionally and asserts no cause'
 
 run 14 GH_TOKEN=t1
 assert_status 'findings' 14 "$RUN_STATUS"
-assert_lacks 'findings' "$RUN_OUTPUT" 'could not run'
+assert_lacks 'findings' "$RUN_OUTPUT" 'the audit run failed rather than reporting findings'
 ok 'findings are re-raised with no hint -- never advise disabling the audit'
 
 run 2 GH_TOKEN=t1
 assert_status 'usage error' 2 "$RUN_STATUS"
-assert_lacks 'usage error' "$RUN_OUTPUT" 'could not run'
+assert_lacks 'usage error' "$RUN_OUTPUT" 'the audit run failed rather than reporting findings'
 ok 'a usage error is re-raised with no hint'
 
 run 1
 assert_status 'offline failure' 1 "$RUN_STATUS"
-assert_lacks 'offline failure' "$RUN_OUTPUT" 'could not run'
+assert_lacks 'offline failure' "$RUN_OUTPUT" 'the audit run failed rather than reporting findings'
 ok 'the hint never fires on the offline path'
 
 run 0 GH_TOKEN=t1
 assert_status 'clean online' 0 "$RUN_STATUS"
-assert_lacks 'clean online' "$RUN_OUTPUT" 'could not run'
+assert_lacks 'clean online' "$RUN_OUTPUT" 'the audit run failed rather than reporting findings'
 ok 'a clean online run draws no hint'
 
 # -- the token value never reaches the output --

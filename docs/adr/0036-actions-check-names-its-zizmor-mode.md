@@ -187,15 +187,27 @@ unauthenticated, at a lower rate limit.
 - The gate never reads a token's value — it tests each variable for emptiness and lets
   zizmor read the values itself, so no credential passes through the script, its argv, or
   its output.
+- **A non-boolean mode variable is inert offline and fatal online.** `ZIZMOR_OFFLINE=1` is
+  green today, because the recipe's explicit `--offline` shadows it. It stays green on the
+  offline path here for the same reason. On the *online* path no flag is passed, so
+  nothing shadows it and zizmor exits 2 with `invalid value '1' for '--offline'` — after
+  the gate has announced online mode, and with no hint, since status 2 is excluded from
+  it. Reaching it takes a malformed mode variable and an exported token on the same
+  machine; the gate's warning names the variable and zizmor's error names the accepted
+  values, so it is diagnosable rather than mysterious. Accepted as a narrow regression
+  against "everything running today keeps running unchanged".
 - **Every fact above about zizmor's CLI was measured on 1.29.0, and CI installs zizmor
   unpinned** from Homebrew alongside the other gate tools. The variable names, the
   `true`/`false` vocabulary, and the exit statuses are therefore a contract with one
-  observed version, not a version-independent one. A zizmor that renames a variable makes
-  the mode line wrong; one that renumbers its statuses makes the hint stop appearing. The
-  first is loud — the gate would report a mode that disagrees with the run — and the
-  second is silent but harmless. Pinning the tool set is a separate decision (rejected
-  below); this residual is recorded rather than engineered against, and the suite pins the
-  gate's own behaviour against a stub, not against zizmor.
+  observed version, not a version-independent one — and the two renames fail in opposite
+  directions. Renaming a **token** variable is self-consistent: the gate finds no token,
+  reports offline, and runs offline. Renaming a **mode** variable is the dangerous one and
+  it is silent: the gate would read the old name, find nothing, see a token, print "online
+  mode", and pass no flag, while an operator who set the *new* variable to `true` gets an
+  offline run at exit 0 with no `WARN` — unaudited and labelled audited, the state this
+  change exists to remove. Pinning the tool set is a separate decision (rejected below);
+  this residual is recorded rather than engineered against, and the suite pins the gate's
+  own behaviour against a stub, not against zizmor.
 - Mode selection lives in a script rather than the recipe body, which brings it under
   `shellcheck`, `shfmt`, and a suite. It is a gate script under `scripts/`, so anatomy
   rules 1 and 2 do not bind it; rule 3 holds, as it runs and exits.
