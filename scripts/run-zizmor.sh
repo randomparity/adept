@@ -156,15 +156,21 @@ fi
 # error (2) is not offered it either: the offline subset does not fix a malformed
 # variable.
 #
-# The wording leads with the diagnosis and scopes the remedy to a local run,
-# because CI is where a token is always set and so where status 1 is most likely.
-# On a runner the only way to act on "set ZIZMOR_OFFLINE=true" is to edit
-# verify.yml or the Justfile, which turns the five provenance audits off for good
-# -- and it would arrive on a red required check, where the pressure to make it
-# green is highest. That is the same bad advice the status-14 case is excluded to
-# avoid, one step removed.
+# The line reports what status 1 carries and no cause it does not. All 1 tells us
+# is that the run failed instead of reporting findings: an unreachable API and a
+# rejected token both land here, but so does `invalid input: <path>` for a
+# missing directory and a zizmor.yml that fails to load, and for those two
+# ZIZMOR_OFFLINE=true fixes nothing. Naming a cause the observation does not carry
+# is what ADR 0025 decision 2 forbids and what this whole change exists to remove,
+# so the remedy is offered conditionally and zizmor's own error is pointed at.
+#
+# The remedy is scoped to a local run because CI is where a token is always set
+# and so where status 1 is most likely. On a runner the only way to act on
+# ZIZMOR_OFFLINE=true is to edit verify.yml or the Justfile, turning the five
+# provenance audits off for good -- on a red required check, where the pressure to
+# go green is highest. That is the status-14 mistake one step removed.
 if [[ $mode == online ]] && ((status == 1)); then
-	say 'the online audits could not run: an API or token fault, not a reason to disable them. For a local offline run, set ZIZMOR_OFFLINE=true' >&2
+	say 'the audit run failed rather than reporting findings; zizmor own error is above. If it is an API or token fault, a local offline run is ZIZMOR_OFFLINE=true' >&2
 fi
 
 exit "$status"

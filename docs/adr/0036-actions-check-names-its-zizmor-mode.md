@@ -53,12 +53,16 @@ Three measurements then decide the shape of the fix. All are from this workstati
    same value with no flag exits 2 with `invalid value '0' for '--offline'` and
    `[possible values: true, false]`. That enumeration comes from clap's rejection path,
    not from `--help`.
-4. **The exit statuses are distinct.** Measured: 0 clean, 1 tool failure
-   (`fatal: no audit was performed`), 2 usage error, and **14** for a run that completes
-   and reports findings — `zizmor --no-progress --offline` against a throwaway workflow
-   with an unpinned `uses:` and a `${{ }}` interpolation in `run:` reported
-   `7 findings ... 2 medium, 2 high` at exit 14. A gate that keys on "non-zero" cannot
-   tell a finding from a failure.
+4. **A findings exit is distinct from a failure exit.** Measured: 0 clean, 1 the run
+   failed, 2 usage error, 3 a workflow that would not parse, and **14** for a run that
+   completes and reports findings — `zizmor --no-progress --offline` against a throwaway
+   workflow with an unpinned `uses:` and a `${{ }}` interpolation in `run:` reported
+   `7 findings ... 2 medium, 2 high` at exit 14. The list is "at least these", not an
+   enumeration of zizmor's whole status space, and only the 1-versus-14 split is
+   load-bearing: a gate that keys on "non-zero" cannot tell a finding from a failure.
+   Status 1 itself carries no cause — an unreachable API, a rejected token,
+   `invalid input: <path>` for a missing directory, and an unloadable `zizmor.yml` all
+   land there.
 
 ## Decision
 
@@ -113,8 +117,8 @@ an online run exits with zizmor's **tool-failure** status the gate prints the re
 it:
 
 ```
-run-zizmor: the online audits could not run: an API or token fault, not a reason to
-  disable them. For a local offline run, set ZIZMOR_OFFLINE=true
+run-zizmor: the audit run failed rather than reporting findings; zizmor own error is
+  above. If it is an API or token fault, a local offline run is ZIZMOR_OFFLINE=true
 ```
 
 **Keyed on tool failure alone — status 1 — never on "non-zero".** Measurement 4 is why:

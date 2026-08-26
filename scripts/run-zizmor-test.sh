@@ -245,8 +245,19 @@ ok 'an exported-but-empty GH_HOST is still named on the online line'
 
 run 1 GH_TOKEN=t1
 assert_status 'tool failure' 1 "$RUN_STATUS"
-assert_contains 'tool failure' "$RUN_OUTPUT" 'the online audits could not run: an API or token fault, not a reason to disable them'
+assert_contains 'tool failure' "$RUN_OUTPUT" 'the audit run failed rather than reporting findings'
 ok 'a tool failure is re-raised and draws the hint'
+
+# Status 1 covers an unreachable API, a rejected token, `invalid input: <path>`
+# for a missing directory, and a zizmor.yml that fails to load. The hint must
+# therefore not assert which of those happened -- that is the cause-not-carried
+# defect ADR 0025 decision 2 forbids, and the one this change exists to remove.
+assert_lacks 'hint names no cause' "$RUN_OUTPUT" 'an API or token fault, not a reason'
+case $RUN_OUTPUT in
+*'If it is an API or token fault'*) ;;
+*) fail 'hint names no cause: expected the remedy to be offered conditionally' ;;
+esac
+ok 'the hint offers its remedy conditionally and asserts no cause'
 
 run 14 GH_TOKEN=t1
 assert_status 'findings' 14 "$RUN_STATUS"

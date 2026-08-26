@@ -267,8 +267,8 @@ prints the response after it, so the red path carries a remedy as the offline co
 do:
 
 ```
-run-zizmor: the online audits could not run: an API or token fault, not a reason to
-  disable them. For a local offline run, set ZIZMOR_OFFLINE=true
+run-zizmor: the audit run failed rather than reporting findings; zizmor own error is
+  above. If it is an API or token fault, a local offline run is ZIZMOR_OFFLINE=true
 ```
 
 **The condition is `status == 1`, never "non-zero".** Findings exit 14, and offering this
