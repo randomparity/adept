@@ -95,10 +95,53 @@ jobs:
           # version already installed leaves npm's tree satisfied and the binary
           # still missing, which is a different fault wearing the same symptom.
           claude --version
+      # GH_TOKEN is what puts `just actions-check` into zizmor's online mode, so
+      # the pin-provenance audits -- impostor-commit, ref-confusion,
+      # known-vulnerable-actions, stale-action-refs, ref-version-mismatch -- run
+      # here rather than nowhere. CI is where connectivity is assured and where
+      # the required check lives.
+      #
+      # `permissions:` above is deliberately NOT widened for this and stays
+      # `contents: read`: those audits resolve other repositories' refs and the
+      # advisory database, neither of which is a resource of this repository.
+      # What the line changes is that the token's value is visible to the whole
+      # `just ci` step; on a fork pull request GitHub makes it read-only, so the
+      # worst it grants is authenticated read of a public repository. Checkout's
+      # `persist-credentials: false` is likewise untouched -- that governs a
+      # credential in .git/config, and zizmor reads the environment. See ADR 0036.
       - name: Verify
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: just ci
+          GH_TOKEN: ${{ github.token }}
+        # The guard asserts the one precondition CI's whole provenance coverage
+        # rests on. A workstation is offline by default and says so, so this
+        # runner is the only place the five online audits execute; if
+        # `github.token` ever resolves empty -- a repository or organization
+        # setting, a platform change, or this line lost in a conflict resolution
+        # -- run-zizmor.sh would report the offline condition and exit 0, and the
+        # required check would stay green with no provenance audited anywhere.
+        # That is the defect this change removes, relocated one level up, so it
+        # gets a red rather than a log line nobody reads. It re-types no gate
+        # command; `just ci` is still the recipe.
+        #
+        # Two arms, not one. `-z` alone cannot tell an unset variable from an
+        # empty one, and those call for opposite responses: unset means the
+        # `GH_TOKEN:` line above is gone and the fix is one line in this file,
+        # while set-and-empty means `github.token` itself resolved empty and the
+        # fix is in repository or organization settings. Reporting one cause for
+        # both would send the second reader on the first reader's investigation,
+        # on a red check that blocks every merge. `${VAR+set}` is the same idiom
+        # scripts/run-zizmor.sh uses for the same distinction (ADR 0025).
+        run: |
+          if [ -z "${GH_TOKEN+set}" ]; then
+            printf 'verify: GH_TOKEN is unset in this step; the GH_TOKEN: github.token wiring is missing from the env: block above, so the zizmor online audits would not run\n' >&2
+            exit 1
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            printf 'verify: GH_TOKEN is set but empty; github.token resolved empty, so the zizmor online audits would not run\n' >&2
+            exit 1
+          fi
+          just ci
 
   # A matrix renames its checks to `job (axis)`, so the bare `verify` context that
   # branch protection requires would stop reporting and every PR would sit BLOCKED
