@@ -139,13 +139,15 @@ fault**.
 2. **Checks green for `HEAD_SHA`.**
 
    ```sh
-   gh run list --repo <owner/name> --commit "$HEAD_SHA" --limit 100 \
-     --json workflowName,event,status,conclusion \
-     --jq '.[] | select(.status != "completed" or .conclusion != "success")'
+   RUNS=$(gh run list --repo <owner/name> --commit "$HEAD_SHA" --limit 100 \
+     --json workflowName,event,status,conclusion)
+   RUN_COUNT=$(printf '%s\n' "$RUNS" | jq 'length')
+   printf '%s\n' "$RUNS" | jq '.[] | {workflowName,event,status,conclusion}'
    ```
 
-   Partition on `conclusion`'s vocabulary, not on `!= success` — the `--jq` above is a
-   starting filter, not the rule. A result count equal to the limit is potentially
+   Retain the complete array as shown: filtering first destroys the count and makes
+   all-success indistinguishable from no runs. Partition on `conclusion`'s vocabulary. A
+   result count equal to the limit is potentially
    truncated and holds rather than proving every run green. **Green** is a non-empty list
    in which every run is
    `completed` at `success`, `skipped`, or `neutral`; `skipped` is an ordinary result for a
