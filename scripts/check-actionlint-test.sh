@@ -112,6 +112,32 @@ assert_status 'static Unix matrix' 0 "$RUN_STATUS"
 [[ $(wc -l <"$SHELLCHECK_LOG") -eq 1 ]] ||
 	fail 'the static Unix matrix run block must reach ShellCheck'
 
+matrix_leak=$SCRATCH/matrix-leak
+# shellcheck disable=SC2016 # fixture preserves the literal Actions expression
+write_workflow "$matrix_leak" 'name: matrix leak
+on: push
+jobs:
+  earlier:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: |
+          echo earlier
+  later:
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: |
+          echo later' matrix-leak.yml
+run_gate "$matrix_leak"
+assert_status 'matrix state cannot leak between jobs' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'cannot independently ShellCheck matrix.os'*) ;;
+*) fail "matrix state leak: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'dynamic matrix runner did not reach ShellCheck' "$SHELLCHECK_LOG"
+
 step_shell=$SCRATCH/step-shell
 write_workflow "$step_shell" 'name: step shell
 on: push

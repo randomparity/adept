@@ -71,14 +71,34 @@ for workflow in "${workflow_files[@]}"; do
 	function add_matrix_os(value) {
 		value = trim(value)
 		sub(/[ ]*(#.*)?$/, "", value)
-		if (!matrix_os_seen) {
-			matrix_os_all_unix = 1
-			matrix_os_seen = 1
+		if (!job_matrix_os_seen) {
+			job_matrix_os_all_unix = 1
+			job_matrix_os_seen = 1
 		}
-		matrix_os_values++
+		job_matrix_os_values++
 		if (value !~ /^(ubuntu|macos)(-[[:alnum:]_.-]+)?$/) {
-			matrix_os_all_unix = 0
+			job_matrix_os_all_unix = 0
 		}
+	}
+
+	function validate_job() {
+		if (job_matrix_runner && (job_matrix_os_values == 0 ||
+			!job_matrix_os_all_unix)) {
+			die("cannot independently ShellCheck matrix.os for job " job_name \
+				": every static value must be ubuntu-* or macos-*")
+		}
+	}
+
+	function begin_job(name) {
+		validate_job()
+		job_name = name
+		job_matrix_runner = 0
+		job_matrix_os_seen = 0
+		job_matrix_os_values = 0
+		job_matrix_os_all_unix = 0
+		job_matrix_indent = -1
+		os_list_indent = -1
+		in_job = 1
 	}
 
 	{
@@ -91,21 +111,51 @@ for workflow in "${workflow_files[@]}"; do
 		sub(/^ */, "", key)
 		field = key
 		sub(/^- +/, "", field)
-
 		if (field ~ /^shell:/) {
 			die("shell overrides are unsupported; add extractor support before using one")
 		}
 
+		if (indent == 0 && key == "jobs:") {
+			validate_job()
+			in_jobs = 1
+			in_job = 0
+			next
+		}
+		if (in_jobs && indent == 0) {
+			validate_job()
+			in_jobs = 0
+			in_job = 0
+		}
+		if (in_jobs && indent == 2 && key ~ /^[^#][^:]*:[ ]*(#.*)?$/) {
+			name = key
+			sub(/:[ ]*(#.*)?$/, "", name)
+			begin_job(name)
+			next
+		}
+		if (!in_job) {
+			next
+		}
+
+		if (job_matrix_indent >= 0 && indent <= job_matrix_indent) {
+			job_matrix_indent = -1
+			os_list_indent = -1
+		}
 		if (os_list_indent >= 0 && indent <= os_list_indent) {
 			os_list_indent = -1
 		}
-		if (os_list_indent >= 0 && indent > os_list_indent && key ~ /^-[ ]+/) {
+		if (job_matrix_indent >= 0 && os_list_indent >= 0 &&
+			indent > os_list_indent && key ~ /^-[ ]+/) {
 			value = key
 			sub(/^-[ ]+/, "", value)
 			add_matrix_os(value)
 			next
 		}
-		if (field ~ /^os:/) {
+		if (field ~ /^matrix:[ ]*(#.*)?$/) {
+			job_matrix_indent = indent
+			os_list_indent = -1
+			next
+		}
+		if (job_matrix_indent >= 0 && indent > job_matrix_indent && field ~ /^os:/) {
 			value = field
 			sub(/^os:[ ]*/, "", value)
 			if (value ~ /^[[]/) {
@@ -126,7 +176,7 @@ for workflow in "${workflow_files[@]}"; do
 			value = trim(value)
 			sub(/[ ]*(#.*)?$/, "", value)
 			if (value == "${{ matrix.os }}") {
-				matrix_runner = 1
+				job_matrix_runner = 1
 			} else if (value !~ /^(ubuntu|macos)(-[[:alnum:]_.-]+)?$/) {
 				die("cannot independently ShellCheck runner: " value)
 			}
@@ -134,9 +184,7 @@ for workflow in "${workflow_files[@]}"; do
 	}
 
 	END {
-		if (matrix_runner && (matrix_os_values == 0 || !matrix_os_all_unix)) {
-			die("cannot independently ShellCheck matrix.os: every static value must be ubuntu-* or macos-*")
-		}
+		validate_job()
 	}
 	' "$workflow"
 
