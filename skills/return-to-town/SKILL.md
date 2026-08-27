@@ -69,18 +69,25 @@ cleanup. Stop with the read failure or unexpected value.
 
 When the `OPEN` route satisfies `$deliver`'s exit condition, you are at the hand-off point.
 
-## Default: hand off, do not self-merge
+## Record the author handshake
 
-First record the hand-off (quest-log skill): post a `WORK:TRAJECTORY` comment on the
+Before choosing the default or operator-authorized path, record the hand-off (quest-log
+skill): post a `WORK:TRAJECTORY` comment on the
 issue with `outcome: handed off — PR #N green+mergeable, awaiting human merge`, guardrail
-status, and any surprises. **Leave the issue open and `status:awaiting-merge` intact** — do
-not close, do not strip. The eventual human UI-merge auto-closes it and `$resurrection`
-strips the residual label (closed-state is authoritative).
+status, and any surprises.
 
 **That comment carries the handshake.** Add a whole line reading `MERGE-READY: #<N> @
 <HEAD_SHA>`, where `HEAD_SHA` is the full 40-character SHA from `git ls-remote origin
 "refs/heads/<branch>" | cut -f1` — never `headRefOid`, never an abbreviation. Write it only
-once the work is finished; "the pull request is green" is not that moment.
+once the work is finished; "the pull request is green" is not that moment. Read the complete
+comment back and verify the markers, pull request number, and exact SHA. A failed, partial, or
+unverifiable write holds both paths; it never authorizes a merge.
+
+## Default: hand off, do not self-merge
+
+Leave the issue open and `status:awaiting-merge` intact — do not close, do not strip. The
+eventual human UI-merge auto-closes it and `$resurrection` strips the residual label
+(closed-state is authoritative).
 
 Only then tell the user the PR is ready to merge and stop. The tracking write is the durable
 hand-off record the resume story depends on — it must happen before this terminal stop.
