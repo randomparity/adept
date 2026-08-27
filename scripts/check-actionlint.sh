@@ -119,6 +119,8 @@ for workflow in "${workflow_files[@]}"; do
 			validate_job()
 			in_jobs = 1
 			in_job = 0
+			jobs_indent = indent
+			job_indent = -1
 			next
 		}
 		if (indent == 0 && (key ~ /^"jobs"[ ]*:/ ||
@@ -126,12 +128,30 @@ for workflow in "${workflow_files[@]}"; do
 			key ~ /^jobs/)) {
 			die("unrecognized jobs declaration")
 		}
-		if (in_jobs && indent == 0) {
+		if (in_jobs && indent <= jobs_indent && key != "" && key !~ /^#/) {
 			validate_job()
 			in_jobs = 0
 			in_job = 0
 		}
-		if (in_jobs && indent == 2 && key ~ /^[^#][^:]*:[ ]*(#.*)?$/) {
+		if (in_jobs && job_indent < 0 && indent > jobs_indent &&
+			key != "" && key !~ /^#/) {
+			if (key !~ /^[^#][^:]*:[ ]*(#.*)?$/) {
+				die("unrecognized job declaration")
+			}
+			job_indent = indent
+			name = key
+			sub(/:[ ]*(#.*)?$/, "", name)
+			begin_job(name)
+			next
+		}
+		if (in_jobs && job_indent >= 0 && indent > jobs_indent &&
+			indent < job_indent && key != "" && key !~ /^#/) {
+			die("inconsistent jobs indentation")
+		}
+		if (in_jobs && indent == job_indent && key != "" && key !~ /^#/) {
+			if (key !~ /^[^#][^:]*:[ ]*(#.*)?$/) {
+				die("unrecognized job declaration")
+			}
 			name = key
 			sub(/:[ ]*(#.*)?$/, "", name)
 			begin_job(name)

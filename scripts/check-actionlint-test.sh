@@ -155,6 +155,23 @@ case $RUN_OUTPUT in
 esac
 assert_empty 'commented jobs did not reach ShellCheck' "$SHELLCHECK_LOG"
 
+wide_jobs=$SCRATCH/wide-jobs
+write_workflow "$wide_jobs" 'name: wide jobs
+on: push
+jobs:
+    check:
+      runs-on: windows-latest
+      steps:
+        - run: |
+            Write-Output unsupported' wide-jobs.yml
+run_gate "$wide_jobs"
+assert_status 'four-space jobs runner rejection' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'cannot independently ShellCheck runner'*) ;;
+*) fail "four-space jobs runner rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'four-space jobs did not reach ShellCheck' "$SHELLCHECK_LOG"
+
 quoted_jobs=$SCRATCH/quoted-jobs
 write_workflow "$quoted_jobs" 'name: quoted jobs
 on: push
