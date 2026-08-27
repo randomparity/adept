@@ -40,7 +40,7 @@ assert_status() { # label expected actual
 }
 
 assert_contains() { # label needle file
-	rg -F -- "$2" "$3" >/dev/null ||
+	rg --no-config -F -- "$2" "$3" >/dev/null ||
 		fail "$1: missing '$2' in $3"
 }
 
@@ -89,7 +89,7 @@ assert_status 'literal run blocks' 0 "$RUN_STATUS"
 	fail "actionlint must disable integrated ShellCheck: $(cat "$ACTIONLINT_LOG")"
 [[ $(wc -l <"$SHELLCHECK_LOG") -eq 2 ]] ||
 	fail 'every literal run block must reach ShellCheck'
-[[ $(rg -x -- '-s bash .*' "$SHELLCHECK_LOG" | wc -l) -eq 2 ]] ||
+[[ $(rg --no-config -x -- '-s bash .*' "$SHELLCHECK_LOG" | wc -l) -eq 2 ]] ||
 	fail 'ShellCheck must receive the explicit bash dialect for every run block'
 assert_contains 'first run block' 'echo first' "$SHELLCHECK_CONTENT"
 assert_contains 'second run block' 'second' "$SHELLCHECK_CONTENT"
