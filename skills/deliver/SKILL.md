@@ -2,7 +2,7 @@
 name: deliver
 description: "Push a feature branch, create or update a pull request, and drive it to green CI and a mergeable GitHub state. Use when asked to ship, publish, or prepare completed work for merge, including as the shipping phase of an issue flow."
 ---
-# Ship It: PR Creation and CI Green + Mergeable
+# Ship It: PR Creation and Hand-Back
 
 Push the branch and drive the PR to **green CI and mergeable state**. Both are
 required — CI can be green while the PR is behind, dirty, blocked, or
@@ -45,6 +45,10 @@ linked issue.
 
 ## 3. Drive to green + mergeable
 
+This is `$deliver`'s hand-back condition, not authorization to merge. An
+issue-backed merge must separately pass ADR 0035's commit-bound four-part gate,
+including its author handshake.
+
 Poll in a loop — **do not stream**. `gh pr checks <PR> --watch` pipes every
 incremental status frame into context for the entire CI run; the intermediate
 frames carry no decision value, only the terminal states do.
@@ -84,8 +88,9 @@ frames carry no decision value, only the terminal states do.
    (always request explicit `--json` fields — never a bare `gh pr view`, which
    dumps the full body and comments). Green checks alone are never the exit
    condition — checks run on the branch head, not the merge result.
-4. Exit only when required checks are green and `mergeStateStatus` is
-   `CLEAN` with `mergeable` equal to `MERGEABLE`.
+4. Hand back only when required checks are green and `mergeStateStatus` is
+   `CLEAN` with `mergeable` equal to `MERGEABLE`. This does not authorize a
+   merge; ADR 0035's commit-bound gate governs that decision.
 5. If merge state is `BEHIND`, merge the latest `BASE_BRANCH` into the PR
    branch (a pushed branch cannot be rebased — force-push is denied; rebase is
    an option only before first push). After resolving, **regenerate any

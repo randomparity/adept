@@ -26,7 +26,7 @@ needs-triage → ready → in-progress → in-review → awaiting-merge → (iss
 | `status:ready` | `0e8a16` | triaged, eligible for work |
 | `status:in-progress` | `fbca04` | a session is implementing |
 | `status:in-review` | `1d76db` | adversarial review of the branch running; a PR may not be open yet |
-| `status:awaiting-merge` | `5319e7` | green + mergeable; human just clicks merge |
+| `status:awaiting-merge` | `5319e7` | green + mergeable with the commit-bound author handshake recorded; human just clicks merge |
 | `status:blocked` | `b60205` | external dependency |
 | `status:needs-human` | `d93f0b` | pipeline cannot proceed; human must diagnose |
 

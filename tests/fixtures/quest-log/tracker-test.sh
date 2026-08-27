@@ -902,11 +902,12 @@ guard_exempt='^(target_url|label_ensure|search|claim_list)$'
 while IFS= read -r op; do
 	[[ -n $op ]] || continue
 	[[ $op =~ $guard_exempt ]] && continue
-	(
+	definition=$(
 		# shellcheck source=/dev/null
 		. "$assets/profiles/github.sh"
 		declare -f "profile_$op"
-	) | rg -q 'github_require_id' ||
+	) || fail "github's profile_$op could not be inspected"
+	rg -q 'github_require_id' <<<"$definition" ||
 		fail "github's profile_$op takes an issue selector but never calls github_require_id"
 done < <(list_profile_declarations "$assets/profiles/github.sh")
 
