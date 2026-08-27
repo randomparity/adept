@@ -78,10 +78,6 @@ for workflow in "${workflow_files[@]}"; do
 	function add_matrix_os(value) {
 		value = trim(value)
 		sub(/[ ]*(#.*)?$/, "", value)
-		if (!job_matrix_os_seen) {
-			job_matrix_os_all_unix = 1
-			job_matrix_os_seen = 1
-		}
 		job_matrix_os_values++
 		if (value !~ /^(ubuntu|macos)(-[[:alnum:]_.-]+)?$/) {
 			job_matrix_os_all_unix = 0
@@ -100,9 +96,8 @@ for workflow in "${workflow_files[@]}"; do
 		validate_job()
 		job_name = name
 		job_matrix_runner = 0
-		job_matrix_os_seen = 0
 		job_matrix_os_values = 0
-		job_matrix_os_all_unix = 0
+		job_matrix_os_all_unix = 1
 		job_matrix_indent = -1
 		os_list_indent = -1
 		in_job = 1
