@@ -1,11 +1,13 @@
 # Reconcile merge-precondition wording and deterministic guard validation
 
-**Goal.** Bring the skill contracts into alignment with ADR 0035 and make the tracker fixture's
-derived issue-selector guard check deterministic.
+**Goal.** Bring the skill contracts into alignment with ADR 0035, make the tracker fixture's
+derived issue-selector guard check deterministic, and remove actionlint's deadlocking integrated
+ShellCheck path without reducing workflow-shell coverage.
 
 **Architecture.** Documentation retains separate hand-back and merge-authorization contracts.
-The fixture captures producer output before searching it, as decided by ADR 0039. The stack is
-Markdown and Bash 3.2.
+The fixture captures producer output before searching it, as decided by ADR 0039. ADR 0040
+separates workflow validation from fail-closed ShellCheck execution. The stack is Markdown and
+Bash 3.2.
 
 ## Global Constraints
 
@@ -14,6 +16,8 @@ Markdown and Bash 3.2.
 - No automated gate asserts on normative prose.
 - Do not change tracker runtime behavior, `$return-to-town`, or `$deliver`'s tracking-write
   condition.
+- Preserve ADR 0034's inline Pages build and reject unsupported workflow shell forms rather than
+  silently skipping them.
 - Run `just verify` bare before each implementation commit.
 
 ## Task 1: Make the derived guard assertion deterministic
@@ -66,7 +70,31 @@ coverage remains intact; no production tracker file changes.
 **Acceptance:** every issue criterion is visible in the three-file diff, no prose gate is added,
 and the full guardrail passes.
 
+## Task 3: Separate workflow validation from ShellCheck execution
+
+**Files:** add `scripts/check-actionlint.sh` and `scripts/check-actionlint-test.sh`; modify
+`Justfile`.
+
+**Interfaces:** consumes workflow YAML, actionlint, and ShellCheck; produces a hard gate with
+independent workflow-structure and embedded-shell validation.
+
+1. Add a focused fixture with stubbed actionlint and ShellCheck commands.
+2. Pass `-shellcheck=` to actionlint, accept only workflows without `shell:` overrides and with
+   static Ubuntu/macOS runners or an all-Unix literal `matrix.os`, extract every supported literal
+   `run: |` block, and invoke `shellcheck -s bash` separately.
+3. Add controlled faults for actionlint failure, unsupported or failed extraction, and ShellCheck
+   failure; require nonzero exits and actionable diagnostics. Prove every current block is seen
+   and assert the exact Bash-dialect argument. Cover shell overrides, Windows and unresolved
+   runners, a static Unix runner matrix, and malformed matrix values.
+4. Change `actions-check` to invoke the new script, leaving zizmor sequencing unchanged.
+5. Run the focused suite, `just lint`, `just format-check`, and `just actions-check`; then run
+   `just verify` bare and commit as `fix: separate workflow shellcheck from actionlint`.
+
+**Acceptance:** actionlint's integrated ShellCheck path is disabled; every supported workflow run
+block is independently ShellChecked; unsupported or unreadable input is red; no workflow file,
+dependency version, or runtime behavior changes.
+
 ## Final verification and cleanup
 
 Run `git diff --check` and `just verify` bare. Confirm only the chartered files plus this spec,
-ADR, and plan differ from `main`; keep the ignored Forge ledger and review artifacts private.
+ADRs, and plan differ from `main`; keep the ignored Forge ledger and review artifacts private.
