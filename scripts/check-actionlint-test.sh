@@ -138,6 +138,41 @@ case $RUN_OUTPUT in
 esac
 assert_empty 'dynamic matrix runner did not reach ShellCheck' "$SHELLCHECK_LOG"
 
+commented_jobs=$SCRATCH/commented-jobs
+write_workflow "$commented_jobs" 'name: commented jobs
+on: push
+jobs: # supported comment
+  check:
+    runs-on: windows-latest
+    steps:
+      - run: |
+          Write-Output unsupported' commented-jobs.yml
+run_gate "$commented_jobs"
+assert_status 'commented jobs runner rejection' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'cannot independently ShellCheck runner'*) ;;
+*) fail "commented jobs runner rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'commented jobs did not reach ShellCheck' "$SHELLCHECK_LOG"
+
+quoted_jobs=$SCRATCH/quoted-jobs
+write_workflow "$quoted_jobs" 'name: quoted jobs
+on: push
+"jobs":
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo unsupported' quoted-jobs.yml
+run_gate "$quoted_jobs"
+assert_status 'quoted jobs rejection' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'unrecognized jobs declaration'*) ;;
+*) fail "quoted jobs rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'quoted jobs did not reach ShellCheck' "$SHELLCHECK_LOG"
+
+step_shell=$SCRATCH/step-shell
 step_shell=$SCRATCH/step-shell
 write_workflow "$step_shell" 'name: step shell
 on: push

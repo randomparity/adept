@@ -115,11 +115,16 @@ for workflow in "${workflow_files[@]}"; do
 			die("shell overrides are unsupported; add extractor support before using one")
 		}
 
-		if (indent == 0 && key == "jobs:") {
+		if (indent == 0 && key ~ /^jobs:[ ]*(#.*)?$/) {
 			validate_job()
 			in_jobs = 1
 			in_job = 0
 			next
+		}
+		if (indent == 0 && (key ~ /^"jobs"[ ]*:/ ||
+			index(key, sprintf("%c", 39) "jobs" sprintf("%c", 39)) == 1 ||
+			key ~ /^jobs/)) {
+			die("unrecognized jobs declaration")
 		}
 		if (in_jobs && indent == 0) {
 			validate_job()
