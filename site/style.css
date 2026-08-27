@@ -92,11 +92,11 @@ img { max-width: 100%; height: auto; }
 
 /* The landing page's hero (issue #241): `img { height: auto }` above lets a
  * 1254x1254 source render at the full ~812px content-column width, filling
- * the first viewport before any prose appears. This caps only the image that
- * follows the page's own `<h1>` directly -- the hero -- so the opening
- * paragraph stays above the fold without touching any other image on the
- * site, including the quest map further down this same page. */
-main > h1 + p > img { max-height: 320px; width: auto; }
+ * the first viewport before any prose appears. Key this cap to the
+ * repository-controlled asset rather than generated markup shape, so wrappers
+ * or intervening elements cannot disable it. The quest map has a different
+ * filename and remains uncapped. */
+main img[src$="adept-logo-grimoire.png"] { max-height: 320px; width: auto; }
 
 code {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
