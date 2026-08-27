@@ -25,10 +25,10 @@ unknown or omitted; they are never inferred from elapsed time or silence.
 
 ## Consequences
 
-Operators can distinguish a healthy long-running campaign from an unexplained stall without
-additional polling. The orchestrator has a small communication obligation at durable boundaries,
-but the manifest and tracker remain the only resumable state and existing liveness rules remain
-unchanged.
+Operators receive the latest verified phase and awaited event, reducing unexplained silence
+without establishing worker liveness or distinguishing a healthy wait from a stall. The
+orchestrator has a small communication obligation at durable boundaries, but the manifest and
+tracker remain the only resumable state and existing liveness rules remain unchanged.
 
 ## Considered & rejected
 
@@ -36,6 +36,5 @@ unchanged.
   owned by the manifest rows and tracker and turns communication into a new state transition.
 - **Emit updates on a timer.** verified: issue #263 requires preserving the campaign's prohibition
   on timer polling and speculative liveness inference.
-- **Report only when the operator asks.** judgment: this leaves blocking serial waits silent, which
-  is the behavior the decision exists to change.
-
+- **Retain silence during blocking phases.** verified: issue #263 requires operator-visible updates
+  at durable boundaries, including before a potentially long wait.
