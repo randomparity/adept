@@ -67,9 +67,12 @@ Design records already committed on the branch are not implementation targets.
    before-wait update. After each worker completion is received, require the completion update
    before processing its PR or next row. These clauses invoke the top-level contract and add no
    polling or dispatch.
-4. After each verified merge outcome is recorded in step 6, require the after-merge update before
+4. In step 6, require the before-wait update immediately before a potentially long PR verification,
+   branch-refresh guardrail/CI run, or merge operation. The update reports only evidence already
+   read for that operation; it performs no extra read, retry, probe, dispatch, or state change.
+5. After each verified merge outcome is recorded in step 6, require the after-merge update before
    advancing to the next row or finalization.
-5. Add a `### Progress scenarios` subsection after the existing status-read table with this
+6. Add a `### Progress scenarios` subsection after the existing status-read table with this
    behavior table:
 
    ```markdown
@@ -82,13 +85,13 @@ Design records already committed on the branch are not implementation targets.
    | Evidence unavailable | Unknown or omitted field | Silence, age, and missing data supply no fact |
    ```
 
-6. Review the whole campaign diff and confirm each update site refers to the top-level contract;
-   no site duplicates the field list or introduces a state mutation, dispatch, probe, retry, or
-   read.
-7. Run `git diff --check`. Expected: exit 0 and no output.
-8. Bump `.claude-plugin/plugin.json` from `2.9.18` to `2.10.0`; this adds a campaign capability.
-9. Run `just verify` bare. Expected: exit 0; all repository gates and discovered test suites pass.
-10. Commit the implementation with explicit paths:
+7. Review every existing wait site in campaign steps 5 and 6. Record it as covered by a named
+   update clause or as not orchestrator-owned; confirm each clause refers to the top-level contract
+   and introduces no state mutation, dispatch, probe, retry, or read.
+8. Run `git diff --check`. Expected: exit 0 and no output.
+9. Bump `.claude-plugin/plugin.json` from `2.9.18` to `2.10.0`; this adds a campaign capability.
+10. Run `just verify` bare. Expected: exit 0; all repository gates and discovered test suites pass.
+11. Commit the implementation with explicit paths:
 
     ```text
     feat: report campaign progress at boundaries (#263)
@@ -117,4 +120,3 @@ schema requires cleanup.
 - Review deferrals: none.
 - Guardrail: `just verify` (full suite); focused document gates are `just records` and
   `just public-safety`.
-

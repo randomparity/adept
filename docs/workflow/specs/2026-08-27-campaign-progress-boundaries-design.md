@@ -13,7 +13,7 @@ state, dispatch, or liveness contracts.
 - Scope identity: issue #263, token `q263-965cecc3`.
 - Outcome and criteria: the frozen `WORK:SCOPE` annotation on issue #263.
 - Surface: `skills/campaign/SKILL.md`, its workflow scenarios, these design records, and the
-  repository-required patch version bump.
+  repository-required MINOR version bump to `2.10.0` for the added capability.
 - Exclusions: timer polling, speculative liveness inference, reporting-driven redispatch,
   reporting-driven campaign mutation, and executable runtime services.
 - Ambiguities: none. Interaction is interactive.
@@ -76,4 +76,3 @@ forbids tests that assert Markdown wording; review checks the contract and scena
 - ADR-index coupling: no index.
 - Host architecture: `x86_64`; target architectures: none declared; relationship:
   `no-target-declared`.
-
