@@ -494,7 +494,15 @@ mergeable can arrive while review is still running. Part 4 is the only signal th
 author finished. Without it, leave the row pending and keep draining the queue; read the
 durable line from the issue rather than spending the step-5 agent-probe budget.
 
-**In parallel mode the dispatched agent may still be running.** It stops at hand-off, and hand-off comes some way after its PR first reads green + mergeable — which is the moment you start merging — so the branch is usually still checked out in a worktree you did not create. Merging is unaffected: it touches only refs already pushed. The refresh above is — `git worktree add` on a branch checked out elsewhere fails. Refresh a `BEHIND` sibling only once you have observed that agent's end of run — or once `git worktree list` shows the branch checked out nowhere, which is the same fact for a row you did not dispatch. The cheaper route is to ask the live agent to do the refresh itself; that is the work it was already doing when this race was found. That route reaches only an agent still mid-run: a worker that has handed off has ended its task, so never message one to stay resident for an anticipated refresh, a merge turn, or "one more fix" — a resident worker waits by waking, and every wake replays its full context, so an hour of idle waiting costs more than the fresh bounded dispatch it was saving. Post-handoff work belongs to you or to a new dispatch carrying only the context that work needs.
+**In parallel mode the dispatched agent may still be running.** Do not begin merging when
+its pull request first reads green + mergeable; leave it pending until hand-off supplies the
+matching handshake and the four-part gate passes. Even then, the agent may still be finishing
+its report, and its branch remains checked out in a worktree you did not create. Merging is
+unaffected because it touches only pushed refs. A refresh is different: `git worktree add`
+fails while another worktree holds the branch. Refresh a `BEHIND` sibling only after the
+agent's observed end of run, or after `git worktree list` shows the branch checked out nowhere
+for a row you did not dispatch. Post-handoff work belongs to you or to a fresh bounded dispatch,
+never to an agent kept resident for an anticipated refresh.
 
 The end of run does not by itself hand you the branch. The worker never removes its own worktree, so the branch is still checked out there after it stops, and your `git worktree add` still fails. **Reclaim it first**, exactly as step 5 does before a re-dispatch: take over the agent's existing path, or remove that worktree and then add your own. Only then check out the branch, or re-dispatch a worker with the same context. Use step-4 assignments for artifact regeneration.
 
