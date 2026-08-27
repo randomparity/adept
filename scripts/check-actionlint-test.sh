@@ -133,6 +133,29 @@ case $RUN_OUTPUT in
 esac
 assert_empty 'matrix os scalar did not reach ShellCheck' "$SHELLCHECK_LOG"
 
+matrix_include=$SCRATCH/matrix-include
+# shellcheck disable=SC2016 # fixture preserves the literal Actions expression
+write_workflow "$matrix_include" 'name: matrix include
+on: push
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        include:
+          - os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: |
+          echo unsupported' matrix-include.yml
+run_gate "$matrix_include"
+assert_status 'matrix include rejection' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'matrix must contain only a literal os list'*) ;;
+*) fail "matrix include rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'matrix include did not reach ShellCheck' "$SHELLCHECK_LOG"
+
 matrix_leak=$SCRATCH/matrix-leak
 # shellcheck disable=SC2016 # fixture preserves the literal Actions expression
 write_workflow "$matrix_leak" 'name: matrix leak

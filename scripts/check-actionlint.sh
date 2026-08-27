@@ -249,7 +249,10 @@ for workflow in "${workflow_files[@]}"; do
 			indent > job_matrix_indent && key != "" && key !~ /^#/) {
 			matrix_child_indent = indent
 		}
-		if (job_matrix_indent >= 0 && indent == matrix_child_indent && field ~ /^os:/) {
+		if (job_matrix_indent >= 0 && indent == matrix_child_indent) {
+			if (field !~ /^os:/) {
+				die("matrix must contain only a literal os list")
+			}
 			value = field
 			sub(/^os:[ ]*/, "", value)
 			if (value ~ /^[[]/) {
