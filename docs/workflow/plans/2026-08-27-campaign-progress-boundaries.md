@@ -115,8 +115,9 @@ schema requires cleanup.
 
 - Branch: `feat/campaign-progress-boundaries-263`
 - BASE_BRANCH: `main`
-- Current phase: design complete; plan review next, then forge TDD build.
+- Current phase: build complete; branch adversarial review in progress.
 - Open findings: none.
 - Review deferrals: none.
-- Guardrail: `just verify` (full suite); focused document gates are `just records` and
+- Completed guardrails: `git diff --check main...HEAD`; `just verify` (full suite, 203 record
+  assertions and 21 discovered test suites); focused document gates `just records` and
   `just public-safety`.

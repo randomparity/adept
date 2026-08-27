@@ -1,6 +1,6 @@
 # Campaign progress at durable boundaries — design
 
-Issue: [#263](https://github.com/randomparity/adept/issues/263)  
+Issue: [#263](https://github.com/randomparity/adept/issues/263)
 Decision: [ADR 0038](../../adr/0038-campaign-progress-is-observational.md)
 
 ## Goal
