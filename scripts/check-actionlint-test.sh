@@ -112,6 +112,27 @@ assert_status 'static Unix matrix' 0 "$RUN_STATUS"
 [[ $(wc -l <"$SHELLCHECK_LOG") -eq 1 ]] ||
 	fail 'the static Unix matrix run block must reach ShellCheck'
 
+unsupported_matrix_os=$SCRATCH/unsupported-matrix-os
+# shellcheck disable=SC2016 # fixture preserves the literal Actions expression
+write_workflow "$unsupported_matrix_os" 'name: unsupported matrix os
+on: push
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: |
+          echo unsupported' unsupported-matrix-os.yml
+run_gate "$unsupported_matrix_os"
+assert_status 'matrix os scalar rejection' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'matrix.os must use a literal list'*) ;;
+*) fail "matrix os scalar rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'matrix os scalar did not reach ShellCheck' "$SHELLCHECK_LOG"
+
 matrix_leak=$SCRATCH/matrix-leak
 # shellcheck disable=SC2016 # fixture preserves the literal Actions expression
 write_workflow "$matrix_leak" 'name: matrix leak
@@ -137,6 +158,27 @@ case $RUN_OUTPUT in
 *) fail "matrix state leak: unexpected output: $RUN_OUTPUT" ;;
 esac
 assert_empty 'dynamic matrix runner did not reach ShellCheck' "$SHELLCHECK_LOG"
+
+forged_matrix=$SCRATCH/forged-matrix
+# shellcheck disable=SC2016 # fixture preserves the literal Actions expression
+write_workflow "$forged_matrix" 'name: forged matrix
+on: push
+jobs:
+  check:
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: |
+          strategy:
+            matrix:
+              os: [ubuntu-latest]
+          echo forged' forged-matrix.yml
+run_gate "$forged_matrix"
+assert_status 'run block cannot forge matrix evidence' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'cannot independently ShellCheck matrix.os'*) ;;
+*) fail "forged matrix rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'forged matrix did not reach ShellCheck' "$SHELLCHECK_LOG"
 
 commented_jobs=$SCRATCH/commented-jobs
 write_workflow "$commented_jobs" 'name: commented jobs

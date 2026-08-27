@@ -75,6 +75,19 @@ for workflow in "${workflow_files[@]}"; do
 			value ~ ("^" double_quote name double_quote "[ ]*:")
 	}
 
+	function clear_matrix() {
+		job_matrix_indent = -1
+		matrix_child_indent = -1
+		os_list_indent = -1
+		os_list_entry_indent = -1
+	}
+
+	function clear_strategy() {
+		strategy_indent = -1
+		strategy_child_indent = -1
+		clear_matrix()
+	}
+
 	function add_matrix_os(value) {
 		value = trim(value)
 		sub(/[ ]*(#.*)?$/, "", value)
@@ -98,8 +111,8 @@ for workflow in "${workflow_files[@]}"; do
 		job_matrix_runner = 0
 		job_matrix_os_values = 0
 		job_matrix_os_all_unix = 1
-		job_matrix_indent = -1
-		os_list_indent = -1
+		job_field_indent = -1
+		clear_strategy()
 		in_job = 1
 	}
 
@@ -113,11 +126,31 @@ for workflow in "${workflow_files[@]}"; do
 		sub(/^ */, "", key)
 		field = key
 		sub(/^- +/, "", field)
+		if (policy_block_active) {
+			if (line ~ /^ *$/) {
+				next
+			}
+			if ((policy_block_content_indent < 0 && indent <= policy_block_indent) ||
+				(policy_block_content_indent >= 0 &&
+					indent < policy_block_content_indent)) {
+				policy_block_active = 0
+			} else {
+				if (policy_block_content_indent < 0) {
+					policy_block_content_indent = indent
+				}
+				next
+			}
+		}
 		if (quoted_key(field, "run") || quoted_key(field, "shell")) {
 			die("quoted run or shell declarations are unsupported")
 		}
 		if (field ~ /^shell:/) {
 			die("shell overrides are unsupported; add extractor support before using one")
+		}
+		if (field ~ /^[^#][^:]*:[ ]*[|][+-]?[ ]*(#.*)?$/) {
+			policy_block_active = 1
+			policy_block_indent = indent
+			policy_block_content_indent = -1
 		}
 
 		if (indent == 0 && key ~ /^jobs:[ ]*(#.*)?$/) {
@@ -166,26 +199,57 @@ for workflow in "${workflow_files[@]}"; do
 			next
 		}
 
-		if (job_matrix_indent >= 0 && indent <= job_matrix_indent) {
-			job_matrix_indent = -1
-			os_list_indent = -1
+		if (strategy_indent >= 0 && indent <= strategy_indent) {
+			clear_strategy()
+		} else if (job_matrix_indent >= 0 && indent <= job_matrix_indent) {
+			clear_matrix()
 		}
 		if (os_list_indent >= 0 && indent <= os_list_indent) {
 			os_list_indent = -1
+			os_list_entry_indent = -1
 		}
-		if (job_matrix_indent >= 0 && os_list_indent >= 0 &&
-			indent > os_list_indent && key ~ /^-[ ]+/) {
-			value = key
-			sub(/^-[ ]+/, "", value)
-			add_matrix_os(value)
+		if (job_field_indent < 0 && indent > job_indent && key != "" &&
+			key !~ /^#/) {
+			job_field_indent = indent
+		}
+		if (os_list_indent >= 0 && indent > os_list_indent && key != "" &&
+			key !~ /^#/) {
+			if (os_list_entry_indent < 0) {
+				if (key !~ /^-[ ]+/) {
+					die("matrix.os must use a literal list")
+				}
+				os_list_entry_indent = indent
+			}
+			if (indent == os_list_entry_indent && key ~ /^-[ ]+/) {
+				value = key
+				sub(/^-[ ]+/, "", value)
+				add_matrix_os(value)
+				next
+			}
+		}
+		if (indent == job_field_indent && field ~ /^strategy:[ ]*(#.*)?$/) {
+			strategy_indent = indent
+			strategy_child_indent = -1
+			clear_matrix()
 			next
 		}
-		if (field ~ /^matrix:[ ]*(#.*)?$/) {
+		if (strategy_indent >= 0 && strategy_child_indent < 0 &&
+			indent > strategy_indent && key != "" && key !~ /^#/) {
+			strategy_child_indent = indent
+		}
+		if (strategy_indent >= 0 && indent == strategy_child_indent &&
+			field ~ /^matrix:[ ]*(#.*)?$/) {
 			job_matrix_indent = indent
+			matrix_child_indent = -1
 			os_list_indent = -1
+			os_list_entry_indent = -1
 			next
 		}
-		if (job_matrix_indent >= 0 && indent > job_matrix_indent && field ~ /^os:/) {
+		if (job_matrix_indent >= 0 && matrix_child_indent < 0 &&
+			indent > job_matrix_indent && key != "" && key !~ /^#/) {
+			matrix_child_indent = indent
+		}
+		if (job_matrix_indent >= 0 && indent == matrix_child_indent && field ~ /^os:/) {
 			value = field
 			sub(/^os:[ ]*/, "", value)
 			if (value ~ /^[[]/) {
@@ -197,10 +261,13 @@ for workflow in "${workflow_files[@]}"; do
 				}
 			} else if (value == "") {
 				os_list_indent = indent
+				os_list_entry_indent = -1
+			} else {
+				die("matrix.os must use a literal list")
 			}
 		}
 
-		if (field ~ /^runs-on:/) {
+		if (indent == job_field_indent && field ~ /^runs-on:/) {
 			value = field
 			sub(/^runs-on:[ ]*/, "", value)
 			value = trim(value)
