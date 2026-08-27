@@ -68,6 +68,13 @@ for workflow in "${workflow_files[@]}"; do
 		return value
 	}
 
+	function quoted_key(value, name, single_quote, double_quote) {
+		single_quote = sprintf("%c", 39)
+		double_quote = sprintf("%c", 34)
+		return value ~ ("^" single_quote name single_quote "[ ]*:") ||
+			value ~ ("^" double_quote name double_quote "[ ]*:")
+	}
+
 	function add_matrix_os(value) {
 		value = trim(value)
 		sub(/[ ]*(#.*)?$/, "", value)
@@ -111,6 +118,9 @@ for workflow in "${workflow_files[@]}"; do
 		sub(/^ */, "", key)
 		field = key
 		sub(/^- +/, "", field)
+		if (quoted_key(field, "run") || quoted_key(field, "shell")) {
+			die("quoted run or shell declarations are unsupported")
+		}
 		if (field ~ /^shell:/) {
 			die("shell overrides are unsupported; add extractor support before using one")
 		}
@@ -225,6 +235,13 @@ for workflow in "${workflow_files[@]}"; do
 		return length(prefix)
 	}
 
+	function quoted_key(value, name, single_quote, double_quote) {
+		single_quote = sprintf("%c", 39)
+		double_quote = sprintf("%c", 34)
+		return value ~ ("^" single_quote name single_quote "[ ]*:") ||
+			value ~ ("^" double_quote name double_quote "[ ]*:")
+	}
+
 	function begin_run() {
 		block_count++
 		path = sprintf("%s/%03d.sh", output_dir, block_count)
@@ -243,6 +260,9 @@ for workflow in "${workflow_files[@]}"; do
 		value = line
 		sub(/^ */, "", value)
 		sub(/^- +/, "", value)
+		if (quoted_key(value, "run") || quoted_key(value, "shell")) {
+			die("quoted run or shell declarations are unsupported")
+		}
 		if (value ~ /^run:/) {
 			sub(/^run:[ ]*/, "", value)
 			if (value !~ /^[|][+-]?[ ]*(#.*)?$/) {

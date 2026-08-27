@@ -190,7 +190,6 @@ esac
 assert_empty 'quoted jobs did not reach ShellCheck' "$SHELLCHECK_LOG"
 
 step_shell=$SCRATCH/step-shell
-step_shell=$SCRATCH/step-shell
 write_workflow "$step_shell" 'name: step shell
 on: push
 jobs:
@@ -207,6 +206,76 @@ case $RUN_OUTPUT in
 *) fail "step shell rejection: unexpected output: $RUN_OUTPUT" ;;
 esac
 assert_empty 'step shell did not reach ShellCheck' "$SHELLCHECK_LOG"
+
+quoted_run_double=$SCRATCH/quoted-run-double
+write_workflow "$quoted_run_double" 'name: quoted run double
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - "run": |
+          echo bypass' quoted-run-double.yml
+run_gate "$quoted_run_double"
+assert_status 'double-quoted run rejection' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'quoted run or shell declarations are unsupported'*) ;;
+*) fail "double-quoted run rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'double-quoted run did not reach ShellCheck' "$SHELLCHECK_LOG"
+
+quoted_run_single=$SCRATCH/quoted-run-single
+write_workflow "$quoted_run_single" "name: quoted run single
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - 'run': |
+          echo bypass" quoted-run-single.yml
+run_gate "$quoted_run_single"
+assert_status 'single-quoted run rejection' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'quoted run or shell declarations are unsupported'*) ;;
+*) fail "single-quoted run rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'single-quoted run did not reach ShellCheck' "$SHELLCHECK_LOG"
+
+quoted_shell_double=$SCRATCH/quoted-shell-double
+write_workflow "$quoted_shell_double" 'name: quoted shell double
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo bypass
+        "shell": bash' quoted-shell-double.yml
+run_gate "$quoted_shell_double"
+assert_status 'double-quoted shell rejection' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'quoted run or shell declarations are unsupported'*) ;;
+*) fail "double-quoted shell rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'double-quoted shell did not reach ShellCheck' "$SHELLCHECK_LOG"
+
+quoted_shell_single=$SCRATCH/quoted-shell-single
+write_workflow "$quoted_shell_single" "name: quoted shell single
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo bypass
+        'shell': bash" quoted-shell-single.yml
+run_gate "$quoted_shell_single"
+assert_status 'single-quoted shell rejection' 2 "$RUN_STATUS"
+case $RUN_OUTPUT in
+*'quoted run or shell declarations are unsupported'*) ;;
+*) fail "single-quoted shell rejection: unexpected output: $RUN_OUTPUT" ;;
+esac
+assert_empty 'single-quoted shell did not reach ShellCheck' "$SHELLCHECK_LOG"
 
 workflow_default=$SCRATCH/workflow-default
 write_workflow "$workflow_default" 'name: workflow default
