@@ -62,7 +62,7 @@ the 0→2/nonzero→same status rule; Task 3 relies on its focused suite being g
    	cleanup_status=$?
    [[ $cleanup_status -eq 2 ]] ||
    	fail "clean cleanup failure: expected exit 2, got $cleanup_status: $cleanup_output"
-   [[ $cleanup_output == *"retained scratch path: $SCRATCH/ripgrep-config."* ]] ||
+   [[ $cleanup_output == *"ripgrep-config: retained scratch path: $SCRATCH/ripgrep-config."* ]] ||
    	fail "clean cleanup failure: retained path missing: $cleanup_output"
 
    finding_status=0
@@ -72,7 +72,7 @@ the 0→2/nonzero→same status rule; Task 3 relies on its focused suite being g
    	fail "finding cleanup failure: expected exit 1, got $finding_status: $finding_output"
    [[ $finding_output == *'scripts/scan.sh:4: runs rg'* ]] ||
    	fail "finding cleanup failure: finding missing: $finding_output"
-   [[ $finding_output == *"retained scratch path: $SCRATCH/ripgrep-config."* ]] ||
+   [[ $finding_output == *"ripgrep-config: retained scratch path: $SCRATCH/ripgrep-config."* ]] ||
    	fail "finding cleanup failure: retained path missing: $finding_output"
    ```
 
@@ -134,7 +134,8 @@ with exit 2 only when `status` was 0; Task 3 relies on the focused suite being g
    	local input=$1
    	printf '%b' "$input" | (
    		cd "$REPO"
-   		PATH="$RM_FAIL_BIN:$BIN:$PATH" JUST_LOG="$LOG" SOURCE_REPO="$REPO" "$VERIFIER"
+   		PATH="$RM_FAIL_BIN:$BIN:$PATH" TMPDIR="$SCRATCH" JUST_LOG="$LOG" \
+   			SOURCE_REPO="$REPO" "$VERIFIER"
    	)
    }
 
@@ -143,7 +144,8 @@ with exit 2 only when `status` was 0; Task 3 relies on the focused suite being g
    rm_cleanup_output=$(run_verifier_with_rm \
    	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
    	2>&1) || rm_cleanup_status=$?
-   [[ $rm_cleanup_status -eq 2 && $rm_cleanup_output == *'retained cleanup path:'* ]] ||
+   [[ $rm_cleanup_status -eq 2 && \
+   	$rm_cleanup_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
    	fail "scratch removal failure should exit 2 and name its path: $rm_cleanup_output"
 
    new_repo
@@ -153,7 +155,8 @@ with exit 2 only when `status` was 0; Task 3 relies on the focused suite being g
    	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
    	2>&1) || rm_failure_status=$?
    unset FAIL_CI
-   [[ $rm_failure_status -eq 73 && $rm_failure_output == *'retained cleanup path:'* ]] ||
+   [[ $rm_failure_status -eq 73 && \
+   	$rm_failure_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
    	fail "scratch removal failure should preserve CI exit 73: $rm_failure_output"
    ```
 
