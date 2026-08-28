@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Fixture suite for scripts/run-zizmor.sh. zizmor is stubbed on PATH, so the suite
 # needs no network, no credentials, and no zizmor installation, and it pins the
-# gate's own behaviour rather than the tool's -- which matters because CI installs
-# zizmor unpinned (ADR 0036).
+# gate's own behaviour rather than the tool's. CI installs the admitted version
+# exactly, while the stub lets this suite exercise rejected observations too (ADR 0044).
 #
 # The stub records the argv it was handed and which token variables reached it,
 # and exits with whatever status a case asks for. Two of those recordings are the
@@ -33,6 +33,10 @@ mkdir -p "$stub_dir"
 cat >"$stub_dir/zizmor" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ ${1:-} == --version ]]; then
+	printf '%s\n' "${ZIZMOR_STUB_VERSION_OUTPUT:-zizmor 1.29.0}"
+	exit "${ZIZMOR_STUB_VERSION_STATUS:-0}"
+fi
 printf '%s\n' "$*" >"$ZIZMOR_STUB_ARGV"
 {
 	printf 'GH_TOKEN=%s\n' "${GH_TOKEN+<set:$GH_TOKEN>}"
@@ -63,6 +67,8 @@ run() {
 			ZIZMOR_STUB_ARGV="$argv_file" \
 			ZIZMOR_STUB_ENV="$env_file" \
 			ZIZMOR_STUB_STATUS="$status" \
+			ZIZMOR_STUB_VERSION_OUTPUT='zizmor 1.29.0' \
+			ZIZMOR_STUB_VERSION_STATUS=0 \
 			"$@" \
 			"$gate" .github/workflows/ 2>&1
 	) || RUN_STATUS=$?
@@ -90,6 +96,40 @@ assert_status() { # label expected actual
 ok() { # message
 	printf 'ok   %s\n' "$1"
 }
+
+# -- exact analyzer version admission --
+
+run 0 GH_TOKEN=t1
+assert_status 'admitted version' 0 "$RUN_STATUS"
+[[ $RUN_ARGV == '.github/workflows/' ]] ||
+	fail "admitted version: expected audit invocation, got '$RUN_ARGV'"
+ok 'zizmor 1.29.0 is admitted and the audit runs'
+
+for observed in 'zizmor 1.28.0' 'zizmor 1.30.0'; do
+	run 0 ZIZMOR_STUB_VERSION_OUTPUT="$observed"
+	assert_status "version mismatch $observed" 1 "$RUN_STATUS"
+	assert_contains "version mismatch $observed" "$RUN_OUTPUT" 'expected zizmor 1.29.0'
+	assert_contains "version mismatch $observed" "$RUN_OUTPUT" "observed $observed"
+	[[ -z $RUN_ARGV ]] ||
+		fail "version mismatch $observed: audit ran with '$RUN_ARGV'"
+done
+ok 'older and newer analyzer versions fail before the audit and name both versions'
+
+malformed_version=$'zizmor 1.29.0; touch should-not-exist\nextra output'
+run 0 ZIZMOR_STUB_VERSION_OUTPUT="$malformed_version"
+assert_status 'malformed version' 1 "$RUN_STATUS"
+assert_contains 'malformed version' "$RUN_OUTPUT" 'observed zizmor 1.29.0; touch should-not-exist'
+assert_contains 'malformed version' "$RUN_OUTPUT" 'extra output'
+[[ -z $RUN_ARGV ]] || fail "malformed version: audit ran with '$RUN_ARGV'"
+[[ ! -e $SCRATCH/should-not-exist ]] || fail 'malformed version output was evaluated'
+ok 'multiline metacharacter output is reported as inert data and fails before the audit'
+
+run 0 ZIZMOR_STUB_VERSION_STATUS=9 ZIZMOR_STUB_VERSION_OUTPUT='version probe failed'
+assert_status 'version command failure' 1 "$RUN_STATUS"
+assert_contains 'version command failure' "$RUN_OUTPUT" 'expected zizmor 1.29.0'
+assert_contains 'version command failure' "$RUN_OUTPUT" 'version command exited 9'
+[[ -z $RUN_ARGV ]] || fail "version command failure: audit ran with '$RUN_ARGV'"
+ok 'a failed version command names its status and prevents the audit'
 
 # -- mode selection from the token variables --
 
