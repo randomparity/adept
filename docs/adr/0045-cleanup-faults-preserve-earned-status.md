@@ -33,12 +33,18 @@ and already-failing runs.
 **Ignore cleanup failures.** judgment: observability; silence would leave scratch state behind
 without telling the operator where it is.
 
-**Return the removal command's status.** verified: issue #77 reproduces a clean
-`check-ripgrep-config.sh` run printing its ok line and then exiting 1 under a failing `rm`, which
-borrows the status reserved for a content finding.
+**Return the removal command's status.** verified: at base commit
+`48a814c6f6c94791134d52b8ddc1a51d7b897b31`,
+`bash -c 'set -e; cleanup(){ false; }; trap cleanup EXIT; printf "ok\n"'` printed `ok` and
+exited 1 under GNU Bash 5.3.9 on x86_64 Linux, reproducing the status replacement reported by
+issue #77.
 
 **Always replace the incoming status with exit 2.** judgment: correctness; cleanup is secondary to
 the gate or CI verdict already earned and must not hide it.
 
-**Extract a shared cleanup helper.** judgment: scope and fit; the two gates have different scratch
-ownership and worktree-removal steps, and this is only the second production repetition.
+**Extract a shared cleanup helper.** verified: at base commit
+`48a814c6f6c94791134d52b8ddc1a51d7b897b31`,
+`sed -n '60,70p' scripts/check-ripgrep-config.sh` showed one guarded scratch-directory removal,
+while `sed -n '126,144p' scripts/verify-push.sh` showed worktree removal followed by scratch-root
+removal. Judgment: a shared abstraction across those different responsibilities is outside this
+two-site correction and would add more surface than it removes.
