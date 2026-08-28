@@ -57,10 +57,10 @@ prior art is considered before disposition without changing the charter.
 | Failure mode | Severity | Evaluation |
 |---|---:|---|
 | Miss the motivating speculative first-pass pattern | 4 | EH-1: #566-style platform findings trigger focused prior-art research before disposition. |
-| Leak private target context into a query | 5 | EH-2: a private-repository example requires abstract public-safe terms or parks if it cannot be summarized safely. |
+| Leak private target context into a query | 5 | EH-2: a private-repository example uses abstract public-safe terms or records `not searched` as non-evidence and continues ordinary disposition. |
 | Treat external advice as scope authority | 5 | EH-3: advice proposing a new contract is rejected or returned to scope checkpoint. |
 | Browse on an ordinary clean pass | 2 | EH-4: an approve result with no unresolved practice records `not triggered`. |
-| Repeat unbounded searches | 4 | EH-5: conflicting sources produce one focused clarification/park, not iterative browsing. |
+| Repeat unbounded searches | 4 | EH-5: conflicting sources are recorded as inconclusive non-evidence; ordinary disposition continues unless the underlying finding independently requires authority. |
 | Stale or conflicting guidance | 4 | EH-6: the note identifies the conflict and does not claim confirmation. |
 | Search unavailable or inconclusive | 3 | EH-7: the outcome is recorded as non-evidence and normal disposition continues. |
 
