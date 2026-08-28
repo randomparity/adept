@@ -18,8 +18,8 @@ The local `zizmor --version` output was `zizmor 1.29.0` at design time.
 
 `scripts/run-zizmor.sh` owns an exact expected version, 1.29.0. Before selecting an audit
 mode, it runs `zizmor --version` and requires the exact output `zizmor 1.29.0`. A command
-failure or any other output stops the gate before the audit and reports the expected and
-observed result.
+failure or any other output after shell command substitution removes trailing newlines
+stops the gate before the audit and reports the expected and observed result.
 
 CI installs uv 0.12.7 through `astral-sh/setup-uv` v10.0.1 pinned to commit
 `20cfd1bf945f4377ade1205e4dbc17946fc9a30d`, then runs

@@ -17,7 +17,8 @@ legs already invoke it. CI will install that exact version through pinned setup-
 The wrapper must:
 
 1. execute `zizmor --version` before mode selection or auditing;
-2. continue only when stdout is exactly `zizmor 1.29.0` and the command succeeds;
+2. continue only when shell-command-substitution-normalized stdout is exactly
+   `zizmor 1.29.0` and the command succeeds; trailing newlines are intentionally ignored;
 3. otherwise exit 1 and name the expected version plus the observed output or command
    failure;
 4. never invoke the audit after a failed version check; and
@@ -52,8 +53,9 @@ measurement or mode decision is rewritten.
   `run-zizmor: expected zizmor 1.29.0, observed <output>; install zizmor 1.29.0`.
 - Failed `--version`: exit 1 with the expected version, the command status, and an install
   instruction. The audit invocation must remain absent.
-- Multi-line output is a mismatch and is rendered as observed data; no value is evaluated
-  as shell code.
+- Output containing an embedded newline and additional nonblank content is a mismatch and
+  is rendered as observed data. Shell command substitution intentionally removes trailing
+  newlines before comparison. No value is evaluated as shell code.
 
 ## Threat model
 
@@ -78,7 +80,8 @@ The setup action is pinned by full commit SHA, uv by exact version, and zizmor b
 package version. The complete version output is compared as inert shell data inside
 `[[ ... ]]`; it is never evaluated, split into a command, or used as a path. A nonzero
 version command and every non-exact output fail closed before the audit. Tests cover
-metacharacters and multiple lines as mismatch data and prove the audit stub is not invoked.
+metacharacters and an embedded newline with additional nonblank content as mismatch data and
+prove the audit stub is not invoked.
 
 ### Out of scope
 
