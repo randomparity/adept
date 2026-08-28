@@ -36,7 +36,8 @@ Task 2 must satisfy them without changing their expected codes.
 1. Extend `renumber_match_outranks_fault` so two earlier candidate index reads fault with
    distinguishable paths before `docs/debt/0006-b.md` matches. Keep expected exit `0`, then assert
    `.err` contains `::warning::W-RENUMBER-SCAN:`, names the later faulting candidate and its exit,
-   and `.out` still names the real renumber destination.
+   and `.out` still names the real renumber destination. The path assertion specifically proves
+   the predicate copied its local `fault_path` into caller-visible `renumber_fault_path`.
 2. Add a gate fixture whose protected set is empty, whose first two `ls-tree` witnesses fault with
    distinguishable paths, and whose later workflow witness finds the former gate basename. Assert
    exit `1`, `E-GATE-EMPTY-SET`, `W-GATE-WITNESS-SCAN` naming the second fault, and absence of
@@ -63,9 +64,10 @@ Produces status `3` from `renumbered_elsewhere` and `gate_existed_at`; Task 3 re
 mirrors being identical and the focused suite being green.
 
 1. In each predicate's positive-result branch, return `3` when `fault_status` is non-zero and
-   return `0` otherwise. Before returning `3`, copy the retained `fault_status` to
-   `path_exists_status`; the location global already names the last fault because every fault
-   assignment overwrites it.
+   return `0` otherwise. In `renumbered_elsewhere`, copy both local retained values before return:
+   `path_exists_status=$fault_status` and `renumber_fault_path=$fault_path`. In
+   `gate_existed_at`, copy `fault_status` to `path_exists_status`; its caller-visible
+   `gate_witness_path` already changes with every fault.
 2. In the `renumbered_elsewhere` caller, add a status-3 case that emits
    `warn_full "W-RENUMBER-SCAN: $record: found renumber destination $renumbered_to after an incomplete search (could not read $renumber_fault_path, exit $path_exists_status)"`
    and then prints the same renumber note as status 0.
