@@ -16,7 +16,7 @@ Tech stack: Bash 3.2-compatible shell, git-backed shell fixtures, Just guardrail
   byte-identical.
 - Preserve the existing `E-SECTION-SCAN` diagnostic and three-way grep status handling.
 - Full guardrail: `just verify`; CI wrapper: `just ci`; focused suite:
-  `just test check-records`.
+  `./.github/scripts/check-records-test.sh`.
 - Every repository change requires a patch version increase in
   `.claude-plugin/plugin.json`.
 
@@ -79,7 +79,7 @@ Steps:
 5. Run the focused case against the unchanged production code:
 
    ```bash
-   just test check-records
+   ./.github/scripts/check-records-test.sh
    ```
 
    Expected: non-zero, with the new case reporting that `E-SECTION-SCAN` was downgraded to
@@ -126,7 +126,7 @@ Steps:
 4. Run:
 
    ```bash
-   just test check-records
+   ./.github/scripts/check-records-test.sh
    ```
 
    Expected: exit 0 and the suite summary reports the matching suites passed.
