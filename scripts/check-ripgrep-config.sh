@@ -60,20 +60,26 @@ lister="$root/scripts/list-shell-sources.sh"
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/ripgrep-config.XXXXXX") || fault 'could not create a scratch directory'
 cleanup() {
-	local exit_status=$?
+	local exit_status=$? cleanup_status
+	cleanup_status=$exit_status
 	case $scratch in
 	"${TMPDIR:-/tmp}"/ripgrep-config.*)
 		if rm -R -- "$scratch"; then
 			exit "$exit_status"
 		fi
-		printf 'ripgrep-config: retained scratch path: %s\n' "$scratch" >&2
+		if [ "$exit_status" -eq 0 ]; then
+			cleanup_status=2
+		fi
+		printf 'ripgrep-config: retained scratch path: %s\n' "$scratch" >&2 || :
 		;;
-	*) printf 'ripgrep-config: refusing cleanup outside scratch root: %s\n' "$scratch" >&2 ;;
+	*)
+		if [ "$exit_status" -eq 0 ]; then
+			cleanup_status=2
+		fi
+		printf 'ripgrep-config: refusing cleanup outside scratch root: %s\n' "$scratch" >&2 || :
+		;;
 	esac
-	if [ "$exit_status" -eq 0 ]; then
-		exit 2
-	fi
-	exit "$exit_status"
+	exit "$cleanup_status"
 }
 trap cleanup EXIT
 

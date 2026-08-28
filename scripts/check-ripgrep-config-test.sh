@@ -123,6 +123,21 @@ finding_output=$(PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$bare_root" 2>
 [[ $finding_output == *"ripgrep-config: retained scratch path: $SCRATCH/ripgrep-config."* ]] ||
 	fail "finding cleanup failure: retained path missing: $finding_output"
 
+# A diagnostic is secondary accounting too. If stderr is unavailable, cleanup
+# still preserves the verdict it had already earned rather than borrowing the
+# failed printf's status 1.
+closed_clean_status=0
+PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$cleanup_root" 2>&- ||
+	closed_clean_status=$?
+[[ $closed_clean_status -eq 2 ]] ||
+	fail "clean cleanup with closed stderr: expected exit 2, got $closed_clean_status"
+
+closed_finding_status=0
+PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$bare_root" 2>&- ||
+	closed_finding_status=$?
+[[ $closed_finding_status -eq 1 ]] ||
+	fail "finding cleanup with closed stderr: expected exit 1, got $closed_finding_status"
+
 # Neutralising one source says nothing about the next one; the gate answers per
 # file, not per repository.
 mixed_root=$(new_fixture mixed)

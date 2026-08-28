@@ -275,6 +275,26 @@ unset FAIL_CI
 	$rm_failure_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
 	fail "scratch removal failure should preserve CI exit 73: $rm_failure_output"
 
+# A failed retained-path diagnostic must not become the cleanup verdict. Closed
+# stderr constructs that path without depending on platform-specific I/O faults.
+new_repo
+rm_closed_status=0
+run_verifier_with_rm \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
+	2>&- || rm_closed_status=$?
+[[ $rm_closed_status -eq 2 ]] ||
+	fail "closed cleanup diagnostic should keep exit 2, got $rm_closed_status"
+
+new_repo
+export FAIL_CI=1
+rm_closed_failure_status=0
+run_verifier_with_rm \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
+	2>&- || rm_closed_failure_status=$?
+unset FAIL_CI
+[[ $rm_closed_failure_status -eq 73 ]] ||
+	fail "closed cleanup diagnostic should preserve CI exit 73, got $rm_closed_failure_status"
+
 # The verifier clears Git's repository-local selectors before it resolves
 # anything inside the detached worktree. Read through a process substitution
 # that loop reported its own status and never rev-parse's, so a rev-parse that
