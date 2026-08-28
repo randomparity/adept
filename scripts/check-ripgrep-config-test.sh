@@ -94,6 +94,50 @@ track "$bare_root"
 assert_fails 'unneutralised invocation' "$bare_root" \
 	'scripts/scan.sh:4: runs rg without unset RIPGREP_CONFIG_PATH or --no-config'
 
+rm_shim=$SCRATCH/shim-rm
+mkdir -p "$rm_shim"
+# shellcheck disable=SC2016 # the shim writes its own script, not this suite.
+printf '#!/usr/bin/env bash\nif [[ $1 == -R ]]; then exit 1; fi\nexec /bin/rm "$@"\n' >"$rm_shim/rm"
+chmod +x "$rm_shim/rm"
+
+cleanup_root=$(new_fixture cleanup-fault)
+write_source "$cleanup_root" scripts/scan.sh '#!/usr/bin/env bash
+unset RIPGREP_CONFIG_PATH
+rg --no-config -n pattern .'
+track "$cleanup_root"
+cleanup_status=0
+cleanup_output=$(PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$cleanup_root" 2>&1) ||
+	cleanup_status=$?
+[[ $cleanup_status -eq 2 ]] ||
+	fail "clean cleanup failure: expected exit 2, got $cleanup_status: $cleanup_output"
+[[ $cleanup_output == *"ripgrep-config: retained scratch path: $SCRATCH/ripgrep-config."* ]] ||
+	fail "clean cleanup failure: retained path missing: $cleanup_output"
+
+finding_status=0
+finding_output=$(PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$bare_root" 2>&1) ||
+	finding_status=$?
+[[ $finding_status -eq 1 ]] ||
+	fail "finding cleanup failure: expected exit 1, got $finding_status: $finding_output"
+[[ $finding_output == *'scripts/scan.sh:4: runs rg'* ]] ||
+	fail "finding cleanup failure: finding missing: $finding_output"
+[[ $finding_output == *"ripgrep-config: retained scratch path: $SCRATCH/ripgrep-config."* ]] ||
+	fail "finding cleanup failure: retained path missing: $finding_output"
+
+# A diagnostic is secondary accounting too. If stderr is unavailable, cleanup
+# still preserves the verdict it had already earned rather than borrowing the
+# failed printf's status 1.
+closed_clean_status=0
+PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$cleanup_root" 2>&- ||
+	closed_clean_status=$?
+[[ $closed_clean_status -eq 2 ]] ||
+	fail "clean cleanup with closed stderr: expected exit 2, got $closed_clean_status"
+
+closed_finding_status=0
+PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$bare_root" 2>&- ||
+	closed_finding_status=$?
+[[ $closed_finding_status -eq 1 ]] ||
+	fail "finding cleanup with closed stderr: expected exit 1, got $closed_finding_status"
+
 # Neutralising one source says nothing about the next one; the gate answers per
 # file, not per repository.
 mixed_root=$(new_fixture mixed)
