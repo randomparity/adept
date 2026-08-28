@@ -13,9 +13,11 @@ return success as soon as a positive result appears. That preserves the verdict 
 the fact that part of the search did not run.
 
 [ADR 0005](0005-scan-faults-are-reported-not-collapsed.md) requires a predicate to return a
-distinct fault value and its caller to report it. It does not define an outcome that combines
-a positive answer with a reportable, outranked fault, and its error channel would incorrectly
-turn an incomplete but decisive search into failure.
+distinct fault value and its caller to report it. Although ADR 0005 is formally superseded,
+[ADR 0024](0024-a-failing-repository-probe-is-not-evidence-of-absence.md) withdraws one
+consequence while carrying its three decisions forward unchanged. Those decisions do not define
+an outcome that combines a positive answer with a reportable, outranked fault, and the existing
+error channel would incorrectly turn an incomplete but decisive search into failure.
 
 ## Decision
 
@@ -51,8 +53,8 @@ where a later candidate or witness supplies a genuine positive result; treating 
 fault as decisive would reverse the established verdict rather than report how it was reached.
 
 **Emit the warning inside each predicate before returning success.** judgment: fit; it would
-violate ADR 0005's caller-reporting boundary and make the predicate responsible for both search
-and presentation.
+violate the caller-reporting boundary carried forward by ADR 0024 and make the predicate
+responsible for both search and presentation.
 
 **Add a side-channel global while continuing to return ordinary success.** judgment:
 maintainability; every caller would have to remember to inspect optional state after an
