@@ -11,8 +11,8 @@ workstations, with an actionable failure before any audit runs.
 
 The existing `scripts/run-zizmor.sh` boundary will admit exactly zizmor 1.29.0. This is the
 smallest shared point: `just actions-check`, `just verify`, `just ci`, and both CI matrix
-legs already invoke it. No new script, installer, dependency, or network operation is
-needed.
+legs already invoke it. CI will install that exact version through pinned setup-uv and
+`uv tool install`; workstations keep using their existing locally installed binary.
 
 The wrapper must:
 
@@ -24,10 +24,12 @@ The wrapper must:
 5. retain all existing mode selection, credential handling, diagnostics, and exit-status
    forwarding after admission succeeds.
 
-CI keeps the existing Homebrew installation. The wrapper is the enforcement point, so a
-different Homebrew resolution produces a red matrix leg before analysis. The same behavior
-on a workstation keeps `just verify` offline by default: `--version` is local and the later
-tokenless audit remains explicitly offline.
+CI removes zizmor from the Homebrew bundle, installs uv 0.12.7 through
+`astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d` (v10.0.1), and runs
+`uv tool install 'zizmor==1.29.0'`. The exact request makes version transitions independent
+of staggered runner images. The wrapper remains the enforcement point and catches an
+installer or `PATH` mismatch before analysis. On a workstation, `--version` is local and
+the later tokenless audit remains explicitly offline.
 
 ## Components and data flow
 
@@ -57,30 +59,32 @@ measurement or mode decision is rewritten.
 
 ### Boundary inventory
 
-The existing `PATH` lookup is the only trust boundary: a local operator or CI provisioning
-selects the `zizmor` executable. The design adds a read of that executable's `--version`
-output and widens no network, credential, authorization, or file boundary.
+The existing `PATH` lookup remains a trust boundary: a local operator or CI provisioning
+selects the `zizmor` executable. The design adds a pinned third-party setup action and a
+PyPI tool download to CI, plus a read of the executable's `--version` output. It widens no
+credential, authorization, or file boundary.
 
 ### Actors and trust
 
-CI provisioning and the local operator are trusted to choose `PATH`; a compromised binary
-was already able to execute during the audit. Version output is untrusted text used only
-for exact comparison and an error message. The GitHub token remains handled by the existing
-ADR 0036 flow and is never read or printed by the version check.
+The pinned setup-uv commit and PyPI are trusted to provision the requested package; the
+local operator is trusted to choose `PATH`. A compromised binary was already able to
+execute during the audit. Version output is untrusted text used only for exact comparison
+and an error message. The GitHub token remains handled by the existing ADR 0036 flow and is
+never read or printed by installation or the version check.
 
 ### Controls
 
-The complete output is compared as inert shell data inside `[[ ... ]]`; it is never
-evaluated, split into a command, or used as a path. A nonzero version command and every
-non-exact output fail closed before the audit. Tests cover metacharacters and multiple
-lines as mismatch data and prove the audit stub is not invoked.
+The setup action is pinned by full commit SHA, uv by exact version, and zizmor by exact
+package version. The complete version output is compared as inert shell data inside
+`[[ ... ]]`; it is never evaluated, split into a command, or used as a path. A nonzero
+version command and every non-exact output fail closed before the audit. Tests cover
+metacharacters and multiple lines as mismatch data and prove the audit stub is not invoked.
 
 ### Out of scope
 
-Binary provenance and installer compromise are unchanged: an executable can lie about its
-version, and this change does not add signature verification. Pinning unrelated CI tools is
-owned by separate work. These risks are not worsened by reading `--version` before running
-the same executable.
+An executable can lie about its version, and this change does not add independent signature
+verification beyond setup-uv's release checks and the package index transport. Pinning
+unrelated CI tools is owned by separate work.
 
 ## Verification
 
@@ -91,4 +95,3 @@ the existing online audit path.
 
 The plugin manifest receives a patch version bump because every repository change must be
 installable under ADR 0022.
-

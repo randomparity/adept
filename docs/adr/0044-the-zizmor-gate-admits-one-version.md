@@ -21,11 +21,14 @@ mode, it runs `zizmor --version` and requires the exact output `zizmor 1.29.0`. 
 failure or any other output stops the gate before the audit and reports the expected and
 observed result.
 
-CI continues installing zizmor with Homebrew. Homebrew may resolve a different package,
-but the guardrail suite will not use it: both matrix legs enter through the same wrapper
-and must pass the same admission check. Workstations use that same path, so the local and
-CI contracts cannot silently diverge. Updating zizmor requires one reviewed change to the
-expected version and its version-sensitive tests and documentation.
+CI installs uv 0.12.7 through `astral-sh/setup-uv` v10.0.1 pinned to commit
+`20cfd1bf945f4377ade1205e4dbc17946fc9a30d`, then runs
+`uv tool install 'zizmor==1.29.0'`. Both matrix legs therefore request the same analyzer
+package instead of accepting runner-image state. Workstations use the same wrapper
+admission check, so the local and CI contracts cannot silently diverge. Updating zizmor
+requires one reviewed change to the CI request, wrapper expectation, version-sensitive
+tests, and documentation; the existing version remains installable while that change is
+reviewed.
 
 ADR 0036 remains authoritative for mode selection. Its caveat that those semantics were
 measured on 1.29.0 is now an enforced precondition rather than an unbounded residual.
@@ -33,20 +36,25 @@ measured on 1.29.0 is now an enforced precondition rather than an unbounded resi
 ## Consequences
 
 - Every successful zizmor audit in `just verify` uses 1.29.0 on CI and workstations.
-- A runner image moving forward or backward fails with the expected and observed versions
+- CI requests the admitted analyzer version directly, so staggered runner-image package
+  updates cannot deadlock a version transition.
+- A workstation moving forward or backward fails with the expected and observed versions
   instead of producing analyzer-dependent findings.
 - `just verify` remains offline by default; the new check executes only the installed
   binary's local `--version` command.
-- A new upstream release intentionally turns CI red only after Homebrew installs it. The
-  repository must then review and update its declared contract before adopting the release.
+- A new upstream release does not change CI until the repository reviews and updates its
+  declared contract.
 - The check trusts the `zizmor` executable selected by `PATH`, as the audit invocation
   already does. It makes no new network request and handles no new credential.
+- CI adds the pinned setup-uv action and PyPI as provisioning dependencies. A failure to
+  download uv or the exact zizmor wheel fails in the install phase before verification.
 
 ## Considered & rejected
 
-- **Install `zizmor==1.29.0` through `uv tool install` in CI.** judgment: this adds a
-  second CI installer and still needs a shared workstation admission check; it is more
-  mechanism without strengthening the contract.
+- **Keep Homebrew as CI's zizmor installer and admit only 1.29.0.** verified: issue #259's
+  observed 1.28.0/1.29.0 matrix skew supplies a state where changing the admitted version
+  leaves either the updated or stale runner leg red. An exact installer is required for a
+  green transition, not only for drift detection.
 - **Assert only that matrix legs agree.** judgment: cross-job aggregation adds workflow
   state, permits both legs to agree on an unreviewed version, and does not constrain the
   workstation path.
@@ -56,4 +64,3 @@ measured on 1.29.0 is now an enforced precondition rather than an unbounded resi
 - **Keep the version floating and retain ADR 0036's caveat.** verified: issue #259 records
   one required workflow run where 1.28.0 and 1.29.0 gated the same commit; the caveat did
   not prevent the divergence.
-
