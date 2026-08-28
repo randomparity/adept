@@ -1302,11 +1302,10 @@ gate_paths() {
   # it and left every profile silently unprotected. A directory merely absent from the ref
   # exits 0 with no output, so that case never needed the guard.
   #
-  # The `|| true` stays. gate_paths runs inside a process substitution, where err's
-  # assignment to `failed` lands in a discarded subshell -- it emits paths only, and its
-  # callers report. A damaged object store is therefore an accepted residual here rather than
-  # an oversight; giving this one function a fault channel means a private sentinel protocol
-  # between it and its caller, which ADR 0005 weighed and rejected.
+  # The `|| true` stays. The caller now captures gate_paths' status, but this listing still
+  # runs behind the process substitution feeding the loop, so its status cannot reach the
+  # function's return. Closing that residual means moving profile enumeration out of this
+  # shape; issue #89 scopes the workflow search below, not this listing.
   profiles_rel=$(repo_relative "$SELF_DIR/profiles")
   if [ -n "$profiles_rel" ]; then
     while IFS= read -r profile; do
