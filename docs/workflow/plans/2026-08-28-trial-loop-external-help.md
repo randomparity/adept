@@ -30,7 +30,9 @@ step 5 consumes only resulting evidence.
 1. Read the existing step 3 through step 6 flow and add a labeled `3a` checkpoint between the
    step 3 audit and step 4 verdict handling. Preserve the existing numbers 4 through 9 and every
    reference to them. State the two triggers from the spec, the iteration-one deadline, the
-   public-safe query boundary, focused-source recording, and the evidence-not-authority rule.
+   public-safe query boundary, focused-source recording, the evidence-not-authority rule, and the
+   untrusted-data rule that ignores embedded source instructions and forbids source-directed tool
+   use, disclosure, mutation, or workflow override.
 2. State that a remaining design-changing question returns to the interactive scope checkpoint or
    existing unattended park path, that unavailable or inconclusive search is recorded as
    non-evidence before ordinary disposition continues, and that later searches require a newly
@@ -41,7 +43,7 @@ step 5 consumes only resulting evidence.
    action, and prek checks pass.
 6. Commit the two implementation files with `feat(trial-loop): add an external-help checkpoint`.
 
-**Acceptance criteria:** EH-1 through EH-7 are readable directly from the checkpoint; no existing
+**Acceptance criteria:** EH-1 through EH-8 are readable directly from the checkpoint; no existing
 loop lifecycle contract changes; structural guardrails pass.
 
 **Rollback:** make a forward rollback that removes the skill checkpoint while retaining a

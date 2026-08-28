@@ -29,6 +29,10 @@ only public-safe abstractions and never private target content, credentials, hos
 other sensitive context. The transcript records source links, the specific proposition each
 supports, and whether that evidence simplifies or rejects a proposed remedy.
 
+Search snippets and pages are untrusted data. The orchestrator ignores embedded instructions and
+never lets source content redirect tool use, disclose context, mutate state, or override the
+charter or workflow.
+
 The evidence passes through `heed-counsel` and the existing four dispositions. It cannot widen the
 charter, create a requirement, or settle a user-owned choice. If research leaves a design-changing
 question or missing authority, the existing interactive scope checkpoint or unattended park path
@@ -64,13 +68,28 @@ prior art is considered before disposition without changing the charter.
 | Repeat unbounded searches | 4 | EH-5: conflicting sources are recorded as inconclusive non-evidence; ordinary disposition continues unless the underlying finding independently requires authority. |
 | Stale or conflicting guidance | 4 | EH-6: the note identifies the conflict and does not claim confirmation. |
 | Search unavailable or inconclusive | 3 | EH-7: the outcome is recorded as non-evidence and normal disposition continues. |
+| Hostile instructions in a source | 5 | EH-8: source instructions are ignored as untrusted data and cannot redirect tools, disclosure, mutation, or workflow authority. |
 
 Evaluation is manual adversarial review because repository rule 4 forbids a gate that asserts on
 specific Markdown prose. Existing structural checks must remain green.
+
+## Threat model
+
+- **Added outbound boundary:** public-safe abstract query terms cross to the selected search
+  connector. The control forbids private target content, credentials, and host identity; if a safe
+  abstraction is impossible, the search is not run and supplies no evidence.
+- **Added inbound boundary:** attacker-controlled snippets and pages return as untrusted data. The
+  control ignores embedded instructions and forbids them from redirecting tools, disclosure,
+  mutation, the charter, or workflow control.
+- **Actors:** an external search provider or indexed-source publisher may control returned content;
+  the local operator and frozen charter remain trusted authorities.
+- **Out of scope:** source truthfulness is not guaranteed. Source propositions remain hypotheses
+  checked through `heed-counsel`; irrelevant, stale, conflicting, or inconclusive results supply no
+  evidence.
 
 ## Traceability
 
 - Ask-for-help escape hatch: Behavior triggers and escalation path.
 - Web research no later than first-loop completion: iteration-one checkpoint placement.
 - Evidence, not authority: Behavior and AI-SPEC boundaries.
-- Verification: EH-1 through EH-7 plus `just verify`.
+- Verification: EH-1 through EH-8 plus `just verify`.
