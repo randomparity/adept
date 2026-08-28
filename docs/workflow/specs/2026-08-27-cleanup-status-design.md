@@ -13,15 +13,20 @@ and the design records. Unrelated cleanup sites and a shared abstraction are exc
 ## Failure contract
 
 Each cleanup function captures `$?` on entry. Successful cleanup exits with that incoming status.
-A failed or refused cleanup prints the gate's existing retained-path diagnostic and exits 2 when
-the incoming status was 0; when it was non-zero, cleanup preserves it after printing the same
-diagnostic. `verify-push.sh` folds the ordinary `rm -R "$TEMP_ROOT"` branch into its existing
-`cleanup_failed` accounting and changes that accounting's otherwise-clean status from 1 to 2.
+A failed removal prints a gate-owned retained-path diagnostic and exits 2 when the incoming status
+was 0; when it was non-zero, cleanup preserves it after printing the same diagnostic.
+`check-ripgrep-config.sh` uses `ripgrep-config: retained scratch path: <path>` and
+`verify-push.sh` keeps `verify-push: retained cleanup path: <path>`. `verify-push.sh` folds the
+ordinary `rm -R "$TEMP_ROOT"` branch into its existing `cleanup_failed` accounting and changes
+that accounting's otherwise-clean status from 1 to 2.
 
 For `check-ripgrep-config.sh`, both a failed removal inside the expected scratch root and refusal
-of a path outside that root follow the shared status tail. A successful removal returns directly
-with the incoming status. This matches the accepted pattern in `check-skill-shape.sh` without
-creating a helper across gates with different cleanup responsibilities.
+of a path outside that root follow the shared status tail. Refusal keeps the existing
+`ripgrep-config: refusing cleanup outside scratch root: <path>` diagnostic; the two messages are
+distinct because one reports a failed operation and the other reports a safety decision. A
+successful removal returns directly with the incoming status. This matches the accepted pattern
+in `check-skill-shape.sh` without creating a helper across gates with different cleanup
+responsibilities.
 
 ## Compatibility and error handling
 
@@ -35,8 +40,8 @@ intentional test residue leaves with the fixture.
 Each suite adds a PATH-prepended `rm` shim that exits 1 for the gate's own scratch removal and
 delegates other removals to the real command. With `TMPDIR` inside the suite fixture, tests prove:
 
-- an otherwise-clean gate exits 2 and names the retained path;
-- a run that already earned its existing failure status preserves it and still names the path;
+- an otherwise-clean gate exits 2 and emits its exact gate-owned retained-path diagnostic;
+- a run that already earned its existing failure status preserves it and emits that diagnostic;
 - the original successful cleanup paths remain green.
 
 The new assertions must bite: temporarily restoring each production cleanup's unguarded removal
