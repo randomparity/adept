@@ -134,8 +134,8 @@ with exit 2 only when `status` was 0; Task 3 relies on the focused suite being g
    	local input=$1
    	printf '%b' "$input" | (
    		cd "$REPO"
-   		PATH="$RM_FAIL_BIN:$BIN:$PATH" TMPDIR="$SCRATCH" JUST_LOG="$LOG" \
-   			SOURCE_REPO="$REPO" "$VERIFIER"
+           PATH="$RM_FAIL_BIN:$BIN:$PATH" TMPDIR="$SCRATCH" JUST_LOG="$LOG" \
+                   SOURCE_REPO="$REPO" "$VERIFIER"
    	)
    }
 
@@ -145,7 +145,7 @@ with exit 2 only when `status` was 0; Task 3 relies on the focused suite being g
    	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
    	2>&1) || rm_cleanup_status=$?
    [[ $rm_cleanup_status -eq 2 && \
-   	$rm_cleanup_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
+       $rm_cleanup_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
    	fail "scratch removal failure should exit 2 and name its path: $rm_cleanup_output"
 
    new_repo
@@ -156,7 +156,7 @@ with exit 2 only when `status` was 0; Task 3 relies on the focused suite being g
    	2>&1) || rm_failure_status=$?
    unset FAIL_CI
    [[ $rm_failure_status -eq 73 && \
-   	$rm_failure_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
+       $rm_failure_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
    	fail "scratch removal failure should preserve CI exit 73: $rm_failure_output"
    ```
 
