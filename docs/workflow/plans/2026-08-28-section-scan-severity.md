@@ -43,17 +43,18 @@ Steps:
    Rewrite `target:` as `- target:`, commit it, and capture `b=$(base_of "$d")`, matching the
    adjacent legacy fixtures.
 2. Set `stub_bin=$SCRATCH/grep-legacy-section-fault-bin`, create the directory, capture
-   `real_grep=$(command -v grep)`, write `$stub_bin/grep` with this complete behavior, and
-   run `chmod +x "$stub_bin/grep"` before invoking the case:
+   `real_grep=$(command -v grep)`, and write `$stub_bin/grep` with an unquoted heredoc so the
+   real binary path is installed now while the stub-time parameters remain escaped. Run
+   `chmod +x "$stub_bin/grep"` before invoking the case. The complete heredoc body is:
 
    ```bash
    #!/usr/bin/env bash
-   if [ "$1" = -qxF ] && [ "$2" = "## Status" ] &&
-     [ "$3" = docs/debt/0001-valid.md ]; then
+   if [ "\$1" = -qxF ] && [ "\$2" = "## Status" ] &&
+     [ "\$3" = docs/debt/0001-valid.md ]; then
      printf 'grep: fixture-fault: required-section scan failed\n' >&2
      exit 2
    fi
-   exec "$real_grep" "$@"
+   exec "$real_grep" "\$@"
    ```
 
    The exact working-tree path condition leaves the base pass's temporary blob readable, so
@@ -76,14 +77,19 @@ Steps:
    ```
 
    Expected: exit 0.
-5. Run the focused case against the unchanged production code:
+5. Allocate a caller-owned scratch directory and run the focused suite against the unchanged
+   production code, passing that directory as the suite's positional argument:
 
    ```bash
-   ./.github/scripts/check-records-test.sh
+   red_scratch=$(mktemp -d "${TMPDIR:-/tmp}/quest-90-red.XXXXXX")
+   ./.github/scripts/check-records-test.sh "$red_scratch"
    ```
 
    Expected: non-zero, with the new case reporting that `E-SECTION-SCAN` was downgraded to
-   `W-LEGACY-SHAPE`. This is the controlled red proof; do not commit it separately.
+   `W-LEGACY-SHAPE`. This is the controlled red proof; do not commit it separately. After
+   recording that output, verify the basename starts with `quest-90-red.` and its parent is
+   exactly `${TMPDIR:-/tmp}`, then remove only that owned tree with
+   `find "$red_scratch" -depth -delete`. Confirm `[ ! -e "$red_scratch" ]` before Task 2.
 
 Acceptance: the new test deterministically distinguishes the current downgraded behavior from
 the required error behavior, including on hosts running as root.
