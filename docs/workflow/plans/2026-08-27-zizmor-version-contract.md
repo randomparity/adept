@@ -88,9 +88,11 @@ repository guardrail is green.
 
 ## Rollback and cleanup
 
-Reverting both commits restores the floating-version behavior and manifest version as one
-change. Fixture scratch directories remain owned by `fixture_init` cleanup. No persistent
-state, generated artifact, external service, or migration requires cleanup.
+Rollback reverts the functional and documentation changes but must bump the manifest
+forward again (for example, from 2.12.2 to 2.12.3); ADR 0022 forbids restoring 2.12.1
+against a base that already shipped 2.12.2. Run `just version-check` and `just verify` on
+that rollback. Fixture scratch directories remain owned by `fixture_init` cleanup. No
+persistent state, generated artifact, external service, or migration requires cleanup.
 
 ## Durable handoff
 
