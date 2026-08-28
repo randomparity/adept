@@ -42,8 +42,9 @@ Steps:
 1. In the existing `-- grandfathering --` group, create a `legacy_section_scan_fault` fixture.
    Rewrite `target:` as `- target:`, commit it, and capture `b=$(base_of "$d")`, matching the
    adjacent legacy fixtures.
-2. Create `$SCRATCH/grep-legacy-section-fault-bin/grep`, capture
-   `real_grep=$(command -v grep)`, and give the stub this complete behavior:
+2. Set `stub_bin=$SCRATCH/grep-legacy-section-fault-bin`, create the directory, capture
+   `real_grep=$(command -v grep)`, write `$stub_bin/grep` with this complete behavior, and
+   run `chmod +x "$stub_bin/grep"` before invoking the case:
 
    ```bash
    #!/usr/bin/env bash
