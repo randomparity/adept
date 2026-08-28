@@ -1347,6 +1347,61 @@ STUB
     expect_error_code "$d/.e3" E-GATE-WITNESS-SCAN
   fi
 
+  # A later positive witness keeps the undeclared-rename verdict, but the earlier fault still
+  # needs a trace. The unrelated workflow names debt.sh, a successor whose basename did not
+  # change, so gate_paths does not treat that workflow as protected; gate_existed_at's broader
+  # closed witness set still sees it after the SELF_DIR probe for debt.sh faults.
+  d="$SCRATCH/gate_witness_outranks_fault"
+  mkdir -p "$d/docs/debt" "$d/.github/scripts/profiles" "$d/.github/workflows"
+  git -C "$d" init -q .
+  git -C "$d" config user.email test@example.invalid
+  git -C "$d" config user.name "check-records test"
+  cat >"$d/.github/workflows/unrelated.yml" <<'YAML'
+name: unrelated
+on: push
+jobs:
+  note:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo debt.sh
+YAML
+  git -C "$d" add -A
+  git -C "$d" commit -qm "before the gate"
+  b=$(base_of "$d")
+  cp "$SCRIPT_DIR/check-records.sh" "$d/.github/scripts/"
+  cp "$SCRIPT_DIR/profiles/debt.sh" "$d/.github/scripts/profiles/"
+  chmod +x "$d/.github/scripts/check-records.sh"
+  write_record "$d" "0001-first.md"
+  git -C "$d" add -A
+  stub_bin="$SCRATCH/git-witness-outrank-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-tree ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = .github/scripts/debt.sh ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "a real gate witness outranks an earlier fault" 1 E-GATE-EMPTY-SET "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "the outranked gate fault is reported"
+  expect_match "$d/.err" 'W-GATE-WITNESS-SCAN beside the verdict' \
+    'the incomplete gate-witness search was silent' '::warning::W-GATE-WITNESS-SCAN: '
+  printf '  %-4s %-44s ' "" "the fault path and status are retained"
+  expect_match "$d/.err" 'gate fault path and status named' \
+    'the gate warning did not name the failed witness' \
+    '.github/scripts/debt.sh: .*git exit 128'
+  printf '  %-4s %-44s ' "" "the no-answer scan error stays suppressed"
+  expect_no_match "$d/.err" 'E-GATE-WITNESS-SCAN suppressed' \
+    'the positive witness was replaced by the no-answer fault' \
+    '::error::E-GATE-WITNESS-SCAN: '
+
   # gate_existed_at has two witnesses, and `renamed_gate` above happens to satisfy both at
   # once (its base-ref workflow names "check-records.sh", which is also the literal
   # basename sitting in SELF_DIR at that ref) — so neither witness is individually proven.
@@ -2044,11 +2099,39 @@ STUB
   b=$(base_of "$d")
   git -C "$d" mv docs/debt/0005-b.md docs/debt/0006-b.md
   write_record "$d" "0002-c.md"
+  write_record "$d" "0003-d.md"
   git -C "$d" add -A
   stub_bin="$SCRATCH/git-renumber-outrank-bin"
-  write_ls_files_stub "$stub_bin" docs/debt/0002-c.md
+  mkdir -p "$stub_bin"
+  real_git=$(command -v git)
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = ls-files ]; then
+  for arg in "\$@"; do
+    case \$arg in
+    docs/debt/0002-c.md | docs/debt/0003-d.md)
+      printf 'fatal: fixture-fault: simulated index read error\n' >&2
+      exit 128
+      ;;
+    esac
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
   run_case "a real renumber outranks a candidate fault" 0 - "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "the outranked fault is reported"
+  expect_match "$d/.err" 'exit=0 W-RENUMBER-SCAN' \
+    'the incomplete renumber search was silent' '::warning::W-RENUMBER-SCAN: '
+  printf '  %-4s %-44s ' "" "the last candidate fault is retained"
+  expect_match "$d/.err" 'last fault path and status named' \
+    'the warning did not name the last candidate fault' \
+    'could not read the index entry for docs/debt/0003-d.md, exit 128'
+  printf '  %-4s %-44s ' "" "the positive renumber action survives"
+  expect_match "$d/.out" 'renumber destination still reported' \
+    'the positive renumber result was lost' \
+    'note: docs/debt/0005-b.md was renumbered to docs/debt/0006-b.md'
 
   # check_gate_files, on the gate file itself. A gate file present and tracked read as removed,
   # which reported E-GATE-GONE -- the gate accusing the change of deleting a file that is

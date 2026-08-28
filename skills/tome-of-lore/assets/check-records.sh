@@ -596,6 +596,11 @@ $candidate"
       else
         used_renumber_targets=$candidate
       fi
+      if [ "$fault_status" -ne 0 ]; then
+        path_exists_status=$fault_status
+        renumber_fault_path=$fault_path
+        return 3
+      fi
       return 0
     fi
   done <<<"$records"
@@ -949,6 +954,10 @@ check_no_disappearances() {
       renumbered_elsewhere "$base" "$record" || renum_status=$?
       case $renum_status in
       0) info "note: $record was renumbered to $renumbered_to (content unchanged)" ;;
+      3)
+        warn_full "W-RENUMBER-SCAN: $record: found renumber destination $renumbered_to after an incomplete search (could not read $renumber_fault_path, exit $path_exists_status)"
+        info "note: $record was renumbered to $renumbered_to (content unchanged)"
+        ;;
       1) err "E-GONE: $record is no longer a record at that path (deleted, moved, untracked, or renamed with its content changed) — resolve records in place with a '> **Resolved by ...**' banner" ;;
       # Reported instead of E-GONE, never alongside it: whether the record moved is exactly what
       # could not be established — by a candidate witness that did not run, by a candidate the
@@ -1074,7 +1083,8 @@ gate_known_basenames() {
 # result is checked non-empty before use: unguarded, an empty result makes the git argument
 # "${base}:/name", and depending on git's tree lookup an absolute-looking path can still
 # resolve — checked explicitly rather than relied on to fail closed.
-# Three-valued: 0 a witness found the gate, 1 no witness did, 2 a witness could not run.
+# Four outcomes: 0 a witness found the gate after a complete search, 1 no witness did, 2 no
+# witness answered because a scan faulted, 3 a witness found the gate after an earlier fault.
 # Neither witness used to capture its status, so a scan fault was indistinguishable from every
 # witness genuinely finding nothing — and the caller reported that as I-GATE-BOOTSTRAP, an
 # exit-0 informational line, instead of the fatal E-GATE-EMPTY-SET an undeclared rename owes.
@@ -1093,7 +1103,13 @@ gate_existed_at() {
       status=0
       path_exists_at "$base" "${rel}/${name}" || status=$?
       case $status in
-      0) return 0 ;;
+      0)
+        if [ "$fault_status" -ne 0 ]; then
+          path_exists_status=$fault_status
+          return 3
+        fi
+        return 0
+        ;;
       1) ;;
       *)
         fault_status=$path_exists_status
@@ -1110,7 +1126,13 @@ gate_existed_at() {
     status=0
     git grep --no-color -qF "$name" "$base" -- .github/workflows 2>/dev/null || status=$?
     case $status in
-    0) return 0 ;;
+    0)
+      if [ "$fault_status" -ne 0 ]; then
+        path_exists_status=$fault_status
+        return 3
+      fi
+      return 0
+      ;;
     1) ;;
     *)
       fault_status=$status
@@ -1120,7 +1142,8 @@ gate_existed_at() {
   done < <(gate_known_basenames)
 
   # A positive witness returns above, so it outranks a fault on any other witness: evidence
-  # the gate existed is not weakened by an unrelated probe failing.
+  # the gate existed is not weakened by an unrelated probe failing. Return 3 rather than 0 in
+  # that case so the caller can report the incomplete search without changing its verdict.
   if [ "$fault_status" -ne 0 ]; then
     path_exists_status=$fault_status
     return 2
@@ -1197,6 +1220,10 @@ check_gate_files() {
     gate_existed_at "$base" || existed_status=$?
     case $existed_status in
     0) err "E-GATE-EMPTY-SET: no gate file from the base ref is protected — a rename must declare its predecessors in GATE_PREDECESSORS" ;;
+    3)
+      warn_full "W-GATE-WITNESS-SCAN: $gate_witness_path: a later witness established that a gate existed at $base after this read failed (git exit $path_exists_status)"
+      err "E-GATE-EMPTY-SET: no gate file from the base ref is protected — a rename must declare its predecessors in GATE_PREDECESSORS"
+      ;;
     1) info "I-GATE-BOOTSTRAP: no gate existed at $base — this is the change installing it" ;;
     *) err_full "E-GATE-WITNESS-SCAN: $gate_witness_path: could not determine whether a gate existed at $base (git exit $path_exists_status)" ;;
     esac
