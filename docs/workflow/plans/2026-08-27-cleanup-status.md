@@ -59,21 +59,21 @@ the 0→2/nonzero→same status rule; Task 3 relies on its focused suite being g
    track "$cleanup_root"
    cleanup_status=0
    cleanup_output=$(PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$cleanup_root" 2>&1) ||
-   	cleanup_status=$?
+       cleanup_status=$?
    [[ $cleanup_status -eq 2 ]] ||
-   	fail "clean cleanup failure: expected exit 2, got $cleanup_status: $cleanup_output"
+       fail "clean cleanup failure: expected exit 2, got $cleanup_status: $cleanup_output"
    [[ $cleanup_output == *"ripgrep-config: retained scratch path: $SCRATCH/ripgrep-config."* ]] ||
-   	fail "clean cleanup failure: retained path missing: $cleanup_output"
+       fail "clean cleanup failure: retained path missing: $cleanup_output"
 
    finding_status=0
    finding_output=$(PATH="$rm_shim:$PATH" TMPDIR="$SCRATCH" "$gate" "$bare_root" 2>&1) ||
-   	finding_status=$?
+       finding_status=$?
    [[ $finding_status -eq 1 ]] ||
-   	fail "finding cleanup failure: expected exit 1, got $finding_status: $finding_output"
+       fail "finding cleanup failure: expected exit 1, got $finding_status: $finding_output"
    [[ $finding_output == *'scripts/scan.sh:4: runs rg'* ]] ||
-   	fail "finding cleanup failure: finding missing: $finding_output"
+       fail "finding cleanup failure: finding missing: $finding_output"
    [[ $finding_output == *"ripgrep-config: retained scratch path: $SCRATCH/ripgrep-config."* ]] ||
-   	fail "finding cleanup failure: retained path missing: $finding_output"
+       fail "finding cleanup failure: retained path missing: $finding_output"
    ```
 
 2. Run `just test check-ripgrep-config` bare. Expected: exit 1; the clean case observes exit 1
@@ -83,20 +83,20 @@ the 0→2/nonzero→same status rule; Task 3 relies on its focused suite being g
 
    ```bash
    cleanup() {
-   	local exit_status=$?
-   	case $scratch in
-   	"${TMPDIR:-/tmp}"/ripgrep-config.*)
-   		if rm -R -- "$scratch"; then
-   			exit "$exit_status"
-   		fi
-   		printf 'ripgrep-config: retained scratch path: %s\n' "$scratch" >&2
-   		;;
-   	*) printf 'ripgrep-config: refusing cleanup outside scratch root: %s\n' "$scratch" >&2 ;;
-   	esac
-   	if [ "$exit_status" -eq 0 ]; then
-   		exit 2
-   	fi
-   	exit "$exit_status"
+       local exit_status=$?
+       case $scratch in
+       "${TMPDIR:-/tmp}"/ripgrep-config.*)
+           if rm -R -- "$scratch"; then
+               exit "$exit_status"
+           fi
+           printf 'ripgrep-config: retained scratch path: %s\n' "$scratch" >&2
+           ;;
+       *) printf 'ripgrep-config: refusing cleanup outside scratch root: %s\n' "$scratch" >&2 ;;
+       esac
+       if [ "$exit_status" -eq 0 ]; then
+           exit 2
+       fi
+       exit "$exit_status"
    }
    ```
 
@@ -131,33 +131,33 @@ with exit 2 only when `status` was 0; Task 3 relies on the focused suite being g
    chmod +x "$RM_FAIL_BIN/rm"
 
    run_verifier_with_rm() {
-   	local input=$1
-   	printf '%b' "$input" | (
-   		cd "$REPO"
+       local input=$1
+       printf '%b' "$input" | (
+           cd "$REPO"
            PATH="$RM_FAIL_BIN:$BIN:$PATH" TMPDIR="$SCRATCH" JUST_LOG="$LOG" \
                    SOURCE_REPO="$REPO" "$VERIFIER"
-   	)
+       )
    }
 
    new_repo
    rm_cleanup_status=0
    rm_cleanup_output=$(run_verifier_with_rm \
-   	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
-   	2>&1) || rm_cleanup_status=$?
+       "refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
+       2>&1) || rm_cleanup_status=$?
    [[ $rm_cleanup_status -eq 2 && \
        $rm_cleanup_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
-   	fail "scratch removal failure should exit 2 and name its path: $rm_cleanup_output"
+       fail "scratch removal failure should exit 2 and name its path: $rm_cleanup_output"
 
    new_repo
    export FAIL_CI=1
    rm_failure_status=0
    rm_failure_output=$(run_verifier_with_rm \
-   	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
-   	2>&1) || rm_failure_status=$?
+       "refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
+       2>&1) || rm_failure_status=$?
    unset FAIL_CI
    [[ $rm_failure_status -eq 73 && \
        $rm_failure_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
-   	fail "scratch removal failure should preserve CI exit 73: $rm_failure_output"
+       fail "scratch removal failure should preserve CI exit 73: $rm_failure_output"
    ```
 
 2. Run `just test verify-push` bare. Expected: exit 1; the ordinary scratch removal still aborts
@@ -167,22 +167,22 @@ with exit 2 only when `status` was 0; Task 3 relies on the focused suite being g
 
    ```bash
    cleanup() {
-   	local status=$? cleanup_failed=0
-   	if ((retain_cleanup)); then
-   		printf 'verify-push: retained cleanup path: %s\n' "$TEMP_ROOT" >&2
-   		exit "$status"
-   	fi
-   	if ((worktree_added)) && ! git -C "$ROOT" worktree remove --force "$WORKTREE"; then
-   		printf 'verify-push: retained cleanup path: %s\n' "$TEMP_ROOT" >&2
-   		cleanup_failed=1
-   	elif ! rm -R "$TEMP_ROOT"; then
-   		printf 'verify-push: retained cleanup path: %s\n' "$TEMP_ROOT" >&2
-   		cleanup_failed=1
-   	fi
-   	if ((status != 0)); then
-   		exit "$status"
-   	fi
-   	((cleanup_failed == 0)) || exit 2
+       local status=$? cleanup_failed=0
+       if ((retain_cleanup)); then
+           printf 'verify-push: retained cleanup path: %s\n' "$TEMP_ROOT" >&2
+           exit "$status"
+       fi
+       if ((worktree_added)) && ! git -C "$ROOT" worktree remove --force "$WORKTREE"; then
+           printf 'verify-push: retained cleanup path: %s\n' "$TEMP_ROOT" >&2
+           cleanup_failed=1
+       elif ! rm -R "$TEMP_ROOT"; then
+           printf 'verify-push: retained cleanup path: %s\n' "$TEMP_ROOT" >&2
+           cleanup_failed=1
+       fi
+       if ((status != 0)); then
+           exit "$status"
+       fi
+       ((cleanup_failed == 0)) || exit 2
    }
    ```
 
