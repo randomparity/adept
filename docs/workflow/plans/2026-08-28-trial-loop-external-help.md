@@ -23,8 +23,9 @@ Tech stack: Markdown skill contracts, ADR/spec records, JSON plugin manifest.
 **Files:** modify `skills/trial-loop/SKILL.md` and `.claude-plugin/plugin.json`.
 
 **Interfaces:** consumes the pass artifact after step 3's audit line and before step 5's
-`heed-counsel` evaluation. Produces a transcript line containing either the focused sources and
-supported propositions or `external help: not triggered`; step 5 consumes any resulting evidence.
+`heed-counsel` evaluation. Produces a transcript line containing the focused sources and supported
+propositions, `external help: not triggered`, or an unavailable/inconclusive non-evidence note;
+step 5 consumes only resulting evidence.
 
 1. Read the existing step 3 through step 6 flow and add a labeled `3a` checkpoint between the
    step 3 audit and step 4 verdict handling. Preserve the existing numbers 4 through 9 and every
