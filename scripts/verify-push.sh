@@ -132,13 +132,14 @@ cleanup() {
 	if ((worktree_added)) && ! git -C "$ROOT" worktree remove --force "$WORKTREE"; then
 		printf 'verify-push: retained cleanup path: %s\n' "$TEMP_ROOT" >&2
 		cleanup_failed=1
-	else
-		rm -R "$TEMP_ROOT"
+	elif ! rm -R "$TEMP_ROOT"; then
+		printf 'verify-push: retained cleanup path: %s\n' "$TEMP_ROOT" >&2
+		cleanup_failed=1
 	fi
 	if ((status != 0)); then
 		exit "$status"
 	fi
-	((cleanup_failed == 0)) || exit 1
+	((cleanup_failed == 0)) || exit 2
 }
 trap cleanup EXIT
 

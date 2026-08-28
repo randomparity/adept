@@ -227,7 +227,7 @@ cleanup_output=$(run_verifier_with_git \
 	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\\n" "$FAIL_BIN" 2>&1)
 cleanup_status=$?
 set -e
-[[ $cleanup_status -ne 0 && $cleanup_output == *'retained cleanup path'* ]] ||
+[[ $cleanup_status -eq 2 && $cleanup_output == *'retained cleanup path'* ]] ||
 	fail 'worktree cleanup failure should retain and report cleanup path'
 
 new_repo
@@ -240,6 +240,40 @@ unset FAIL_CI
 set -e
 [[ $failure_status == 73 && $failure_output == *'retained cleanup path'* ]] ||
 	fail 'cleanup failure should preserve the ci failure status'
+
+RM_FAIL_BIN=$SCRATCH/failing-rm
+mkdir -p "$RM_FAIL_BIN"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$RM_FAIL_BIN/rm"
+chmod +x "$RM_FAIL_BIN/rm"
+
+run_verifier_with_rm() {
+	local input=$1
+	printf '%b' "$input" | (
+		cd "$REPO"
+		PATH="$RM_FAIL_BIN:$BIN:$PATH" TMPDIR="$SCRATCH" JUST_LOG="$LOG" \
+			SOURCE_REPO="$REPO" "$VERIFIER"
+	)
+}
+
+new_repo
+rm_cleanup_status=0
+rm_cleanup_output=$(run_verifier_with_rm \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
+	2>&1) || rm_cleanup_status=$?
+[[ $rm_cleanup_status -eq 2 &&
+	$rm_cleanup_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
+	fail "scratch removal failure should exit 2 and name its path: $rm_cleanup_output"
+
+new_repo
+export FAIL_CI=1
+rm_failure_status=0
+rm_failure_output=$(run_verifier_with_rm \
+	"refs/heads/main $OBJECT refs/heads/main 0000000000000000000000000000000000000000\n" \
+	2>&1) || rm_failure_status=$?
+unset FAIL_CI
+[[ $rm_failure_status -eq 73 &&
+	$rm_failure_output == *"verify-push: retained cleanup path: $SCRATCH/verify-push."* ]] ||
+	fail "scratch removal failure should preserve CI exit 73: $rm_failure_output"
 
 # The verifier clears Git's repository-local selectors before it resolves
 # anything inside the detached worktree. Read through a process substitution
