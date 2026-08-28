@@ -343,7 +343,9 @@ check_sections() {
       continue
       ;;
     *)
-      err "E-SECTION-SCAN: $label: could not scan $file for section '$section' (grep exit $grep_status)"
+      # err_full, not err: a scan fault describes the scan, not the record, so it must not be
+      # downgraded to W-LEGACY-SHAPE for a record already non-conforming at the base ref.
+      err_full "E-SECTION-SCAN: $label: could not scan $file for section '$section' (grep exit $grep_status)"
       continue
       ;;
     esac
