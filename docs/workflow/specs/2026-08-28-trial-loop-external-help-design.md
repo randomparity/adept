@@ -1,6 +1,6 @@
 # `$trial-loop` external-help checkpoint — design
 
-Issue: #276  
+Issue: #276
 Decision: [ADR 0046](../../adr/0046-seek-external-help-after-first-review.md)
 
 ## Goal and scope
