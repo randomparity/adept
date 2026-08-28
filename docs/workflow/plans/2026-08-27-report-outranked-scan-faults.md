@@ -1,9 +1,13 @@
 # Report outranked scan faults — implementation plan
 
-**Issue:** #87  
-**Decision:** [ADR 0043](../../adr/0043-report-outranked-scan-faults.md)  
-**Spec:** [design](../specs/2026-08-27-report-outranked-scan-faults-design.md)  
-**Branch:** `feat/report-outranked-scan-faults-87`  
+**Issue:** #87
+
+**Decision:** [ADR 0043](../../adr/0043-report-outranked-scan-faults.md)
+
+**Spec:** [design](../specs/2026-08-27-report-outranked-scan-faults-design.md)
+
+**Branch:** `feat/report-outranked-scan-faults-87`
+
 **BASE_BRANCH:** `main`
 
 ## Global constraints
