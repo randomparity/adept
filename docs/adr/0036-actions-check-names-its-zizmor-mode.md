@@ -4,6 +4,8 @@
 
 Accepted (2026-08-25)
 
+> **The 1.29.0 measurement is enforced by [ADR 0044](0044-the-zizmor-gate-admits-one-version.md) (2026-08-27).**
+
 ## Context
 
 `actions-check` runs `zizmor --offline .github/workflows/`, so the audits that need the
