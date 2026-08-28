@@ -26,8 +26,9 @@ Tech stack: Markdown skill contracts, ADR/spec records, JSON plugin manifest.
 `heed-counsel` evaluation. Produces a transcript line containing either the focused sources and
 supported propositions or `external help: not triggered`; step 5 consumes any resulting evidence.
 
-1. Read the existing step 3 through step 6 flow and add a numbered checkpoint between audit and
-   verdict handling. State the two triggers from the spec, the iteration-one deadline, the
+1. Read the existing step 3 through step 6 flow and add a labeled `3a` checkpoint between the
+   step 3 audit and step 4 verdict handling. Preserve the existing numbers 4 through 9 and every
+   reference to them. State the two triggers from the spec, the iteration-one deadline, the
    public-safe query boundary, focused-source recording, and the evidence-not-authority rule.
 2. State that a remaining design-changing question returns to the interactive scope checkpoint or
    existing unattended park path, that unavailable or inconclusive search is recorded as
