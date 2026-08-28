@@ -2621,6 +2621,47 @@ STUB
   b=$(base_of "$d")
   run_case "legacy record downgrades to a warning" 0 W-LEGACY-SHAPE "$d" BASE_SHA="$b"
 
+  # A scan fault describes the scan, not the grandfathered record, so it must stay at full
+  # severity after the base pass selects downgrade mode. Fault only the working-tree path:
+  # the base pass reads a temporary copy and still has to establish the record's legacy shape.
+  d=$(case_dir legacy_section_scan_fault)
+  sed 's/^target: /- target: /' "$d/docs/debt/0001-valid.md" >"$d/.rec"
+  mv "$d/.rec" "$d/docs/debt/0001-valid.md"
+  git -C "$d" commit -aqm "legacy shape"
+  b=$(base_of "$d")
+  stub_bin="$SCRATCH/grep-legacy-section-fault-bin"
+  mkdir -p "$stub_bin"
+  real_grep=$(command -v grep)
+  cat >"$stub_bin/grep" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = -qxF ] && [ "\$2" = "## Status" ] &&
+  [ "\$3" = docs/debt/0001-valid.md ]; then
+  printf 'grep: fixture-fault: required-section scan failed\n' >&2
+  exit 2
+fi
+exec "$real_grep" "\$@"
+STUB
+  chmod +x "$stub_bin/grep"
+  run_case "legacy record section scan fault stays an error" 1 E-SECTION-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+  printf '  %-4s %-44s ' "" "scan fault is not relabelled as legacy shape"
+  scan=0
+  grep -qF '(E-SECTION-SCAN)' "$d/.err" || scan=$?
+  case $scan in
+  0)
+    failed=$((failed + 1))
+    printf 'FAIL E-SECTION-SCAN was relabelled W-LEGACY-SHAPE\n'
+    ;;
+  1)
+    passed=$((passed + 1))
+    printf 'ok   full-severity code retained\n'
+    ;;
+  *)
+    failed=$((failed + 1))
+    printf 'FAIL could not scan %s (grep exit %d)\n' "$d/.err" "$scan"
+    ;;
+  esac
+
   # A banner-only edit to a legacy record: the one edit the convention permits, on a record
   # that can never reach conformance. This is the deadlock grandfathering exists to break —
   # under a "structure is checked on records the change touches" rule it would demand full
