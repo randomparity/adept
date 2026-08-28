@@ -1254,6 +1254,48 @@ STUB
   run_case "gate file witness faults, not silently unprotected" 1 E-GATE-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
 
+  # A checker basename is repository-controlled and may look like a git-grep option. Quoting
+  # keeps it one shell argument; only `-e` keeps Git from parsing it as an option and silently
+  # omitting the workflow that protects the renamed checker.
+  d="$SCRATCH/option_shaped_checker"
+  new_repo "$d"
+  mv "$d/.github/scripts/check-records.sh" "$d/.github/scripts/--cached"
+  sed 's/check-records\.sh/--cached/' "$d/.github/workflows/records.yml" >"$d/.workflow"
+  mv "$d/.workflow" "$d/.github/workflows/records.yml"
+  write_record "$d" "0001-valid.md"
+  git -C "$d" add -A
+  git -C "$d" commit -qm base
+  b=$(base_of "$d")
+  rm "$d/.github/workflows/records.yml"
+  cat >"$d/.github/scripts/check-records.sh" <<'STUB'
+#!/usr/bin/env bash
+exec "$(dirname "$0")/--cached" "$@"
+STUB
+  chmod +x "$d/.github/scripts/check-records.sh"
+  run_case "option-shaped checker still protects its workflow" 1 E-GATE-GONE "$d" \
+    BASE_SHA="$b"
+
+  # A workflow search that could not read the base ref must not silently shrink the gate's
+  # protected path set. The checker itself and its suite still give gate_paths two paths, so
+  # this fixture would otherwise pass while omitting the workflow whose scan faulted.
+  stub_bin="$SCRATCH/git-gate-paths-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = grep ] && [ "\$3" = -lF ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = .github/workflows ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "gate workflow search faults, not silently omitted" 1 E-GATE-PATHS-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
   # A base ref that predates the gate is the adoption PR, and it must not be red — and it
   # must say why, per the same discipline as every other rule: assert both the exit status
   # and which code fired. Bespoke rather than run_case: I-GATE-BOOTSTRAP is informational,
@@ -1327,7 +1369,7 @@ STUB
   mkdir -p "$stub_bin"
   cat >"$stub_bin/git" <<STUB
 #!/usr/bin/env bash
-if [ "\$1" = grep ]; then
+if [ "\$1" = grep ] && [ "\$3" = -qF ]; then
   for arg in "\$@"; do
     if [ "\$arg" = .github/workflows ]; then
       printf 'fatal: fixture-fault: simulated object store error\n' >&2

@@ -1159,7 +1159,13 @@ gate_existed_at() {
 # profile — a repo with more than one profile would otherwise print every gate finding once
 # per profile in RECORD_PROFILES.
 check_gate_files() {
-  local base=$1 self successor successor_path gate_path_count=0 self_status still_status succ_status
+  local base=$1 paths paths_status=0 self successor successor_path gate_path_count=0
+  local self_status still_status succ_status
+  paths=$(gate_paths "$base") || paths_status=$?
+  if [ "$paths_status" -ne 0 ]; then
+    err_full "E-GATE-PATHS-SCAN: $base: could not search the base ref's workflows for gate paths (git exit $paths_status)"
+    return
+  fi
   while IFS= read -r self; do
     [ -n "$self" ] || continue
     self_status=0
@@ -1210,7 +1216,7 @@ check_gate_files() {
     1) err "E-GATE-GONE: $self was deleted or untracked — the gate cannot be removed by the change it gates" ;;
     *) err_full "E-GATE-SUCCESSOR-SCAN: $successor_path: could not read the index entry for $self's declared successor, so the rename is unverified (git exit $tracked_in_index_status)" ;;
     esac
-  done < <(gate_paths "$base" | sort -u)
+  done < <(printf '%s\n' "$paths" | sort -u)
 
   # An empty protected set means self-protection is off. That is the correct state for the
   # PR that installs the gate in a new repo, and a silent failure for one that renamed it —
@@ -1249,11 +1255,11 @@ repo_relative() {
 # stopping it from mentioning the checker — swapping it for a symlink to an inert file does
 # exactly that. A repo driving the checker from something other than GitHub Actions yields
 # no workflow here, which is not an error; that file is just not protected.
-# Emits paths only. It must not call err: callers read it through a process substitution,
-# where an err would set failed=1 in a subshell and lose it — the same shape that once let a
-# stray file print an error and still exit 0. The caller checks locatability itself.
+# Emits paths only. It must not call err: callers capture its output and status separately,
+# because an err inside that subshell would set failed=1 only in the discarded process. The
+# caller reports a non-zero status before it reads any paths.
 gate_paths() {
-  local base=$1 rel profile old key new needle profiles_rel
+  local base=$1 rel profile old key new needle profiles_rel matches grep_status needles
   rel=$(repo_relative "$SELF_FILE")
   [ -n "$rel" ] && printf '%s\n' "$rel"
 
@@ -1296,11 +1302,10 @@ gate_paths() {
   # it and left every profile silently unprotected. A directory merely absent from the ref
   # exits 0 with no output, so that case never needed the guard.
   #
-  # The `|| true` stays. gate_paths runs inside a process substitution, where err's
-  # assignment to `failed` lands in a discarded subshell -- it emits paths only, and its
-  # callers report. A damaged object store is therefore an accepted residual here rather than
-  # an oversight; giving this one function a fault channel means a private sentinel protocol
-  # between it and its caller, which ADR 0005 weighed and rejected.
+  # The `|| true` stays. The caller now captures gate_paths' status, but this listing still
+  # runs behind the process substitution feeding the loop, so its status cannot reach the
+  # function's return. Closing that residual means moving profile enumeration out of this
+  # shape; issue #89 scopes the workflow search below, not this listing.
   profiles_rel=$(repo_relative "$SELF_DIR/profiles")
   if [ -n "$profiles_rel" ]; then
     while IFS= read -r profile; do
@@ -1332,26 +1337,36 @@ gate_paths() {
   # are generic enough to appear in an unrelated repo's workflow for reasons that have nothing
   # to do with this gate.
   #
-  # `sort -u` at the end: a workflow naming more than one needle (this repo's own workflow
-  # names both check-debt.sh and check-debt-test.sh in the same PR) would otherwise be
-  # emitted once per match, and check_gate_files would then report the same path's finding
-  # more than once.
-  {
-    printf '%s\n' "$(basename "$SELF_FILE")"
-    while IFS= read -r old; do
-      [ -n "$old" ] || continue
-      key=${old%%$'\t'*}
-      new=${old#*$'\t'}
-      key=${key##*/}
-      new=${new##*/}
-      case "$key" in
-      *.sh) [ "$key" = "$new" ] || printf '%s\n' "$key" ;;
-      esac
-    done <<<"$GATE_PREDECESSORS"
-  } | while IFS= read -r needle; do
-    git grep --no-color -lF "$needle" "$base" -- .github/workflows 2>/dev/null |
-      sed 's/^[^:]*://' || true
-  done | sort -u
+  # The caller sorts the complete result: a workflow naming more than one needle (this repo's
+  # own workflow names both check-debt.sh and check-debt-test.sh in the same PR) would otherwise
+  # be emitted once per match, and check_gate_files would report the same finding more than once.
+  needles=${SELF_FILE##*/}
+  while IFS= read -r old; do
+    [ -n "$old" ] || continue
+    key=${old%%$'\t'*}
+    new=${old#*$'\t'}
+    key=${key##*/}
+    new=${new##*/}
+    case "$key" in
+    *.sh) [ "$key" = "$new" ] || needles="$needles
+$key" ;;
+    esac
+  done <<<"$GATE_PREDECESSORS"
+
+  while IFS= read -r needle; do
+    grep_status=0
+    matches=$(git grep --no-color -lF -e "$needle" "$base" -- .github/workflows 2>/dev/null) ||
+      grep_status=$?
+    case $grep_status in
+    0)
+      while IFS= read -r rel; do
+        printf '%s\n' "${rel#*:}"
+      done <<<"$matches"
+      ;;
+    1) ;;
+    *) return "$grep_status" ;;
+    esac
+  done <<<"$needles"
 }
 
 # `git rev-parse --show-toplevel` exits non-zero for more than "you are not inside a git
