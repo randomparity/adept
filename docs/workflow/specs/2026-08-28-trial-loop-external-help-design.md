@@ -46,8 +46,9 @@ the search failure by itself—requires authority.
 ## AI-SPEC and evaluation plan
 
 The user is the review-loop operator. A completed reviewer pass triggers the coordinator's
-decision; its inputs are the charter, review summary, and findings, and its output is either a
-public-safe prior-art evidence note or `not triggered`. Allowed sources are repository evidence,
+decision; its inputs are the charter, review summary, and findings, and its output is a
+public-safe prior-art evidence note, `not triggered`, or an unavailable/inconclusive non-evidence
+note. Allowed sources are repository evidence,
 the issue's public provenance, and relevant authoritative or mature external sources. It must not
 send private context, treat search output as authority, widen scope, or loop over broad research.
 Fallback is one focused operator question when authority is missing, or the existing unattended
