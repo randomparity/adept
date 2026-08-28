@@ -16,8 +16,9 @@
   byte-identical.
 - Status `3` means `positive-with-fault`. It reports the last fault encountered, emits a warning,
   and preserves the status-0 action and process verdict.
-- Exact guardrails: focused `just test check-records`; mirrored record gate `just records`; full
-  repository suite `just verify`. CI invokes the same suite through `just ci`.
+- Exact guardrails: focused `./.github/scripts/check-records-test.sh`; mirrored record gate
+  `just records`; full repository suite `just verify`. CI invokes the same suite through
+  `just ci`.
 - Host architecture is `x86_64`; no target architecture is declared; relationship is
   `no-target-declared`. The host uses GNU userland. Repository targets are not inferred from it.
 - ADR index coupling is `not coupled`: `docs/adr/README.md` is deliberately a directory policy,
@@ -42,9 +43,9 @@ Task 2 must satisfy them without changing their expected codes.
    distinguishable paths, and whose later workflow witness finds the former gate basename. Assert
    exit `1`, `E-GATE-EMPTY-SET`, `W-GATE-WITNESS-SCAN` naming the second fault, and absence of
    `E-GATE-WITNESS-SCAN`.
-3. Run `just test check-records` bare. Expected: non-zero, with the first new warning assertion
-   failing because neither caller emits the new code. This red result is the TDD proof; do not
-   alter production code before observing it.
+3. Run `./.github/scripts/check-records-test.sh` bare. Expected: non-zero, with the first new
+   warning assertion failing because neither caller emits the new code. This red result is the
+   TDD proof; do not alter production code before observing it.
 4. Apply the same completed edits to the skill asset mirror and confirm
    `cmp -s .github/scripts/check-records-test.sh skills/tome-of-lore/assets/check-records-test.sh`.
 
@@ -76,8 +77,8 @@ mirrors being identical and the focused suite being green.
    and then emits the same `E-GATE-EMPTY-SET` error as status 0.
 4. Apply the same production edits to its skill asset mirror. Run
    `cmp -s .github/scripts/check-records.sh skills/tome-of-lore/assets/check-records.sh`.
-5. Run `just test check-records` bare. Expected: exit 0, the suite's `0 failed` summary, and
-   `test: 1 suites passed`.
+5. Run `./.github/scripts/check-records-test.sh` bare. Expected: exit 0 and the suite's
+   `0 failed` summary.
 
 **Acceptance:** status 3 preserves the positive verdict/action; one full-severity warning reports
 the last retained fault; ordinary statuses 0, 1, and 2 retain their behavior; mirrors match.
@@ -93,12 +94,15 @@ status value without a consumer or a consumer no predicate can reach.
 plugin version `2.12.1` and final guardrail evidence for delivery.
 
 1. Temporarily neutralise only the `renumbered_elsewhere` status-3 caller warning. Run
-   `just test check-records` bare and require non-zero with the new `W-RENUMBER-SCAN` assertion
-   failing. Restore the exact production line without committing the mutation.
+   `./.github/scripts/check-records-test.sh` bare and require non-zero with the new
+   `W-RENUMBER-SCAN` assertion failing. Restore the exact production line without committing the
+   mutation.
 2. Temporarily neutralise only the `gate_existed_at` status-3 caller warning. Run
-   `just test check-records` bare and require non-zero with the new `W-GATE-WITNESS-SCAN`
-   assertion failing. Restore the exact production line without committing the mutation.
-3. Run `just test check-records` again. Expected: exit 0 with every suite assertion passing.
+   `./.github/scripts/check-records-test.sh` bare and require non-zero with the new
+   `W-GATE-WITNESS-SCAN` assertion failing. Restore the exact production line without committing
+   the mutation.
+3. Run `./.github/scripts/check-records-test.sh` again. Expected: exit 0 with every suite assertion
+   passing and the summary reporting `0 failed`.
 4. Change `.claude-plugin/plugin.json` version from `2.12.0` to `2.12.1`; this is a PATCH because
    no invocation contract or capability is added.
 5. Run `git diff --check`, then `just records`, then `just verify`, all bare. Expected: exit 0;
