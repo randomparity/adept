@@ -25,6 +25,10 @@ then executes its status-0 action. `renumbered_elsewhere` uses `W-RENUMBER-SCAN`
 renumber note. `gate_existed_at` uses `W-GATE-WITNESS-SCAN` before the existing
 `E-GATE-EMPTY-SET` result. Neither warning changes the process exit status.
 
+If multiple reads fault before the positive result, the existing fault globals retain the last
+fault encountered. The warning reports that fault only; it signals an incomplete search rather
+than inventorying every failed read.
+
 ## Components and data flow
 
 `renumbered_elsewhere` remembers the first or latest candidate fault as it does today. When a
@@ -53,6 +57,9 @@ The existing `renumber_match_outranks_fault` fixture will assert exit 0, the rea
 and `W-RENUMBER-SCAN` naming the failed candidate read and exit status. A new gate fixture will
 make one `ls-tree` witness fault before a later real witness succeeds, assert the existing
 `E-GATE-EMPTY-SET` verdict, and assert `W-GATE-WITNESS-SCAN` names the failed witness and status.
+At one site, the fixture will fault two reads before the positive result and assert that the
+warning names the last fault, pinning the deterministic selection rule without duplicating the
+same policy test at both callers.
 
 Each new assertion must bite: temporarily neutralising the status-3 caller branch must make its
 focused suite fail, after which the implementation is restored. `just records` proves fixture

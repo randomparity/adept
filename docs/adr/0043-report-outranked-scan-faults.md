@@ -27,6 +27,10 @@ ordinary positive-result globals. Its caller emits one full-severity warning nam
 read and its exit status, then performs the same positive-result action it would have performed
 for ordinary success.
 
+When several reads fault before the positive result, the predicate retains and reports the last
+fault encountered. The warning is a trace that the search was incomplete, not an inventory of
+every failed read; earlier faults are not reported individually.
+
 The two sites use rule-specific warning codes: `W-RENUMBER-SCAN` and
 `W-GATE-WITNESS-SCAN`. A search with no positive result keeps ADR 0005's existing fault return
 and error diagnostic. A search with no fault keeps its existing success or negative return.
@@ -34,9 +38,10 @@ and error diagnostic. A search with no fault keeps its existing success or negat
 ## Consequences
 
 The gate's exit status remains unchanged when a positive witness outranks a fault. Operators and
-CI logs gain a stable trace showing that the answer was reached incompletely. Callers acquire a
-fourth predicate outcome and must keep its warning and positive action adjacent so later edits do
-not accidentally turn the warning into a failing verdict or omit the positive action.
+CI logs gain a stable trace showing that the answer was reached incompletely, with deterministic
+selection when several reads fault. Callers acquire a fourth predicate outcome and must keep its
+warning and positive action adjacent so later edits do not accidentally turn the warning into a
+failing verdict or omit the positive action.
 
 The warning is emitted with `warn_full`: an outranked external-read fault is independent of a
 record's grandfathered shape and is not downgraded. The two mirrored gate scripts and their test
