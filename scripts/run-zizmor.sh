@@ -34,14 +34,15 @@ set -euo pipefail
 # error even with --offline on argv -- that removal is what makes "an empty value
 # is not a token" true rather than merely asserted.
 #
-# Everything above about zizmor's CLI was measured on 1.29.0, and CI installs
-# zizmor unpinned. A zizmor that renames a variable makes the mode line disagree
-# with the run, which is loud; one that renumbers its exit statuses makes the
-# online-failure hint stop appearing, which is silent and harmless.
+# Everything above about zizmor's CLI was measured on 1.29.0. The version check
+# below makes that measurement an enforced precondition before mode selection.
+# A future version is reviewed and admitted deliberately rather than inheriting
+# analyzer behavior from whichever binary happens to be on PATH.
 #
 # Exit 2 on usage, otherwise zizmor's own status, re-raised unchanged.
 
 LABEL='run-zizmor'
+EXPECTED_ZIZMOR_VERSION='1.29.0'
 
 say() {
 	printf '%s: %s\n' "$LABEL" "$*"
@@ -68,6 +69,22 @@ for argument in "$@"; do
 		;;
 	esac
 done
+
+version_output=''
+version_status=0
+version_output=$(zizmor --version 2>&1) || version_status=$?
+if ((version_status != 0)); then
+	printf '%s: expected zizmor %s; version command exited %s; install zizmor %s\n' \
+		"$LABEL" "$EXPECTED_ZIZMOR_VERSION" "$version_status" \
+		"$EXPECTED_ZIZMOR_VERSION" >&2
+	exit 1
+fi
+if [[ $version_output != "zizmor $EXPECTED_ZIZMOR_VERSION" ]]; then
+	printf '%s: expected zizmor %s, observed %s; install zizmor %s\n' \
+		"$LABEL" "$EXPECTED_ZIZMOR_VERSION" "$version_output" \
+		"$EXPECTED_ZIZMOR_VERSION" >&2
+	exit 1
+fi
 
 # Returns 0 when the value selects offline, 1 when it does not -- including the
 # malformed case, which warns first.
