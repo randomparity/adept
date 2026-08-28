@@ -1355,7 +1355,7 @@ $key" ;;
 
   while IFS= read -r needle; do
     grep_status=0
-    matches=$(git grep --no-color -lF "$needle" "$base" -- .github/workflows 2>/dev/null) ||
+    matches=$(git grep --no-color -lF -e "$needle" "$base" -- .github/workflows 2>/dev/null) ||
       grep_status=$?
     case $grep_status in
     0)

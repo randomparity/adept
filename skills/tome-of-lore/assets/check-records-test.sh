@@ -1254,6 +1254,27 @@ STUB
   run_case "gate file witness faults, not silently unprotected" 1 E-GATE-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
 
+  # A checker basename is repository-controlled and may look like a git-grep option. Quoting
+  # keeps it one shell argument; only `-e` keeps Git from parsing it as an option and silently
+  # omitting the workflow that protects the renamed checker.
+  d="$SCRATCH/option_shaped_checker"
+  new_repo "$d"
+  mv "$d/.github/scripts/check-records.sh" "$d/.github/scripts/--cached"
+  sed 's/check-records\.sh/--cached/' "$d/.github/workflows/records.yml" >"$d/.workflow"
+  mv "$d/.workflow" "$d/.github/workflows/records.yml"
+  write_record "$d" "0001-valid.md"
+  git -C "$d" add -A
+  git -C "$d" commit -qm base
+  b=$(base_of "$d")
+  rm "$d/.github/workflows/records.yml"
+  cat >"$d/.github/scripts/check-records.sh" <<'STUB'
+#!/usr/bin/env bash
+exec "$(dirname "$0")/--cached" "$@"
+STUB
+  chmod +x "$d/.github/scripts/check-records.sh"
+  run_case "option-shaped checker still protects its workflow" 1 E-GATE-GONE "$d" \
+    BASE_SHA="$b"
+
   # A workflow search that could not read the base ref must not silently shrink the gate's
   # protected path set. The checker itself and its suite still give gate_paths two paths, so
   # this fixture would otherwise pass while omitting the workflow whose scan faulted.
