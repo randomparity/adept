@@ -1254,6 +1254,27 @@ STUB
   run_case "gate file witness faults, not silently unprotected" 1 E-GATE-SCAN "$d" \
     BASE_SHA="$b" PATH="$stub_bin:$PATH"
 
+  # A workflow search that could not read the base ref must not silently shrink the gate's
+  # protected path set. The checker itself and its suite still give gate_paths two paths, so
+  # this fixture would otherwise pass while omitting the workflow whose scan faulted.
+  stub_bin="$SCRATCH/git-gate-paths-fault-bin"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/git" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = grep ] && [ "\$3" = -lF ]; then
+  for arg in "\$@"; do
+    if [ "\$arg" = .github/workflows ]; then
+      printf 'fatal: fixture-fault: simulated object store error\n' >&2
+      exit 128
+    fi
+  done
+fi
+exec "$real_git" "\$@"
+STUB
+  chmod +x "$stub_bin/git"
+  run_case "gate workflow search faults, not silently omitted" 1 E-GATE-PATHS-SCAN "$d" \
+    BASE_SHA="$b" PATH="$stub_bin:$PATH"
+
   # A base ref that predates the gate is the adoption PR, and it must not be red — and it
   # must say why, per the same discipline as every other rule: assert both the exit status
   # and which code fired. Bespoke rather than run_case: I-GATE-BOOTSTRAP is informational,
@@ -1327,7 +1348,7 @@ STUB
   mkdir -p "$stub_bin"
   cat >"$stub_bin/git" <<STUB
 #!/usr/bin/env bash
-if [ "\$1" = grep ]; then
+if [ "\$1" = grep ] && [ "\$3" = -qF ]; then
   for arg in "\$@"; do
     if [ "\$arg" = .github/workflows ]; then
       printf 'fatal: fixture-fault: simulated object store error\n' >&2
