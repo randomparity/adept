@@ -44,5 +44,6 @@ step 5 consumes only resulting evidence.
 **Acceptance criteria:** EH-1 through EH-7 are readable directly from the checkpoint; no existing
 loop lifecycle contract changes; structural guardrails pass.
 
-**Rollback:** revert the implementation commit; design records remain as the decision history if
-the feature is later superseded.
+**Rollback:** make a forward rollback that removes the skill checkpoint while retaining a
+monotonically increasing manifest version (bump the rollback change to the next patch). Design
+records remain as decision history and ADR 0046 is superseded rather than rewritten.
