@@ -43,7 +43,7 @@ remaining status discard is deliberate and falls into one of five classes:
   "guarded at its input or moved out");
 - path-pattern and in-memory predicates (`is_two_space`, `cleared_dependency_candidate`).
 
-One empirical fact constrains the match set. `if !` appears 142 times across the
+One empirical fact constrains the match set. `if !` appears roughly 140 times across the
 shell-source inventory, and every site reports its fault in the then-branch — the #25 sweep
 converted the silent ones, and the survivors call `err`, `fail`, `report`, `die`, or exit
 non-zero. A structural check cannot separate a reporting `if !` from a collapsing one

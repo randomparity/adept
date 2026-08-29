@@ -23,12 +23,11 @@ are excluded (ADR 0047 Considered & rejected).
 The guard scans the repository's shell sources — `scripts/list-shell-sources.sh --all -z`
 output — minus test scripts (paths matching `tests/fixtures/*` or `*/tests/fixtures/*`, and
 names ending `-test.sh`). For each file, line by line, it applies, in order:
-
-1. **Heredoc tracking.** A line containing `<<` (not `<<<`) followed by optional `-`,
+1. **Comment skip.** A line whose first non-whitespace character is `#` is skipped.
+2. **Heredoc tracking.** A line containing `<<` (not `<<<`) followed by optional `-`,
    optional quote, and a word character opens a heredoc; its delimiter word is queued. While
    a delimiter is pending, lines are skipped until a line equal to the delimiter (leading
    tabs tolerated only for `<<-`), which dequeues it. Heredoc bodies are content, not code.
-2. **Comment skip.** A line whose first non-whitespace character is `#` is skipped.
 3. **Pragma check.** A line containing `scan-fault: deliberate —` followed by at least one
    non-whitespace character is exempt.
 4. **Match.** A line is a finding when it contains one of:

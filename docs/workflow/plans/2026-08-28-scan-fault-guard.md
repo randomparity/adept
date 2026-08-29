@@ -83,10 +83,9 @@ var_assign_pat='^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+'
 
 # Pure builtins: their own status is never a scan verdict, and with no pipeline
 # and no command substitution they cannot wrap a scanning stage.
-# local/export/declare/typeset/readonly are deliberately absent: they can wrap
-# a command substitution that scans.
+# When a line contains a pipeline (|) or command substitution ($(), the builtin
+# is not exempt because it may wrap a scanning command.
 builtins='printf echo read : true false unset local export cd shift return exit break continue trap umask set eval source . declare typeset pwd type hash let wait getopts times ulimit alias bg fg jobs kill help compgen complete dirs disown enable history logout popd pushd readonly shopt suspend builtin exec caller bind fc mapfile readarray coproc'
-
 # Discard shapes, named for the finding message. The name never spells the
 # literal operator, so this script's own messages cannot match its own patterns.
 trailing_shapes=(
