@@ -237,6 +237,8 @@ shape-check:
 public-safety:
   ./scripts/check-public-safety.sh
 
+scan-fault-check:
+  ./scripts/check-scan-fault-discards.sh
 ripgrep-config-check:
   ./scripts/check-ripgrep-config.sh
 
@@ -272,7 +274,7 @@ actions-check:
   # be unseen by shellcheck and shfmt and could carry no suite. See ADR 0036.
   ./scripts/run-zizmor.sh .github/workflows/
 
-commit-check: lint format-check public-safety
+commit-check: lint format-check public-safety scan-fault-check
 
 push-check:
   ./scripts/verify-push.sh

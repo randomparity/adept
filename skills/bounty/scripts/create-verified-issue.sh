@@ -137,7 +137,7 @@ created_output=$("$tracker" create --target "$repo" "${create_args[@]}" 2>&1) ||
 create_class=$create_status
 ((create_status == 0)) || create_status=1
 issue_url_pattern='https://[^/[:space:]]+/[^/[:space:]]+/[^/[:space:]]+/issues/[0-9]+'
-issue_url=$(printf '%s\n' "$created_output" | rg -o "$issue_url_pattern" | tail -n 1 || true)
+issue_url=$(printf '%s\n' "$created_output" | rg -o "$issue_url_pattern" | tail -n 1 || true) # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
 # A partial carrying no identity means the write landed and only its URL could
 # not be parsed. Reporting that as a failed command invites a re-run and a
 # duplicate live issue, which is the outcome this script exists to prevent.

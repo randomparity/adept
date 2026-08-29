@@ -68,7 +68,7 @@ observe_host_shell() {
 observe_host_userland() {
 	HOST_USERLAND=unknown
 	local out='' status=0
-	command -v sed >/dev/null 2>&1 || return 0
+	command -v sed >/dev/null 2>&1 || return 0 # scan-fault: deliberate — probe; absence is ordinary
 	out=$(sed --version 2>/dev/null) || status=$?
 	if [[ $out == *GNU* ]]; then
 		HOST_USERLAND=gnu

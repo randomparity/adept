@@ -68,7 +68,7 @@ profile_check_status() {
   # `set -e` suppression: `grep .` exits 1 on any record whose Status holds only a banner, and
   # `head` can leave 141 behind on a long one. Neither is a verdict.
   # shellcheck disable=SC2154 # assigned by read_section in check-records.sh, which sources this
-  body=$(printf '%s\n' "$read_section_out" | grep -v '^>' | grep . | head -1) || :
+  body=$(printf '%s\n' "$read_section_out" | grep -v '^>' | grep . | head -1) || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   case "$body" in
   Proposed | Deferred) return 0 ;;
   esac
@@ -127,7 +127,7 @@ check_supersede_link() {
   fi
   # In-memory; discard per ADR 0032 decision 2, as in profile_check_status.
   link=$(printf '%s\n' "$read_section_out" |
-    sed -n 's/^> \*\*Superseded by \[[0-9]\{4\}\](\([^)]*\)).*/\1/p' | head -1) || :
+    sed -n 's/^> \*\*Superseded by \[[0-9]\{4\}\](\([^)]*\)).*/\1/p' | head -1) || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   [ -n "$link" ] || return 0
   if [ ! -f "$RECORD_DIR/$link" ]; then
     err_full "E-SUPERSEDE-DANGLING: $label: supersession banner names $RECORD_DIR/$link, which is not a record here"

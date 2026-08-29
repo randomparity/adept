@@ -189,8 +189,8 @@ while IFS= read -r -d '' path; do
 		;;
 	esac
 	case $mode in
-	tabs) is_two_space "$path" && continue ;;
-	two-space) is_two_space "$path" || continue ;;
+	tabs) is_two_space "$path" && continue ;;      # scan-fault: deliberate — path-pattern test, not a scan
+	two-space) is_two_space "$path" || continue ;; # scan-fault: deliberate — path-pattern test, not a scan
 	esac
 	found=1
 	if ((nul)); then

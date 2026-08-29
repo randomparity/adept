@@ -65,7 +65,7 @@ GH_OUT=''
 GH_ERR=''
 # shellcheck disable=SC2329 # run by the EXIT trap, not called directly
 github_cleanup() {
-	rm -f -- "$github_err_file" || :
+	rm -f -- "$github_err_file" || : # scan-fault: deliberate — cleanup; trap reports retention
 }
 github_run() { # gh-args...
 	local rc=0
@@ -345,7 +345,7 @@ profile_create() {
 	out=$GH_OUT
 	url=$(printf '%s\n' "$out" |
 		rg -o 'https://[^/[:space:]]+/[^/[:space:]]+/[^/[:space:]]+/issues/[0-9]+' |
-		tail -n 1 || true)
+		tail -n 1 || true) # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
 	if ((rc != 0)); then
 		# A failure that cannot have written is not partial. Reporting an
 		# auth or not-found error as "the write may have landed" tells an
