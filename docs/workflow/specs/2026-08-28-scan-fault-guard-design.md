@@ -21,8 +21,8 @@ are excluded (ADR 0047 Considered & rejected).
 ## Behavior
 
 The guard scans the repository's shell sources — `scripts/list-shell-sources.sh --all -z`
-output — minus test scripts (paths containing `/tests/fixtures/` and names ending
-`-test.sh`). For each file, line by line, it applies, in order:
+output — minus test scripts (paths matching `tests/fixtures/*` or `*/tests/fixtures/*`, and
+names ending `-test.sh`). For each file, line by line, it applies, in order:
 
 1. **Heredoc tracking.** A line containing `<<` (not `<<<`) followed by optional `-`,
    optional quote, and a word character opens a heredoc; its delimiter word is queued. While
@@ -35,18 +35,20 @@ output — minus test scripts (paths containing `/tests/fixtures/` and names end
    - `|| true` or `|| :` on a command that is not a test and not a pure builtin;
    - `|| continue`, `&& continue`, `|| return 0`, `&& return 0`, `|| exit 0`, `&& exit 0`
      on such a command;
-   - `[ -n "$(cmd)" ]` or `[ -z "$(cmd)" ]`.
-5. **Exclusions.** Patterns 1–7 do not fire when the discarded command is a test — the text
-   before the operator ends with `]`, `]]`, or `))`, or the line's command word is `test` —
-   or a pure builtin with no pipeline in the line (`printf`, `echo`, `read`, `:`, `true`,
-   `false`, `unset`, `local`, `export`, `cd`, `shift`, `return`, `exit`, `break`,
+   - `[ -n "$(cmd)" ]`, `[ -z "$(cmd)" ]`, `[[ -n $(cmd) ]]`, `[[ -z $(cmd) ]]`,
+     `[[ -n "$(cmd)" ]]`, `[[ -z "$(cmd)" ]]`, or `test -n/-z` with a command substitution.
+5. **Exclusions.** The trailing discard patterns do not fire when the discarded command is a
+   test — the text before the operator ends with `]`, `]]`, or `))`, or the line's command
+   word is `test` — or a pure builtin when the line contains no pipeline (`|`) and no
+   command substitution (`$(`). The pure builtins are: `printf`, `echo`, `read`, `:`,
+   `true`, `false`, `unset`, `local`, `export`, `cd`, `shift`, `return`, `exit`, `break`,
    `continue`, `trap`, `umask`, `set`, `eval`, `source`, `.`, `declare`, `typeset`, `pwd`,
    `type`, `hash`, `let`, `wait`, `getopts`, `times`, `ulimit`, `alias`, `bg`, `fg`,
    `jobs`, `kill`, `help`, `compgen`, `complete`, `dirs`, `disown`, `enable`, `history`,
    `logout`, `popd`, `pushd`, `readonly`, `shopt`, `suspend`, `builtin`, `exec`, `caller`,
-   `bind`, `fc`, `mapfile`, `readarray`, `coproc`). The command word is the first token
-   after leading `VAR=value` assignments; `local`/`export`/`declare`/`typeset`/`readonly`
-   are deliberately not excluded (they can wrap a substitution that scans).
+   `bind`, `fc`, `mapfile`, `readarray`, `coproc`. The command word is the first token
+   after leading `VAR=value` assignments. If the line contains a pipeline or a command
+   substitution, it is not builtin-exempt.
 6. **Report.** A finding prints `scan-fault-guard: <file>:<line>: <shape> without a
    '# scan-fault: deliberate — <reason>' pragma` where `<shape>` names the operator
    (`trailing true-discard`, `trailing colon-discard`, `continue-discard`, `return-0-discard`,
