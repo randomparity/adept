@@ -11,16 +11,17 @@ without the pragma is a finding (exit 1), a guard fault is exit 2, clean is exit
 `scripts/check-scan-fault-discards-test.sh` drives it with `--files` over scratch fixtures.
 The `commit-check` recipe gains the gate, so `just verify`, the pre-push hook, and CI run it.
 
-Tech stack: bash 3.2 (macOS system bash floor), ERE via `[[ =~ ]]`, no arrays beyond the
-plain indexed kind, no `mapfile`/`readarray`/associative arrays. Guardrails: `just verify`
-(records, lint, format-check, public-safety, shape-check, ripgrep-config-check, plugin-check,
-version-check, test, actions-check, prek dry-run); `just records` compares the
-`.github/scripts/` ↔ `skills/tome-of-lore/assets/` twins byte-for-byte.
+Tech stack: bash 3.2 (macOS system bash floor), ERE via `[[ =~ ]]` with regexes in variables,
+no arrays beyond the plain indexed kind, no `mapfile`/`readarray`/associative arrays.
+Guardrails: `just verify` (records, lint, format-check, public-safety, shape-check,
+ripgrep-config-check, plugin-check, version-check, test, actions-check, prek dry-run); `just
+records` compares the `.github/scripts/` ↔ `skills/tome-of-lore/assets/` twins byte-for-byte.
 
 ## Global Constraints
 
 - Bash 3.2 is the floor: no `mapfile`, no `readarray`, no associative arrays (CLAUDE.md).
 - Shell is bash with tab indentation, `#!/usr/bin/env bash`, `set -euo pipefail` (CLAUDE.md).
+- Regexes in variables: bash 3.2 mis-parses some quoted regex literals inside `[[ =~ ]]` (CLAUDE.md).
 - `rg` invocations in gate scripts pass `--no-config` (CLAUDE.md).
 - Every deliberate discard in the gate scripts carries the pragma `# scan-fault: deliberate — <reason>` with a non-empty reason (ADR 0047 decision 3).
 - The guard follows the rule it enforces: it captures its own statuses and reports its own faults as exit 2 (ADR 0047 decision 6).
@@ -71,6 +72,15 @@ pragma. With --files, scans exactly the named files.
 EOF
 }
 
+# Regexes in variables: bash 3.2 (macOS system bash) mis-parses some quoted regex
+# literals inside [[ =~ ]].
+heredoc_pat='<<[[:space:]]*(-?)(['"'"'"]?)([A-Za-z0-9_]+)'
+comment_pat='^[[:space:]]*#'
+pragma_pat='scan-fault:[[:space:]]deliberate[[:space:]]—[[:space:]]*[^[:space:]]'
+test_preceding_pat='(\]|\)[[:space:]]*\))[[:space:]]*(\|\||&&)'
+test_cmd_pat='^[[:space:]]*test[[:space:]]'
+var_assign_pat='^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+'
+
 # Pure builtins: their own status is never a scan verdict, and with no pipeline
 # and no command substitution they cannot wrap a scanning stage.
 # local/export/declare/typeset/readonly are deliberately absent: they can wrap
@@ -99,7 +109,7 @@ substitution_shapes=(
 command_word() {
   local rest=$1
   rest=${rest#"${rest%%[![:space:]]*}"}
-  while [[ $rest =~ ^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+ ]]; do
+  while [[ $rest =~ $var_assign_pat ]]; do
     rest=${rest#*"${BASH_REMATCH[0]}"}
     rest=${rest#"${rest%%[![:space:]]*}"}
   done
@@ -109,7 +119,7 @@ command_word() {
 findings=0
 
 scan_file() {
-  local file=$1 line lineno=0 pending="" tabs="" first rest m
+  local file=$1 line lineno=0 pending="" tabs="" first rest m word is_builtin line_before shape
   if ! { exec 3<"$file"; } 2>/dev/null; then
     printf 'scan-fault-guard: could not open %s\n' "$file" >&2
     exit 2
@@ -120,15 +130,20 @@ scan_file() {
       first=${pending%% *}
       if [ "$line" = "$first" ] ||
         { [ "${tabs%% *}" = 1 ] && [ "${line#"${line%%[!$'\t']*}"}" = "$first" ]; }; then
-        pending=${pending#"$first"}
-        pending=${pending# }
-        tabs=${tabs#* }
-        tabs=${tabs# }
+        case "$pending" in
+        *' '*) pending=${pending#* } ;;
+        *) pending="" ;;
+        esac
+        case "$tabs" in
+        *' '*) tabs=${tabs#* } ;;
+        *) tabs="" ;;
+        esac
       fi
       continue
     fi
+    [[ $line =~ $comment_pat ]] && continue
     rest=$line
-    while [[ $rest =~ <<[[:space:]]*(-?)(['"]?)([A-Za-z0-9_]+) ]]; do
+    while [[ $rest =~ $heredoc_pat ]]; do
       m=${BASH_REMATCH[0]}
       pending="$pending ${BASH_REMATCH[3]}"
       if [ -n "${BASH_REMATCH[1]}" ]; then
@@ -140,20 +155,20 @@ scan_file() {
     done
     pending=${pending# }
     tabs=${tabs# }
-    [[ $line =~ ^[[:space:]]*# ]] && continue
-    [[ $line =~ scan-fault:[[:space:]]deliberate[[:space:]]—[[:space:]]*[^[:space:]] ]] && continue
-    if [[ $line =~ (\]|\]\]|\)\))[[:space:]]*(\|\||&&) ]] ||
-      [[ $line =~ ^[[:space:]]*test[[:space:]] ]]; then
+    [[ $line =~ $pragma_pat ]] && continue
+    if [[ $line =~ $test_preceding_pat ]] || [[ $line =~ $test_cmd_pat ]]; then
       continue
     fi
     for shape in "${trailing_shapes[@]}"; do
-      if [[ $line =~ ${shape#*|} ]]; then
+      pat=${shape#*|}
+      if [[ $line =~ $pat ]]; then
         word=$(command_word "$line")
         is_builtin=no
         case " $builtins " in
         *" $word "*) is_builtin=yes ;;
         esac
-        if [ "$is_builtin" = yes ] && [[ $line != *'|'* ]] && [[ $line != *'$('* ]]; then
+        line_before=${line%"${BASH_REMATCH[0]}"*}
+        if [ "$is_builtin" = yes ] && [[ $line_before != *'|'* ]] && [[ $line != *'$('* ]]; then
           break
         fi
         printf 'scan-fault-guard: %s:%s: %s without a '\''# scan-fault: deliberate — <reason>'\'' pragma\n' \
@@ -163,7 +178,8 @@ scan_file() {
       fi
     done
     for shape in "${substitution_shapes[@]}"; do
-      if [[ $line =~ ${shape#*|} ]]; then
+      pat=${shape#*|}
+      if [[ $line =~ $pat ]]; then
         printf 'scan-fault-guard: %s:%s: %s without a '\''# scan-fault: deliberate — <reason>'\'' pragma\n' \
           "$file" "$lineno" "${shape%%|*}" >&2
         findings=$((findings + 1))
@@ -370,6 +386,10 @@ expect 'heredoc body is not a finding' 0 h1.sh \
 expect 'heredoc opener with discard is a finding' 1 h2.sh \
   '#!/usr/bin/env bash' \
   'cat >"$f" <<'"'"'STUB'"'"' || true'
+expect 'heredoc example in comment does not open phantom heredoc' 1 h3.sh \
+  '#!/usr/bin/env bash' \
+  '# cat <<EOF' \
+  'grep -q pattern file || true'
 
 # Fault paths: unreadable file and bad argument exit 2.
 set +e
