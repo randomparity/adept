@@ -95,7 +95,7 @@ check_targets() {
   fi
   # In-memory; discard per ADR 0032 decision 2. sed exits 0 having printed nothing when the
   # section carries no target line, which is E-TARGET-MISSING's honest case below.
-  targets=$(printf '%s\n' "$read_section_out" | sed -n 's/^target:[[:space:]]*//p') || :
+  targets=$(printf '%s\n' "$read_section_out" | sed -n 's/^target:[[:space:]]*//p') || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
 
   while IFS= read -r target; do
     [ -n "$target" ] || continue
@@ -131,7 +131,7 @@ check_review_by() {
     return 0
   fi
   # In-memory; discard per ADR 0032 decision 2.
-  review_by=$(printf '%s\n' "$read_section_out" | sed -n 's/^review-by:[[:space:]]*//p' | head -1) || :
+  review_by=$(printf '%s\n' "$read_section_out" | sed -n 's/^review-by:[[:space:]]*//p' | head -1) || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   if [ -z "$review_by" ]; then
     [ "$resolved" = yes ] && return 0
     err "E-REVIEWBY-MISSING: $label: open deferral needs review-by: YYYY-MM-DD in Status"

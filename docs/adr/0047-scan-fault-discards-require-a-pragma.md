@@ -104,10 +104,10 @@ failed source listing) as exit 2, and never collapses them into a pass.
   sweeps held; every flagged site is a deliberate exception with a documented reason. The
   fail-closed instances in test fixtures (a `rg -c … || true` whose fault fails the
   assertion loudly) are outside the scan scope by decision 4.
-- **Residuals, recorded.** The `if !` negation shape is not matched: all 142 current sites
-  report their fault, and separating reporting from collapsing requires then-branch parsing
-  the repo's culture rejects; a new `if ! scan; then <silent negative>; fi` is a review
-  matter, not a gate matter. Bare pipelines without a trailing discard are not matched: ADR
+- **Residuals, recorded.** The `if !` negation shape is not matched: every sampled site
+  across the inventory reports its fault, and separating reporting from collapsing requires
+  then-branch parsing the repo's culture rejects; a new `if ! scan; then <silent negative>; fi`
+  is a review matter, not a gate matter. Bare pipelines without a trailing discard are not matched: ADR
   0032 lifted every reading stage, and a new one is the same review matter. `|| return N>0`
   and `|| exit N>0` are not matched: propagation is loud. A heredoc tracker that misreads
   `<<` inside a string would skip subsequent lines (fail-open); the current inventory has no

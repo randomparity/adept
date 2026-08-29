@@ -254,20 +254,20 @@ apply_cleared_dependency() { # repo issue-json
 	fi
 	if [[ $status_labels != '["status:ready"]' ]]; then
 		restore_cleared_dependency_blocked "$repo" "$number" "$final" \
-			'a conflicting status write' || :
+			'a conflicting status write' || : # scan-fault: deliberate — best-effort restore; primary error already reported
 		return 1
 	fi
 	if ! jq -e '(.state | ascii_upcase) == "OPEN" and
     (all(.labels[].name; . != "epic"))' >/dev/null <<<"$final"; then
 		restore_cleared_dependency_blocked "$repo" "$number" "$final" \
-			'post-write state changed' || :
+			'post-write state changed' || : # scan-fault: deliberate — best-effort restore; primary error already reported
 		return 1
 	fi
 	clear_cleared_dependency_results
 	body=$(jq -r '.body // ""' <<<"$final")
 	if ! cleared_dependency_body_verdict "$repo" "$number" "$body"; then
 		restore_cleared_dependency_blocked "$repo" "$number" "$final" \
-			"$cleared_dependency_reason" || :
+			"$cleared_dependency_reason" || : # scan-fault: deliberate — best-effort restore; primary error already reported
 		return 1
 	fi
 	printf 'readied #%s\n' "$number"
@@ -297,7 +297,7 @@ reconcile_cleared_dependencies() { # plan|apply owner/name
 		return 1
 	fi
 	while IFS= read -r issue; do
-		cleared_dependency_candidate "$issue" || continue
+		cleared_dependency_candidate "$issue" || continue # scan-fault: deliberate — in-memory jq predicate, ADR 0032 decision 4
 		number=$(jq -r .number <<<"$issue")
 		if ((${#targets[@]} > 0)); then
 			selected=false

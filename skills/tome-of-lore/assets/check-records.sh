@@ -366,7 +366,7 @@ check_sections() {
     fi
     # In-memory, and the discard is written out per ADR 0032 decision 2. Unlike protected_shape
     # this one fails toward a false error rather than a false pass, so it is not captured.
-    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]') || :
+    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]') || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
     if [ -z "$body" ]; then
       err "E-SECTION-EMPTY: $label: section '$section' is empty — a heading with no content is not a record"
     fi
@@ -392,7 +392,7 @@ check_status() {
   record_resolved=no
   status_block=$(section_body "$file" "## Status")
 
-  banner=$(printf '%s\n' "$status_block" | grep "$BANNER_PREFIX" || true)
+  banner=$(printf '%s\n' "$status_block" | grep "$BANNER_PREFIX" || true) # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   if [ -n "$banner" ]; then
     banner_count=$(printf '%s\n' "$banner" | grep -c .)
     if [ "$banner_count" -ne 1 ]; then
@@ -642,7 +642,7 @@ records_in_ref() {
   # `printf` over a shell variable, which ADR 0005 decision 1 places outside the scan rule and
   # ADR 0032 decision 4 confirms does not convert: grep's exit 1 here means the ref simply held
   # no records. The discard is written out per decision 2.
-  records_in_ref_out=$(printf '%s' "$raw" | grep -E "$RECORD_RE") || :
+  records_in_ref_out=$(printf '%s' "$raw" | grep -E "$RECORD_RE") || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   return 0
 }
 
@@ -725,7 +725,7 @@ check_preamble_intact() {
   # In-memory, so ADR 0005 decision 1 exempts it and ADR 0032 decision 2 requires the discard be
   # written here rather than left to the caller's ambient `set -e` suppression. grep -c prints 0
   # and exits 1 when nothing matched, which is the ordinary "nothing was removed" answer.
-  removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
+  removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   if [ "$removed" -gt 0 ]; then
     err_full "E-PREAMBLE-REWRITTEN: $path drops $removed line(s) between the title and the first section that the base ref had"
   fi
@@ -761,7 +761,7 @@ check_sections_append_only() {
       return 0
       ;;
     esac
-    sections=$(printf '%s\n' "$all_sections" | grep -vxF '## Status') || :
+    sections=$(printf '%s\n' "$all_sections" | grep -vxF '## Status') || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   fi
 
   while IFS= read -r section; do
@@ -798,7 +798,7 @@ check_sections_append_only() {
       continue
     fi
 
-    removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
+    removed=$(printf '%s\n' "$diff_out" | grep -c '^<') || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
     if [ "$removed" -gt 0 ]; then
       err_full "E-REWRITE: $path drops $removed line(s) from '$section' that the base ref had — a merged record is append-only there; resolve it with a banner rather than rewriting it"
     fi
@@ -1314,7 +1314,7 @@ gate_paths() {
       [ -n "$profile" ] || continue
       rel=$(repo_relative "$SELF_DIR/profiles/${profile##*/}")
       [ -n "$rel" ] && printf '%s\n' "$rel"
-    done < <(git ls-tree -r --name-only "$base" -- "$profiles_rel" 2>/dev/null || true)
+    done < <(git ls-tree -r --name-only "$base" -- "$profiles_rel" 2>/dev/null || true) # scan-fault: deliberate — process-substitution listing; status has no channel (documented above)
   fi
 
   # The workflow template, when it ships beside the scripts. It is part of the gate in the
@@ -1527,7 +1527,7 @@ read_base_blob() {
 dir_in_ref() {
   local ref=$1 dir=$2 status=0
   [ -n "$ref" ] || return 0
-  git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null || return 0
+  git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null || return 0 # scan-fault: deliberate — no base ref means nothing to have existed (fail-open, documented above)
   path_exists_at "$ref" "$dir" || status=$?
   return "$status"
 }
@@ -1639,7 +1639,7 @@ run_profile() {
 main() {
   require_repo_root || return 1
 
-  if [ -z "$(repo_relative "$SELF_FILE")" ]; then
+  if [ -z "$(repo_relative "$SELF_FILE")" ]; then # scan-fault: deliberate — pure parameter expansion, not a scan
     err "E-GATE-UNLOCATABLE: cannot locate $SELF_FILE inside this repository — self-protection is off"
   fi
 
@@ -1663,7 +1663,7 @@ main() {
     # an array.
     # shellcheck disable=SC2086
     for name in $profiles; do
-      run_profile "$name" || true
+      run_profile "$name" || true # scan-fault: deliberate — one profile's failure must not hide another's findings
     done
   fi
 

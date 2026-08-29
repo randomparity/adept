@@ -244,7 +244,7 @@ report_status_leftover() {
 
   # In-memory from here, which ADR 0005 decision 1 exempts; the discards are written out per
   # ADR 0032 decision 2 rather than left to migrate_profile's ambient `set -e` suppression.
-  banner=$(printf '%s\n' "$body" | grep "$BANNER_PREFIX") || :
+  banner=$(printf '%s\n' "$body" | grep "$BANNER_PREFIX") || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   if [ -n "$banner" ]; then
     if ! printf '%s' "$banner" | grep -qE "$BANNER_PATTERN"; then
       leftover "$label: the banner must read '$BANNER_HINT', and its date is not derivable from the text"
@@ -254,7 +254,7 @@ report_status_leftover() {
       return 0
     fi
   fi
-  status=$(printf '%s\n' "$body" | grep -v '^>' | grep . | head -1) || :
+  status=$(printf '%s\n' "$body" | grep -v '^>' | grep . | head -1) || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   if [ -n "$status" ] && ! status_is_canonical "$status"; then
     leftover "$label: status '$status' is not a form the gate accepts, and no date can be taken from that line"
   fi
@@ -293,7 +293,7 @@ report_leftovers() {
       report_failure "E-MIGRATE-SECTION-SCAN: $file: could not read the body of '$section' (awk exit $read_section_status)"
       continue
     fi
-    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]') || :
+    body=$(printf '%s' "$read_section_out" | tr -d '[:space:]') || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
     if [ -z "$body" ]; then
       leftover "$label: '$section' has no body — a heading with no content is not a record"
     fi
@@ -314,7 +314,7 @@ show_rewrites() {
   fi
   # In-memory; discard per ADR 0032 decision 2. The emptiness guard keeps a here-string from
   # feeding the loop one blank line where the process substitution fed it nothing.
-  changed_lines=$(printf '%s\n' "$diff_out" | grep -E '^[<>] ') || :
+  changed_lines=$(printf '%s\n' "$diff_out" | grep -E '^[<>] ') || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   [ -n "$changed_lines" ] || return 0
   while IFS= read -r line; do
     info "    $line"
@@ -368,7 +368,7 @@ migrate_record() {
   fi
   # In-memory; discard per ADR 0032 decision 2. grep -c prints 0 and exits 1 when the transform
   # rewrote nothing, which is the ordinary "already canonical" answer.
-  changed=$(printf '%s\n' "$diff_out" | grep -c '^<') || :
+  changed=$(printf '%s\n' "$diff_out" | grep -c '^<') || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   info "$path: $changed marker line(s) rewritten"
   show_rewrites "$path" "$tmp"
   if [ "$changed" -gt 0 ]; then
@@ -420,7 +420,7 @@ migrate_profile() {
   fi
   # In-memory; discard per ADR 0032 decision 2. grep exits 1 when the directory holds no file
   # matching the record pattern, which is an ordinary empty listing.
-  records=$(printf '%s\n' "$sorted" | grep -E "$RECORD_RE") || :
+  records=$(printf '%s\n' "$sorted" | grep -E "$RECORD_RE") || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4
   [ -n "$records" ] || return 0
 
   while IFS= read -r record; do

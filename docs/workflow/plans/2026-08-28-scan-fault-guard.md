@@ -63,7 +63,7 @@ set -euo pipefail
 # enforces: it captures its own statuses and reports its own faults.
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 usage: check-scan-fault-discards.sh [--files file...]
 
 Scans the repository's gate scripts (the shell-source inventory minus test
@@ -86,150 +86,153 @@ var_assign_pat='^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+'
 # When a line contains a pipeline (|) or command substitution ($(), the builtin
 # is not exempt because it may wrap a scanning command.
 builtins='printf echo read : true false unset local export cd shift return exit break continue trap umask set eval source . declare typeset pwd type hash let wait getopts times ulimit alias bg fg jobs kill help compgen complete dirs disown enable history logout popd pushd readonly shopt suspend builtin exec caller bind fc mapfile readarray coproc'
+
 # Discard shapes, named for the finding message. The name never spells the
 # literal operator, so this script's own messages cannot match its own patterns.
 trailing_shapes=(
-  'trailing true-discard|\|\|[[:space:]]+true'
-  'trailing colon-discard|\|\|[[:space:]]+:'
-  'continue-discard|(\|\||&&)[[:space:]]+continue'
-  'return-0-discard|(\|\||&&)[[:space:]]+return[[:space:]]+0'
-  'exit-0-discard|(\|\||&&)[[:space:]]+exit[[:space:]]+0'
+	'trailing true-discard|\|\|[[:space:]]+true'
+	'trailing colon-discard|\|\|[[:space:]]*:'
+	'continue-discard|(\|\||&&)[[:space:]]+continue'
+	'return-0-discard|(\|\||&&)[[:space:]]+return[[:space:]]+0'
+	'exit-0-discard|(\|\||&&)[[:space:]]+exit[[:space:]]+0'
 )
 
 # The substitution-in-test shape matches both bracket styles [ ... ] and [[ ... ]]
 # and test builtins, with or without double quotes around the substitution.
 substitution_shapes=(
-  'substitution-in-test|(\[\[?|test)[[:space:]]+-(n|z)[[:space:]]+"?\$\('
+	'substitution-in-test|(\[\[?|test)[[:space:]]+-(n|z)[[:space:]]+"?\$\('
 )
 
 # First token after leading VAR=value assignments. Naive by design: a value
 # containing spaces is mis-stripped, but such lines carry a pipeline or a
 # substitution and are not builtin-exempt anyway.
 command_word() {
-  local rest=$1
-  rest=${rest#"${rest%%[![:space:]]*}"}
-  while [[ $rest =~ $var_assign_pat ]]; do
-    rest=${rest#*"${BASH_REMATCH[0]}"}
-    rest=${rest#"${rest%%[![:space:]]*}"}
-  done
-  printf '%s\n' "${rest%%[[:space:]]*}"
+	local rest=$1
+	rest=${rest#"${rest%%[![:space:]]*}"}
+	while [[ $rest =~ $var_assign_pat ]]; do
+		rest=${rest#*"${BASH_REMATCH[0]}"}
+		rest=${rest#"${rest%%[![:space:]]*}"}
+	done
+	printf '%s\n' "${rest%%[[:space:]]*}"
 }
 
 findings=0
 
 scan_file() {
-  local file=$1 line lineno=0 pending="" tabs="" first rest m word is_builtin line_before shape
-  if ! { exec 3<"$file"; } 2>/dev/null; then
-    printf 'scan-fault-guard: could not open %s\n' "$file" >&2
-    exit 2
-  fi
-  while IFS= read -r line <&3; do
-    lineno=$((lineno + 1))
-    if [ -n "$pending" ]; then
-      first=${pending%% *}
-      if [ "$line" = "$first" ] ||
-        { [ "${tabs%% *}" = 1 ] && [ "${line#"${line%%[!$'\t']*}"}" = "$first" ]; }; then
-        case "$pending" in
-        *' '*) pending=${pending#* } ;;
-        *) pending="" ;;
-        esac
-        case "$tabs" in
-        *' '*) tabs=${tabs#* } ;;
-        *) tabs="" ;;
-        esac
-      fi
-      continue
-    fi
-    [[ $line =~ $comment_pat ]] && continue
-    rest=$line
-    while [[ $rest =~ $heredoc_pat ]]; do
-      m=${BASH_REMATCH[0]}
-      pending="$pending ${BASH_REMATCH[3]}"
-      if [ -n "${BASH_REMATCH[1]}" ]; then
-        tabs="$tabs 1"
-      else
-        tabs="$tabs 0"
-      fi
-      rest=${rest#*"$m"}
-    done
-    pending=${pending# }
-    tabs=${tabs# }
-    [[ $line =~ $pragma_pat ]] && continue
-    if [[ $line =~ $test_preceding_pat ]] || [[ $line =~ $test_cmd_pat ]]; then
-      continue
-    fi
-    for shape in "${trailing_shapes[@]}"; do
-      pat=${shape#*|}
-      if [[ $line =~ $pat ]]; then
-        word=$(command_word "$line")
-        is_builtin=no
-        case " $builtins " in
-        *" $word "*) is_builtin=yes ;;
-        esac
-        line_before=${line%"${BASH_REMATCH[0]}"*}
-        if [ "$is_builtin" = yes ] && [[ $line_before != *'|'* ]] && [[ $line != *'$('* ]]; then
-          break
-        fi
-        printf 'scan-fault-guard: %s:%s: %s without a '\''# scan-fault: deliberate — <reason>'\'' pragma\n' \
-          "$file" "$lineno" "${shape%%|*}" >&2
-        findings=$((findings + 1))
-        break
-      fi
-    done
-    for shape in "${substitution_shapes[@]}"; do
-      pat=${shape#*|}
-      if [[ $line =~ $pat ]]; then
-        printf 'scan-fault-guard: %s:%s: %s without a '\''# scan-fault: deliberate — <reason>'\'' pragma\n' \
-          "$file" "$lineno" "${shape%%|*}" >&2
-        findings=$((findings + 1))
-        break
-      fi
-    done
-  done
-  exec 3<&-
+	local file=$1 line lineno=0 pending="" tabs="" first rest m word is_builtin line_before shape pat
+	if ! { exec 3<"$file"; } 2>/dev/null; then
+		printf 'scan-fault-guard: could not open %s\n' "$file" >&2
+		exit 2
+	fi
+	while IFS= read -r line <&3; do
+		lineno=$((lineno + 1))
+		if [ -n "$pending" ]; then
+			first=${pending%% *}
+			if [ "$line" = "$first" ] ||
+				{ [ "${tabs%% *}" = 1 ] && [ "${line#"${line%%[!$'\t']*}"}" = "$first" ]; }; then
+				case "$pending" in
+				*' '*) pending=${pending#* } ;;
+				*) pending="" ;;
+				esac
+				case "$tabs" in
+				*' '*) tabs=${tabs#* } ;;
+				*) tabs="" ;;
+				esac
+			fi
+			continue
+		fi
+		[[ $line =~ $comment_pat ]] && continue
+		rest=$line
+		while [[ $rest =~ $heredoc_pat ]]; do
+			m=${BASH_REMATCH[0]}
+			pending="$pending ${BASH_REMATCH[3]}"
+			if [ -n "${BASH_REMATCH[1]}" ]; then
+				tabs="$tabs 1"
+			else
+				tabs="$tabs 0"
+			fi
+			rest=${rest#*"$m"}
+		done
+		pending=${pending# }
+		tabs=${tabs# }
+		[[ $line =~ $pragma_pat ]] && continue
+		if [[ $line =~ $test_preceding_pat ]] || [[ $line =~ $test_cmd_pat ]]; then
+			continue
+		fi
+		for shape in "${trailing_shapes[@]}"; do
+			pat=${shape#*|}
+			if [[ $line =~ $pat ]]; then
+				word=$(command_word "$line")
+				is_builtin=no
+				case " $builtins " in
+				*" $word "*) is_builtin=yes ;;
+				esac
+				line_before=${line%"${BASH_REMATCH[0]}"*}
+				# shellcheck disable=SC2016 # literal matching of '$(' in line
+				if [ "$is_builtin" = yes ] && [[ $line_before != *'|'* ]] && [[ $line != *'$('* ]]; then
+					break
+				fi
+				printf 'scan-fault-guard: %s:%s: %s without a '\''# scan-fault: deliberate — <reason>'\'' pragma\n' \
+					"$file" "$lineno" "${shape%%|*}" >&2
+				findings=$((findings + 1))
+				break
+			fi
+		done
+		for shape in "${substitution_shapes[@]}"; do
+			pat=${shape#*|}
+			if [[ $line =~ $pat ]]; then
+				printf 'scan-fault-guard: %s:%s: %s without a '\''# scan-fault: deliberate — <reason>'\'' pragma\n' \
+					"$file" "$lineno" "${shape%%|*}" >&2
+				findings=$((findings + 1))
+				break
+			fi
+		done
+	done
+	exec 3<&-
 }
 
 if [ $# -gt 0 ] && [ "$1" = --files ]; then
-  shift
-  if [ $# -eq 0 ]; then
-    printf 'scan-fault-guard: --files needs at least one file\n' >&2
-    exit 2
-  fi
-  for file in "$@"; do
-    scan_file "$file"
-  done
-  exit "$([ "$findings" -gt 0 ] && echo 1 || echo 0)"
+	shift
+	if [ $# -eq 0 ]; then
+		printf 'scan-fault-guard: --files needs at least one file\n' >&2
+		exit 2
+	fi
+	for file in "$@"; do
+		scan_file "$file"
+	done
+	exit "$([ "$findings" -gt 0 ] && echo 1 || echo 0)"
 fi
 
 if [ $# -gt 0 ]; then
-  usage >&2
-  exit 2
+	usage >&2
+	exit 2
 fi
 
 listing=$(mktemp) || {
-  printf 'scan-fault-guard: could not create a scratch file\n' >&2
-  exit 2
+	printf 'scan-fault-guard: could not create a scratch file\n' >&2
+	exit 2
 }
+# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
 cleanup() {
-  local status=$?
-  if ! rm -f -- "$listing"; then
-    printf 'scan-fault-guard: retained scratch path: %s\n' "$listing" >&2
-    if ((status == 0)); then
-      exit 2
-    fi
-  fi
-  exit "$status"
+	local status=$?
+	if ! rm -f -- "$listing"; then
+		printf 'scan-fault-guard: retained scratch path: %s\n' "$listing" >&2
+		if ((status == 0)); then
+			exit 2
+		fi
+	fi
+	exit "$status"
 }
 trap cleanup EXIT
 if ! ./scripts/list-shell-sources.sh --all -z >"$listing"; then
-  printf 'scan-fault-guard: could not discover shell sources\n' >&2
-  exit 2
+	printf 'scan-fault-guard: could not discover shell sources\n' >&2
+	exit 2
 fi
 while IFS= read -r -d '' file; do
-  case "$file" in
-  tests/fixtures/* | */tests/fixtures/* | *-test.sh) continue ;;
-  esac
-  scan_file "$file"
+	case "$file" in
+	tests/fixtures/* | */tests/fixtures/* | *-test.sh) continue ;;
+	esac
+	scan_file "$file"
 done <"$listing"
 exit "$([ "$findings" -gt 0 ] && echo 1 || echo 0)"
 ```
@@ -260,6 +263,7 @@ set -euo pipefail
 # scratch fixture and asserts the guard's exit status and message. The suite is
 # a *-test.sh name, so the guard never scans it and its fixture heredocs may
 # contain the idioms.
+# shellcheck disable=SC2016 # fixture arguments intentionally contain literal unexpanded shell syntax
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 GUARD=${GUARD:-./scripts/check-scan-fault-discards.sh}
@@ -272,123 +276,126 @@ fail=0
 # expect <label> <expected-exit> <fixture-name> <content...>
 # Writes the fixture, runs the guard with --files, asserts the exit status.
 expect() {
-  local label=$1 expected=$2 name=$3
-  shift 3
-  printf '%s\n' "$@" >"$SCRATCH/$name"
-  set +e
-  "$GUARD" --files "$SCRATCH/$name" >"$SCRATCH/out" 2>&1
-  local status=$?
-  set -e
-  if [ "$status" -eq "$expected" ]; then
-    pass=$((pass + 1))
-    printf '  ok   %s\n' "$label"
-  else
-    fail=$((fail + 1))
-    printf '  FAIL %s: expected exit %s, got %s\n' "$label" "$expected" "$status" >&2
-    cat "$SCRATCH/out" >&2
-  fi
+	local label=$1 expected=$2 name=$3
+	shift 3
+	printf '%s\n' "$@" >"$SCRATCH/$name"
+	set +e
+	"$GUARD" --files "$SCRATCH/$name" >"$SCRATCH/out" 2>&1
+	local status=$?
+	set -e
+	if [ "$status" -eq "$expected" ]; then
+		pass=$((pass + 1))
+		printf '  ok   %s\n' "$label"
+	else
+		fail=$((fail + 1))
+		printf '  FAIL %s: expected exit %s, got %s\n' "$label" "$expected" "$status" >&2
+		cat "$SCRATCH/out" >&2
+	fi
 }
 
 # Each match shape is a finding (exit 1) naming the file and line.
 expect 'trailing true-discard is a finding' 1 f1.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file || true'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file || true'
 expect 'trailing colon-discard is a finding' 1 f2.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file || :'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file || :'
+expect 'unspaced trailing colon-discard is a finding' 1 f2b.sh \
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file ||:'
 expect 'continue-discard is a finding' 1 f3.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file || continue'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file || continue'
 expect 'and-continue is a finding' 1 f4.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file && continue'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file && continue'
 expect 'return-0-discard is a finding' 1 f5.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file || return 0'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file || return 0'
 expect 'and-return-0 is a finding' 1 f6.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file && return 0'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file && return 0'
 expect 'exit-0-discard is a finding' 1 f7.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file || exit 0'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file || exit 0'
 expect 'and-exit-0 is a finding' 1 f8.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file && exit 0'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file && exit 0'
 expect 'substitution-in-test is a finding' 1 f9.sh \
-  '#!/usr/bin/env bash' \
-  'if [ -n "$(git ls-files)" ]; then :; fi'
+	'#!/usr/bin/env bash' \
+	'if [ -n "$(git ls-files)" ]; then :; fi'
 expect 'substitution-in-z-test is a finding' 1 f10.sh \
-  '#!/usr/bin/env bash' \
-  'if [ -z "$(git rev-parse HEAD)" ]; then :; fi'
+	'#!/usr/bin/env bash' \
+	'if [ -z "$(git rev-parse HEAD)" ]; then :; fi'
 expect 'substitution-in-double-bracket-n is a finding' 1 f11.sh \
-  '#!/usr/bin/env bash' \
-  'if [[ -n $(git ls-files) ]]; then :; fi'
+	'#!/usr/bin/env bash' \
+	'if [[ -n $(git ls-files) ]]; then :; fi'
 expect 'substitution-in-double-bracket-z is a finding' 1 f12.sh \
-  '#!/usr/bin/env bash' \
-  'if [[ -z "$(git rev-parse HEAD)" ]]; then :; fi'
+	'#!/usr/bin/env bash' \
+	'if [[ -z "$(git rev-parse HEAD)" ]]; then :; fi'
 
 # The pragma exempts the same lines.
 expect 'pragma exempts true-discard' 0 p1.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file || true # scan-fault: deliberate — in-memory input, ADR 0032 decision 4'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file || true # scan-fault: deliberate — in-memory input, ADR 0032 decision 4'
 expect 'pragma exempts colon-discard' 0 p2.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file || : # scan-fault: deliberate — in-memory input, ADR 0032 decision 4'
 expect 'pragma exempts substitution' 0 p3.sh \
-  '#!/usr/bin/env bash' \
-  'if [ -n "$(git ls-files)" ]; then :; fi # scan-fault: deliberate — case-void guard'
+	'#!/usr/bin/env bash' \
+	'if [ -n "$(git ls-files)" ]; then :; fi # scan-fault: deliberate — case-void guard'
 
 # A pragma without a reason is not a pragma.
 expect 'pragma without reason is a finding' 1 p4.sh \
-  '#!/usr/bin/env bash' \
-  'grep -q pattern file || true # scan-fault: deliberate'
+	'#!/usr/bin/env bash' \
+	'grep -q pattern file || true # scan-fault: deliberate'
 
 # Exclusions: tests, builtins, the required capture form, comments, if-not.
 expect 'test discard is not a finding' 0 e1.sh \
-  '#!/usr/bin/env bash' \
-  '[ -n "$x" ] || continue'
+	'#!/usr/bin/env bash' \
+	'[ -n "$x" ] || continue'
 expect 'double-bracket test is not a finding' 0 e2.sh \
-  '#!/usr/bin/env bash' \
-  '[[ $x == y ]] && return 0'
+	'#!/usr/bin/env bash' \
+	'[[ $x == y ]] && return 0'
 expect 'arithmetic test is not a finding' 0 e3.sh \
-  '#!/usr/bin/env bash' \
-  '(( ${#a[@]} == 1 )) || exit 0'
+	'#!/usr/bin/env bash' \
+	'(( ${#a[@]} == 1 )) || exit 0'
 expect 'test command is not a finding' 0 e4.sh \
-  '#!/usr/bin/env bash' \
-  'test -n "$x" || continue'
+	'#!/usr/bin/env bash' \
+	'test -n "$x" || continue'
 expect 'required capture form is not a finding' 0 e5.sh \
-  '#!/usr/bin/env bash' \
-  'status=0' \
-  'git ls-files -- "$p" || status=$?'
+	'#!/usr/bin/env bash' \
+	'status=0' \
+	'git ls-files -- "$p" || status=$?'
 expect 'read builtin is not a finding' 0 e6.sh \
-  '#!/usr/bin/env bash' \
-  'IFS= read -r line <&3 || :'
+	'#!/usr/bin/env bash' \
+	'IFS= read -r line <&3 || :'
 expect 'printf builtin is not a finding' 0 e7.sh \
-  '#!/usr/bin/env bash' \
-  'printf "x" >&2 || :'
+	'#!/usr/bin/env bash' \
+	'printf "x" >&2 || :'
 expect 'comment line is not a finding' 0 e8.sh \
-  '#!/usr/bin/env bash' \
-  '# grep -q pattern file || true'
+	'#!/usr/bin/env bash' \
+	'# grep -q pattern file || true'
 expect 'if-not shape is not a finding (residual)' 0 e9.sh \
-  '#!/usr/bin/env bash' \
-  'if ! grep -q pattern file; then return 0; fi'
+	'#!/usr/bin/env bash' \
+	'if ! grep -q pattern file; then return 0; fi'
 expect 'return-1 propagation is not a finding' 0 e10.sh \
-  '#!/usr/bin/env bash' \
-  'load_profile x || return 1'
+	'#!/usr/bin/env bash' \
+	'load_profile x || return 1'
 
 # Heredoc bodies are content, not code; the opener line is still checked.
 expect 'heredoc body is not a finding' 0 h1.sh \
-  '#!/usr/bin/env bash' \
-  'cat >"$f" <<'"'"'STUB'"'"'' \
-  'grep -q pattern file || true' \
-  'STUB'
+	'#!/usr/bin/env bash' \
+	'cat >"$f" <<'"'"'STUB'"'"'' \
+	'grep -q pattern file || true' \
+	'STUB'
 expect 'heredoc opener with discard is a finding' 1 h2.sh \
-  '#!/usr/bin/env bash' \
-  'cat >"$f" <<'"'"'STUB'"'"' || true'
+	'#!/usr/bin/env bash' \
+	'cat >"$f" <<'"'"'STUB'"'"' || true'
 expect 'heredoc example in comment does not open phantom heredoc' 1 h3.sh \
-  '#!/usr/bin/env bash' \
-  '# cat <<EOF' \
-  'grep -q pattern file || true'
+	'#!/usr/bin/env bash' \
+	'# cat <<EOF' \
+	'grep -q pattern file || true'
 
 # Fault paths: unreadable file and bad argument exit 2.
 set +e
@@ -396,29 +403,29 @@ set +e
 status=$?
 set -e
 if [ "$status" -eq 2 ] && grep -q 'could not open' "$SCRATCH/out"; then
-  pass=$((pass + 1))
-  printf '  ok   unreadable file exits 2 with a message\n'
+	pass=$((pass + 1))
+	printf '  ok   unreadable file exits 2 with a message\n'
 else
-  fail=$((fail + 1))
-  printf '  FAIL unreadable file: expected exit 2 naming the file, got %s\n' "$status" >&2
-  cat "$SCRATCH/out" >&2
+	fail=$((fail + 1))
+	printf '  FAIL unreadable file: expected exit 2 naming the file, got %s\n' "$status" >&2
+	cat "$SCRATCH/out" >&2
 fi
 set +e
 "$GUARD" --badflag >"$SCRATCH/out" 2>&1
 status=$?
 set -e
 if [ "$status" -eq 2 ] && grep -q 'usage' "$SCRATCH/out"; then
-  pass=$((pass + 1))
-  printf '  ok   bad argument exits 2 with usage\n'
+	pass=$((pass + 1))
+	printf '  ok   bad argument exits 2 with usage\n'
 else
-  fail=$((fail + 1))
-  printf '  FAIL bad argument: expected exit 2 with usage, got %s\n' "$status" >&2
-  cat "$SCRATCH/out" >&2
+	fail=$((fail + 1))
+	printf '  FAIL bad argument: expected exit 2 with usage, got %s\n' "$status" >&2
+	cat "$SCRATCH/out" >&2
 fi
 
 printf 'scan-fault-guard-test: %s passed, %s failed\n' "$pass" "$fail"
 if [ "$fail" -gt 0 ]; then
-  exit 1
+	exit 1
 fi
 ```
 
@@ -450,7 +457,7 @@ Modifies (each site gains the pragma on its line; the `.github/scripts/` and
   `# scan-fault: deliberate — cleanup; the trap reports retention`; line 348 gets the
   in-memory pragma.
 - `skills/quest-log/assets/cleared-dependencies.sh`: lines 257, 263, 270 get
-  `# scan-fault: deliberate — best-effort restore; the primary error is already reported`; line 300 gets
+  `# scan-fault: deliberate — best-effort restore; primary error already reported`; line 300 gets
   `# scan-fault: deliberate — in-memory jq predicate, ADR 0032 decision 4`.
 - `skills/attunement/scripts/detect-host-architecture`: line 71 gets
   `# scan-fault: deliberate — probe; absence is ordinary`.
