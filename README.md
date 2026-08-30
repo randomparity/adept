@@ -105,7 +105,7 @@ for which situation — is the [cheat sheet](docs/cheatsheet.md).
 | **Design** | `attunement` reads the repo's conventions, base branch, and guardrail commands before anything runs; `spellcraft` writes and hardens the spec, ADR, and plan; `oathbind` audits the finished design against its frozen scope before any code |
 | **Build & review** | `forge` builds test-first; `trial-loop` runs review-and-fix until it converges; `gauntlet` is a one-shot hostile review; `detect-evil` is the security pass; `detect-curse` root-causes a failure before you change anything; `dispel` simplifies; `summon-swarm` fans high-volume generation out to parallel Codex workers |
 | **Shipping** | `deliver` opens the PR and drives CI green; `return-to-town` hands off or merges; `counterspell` reverses a merged PR that turned out bad |
-| **Hygiene** | `resurrection` reconciles stale labels; `clear-map` prunes landed branches; `restock` handles Dependabot; `warding` sweeps for maintenance work |
+| **Hygiene** | `reincarnate` rebuilds stale AI guidance from current repository evidence; `resurrection` reconciles stale labels; `clear-map` prunes landed branches; `restock` handles Dependabot; `warding` sweeps for maintenance work |
 | **Knowledge** | `grimoire` records a hard-won solution; `bards-tale` mines the workflow telemetry into a retrospective |
 
 Two conventions are consulted rather than run: `quest-log` defines the `status:*` label
