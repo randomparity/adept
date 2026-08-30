@@ -664,7 +664,7 @@ case_preflight_accepts_publishable_large_review() {
 }
 
 case_payload_slot_composes_and_disposes() {
-	local name='PFR-14 payload slot composes into both modes and disposes' expected
+	local name='PFR-15 payload slot composes into both modes and disposes' expected
 	new_case
 	PAYLOAD="$REPO/.agent/sdd/payload.md"
 	printf 'deferral: docs/debt/0001-example.md\n' >"$PAYLOAD"
@@ -724,7 +724,7 @@ case_payload_slot_composes_and_disposes() {
 }
 
 case_empty_payload_argument_is_absent() {
-	local name='PFR-15 empty payload argument composes no section' expected status
+	local name='PFR-16 empty payload argument composes no section' expected status
 	new_case
 	expected="$REPO/expected"
 	{
@@ -756,7 +756,7 @@ case_empty_payload_argument_is_absent() {
 }
 
 case_payload_validation_stops_publication() {
-	local name='PFR-16 invalid payloads never reach publication' marker
+	local name='PFR-17 invalid payloads never reach publication' marker
 	new_case
 	PAYLOAD="$REPO/.agent/sdd/payload.md"
 	printf 'deferred finding\n' >"$PAYLOAD"
@@ -850,7 +850,7 @@ case_payload_validation_stops_publication() {
 }
 
 case_payload_without_final_newline_keeps_sentinel_outer() {
-	local name='PFR-17 payload without final newline keeps sentinel outer'
+	local name='PFR-18 payload without final newline keeps sentinel outer'
 	new_case
 	PAYLOAD="$REPO/.agent/sdd/payload.md"
 	printf '%s' 'deferral without trailing newline' >"$PAYLOAD"
@@ -870,7 +870,7 @@ case_payload_without_final_newline_keeps_sentinel_outer() {
 }
 
 case_argument_arity_is_bounded() {
-	local name='PFR-18 argument count stays bounded at six or seven' status
+	local name='PFR-19 argument count stays bounded at six or seven' status
 	new_case
 	status=0
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
