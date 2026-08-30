@@ -403,7 +403,9 @@ in the exact `review-publication-verified: <URL>` ledger line after this
 handoff's `forge-result-record`, then re-read its exact disposal record. In
 `required` mode, it must own only the exact retained review, `REVIEW_SUMMARY`,
 and one helper-created body in the ledger directory. In `not-required` mode,
-it must own only the exact `REVIEW_SUMMARY` and that one body. Only then skip
+it must own only the exact `REVIEW_SUMMARY` and that one body. When the preserved
+`review-payload:` is a path rather than `none`, that exact payload must be the final owned path in
+either mode; when it is `none`, no payload path may appear. Only then skip
 directly to step 9. Do not rerun `$deliver`, recreate the summary, invoke the
 publication helper, or post a second `WORK:REVIEW` comment.
 Before step 9, re-resolve that PR and require its repository, number, head
