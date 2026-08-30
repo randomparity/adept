@@ -327,8 +327,8 @@ That pair is the ignored build-to-ship identity; do not derive it or any
 record without a global cleanup protocol. If this exact handoff already exists,
 parse and validate it before doing any build work: `publication-verified`
 follows its verified-resume route directly to step 9,
-`publication-in-progress` parks, and `build-complete` resumes from the parsed
-handoff without calling `$forge` again. A parsed `required-failed` parks under
+`publication-in-progress` enters step 8's explicitly authorized recovery check and otherwise
+parks, and `build-complete` resumes from the parsed handoff without calling `$forge` again. A parsed `required-failed` parks under
 its mode rule below. Never replace an existing same-issue, same-scope handoff.
 
 Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the plan and run
@@ -366,15 +366,22 @@ read the temporary file back byte-for-byte. On resume, require this exact
 format: each displayed scalar field occurs once, `guardrail:` occurs at least
 once, no unknown or duplicate scalar field occurs, and every value is
 non-empty. `build-complete` has no `pr:` or `review-comment-url:` field;
-`publication-in-progress` adds exactly one `pr:` and `delivered-head-sha:`
-field; and `publication-verified` adds exactly one `pr:`,
-`delivered-head-sha:`, and `review-comment-url:` field. Both SHA fields are
+`publication-in-progress` adds exactly one `pr:`, `delivered-head-sha:`, and
+`review-payload:` field; and `publication-verified` adds exactly one `pr:`,
+`delivered-head-sha:`, `review-payload:`, and `review-comment-url:` field. `review-payload:` is
+the exact absolute private payload path or the literal `none`. A path must be a regular,
+non-symlink direct child of the physical directory containing `FORGE_LEDGER`: resolve and compare
+its parent before reading content, and reject a different parent, a nested descendant, or lexical
+traversal rather than normalizing it into acceptance. Both SHA fields are
 full immutable object IDs, never abbreviations. Parse only this record to set
 the issue, scope token, `REPO`, `FORGE_MODE`, `FORGE_RANGE`,
 `FORGE_REVIEW_OR_REASON`, `FORGE_LEDGER`, `REVIEW_SUMMARY`, branch,
 `BASE_BRANCH`, and guardrails; require the issue and scope token to equal the
 current frozen charter, and paths, repository, branch, and base to match the
-live checkout. On every resume, require `forge-result-record` to be one whole,
+live checkout. The sole format exception is a legacy `publication-in-progress` handoff written
+before ADR 0048: it may omit `review-payload:` only for the explicitly authorized recovery route,
+which requires the human-supplied payload reconciliation specified below. It remains parked on every
+other route. On every resume, require `forge-result-record` to be one whole,
 exact line in the named ledger. In
 `required` mode it must be the retained record for `forge-range` and name the
 exact handoff review and ledger paths. In `not-required` mode it must be
@@ -387,7 +394,8 @@ or reconstructed value.
 Artifact checks are phase-qualified. In `build-complete`, `required` needs its
 exact retained review to be regular, private mode-0600, non-empty, and readable;
 `not-required` needs its exact verified reason. `publication-in-progress` parks
-without a source-artifact assumption. In `publication-verified`, the review,
+without a source-artifact assumption unless it takes step 8's recovery route, which revalidates
+every retained input. In `publication-verified`, the review,
 summary, and body are expected to be disposed: require the exact all-and-only
 disposal record, not a readable source artifact.
 
@@ -398,14 +406,17 @@ in the exact `review-publication-verified: <URL>` ledger line after this
 handoff's `forge-result-record`, then re-read its exact disposal record. In
 `required` mode, it must own only the exact retained review, `REVIEW_SUMMARY`,
 and one helper-created body in the ledger directory. In `not-required` mode,
-it must own only the exact `REVIEW_SUMMARY` and that one body. Only then skip
+it must own only the exact `REVIEW_SUMMARY` and that one body. When the preserved
+`review-payload:` is a path rather than `none`, that exact payload must be the final owned path in
+either mode; when it is `none`, no payload path may appear. Only then skip
 directly to step 9. Do not rerun `$deliver`, recreate the summary, invoke the
 publication helper, or post a second `WORK:REVIEW` comment.
 Before step 9, re-resolve that PR and require its repository, number, head
 branch, base branch, and full `headRefOid` to equal the record's `repo`, `pr:`,
 branch, `BASE_BRANCH`, and `delivered-head-sha:`. A changed or missing PR parks.
-`publication-in-progress` remains parked for human reconciliation, and only
-`build-complete` continues through review and shipping.
+`publication-in-progress` remains parked for human reconciliation unless step 8 receives explicit
+authority for one recovery attempt and every recovery predicate passes. Only `build-complete`
+continues through review and shipping automatically.
 
 There are three forge modes:
 
@@ -658,6 +669,21 @@ specifies into a `mktemp` file beside the ledger — no headings; each destinati
 its own — atomically rename it only after the write, reject carriage return, NUL, and
 outer annotation markers, and keep the temporary and installed payload in mode 0600.
 A run with nothing to carry creates no payload file and skips every payload step below.
+Before any PR-body write, invoke the helper in validation-only mode with the exact publication
+arguments:
+
+```sh
+skills/quest/scripts/publish-forge-review --preflight \
+  "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
+  "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
+```
+
+Require its sole stdout line to be `preflight-ok`. This mode validates and composes only: it must
+not call GitHub, append the ledger, dispose a source, or retain its temporary body. On nonzero or
+any other output, park with the `build-complete` handoff and retained evidence; do not write the PR
+body or `publication-in-progress`. That is a local pre-write failure, not a consumed publication
+attempt.
+
 Then make the one named PR-body write, ADR 0028's second destination: read the
 delivered PR body, append a blank line, the `## Review exit payloads` heading, and the
 payload file's contents, write the result back with `gh pr edit --body-file`, and
@@ -669,13 +695,14 @@ quest before the helper with the evidence retained.
 
 Reject carriage return, NUL, outer markers, or any failed byte-for-byte
 readback before rename; the temporary and installed summary both stay mode 0600.
-If the summary already exists, or the handoff says a publication attempt is in
-progress, do not overwrite, recreate, or retry it: park for human reconciliation
-with the retained evidence. Before the helper, atomically rewrite and byte-verify
+If the summary already exists, do not overwrite or recreate it: park for human reconciliation
+with the retained evidence. A handoff already in `publication-in-progress` follows the recovery
+rule below and otherwise parks. After successful preflight and any required PR-body write,
+atomically rewrite and byte-verify
 the private mode-0600 handoff with phase
 `publication-in-progress` plus one `pr: <number>` and one
-`delivered-head-sha: <full SHA>` field. On every resume, that phase is a
-terminal parked state, because a prior comment write may be ambiguous.
+`delivered-head-sha: <full SHA>` field and one `review-payload: <absolute path|none>` field. On every resume, that phase is parked by default because a
+prior comment write may be ambiguous.
 
 Immediately before the helper, re-resolve that exact PR. Require its repository,
 number, head branch, base branch, and full `headRefOid` to equal `REPO`, `PR`,
@@ -715,8 +742,54 @@ changed after the one comment, park without a retry or a second comment; record
 the verified URL and the old full SHA, which the public summary visibly scopes.
 Only an unchanged PR permits the private mode-0600 handoff to be atomically
 rewritten and byte-verified as `publication-verified` with the PR number, the
-preserved `delivered-head-sha:`, and `review-comment-url: <verified URL>`. Carry
+preserved `delivered-head-sha:`, preserved `review-payload:`, and
+`review-comment-url: <verified URL>`. Carry
 that URL into step 9; `$return-to-town` needs no forge-scratch cleanup.
+
+### Human-authorized publication recovery
+
+Never enter this route from `build-complete`, and never infer its authority from a request to
+finish, resume, ship, merge, or run a campaign. A parsed `publication-in-progress` handoff may
+make one recovery attempt only when the human explicitly authorizes recovery of that exact PR's
+forge-review publication.
+
+Revalidate the handoff and forge-result record under step 5, then require all of the following:
+
+- the live repository, PR number, head branch, base branch, and full `headRefOid` equal the
+  handoff, including `delivered-head-sha:`;
+- the exact retained review or not-required reason, ledger, summary, and optional payload are the
+  original private inputs and pass the same phase-appropriate checks as `build-complete`; for a
+  new-format handoff, parse the payload only from its exact `review-payload:` path or `none` value;
+- a legacy `publication-in-progress` handoff without `review-payload:` is admissible only when the
+  human explicitly supplies the exact payload path or `none` for this PR in addition to authorizing
+  recovery; require a supplied path to satisfy the handoff's direct-child confinement and validate
+  it as an original private input before reading its content, then append and read back
+  `review-publication-payload-reconciled: <path|none>` before preflight; a current PR-body or
+  filesystem absence never supplies this value, and an existing reconciliation record must match
+  exactly or recovery parks;
+- after the handoff's exact `forge-result-record`, the ledger contains no
+  `review-publication-verified:` line, no `review-publication-disposed:` line, and no
+  `review-publication-recovery-authorized:` line;
+- the PR contains no complete comment whose first whole line is `<!-- WORK:REVIEW -->`, whose body
+  contains this exact summary, and whose last whole line is `<!-- REVIEW:COMPLETE -->`; treat an
+  unreadable or inconclusive comment list as a match and park; and
+- the validation-only helper invocation above succeeds with the exact retained inputs.
+
+Apart from the legacy reconciliation record explicitly required above, any mismatch parks without
+changing the ledger or invoking the publication helper in normal mode.
+Immediately before the attempt, re-resolve the PR and repeat the identity and complete-comment
+checks. Then append and read back this exact private ledger line, substituting the handoff values:
+
+```text
+review-publication-recovery-authorized: pr <number> head <full-sha>
+```
+
+That append consumes the authorization before the external write. Invoke the normal helper
+exactly once with the same inputs. A nonzero exit leaves the recovery line in place and parks
+permanently; neither this run nor a resume may attempt again. On success, apply every existing
+comment-identity, readback, disposal, unchanged-HEAD, and `publication-verified` check above. The
+absence checks narrow a human-authorized exceptional recovery; they never become permission for
+an automatic retry.
 
 ## 9. Hand Off, or Merge if Authorized
 

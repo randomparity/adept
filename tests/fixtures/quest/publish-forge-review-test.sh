@@ -225,6 +225,22 @@ run_helper() {
 		2>"$REPO/error") || STATUS=$?
 }
 
+run_preflight() {
+	local mode=$1 source=$2
+	shift 2
+	local -a payload_args=()
+	if [ -n "${PAYLOAD:-}" ]; then
+		payload_args=("$PAYLOAD")
+	fi
+	STATUS=0
+	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
+		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
+		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
+		"$@" "$SCRIPT" --preflight acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
+		${payload_args[@]+"${payload_args[@]}"} \
+		2>"$REPO/error") || STATUS=$?
+}
+
 post_count() {
 	if [ -f "$STATE/events" ]; then
 		grep -c '^post$' "$STATE/events" || :
@@ -600,15 +616,6 @@ case_private_artifacts_and_size_limit() {
 		return
 	fi
 	new_case
-	awk 'BEGIN { for (i = 0; i < 4097; i += 1) printf "a" }' >"$REVIEW"
-	chmod 600 "$REVIEW"
-	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
-	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
-		! grep -q 'required review exceeds local size limit' "$REPO/error"; then
-		fail "$name" 'oversize review reached publication'
-		return
-	fi
-	new_case
 	large_reason=$(awk 'BEGIN { for (i = 0; i < 32768; i += 1) printf "a" }')
 	run_helper not-required "$large_reason" env GH_MODE=success FAKE_UNAME=Darwin
 	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
@@ -619,8 +626,45 @@ case_private_artifacts_and_size_limit() {
 	ok "$name"
 }
 
+case_preflight_accepts_publishable_large_review() {
+	local name='PFR-14 preflight and publication share the body-size boundary' before
+	new_case
+	awk 'BEGIN { for (i = 0; i < 5548; i += 1) printf "a" }' >"$REVIEW"
+	chmod 600 "$REVIEW"
+	before="$REPO/ledger-before"
+	cp "$LEDGER" "$before"
+	run_preflight required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -ne 0 ] || [ "$OUTPUT" != preflight-ok ] ||
+		[ "$(comment_invocation_count)" != 0 ] || ! cmp -s "$before" "$LEDGER" ||
+		[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] || body_file >/dev/null; then
+		fail "$name" 'preflight posted, mutated its inputs, retained its body, or rejected the review'
+		return
+	fi
+	new_case
+	awk 'BEGIN { for (i = 0; i < 5548; i += 1) printf "a" }' >"$REVIEW"
+	chmod 600 "$REVIEW"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -ne 0 ] || [ "$(post_count)" != 1 ] ||
+		! grep -q '^review-publication-verified:' "$LEDGER" ||
+		! grep -q '^review-publication-disposed:' "$LEDGER"; then
+		fail "$name" 'normal publication did not accept and close the same large review'
+		return
+	fi
+	new_case
+	awk 'BEGIN { for (i = 0; i < 32768; i += 1) printf "a" }' >"$REVIEW"
+	chmod 600 "$REVIEW"
+	run_preflight required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -eq 0 ] || [ "$(comment_invocation_count)" != 0 ] ||
+		[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] ||
+		! grep -q 'publication body exceeds local size limit' "$REPO/error"; then
+		fail "$name" 'oversized composed body did not fail preflight with retained inputs'
+		return
+	fi
+	ok "$name"
+}
+
 case_payload_slot_composes_and_disposes() {
-	local name='PFR-14 payload slot composes into both modes and disposes' expected
+	local name='PFR-15 payload slot composes into both modes and disposes' expected
 	new_case
 	PAYLOAD="$REPO/.agent/sdd/payload.md"
 	printf 'deferral: docs/debt/0001-example.md\n' >"$PAYLOAD"
@@ -680,7 +724,7 @@ case_payload_slot_composes_and_disposes() {
 }
 
 case_empty_payload_argument_is_absent() {
-	local name='PFR-15 empty payload argument composes no section' expected status
+	local name='PFR-16 empty payload argument composes no section' expected status
 	new_case
 	expected="$REPO/expected"
 	{
@@ -712,7 +756,7 @@ case_empty_payload_argument_is_absent() {
 }
 
 case_payload_validation_stops_publication() {
-	local name='PFR-16 invalid payloads never reach publication' marker
+	local name='PFR-17 invalid payloads never reach publication' marker
 	new_case
 	PAYLOAD="$REPO/.agent/sdd/payload.md"
 	printf 'deferred finding\n' >"$PAYLOAD"
@@ -806,7 +850,7 @@ case_payload_validation_stops_publication() {
 }
 
 case_payload_without_final_newline_keeps_sentinel_outer() {
-	local name='PFR-17 payload without final newline keeps sentinel outer'
+	local name='PFR-18 payload without final newline keeps sentinel outer'
 	new_case
 	PAYLOAD="$REPO/.agent/sdd/payload.md"
 	printf '%s' 'deferral without trailing newline' >"$PAYLOAD"
@@ -826,7 +870,7 @@ case_payload_without_final_newline_keeps_sentinel_outer() {
 }
 
 case_argument_arity_is_bounded() {
-	local name='PFR-18 argument count stays bounded at six or seven' status
+	local name='PFR-19 argument count stays bounded at six or seven' status
 	new_case
 	status=0
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
@@ -873,6 +917,7 @@ case_platform_disposers_are_deterministic
 case_preflight_precedes_content_validation
 case_host_is_pinned_before_publication
 case_private_artifacts_and_size_limit
+case_preflight_accepts_publishable_large_review
 case_payload_slot_composes_and_disposes
 case_empty_payload_argument_is_absent
 case_payload_validation_stops_publication
