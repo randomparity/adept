@@ -377,7 +377,7 @@ the issue, scope token, `REPO`, `FORGE_MODE`, `FORGE_RANGE`,
 current frozen charter, and paths, repository, branch, and base to match the
 live checkout. The sole format exception is a legacy `publication-in-progress` handoff written
 before ADR 0048: it may omit `review-payload:` only for the explicitly authorized recovery route,
-which must prove payload absence from the PR body as specified below. It remains parked on every
+which requires the human-supplied payload reconciliation specified below. It remains parked on every
 other route. On every resume, require `forge-result-record` to be one whole,
 exact line in the named ledger. In
 `required` mode it must be the retained record for `forge-range` and name the
@@ -758,9 +758,11 @@ Revalidate the handoff and forge-result record under step 5, then require all of
   original private inputs and pass the same phase-appropriate checks as `build-complete`; for a
   new-format handoff, parse the payload only from its exact `review-payload:` path or `none` value;
 - a legacy `publication-in-progress` handoff without `review-payload:` is admissible only when the
-  unchanged PR body contains no whole-line `## Review exit payloads` heading, in which case payload
-  is proven absent; if that heading exists or the body is unreadable, park because the original
-  payload identity cannot be reconstructed;
+  human explicitly supplies the exact payload path or `none` for this PR in addition to authorizing
+  recovery; validate a supplied path as an original private input, then append and read back
+  `review-publication-payload-reconciled: <path|none>` before preflight; a current PR-body or
+  filesystem absence never supplies this value, and an existing reconciliation record must match
+  exactly or recovery parks;
 - after the handoff's exact `forge-result-record`, the ledger contains no
   `review-publication-verified:` line, no `review-publication-disposed:` line, and no
   `review-publication-recovery-authorized:` line;
@@ -769,7 +771,8 @@ Revalidate the handoff and forge-result record under step 5, then require all of
   unreadable or inconclusive comment list as a match and park; and
 - the validation-only helper invocation above succeeds with the exact retained inputs.
 
-Any mismatch parks without changing the ledger or invoking the publication helper in normal mode.
+Apart from the legacy reconciliation record explicitly required above, any mismatch parks without
+changing the ledger or invoking the publication helper in normal mode.
 Immediately before the attempt, re-resolve the PR and repeat the identity and complete-comment
 checks. Then append and read back this exact private ledger line, substituting the handoff values:
 

@@ -35,17 +35,18 @@ successfully. It records the recovery authorization in the private ledger before
 record consumes the recovery allowance whether publication succeeds or fails.
 
 The terminal handoff persists the optional payload identity as its exact absolute path or explicit
-`none`. A legacy handoff without that field can recover only when the unchanged PR body proves that
-no `## Review exit payloads` section was written; a legacy payload-bearing state parks because its
-local source identity cannot be reconstructed safely.
+`none`. A legacy handoff without that field can recover only when the human explicitly supplies the
+exact legacy value for that PR and Quest records it in the private ledger before preflight. A path
+must pass the ordinary private-input checks; `none` is an explicit reconciliation decision, never
+an inference from current GitHub or filesystem absence.
 
 ## Consequences
 
 - Deterministic local failures occur while the handoff remains recoverable.
 - Ambiguous network failures still park without an automatic retry.
 - Reviews are bounded by the actual composed artifact rather than an unrelated per-source limit.
-- Legacy parked runs can be recovered without treating absence of a comment as blanket retry
-  permission.
+- Legacy parked runs can be recovered only with an explicit payload reconciliation as well as
+  publication-recovery authority.
 - Fresh-session recovery can distinguish an intentionally absent payload from a missing one.
 - Recovery still assumes the human-authorized operator has excluded a concurrent publisher; the
   GitHub issue-comment API supplies no idempotency key or atomic create-if-absent operation.

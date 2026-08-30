@@ -41,9 +41,11 @@ routes. The check must occur immediately before the attempt; any mismatch parks.
 
 New `publication-in-progress` and `publication-verified` handoffs add one `review-payload:` field:
 the exact absolute private payload path or the literal `none`. Recovery parses only that field for
-payload identity. A legacy handoff without the field is eligible only when the unchanged PR body
-contains no whole-line `## Review exit payloads` heading, proving the pre-terminal payload write
-did not occur; if the heading exists or the body is unreadable, recovery parks.
+payload identity. A legacy handoff without the field is eligible only when the human explicitly
+supplies the exact path or `none` for that PR. Quest validates a supplied path and appends and reads
+back `review-publication-payload-reconciled: <path|none>` before preflight. Current PR-body or
+filesystem absence never supplies that value. A prior reconciliation record must match exactly;
+otherwise recovery parks.
 
 ## Failure behavior
 
@@ -73,8 +75,11 @@ the changed instructions and cite the governing lines:
 | New handoff records `review-payload: none` | Recover only with an empty helper payload argument |
 | New handoff records a payload path | Require that exact private file and publish it |
 | Recorded payload is missing or mismatched | Park before recovery record |
-| Legacy handoff and PR body has no payload heading | Treat payload as absent, then continue other checks |
-| Legacy handoff and PR body has a payload heading or is unreadable | Park because payload identity is unprovable |
+| Legacy handoff without explicit payload reconciliation | Park before preflight or ledger mutation |
+| Legacy handoff with human-supplied `none` | Append/read back the exact reconciliation record, then use an empty helper payload argument |
+| Legacy handoff with a human-supplied path | Validate that exact private file, append/read back the exact reconciliation record, then use the path |
+| Legacy reconciliation record disagrees with supplied value | Park without another append or publication attempt |
+| PR body was edited after the legacy handoff | Never use current body presence or absence as payload identity evidence |
 | Complete matching `WORK:REVIEW` comment exists | Park without another comment |
 | Publication-verification record exists after the forge result | Park without another comment |
 | Prior recovery-authorization record exists | Park without another attempt |

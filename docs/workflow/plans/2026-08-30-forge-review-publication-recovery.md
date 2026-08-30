@@ -66,8 +66,8 @@ Steps:
 1. Update Quest's resume routing so `publication-in-progress` remains parked unless explicit human
    recovery authority and every ADR 0048 predicate are present.
 2. Persist `review-payload:` as the exact path or `none` in new terminal handoffs; require that
-   identity during recovery, and admit a legacy handoff only when its unchanged PR body proves no
-   payload section was written.
+   identity during recovery, and admit a legacy handoff only after an explicit human-supplied
+   path-or-`none` value is validated and recorded in the private ledger.
 3. Require absence of a prior recovery line, append and read back the exact recovery line before
    the retry, and route that one attempt through the unchanged publication success checks.
 4. Add the mandatory preflight call and require its success before writing
