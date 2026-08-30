@@ -16,6 +16,7 @@ disposer=''
 repo=''
 pr=''
 mode=''
+operation=publish
 review_or_reason=''
 ledger=''
 summary=''
@@ -45,7 +46,7 @@ fail() {
 
 preflight() {
 	local command
-	for command in gh jq mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc; do
+	for command in gh jq mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm; do
 		command -v "$command" >/dev/null 2>&1 || fail "required command is unavailable"
 	done
 	platform=$(uname -s)
@@ -59,9 +60,13 @@ preflight() {
 }
 
 validate_arguments() {
+	if [ "${1-}" = --preflight ]; then
+		operation=preflight
+		shift
+	fi
 	case $# in
 	6 | 7) ;;
-	*) fail 'usage: publish-forge-review REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY [PAYLOAD]' ;;
+	*) fail 'usage: publish-forge-review [--preflight] REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY [PAYLOAD]' ;;
 	esac
 	repo=$1
 	pr=$2
@@ -183,7 +188,6 @@ validate_content() {
 	case $mode in
 	required)
 		require_private_file 'required review' "$review_or_reason" true
-		check_size 'required review' "$review_or_reason" "$MAX_SOURCE_BYTES"
 		;;
 	not-required)
 		[ -n "$review_or_reason" ] || fail 'not-required reason is invalid'
@@ -286,6 +290,12 @@ validate_arguments "$@"
 preflight
 validate_content
 compose_body
+if [ "$operation" = preflight ]; then
+	rm -- "$body" || fail 'cannot remove preflight publication body'
+	body=''
+	printf '%s\n' preflight-ok
+	exit 0
+fi
 comment_url=$(post_comment)
 read_comment "$comment_url"
 append_ledger "review-publication-verified: $comment_url"

@@ -225,6 +225,22 @@ run_helper() {
 		2>"$REPO/error") || STATUS=$?
 }
 
+run_preflight() {
+	local mode=$1 source=$2
+	shift 2
+	local -a payload_args=()
+	if [ -n "${PAYLOAD:-}" ]; then
+		payload_args=("$PAYLOAD")
+	fi
+	STATUS=0
+	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
+		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
+		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
+		"$@" "$SCRIPT" --preflight acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
+		${payload_args[@]+"${payload_args[@]}"} \
+		2>"$REPO/error") || STATUS=$?
+}
+
 post_count() {
 	if [ -f "$STATE/events" ]; then
 		grep -c '^post$' "$STATE/events" || :
@@ -600,20 +616,48 @@ case_private_artifacts_and_size_limit() {
 		return
 	fi
 	new_case
-	awk 'BEGIN { for (i = 0; i < 4097; i += 1) printf "a" }' >"$REVIEW"
-	chmod 600 "$REVIEW"
-	run_helper required "$REVIEW" env GH_MODE=success FAKE_UNAME=Darwin
-	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
-		! grep -q 'required review exceeds local size limit' "$REPO/error"; then
-		fail "$name" 'oversize review reached publication'
-		return
-	fi
-	new_case
 	large_reason=$(awk 'BEGIN { for (i = 0; i < 32768; i += 1) printf "a" }')
 	run_helper not-required "$large_reason" env GH_MODE=success FAKE_UNAME=Darwin
 	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" ||
 		! grep -q 'not-required reason exceeds local size limit' "$REPO/error"; then
 		fail "$name" 'oversize not-required reason reached GitHub'
+		return
+	fi
+	ok "$name"
+}
+
+case_preflight_accepts_publishable_large_review() {
+	local name='PFR-14 preflight and publication share the body-size boundary' before
+	new_case
+	awk 'BEGIN { for (i = 0; i < 5548; i += 1) printf "a" }' >"$REVIEW"
+	chmod 600 "$REVIEW"
+	before="$REPO/ledger-before"
+	cp "$LEDGER" "$before"
+	run_preflight required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -ne 0 ] || [ "$OUTPUT" != preflight-ok ] ||
+		[ "$(comment_invocation_count)" != 0 ] || ! cmp -s "$before" "$LEDGER" ||
+		[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] || body_file >/dev/null; then
+		fail "$name" 'preflight posted, mutated its inputs, retained its body, or rejected the review'
+		return
+	fi
+	new_case
+	awk 'BEGIN { for (i = 0; i < 5548; i += 1) printf "a" }' >"$REVIEW"
+	chmod 600 "$REVIEW"
+	run_helper required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -ne 0 ] || [ "$(post_count)" != 1 ] ||
+		! grep -q '^review-publication-verified:' "$LEDGER" ||
+		! grep -q '^review-publication-disposed:' "$LEDGER"; then
+		fail "$name" 'normal publication did not accept and close the same large review'
+		return
+	fi
+	new_case
+	awk 'BEGIN { for (i = 0; i < 32768; i += 1) printf "a" }' >"$REVIEW"
+	chmod 600 "$REVIEW"
+	run_preflight required "$REVIEW" env GH_MODE=success
+	if [ "$STATUS" -eq 0 ] || [ "$(comment_invocation_count)" != 0 ] ||
+		[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] ||
+		! grep -q 'publication body exceeds local size limit' "$REPO/error"; then
+		fail "$name" 'oversized composed body did not fail preflight with retained inputs'
 		return
 	fi
 	ok "$name"
@@ -873,6 +917,7 @@ case_platform_disposers_are_deterministic
 case_preflight_precedes_content_validation
 case_host_is_pinned_before_publication
 case_private_artifacts_and_size_limit
+case_preflight_accepts_publishable_large_review
 case_payload_slot_composes_and_disposes
 case_empty_payload_argument_is_absent
 case_payload_validation_stops_publication
