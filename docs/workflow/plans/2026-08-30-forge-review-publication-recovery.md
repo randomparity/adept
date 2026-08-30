@@ -65,15 +65,18 @@ Steps:
 
 1. Update Quest's resume routing so `publication-in-progress` remains parked unless explicit human
    recovery authority and every ADR 0048 predicate are present.
-2. Require absence of a prior recovery line, append and read back the exact recovery line before
+2. Persist `review-payload:` as the exact path or `none` in new terminal handoffs; require that
+   identity during recovery, and admit a legacy handoff only when its unchanged PR body proves no
+   payload section was written.
+3. Require absence of a prior recovery line, append and read back the exact recovery line before
    the retry, and route that one attempt through the unchanged publication success checks.
-3. Add the mandatory preflight call and require its success before writing
+4. Add the mandatory preflight call and require its success before writing
    `publication-in-progress`.
-4. Review the changed Quest instructions against every scenario in the spec's behavioral-review
+5. Review the changed Quest instructions against every scenario in the spec's behavioral-review
    matrix, recording pass/fail and cited lines; fix every failed row and repeat the matrix.
-5. Bump the plugin patch version in `.claude-plugin/plugin.json`.
-6. Run `just verify`; expect every repository gate to pass.
-7. Commit as `fix(quest): recover pre-write publication failures`.
+6. Bump the plugin patch version in `.claude-plugin/plugin.json`.
+7. Run `just verify`; expect every repository gate to pass.
+8. Commit as `fix(quest): recover pre-write publication failures`.
 
 Acceptance: deterministic failures cannot create a terminal handoff, ambiguous failures cannot
 retry automatically, and one explicitly authorized recovery cannot be repeated.

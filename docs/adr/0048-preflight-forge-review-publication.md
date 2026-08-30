@@ -34,6 +34,11 @@ HEAD, handoff, forge-result ledger record, and retained inputs; finds neither a 
 successfully. It records the recovery authorization in the private ledger before the attempt. That
 record consumes the recovery allowance whether publication succeeds or fails.
 
+The terminal handoff persists the optional payload identity as its exact absolute path or explicit
+`none`. A legacy handoff without that field can recover only when the unchanged PR body proves that
+no `## Review exit payloads` section was written; a legacy payload-bearing state parks because its
+local source identity cannot be reconstructed safely.
+
 ## Consequences
 
 - Deterministic local failures occur while the handoff remains recoverable.
@@ -41,6 +46,7 @@ record consumes the recovery allowance whether publication succeeds or fails.
 - Reviews are bounded by the actual composed artifact rather than an unrelated per-source limit.
 - Legacy parked runs can be recovered without treating absence of a comment as blanket retry
   permission.
+- Fresh-session recovery can distinguish an intentionally absent payload from a missing one.
 - Recovery still assumes the human-authorized operator has excluded a concurrent publisher; the
   GitHub issue-comment API supplies no idempotency key or atomic create-if-absent operation.
 

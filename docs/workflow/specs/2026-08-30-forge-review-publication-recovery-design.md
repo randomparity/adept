@@ -39,6 +39,12 @@ record containing PR number and delivered SHA. A prior recovery record blocks an
 After that record, Quest invokes normal publication once and follows the existing success or park
 routes. The check must occur immediately before the attempt; any mismatch parks.
 
+New `publication-in-progress` and `publication-verified` handoffs add one `review-payload:` field:
+the exact absolute private payload path or the literal `none`. Recovery parses only that field for
+payload identity. A legacy handoff without the field is eligible only when the unchanged PR body
+contains no whole-line `## Review exit payloads` heading, proving the pre-terminal payload write
+did not occur; if the heading exists or the body is unreadable, recovery parks.
+
 ## Failure behavior
 
 - Preflight validation or composition failure: no GitHub comment, no ledger mutation, no terminal
@@ -64,6 +70,11 @@ the changed instructions and cite the governing lines:
 | No explicit recovery authorization | Park before preflight, ledger append, or GitHub write |
 | Repository, PR, branch, base, or delivered HEAD mismatch | Park before recovery record |
 | Handoff, forge-result record, or retained input mismatch | Park before recovery record |
+| New handoff records `review-payload: none` | Recover only with an empty helper payload argument |
+| New handoff records a payload path | Require that exact private file and publish it |
+| Recorded payload is missing or mismatched | Park before recovery record |
+| Legacy handoff and PR body has no payload heading | Treat payload as absent, then continue other checks |
+| Legacy handoff and PR body has a payload heading or is unreadable | Park because payload identity is unprovable |
 | Complete matching `WORK:REVIEW` comment exists | Park without another comment |
 | Publication-verification record exists after the forge result | Park without another comment |
 | Prior recovery-authorization record exists | Park without another attempt |

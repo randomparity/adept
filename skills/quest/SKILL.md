@@ -366,15 +366,19 @@ read the temporary file back byte-for-byte. On resume, require this exact
 format: each displayed scalar field occurs once, `guardrail:` occurs at least
 once, no unknown or duplicate scalar field occurs, and every value is
 non-empty. `build-complete` has no `pr:` or `review-comment-url:` field;
-`publication-in-progress` adds exactly one `pr:` and `delivered-head-sha:`
-field; and `publication-verified` adds exactly one `pr:`,
-`delivered-head-sha:`, and `review-comment-url:` field. Both SHA fields are
+`publication-in-progress` adds exactly one `pr:`, `delivered-head-sha:`, and
+`review-payload:` field; and `publication-verified` adds exactly one `pr:`,
+`delivered-head-sha:`, `review-payload:`, and `review-comment-url:` field. `review-payload:` is
+the exact absolute private payload path or the literal `none`. Both SHA fields are
 full immutable object IDs, never abbreviations. Parse only this record to set
 the issue, scope token, `REPO`, `FORGE_MODE`, `FORGE_RANGE`,
 `FORGE_REVIEW_OR_REASON`, `FORGE_LEDGER`, `REVIEW_SUMMARY`, branch,
 `BASE_BRANCH`, and guardrails; require the issue and scope token to equal the
 current frozen charter, and paths, repository, branch, and base to match the
-live checkout. On every resume, require `forge-result-record` to be one whole,
+live checkout. The sole format exception is a legacy `publication-in-progress` handoff written
+before ADR 0048: it may omit `review-payload:` only for the explicitly authorized recovery route,
+which must prove payload absence from the PR body as specified below. It remains parked on every
+other route. On every resume, require `forge-result-record` to be one whole,
 exact line in the named ledger. In
 `required` mode it must be the retained record for `forge-range` and name the
 exact handoff review and ledger paths. In `not-required` mode it must be
@@ -692,7 +696,7 @@ rule below and otherwise parks. After successful preflight and any required PR-b
 atomically rewrite and byte-verify
 the private mode-0600 handoff with phase
 `publication-in-progress` plus one `pr: <number>` and one
-`delivered-head-sha: <full SHA>` field. On every resume, that phase is parked by default because a
+`delivered-head-sha: <full SHA>` field and one `review-payload: <absolute path|none>` field. On every resume, that phase is parked by default because a
 prior comment write may be ambiguous.
 
 Immediately before the helper, re-resolve that exact PR. Require its repository,
@@ -733,7 +737,8 @@ changed after the one comment, park without a retry or a second comment; record
 the verified URL and the old full SHA, which the public summary visibly scopes.
 Only an unchanged PR permits the private mode-0600 handoff to be atomically
 rewritten and byte-verified as `publication-verified` with the PR number, the
-preserved `delivered-head-sha:`, and `review-comment-url: <verified URL>`. Carry
+preserved `delivered-head-sha:`, preserved `review-payload:`, and
+`review-comment-url: <verified URL>`. Carry
 that URL into step 9; `$return-to-town` needs no forge-scratch cleanup.
 
 ### Human-authorized publication recovery
@@ -748,7 +753,12 @@ Revalidate the handoff and forge-result record under step 5, then require all of
 - the live repository, PR number, head branch, base branch, and full `headRefOid` equal the
   handoff, including `delivered-head-sha:`;
 - the exact retained review or not-required reason, ledger, summary, and optional payload are the
-  original private inputs and pass the same phase-appropriate checks as `build-complete`;
+  original private inputs and pass the same phase-appropriate checks as `build-complete`; for a
+  new-format handoff, parse the payload only from its exact `review-payload:` path or `none` value;
+- a legacy `publication-in-progress` handoff without `review-payload:` is admissible only when the
+  unchanged PR body contains no whole-line `## Review exit payloads` heading, in which case payload
+  is proven absent; if that heading exists or the body is unreadable, park because the original
+  payload identity cannot be reconstructed;
 - after the handoff's exact `forge-result-record`, the ledger contains no
   `review-publication-verified:` line, no `review-publication-disposed:` line, and no
   `review-publication-recovery-authorized:` line;
