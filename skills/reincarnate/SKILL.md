@@ -20,7 +20,9 @@ you will inspect and which, if any, the operator wants rebuilt.
 Resolve each selected path before classifying it. Show its canonical target and whether
 it is a symlink, generated file, or managed artifact. Treat a repository path that resolves
 outside the repository as user-level; do not follow or edit it without explicit selection
-in that scope. Edit an owning source rather than generated output.
+in that scope. For generated guidance, make its owning source a selected target governed
+by every remaining confirmation and identity check; include any authorized regeneration
+command in the proposal, then verify the active guidance output.
 
 Treat their scopes differently. Repository files may be rebuilt from evidence in that
 repository. A user-level file governs more than the current repository: preserve every
