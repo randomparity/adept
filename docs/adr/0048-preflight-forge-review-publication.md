@@ -37,8 +37,9 @@ record consumes the recovery allowance whether publication succeeds or fails.
 The terminal handoff persists the optional payload identity as its exact absolute path or explicit
 `none`. A legacy handoff without that field can recover only when the human explicitly supplies the
 exact legacy value for that PR and Quest records it in the private ledger before preflight. A path
-must pass the ordinary private-input checks; `none` is an explicit reconciliation decision, never
-an inference from current GitHub or filesystem absence.
+must be a direct regular, non-symlink child of the validated private forge-ledger directory and
+pass the ordinary private-input checks; `none` is an explicit reconciliation decision, never an
+inference from current GitHub or filesystem absence.
 
 ## Consequences
 

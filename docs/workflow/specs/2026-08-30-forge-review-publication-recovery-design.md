@@ -47,6 +47,11 @@ back `review-publication-payload-reconciled: <path|none>` before preflight. Curr
 filesystem absence never supplies that value. A prior reconciliation record must match exactly;
 otherwise recovery parks.
 
+Every recorded or reconciled payload path must be an absolute regular, non-symlink file whose
+physical parent is exactly the validated private forge-ledger directory. Paths outside that
+directory, nested descendants, lexical traversal, and symlinks park before reconciliation,
+preflight, or publication.
+
 ## Failure behavior
 
 - Preflight validation or composition failure: no GitHub comment, no ledger mutation, no terminal
@@ -75,6 +80,8 @@ the changed instructions and cite the governing lines:
 | New handoff records `review-payload: none` | Recover only with an empty helper payload argument |
 | New handoff records a payload path | Require that exact private file and publish it |
 | Recorded payload is missing or mismatched | Park before recovery record |
+| Recorded or supplied path is outside the ledger directory | Park before content read or ledger mutation |
+| Recorded or supplied path is a symlink, nested path, or traversal spelling | Park before content read or ledger mutation |
 | Legacy handoff without explicit payload reconciliation | Park before preflight or ledger mutation |
 | Legacy handoff with human-supplied `none` | Append/read back the exact reconciliation record, then use an empty helper payload argument |
 | Legacy handoff with a human-supplied path | Validate that exact private file, append/read back the exact reconciliation record, then use the path |
@@ -90,3 +97,21 @@ the changed instructions and cite the governing lines:
 
 The matrix is a review obligation, not a prose-matching gate: the report must evaluate behavior and
 ordering rather than search for prescribed sentences.
+
+## Threat model
+
+The local operator controls recovery authorization and any legacy payload value. Retained handoff,
+ledger, review, summary, and payload files cross from private host storage into workflow control;
+their content then crosses into a public GitHub comment. GitHub PR identity and comment readback
+cross the remote-service boundary back into local verification.
+
+The existing helper validates private modes, regular-file and non-symlink shape, text encoding,
+source/body bounds, annotation markers, public safety, fixed GitHub hostname, and exact comment
+readback. Quest additionally binds authorization to repository, PR, branch, base, and immutable
+HEAD; consumes recovery before its external write; and confines payload paths to the direct private
+ledger directory. Error output must not echo artifact contents.
+
+GitHub does not provide an atomic create-if-absent comment operation, so the explicitly authorized
+recovery retains a documented check-then-post concurrency residual. Host compromise, malicious
+operator authorization, and secret detection beyond path confinement plus the existing public-
+safety scan are outside scope.

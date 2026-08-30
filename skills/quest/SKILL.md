@@ -369,7 +369,10 @@ non-empty. `build-complete` has no `pr:` or `review-comment-url:` field;
 `publication-in-progress` adds exactly one `pr:`, `delivered-head-sha:`, and
 `review-payload:` field; and `publication-verified` adds exactly one `pr:`,
 `delivered-head-sha:`, `review-payload:`, and `review-comment-url:` field. `review-payload:` is
-the exact absolute private payload path or the literal `none`. Both SHA fields are
+the exact absolute private payload path or the literal `none`. A path must be a regular,
+non-symlink direct child of the physical directory containing `FORGE_LEDGER`: resolve and compare
+its parent before reading content, and reject a different parent, a nested descendant, or lexical
+traversal rather than normalizing it into acceptance. Both SHA fields are
 full immutable object IDs, never abbreviations. Parse only this record to set
 the issue, scope token, `REPO`, `FORGE_MODE`, `FORGE_RANGE`,
 `FORGE_REVIEW_OR_REASON`, `FORGE_LEDGER`, `REVIEW_SUMMARY`, branch,
@@ -759,7 +762,8 @@ Revalidate the handoff and forge-result record under step 5, then require all of
   new-format handoff, parse the payload only from its exact `review-payload:` path or `none` value;
 - a legacy `publication-in-progress` handoff without `review-payload:` is admissible only when the
   human explicitly supplies the exact payload path or `none` for this PR in addition to authorizing
-  recovery; validate a supplied path as an original private input, then append and read back
+  recovery; require a supplied path to satisfy the handoff's direct-child confinement and validate
+  it as an original private input before reading its content, then append and read back
   `review-publication-payload-reconciled: <path|none>` before preflight; a current PR-body or
   filesystem absence never supplies this value, and an existing reconciliation record must match
   exactly or recovery parks;
