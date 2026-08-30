@@ -1,6 +1,9 @@
 ---
 name: reincarnate
-description: "Validate and rebuild stale AGENTS.md or CLAUDE.md guidance from current repository evidence. Use when project or user AI instructions have drifted, mention commands or layout that may no longer exist, or need an init-style refresh."
+description: >-
+  Validate and rebuild stale AGENTS.md or CLAUDE.md guidance from current repository evidence.
+  Use when project or user AI instructions have drifted, mention commands or layout that may no
+  longer exist, or need an init-style refresh.
 ---
 # Reincarnate AI Guidance
 
