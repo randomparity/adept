@@ -57,8 +57,10 @@ work, and guidance copied from another scope.
 ## 4. Draft the new manifestation
 
 Draft a complete replacement for each selected repository file. Keep only guidance that
-helps an agent act correctly in that scope. Remove duplication, historical explanation,
-and generic advice already supplied by a higher-precedence file or the agent harness.
+helps an agent act correctly in that scope. Remove duplication only within the same
+ownership and portability scope; use higher-precedence and harness instructions as
+constraints, not substitutes for repository-owned policy. Remove obsolete historical
+explanation that no longer helps an agent act correctly.
 For a user-level file, retain unrelated and unverifiable clauses verbatim unless the
 operator explicitly authorized the full-scope rebuild described above.
 
@@ -78,10 +80,12 @@ Ask for confirmation before replacing any selected guidance file. Confirmation c
 only the displayed patch; revise and ask again if the proposed content changes
 materially.
 
-After confirmation, apply the approved edit. Re-read the resulting files, check their
-instruction precedence and scope, and run only the repository checks relevant to
-documentation or instruction files. Report what changed, what evidence was used, which
-checks ran, and any claims left unverifiable.
+After confirmation, re-read each selected file immediately before editing. If it changed
+since the draft was prepared, stop, incorporate the new content, and obtain confirmation
+for a revised patch. Otherwise apply the approved contextual patch, re-read the resulting
+files, check their instruction precedence and scope, and run only the repository checks
+relevant to documentation or instruction files. Report what changed, what evidence was
+used, which checks ran, and any claims left unverifiable.
 
 If confirmation is withheld, leave every file unchanged and return the draft as the
 result.
