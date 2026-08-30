@@ -24,6 +24,7 @@ it by name — the skill descriptions below are what the harness matches against
 | Dependabot has PRs open | `/restock` |
 | Merged branches are cluttering the worktree | `/clear-map` |
 | It's been a while since the last run — labels may be stale | `/resurrection` |
+| My `AGENTS.md` or `CLAUDE.md` guidance has drifted | `/reincarnate` |
 | I want a maintenance sweep without doing the work | `/warding` |
 | I just solved something worth remembering | `/grimoire` |
 
@@ -85,6 +86,7 @@ read-only step, not a new stage of `/quest` itself.
 |---|---|
 | `campaign` | Drive a set of issues to done: triage, dependency planning, parallel execution, serial merge |
 | `counterspell` | Reverse a bad merged PR: revert or fix-forward, tracking writes, expedited-but-present review |
+| `reincarnate` | Rebuild stale `AGENTS.md` or `CLAUDE.md` guidance from current repository evidence |
 | `resurrection` | Reconcile status labels with actual PR/branch state; reset stale orphaned work |
 | `clear-map` | Delete local branches whose work has landed and remove their worktrees |
 | `restock` | Evaluate open Dependabot PRs against a clean baseline, group and merge safe ones |
