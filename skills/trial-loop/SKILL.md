@@ -101,6 +101,27 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   necessary was a verdict that could not be `approve` while any defensible finding
   stood — so every note held the loop open. With notes no longer withholding the
   verdict (ADR 0049), 2 passes is the common case rather than a squeeze.
+- `prior_rounds`: optional caller-supplied cumulative figure, written
+  `<rounds>/<charters>` — every review iteration already spent on **this change** by
+  earlier `$trial-loop` runs over it, and how many charters those rounds were spent
+  under. Omission means `0/0`: this is the first loop over the change.
+
+  `iteration_budget` bounds one cycle against one frozen charter, so a change reviewed
+  under several charters in sequence draws a full budget per charter and no report
+  states the total. The run that motivated this input spent 6 iterations on a spec and
+  then 5 on the plan derived from it — 11 rounds under two charters, plus two scope
+  audits, before a line of implementation existed. Both loops converged legitimately
+  inside their own caps and no stop condition was ever wrong; nothing was counting
+  across charters.
+
+  This input bounds nothing — it makes the total sayable, and that is the whole of it.
+  The operator in that run intervened as soon as the cost was named, whereas an
+  aggregate ceiling would block a second review that is genuinely warranted.
+
+  It is **not** keyed on the run token. That token is minted per run and unique per
+  target, and the runs this figure exists to make visible are a spec review and then a
+  plan review — different targets, so different tokens. The carry belongs to the caller,
+  the only party that knows two runs reviewed one change; see *Caller contract*.
 - `charter`: the scope boundary you freeze before iteration 1 (below). Not an
   argument the caller types — you derive it.
 
@@ -139,12 +160,18 @@ to report. A **cycle** is one charter's iterations, up to the `iteration_budget`
 starts a new cycle inside the same run. Disclosure and the final report are always
 **run**-scoped.
 
-Before iteration 1, write down a charter and hold it fixed for the cycle. Two
+Before iteration 1, write down a charter and hold it fixed for the cycle. Three
 elements the loop **holds in its own state** and never puts in the block it sends:
 
 - the target paths or branch diff and base — carried by the argument tokens
-  themselves; and
-- the iteration count for this cycle.
+  themselves;
+- the iteration count for this cycle; and
+- the change's cumulative total — `prior_rounds` plus every iteration this run has
+  run, across all its cycles, and the charter count to match.
+
+The last two stay out of the block for the same reason: step 1 forbids the run's own
+history in what a pass is given, and a reviewer told its target has already been
+reviewed eleven times is grading that history rather than the target.
 
 Transmit the complete eight-field external charter to the reviewer, followed by the review
 focus. Scope identity and provenance are required evidence: without them the reviewer
@@ -412,7 +439,15 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    blocked — rather than reconciling it into a verdict of your own.
 3. Paste an audit line into the transcript:
    `review iteration <n>: reviewer=<gauntlet|detect-evil>, verdict=<verdict>, findings=<count>,
-   blocking=<blocking_count>, suppressed=<suppressed_count>, self_collision=<k>/<count>`.
+   blocking=<blocking_count>, suppressed=<suppressed_count>, self_collision=<k>/<count>,
+   cumulative=<rounds>/<charters>`.
+
+   `cumulative` counts this pass and every round `prior_rounds` carried in, over the
+   charters they were spent under — the change's running total, not this cycle's. It
+   goes on **every** pass rather than into the final report alone, because the point of
+   naming the cost is to name it while the run can still be stopped; a total that first
+   appears in a report of a finished run has already been paid.
+
    Count `<k>` on **every** pass using the self-collision definition under *Stop
    conditions* — a finding whose cited lines did not exist at the cycle-start
    baseline. The fraction is the loop's convergence signal, and a signal
@@ -812,7 +847,19 @@ trust boundaries and applies its own finding bar; selecting it changes coordinat
 Report the **run**, not the last cycle: the number of cycles, each cycle's iteration
 count, and for every charter change what changed and who authorized it — otherwise two
 rescopes read as three short clean cycles rather than the up-to-fifteen adversarial
-passes they were. Name the selected reviewer. Then report the final verdict, the fixes made, the
+passes they were. Name the selected reviewer.
+
+Report the change's cumulative total on its own line, in the form the next loop takes
+back as its `prior_rounds`:
+
+    review rounds: <n> this run, <rounds>/<charters> cumulative for this change
+
+The run count alone is what let the motivating failure pass unnoticed: every individual
+report was accurate, and the total existed nowhere except in a reader willing to add up
+several of them. A caller that ran no earlier loop reports its own figure against a
+`0/0` carry, which is the same line and needs no special case.
+
+Then report the final verdict, the fixes made, the
 verification performed, every unresolved finding, and every `deferred-tracked` concern from any
 cycle with its owning record path or tracker issue. When the run took a named exit — *converged
 with deferrals*, *sound with record notes*, or *converged on own surface* — say so by that
@@ -829,6 +876,15 @@ caller cannot reconstruct: it is the difference between "this branch is clean" a
 The verdict is **data for whoever invoked you**, not the end of a task. You
 are almost always one step inside a larger workflow. After the loop exits:
 
+- **Carry the cumulative figure forward.** Whatever the exit, the caller takes the
+  reported `<rounds>/<charters>` and passes it as `prior_rounds` to the next
+  `$trial-loop` it runs over the same change — a re-review after a security round trip,
+  a second design artifact, a loop re-entered after fixes. A caller that drops it
+  restarts the count at zero and reproduces the failure the figure exists to expose,
+  since each loop's own report was never the thing that was wrong. Only the caller can
+  do this: the loops span targets and run tokens, and nothing inside a run can see the
+  one before it. A dispatch that is one reviewer pass rather than a loop still spent a
+  round; count it.
 - An `approve` verdict means the caller advances to the next phase.
 - A *sound with record notes* exit means the same — it is not blocked — and the caller
   carries the outstanding notes into its own report.

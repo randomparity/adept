@@ -476,6 +476,14 @@ that run's iterations. From that point this step reads exactly as it does for a 
 completed review: it reaches none of the named exits below, and step 8's summary records it as
 `exit: none` with `iterations: 1`.
 
+**Carry the issue's cumulative review-round figure through every run here.** Seed it with
+the design phase's total where `$spellcraft` reported one, `0/0` otherwise, pass it to each
+`$trial-loop` run on this branch as its `prior_rounds` — the branch review, an escalated run
+after a single pass, a re-run after the security round trip, a re-run after `$dispel` — and
+count each `single-pass` dispatch as one round. Report the figure the loop returns in the
+transcript beside the routed depth. It is what makes the issue's whole review cost visible in
+one place; per-run reports are individually accurate and sum to nothing a reader can see.
+
 The loop has three named non-blocking exits — *converged with deferrals*, *sound
 with record notes*, and *converged on own surface* — and **each advances this
 workflow**. None of them is blocked and none of them is the `approve` exit; the
