@@ -330,6 +330,18 @@ scope audit is the depth that produced a complete, twice-audited design and zero
 implementation. It is also where a wrong route is cheapest to correct, because the escalation
 happens before any code exists.
 
+**Count the rounds across all of them.** The ADR, spec, and plan reviews are separate
+`$trial-loop` runs over one change, each drawing its own iteration budget, so the design
+phase's real review cost appears in no single loop's report. Start at `0/0`, pass each
+loop's reported cumulative figure into the next as its `prior_rounds` — the ADR set's
+runs in order, then the spec review, then the plan review — and count a `single-pass`
+dispatch as one round the same way, since it cost a reviewer pass whether or not a loop
+wrapped it. When the phase ends, report the design-phase total in the form
+`$trial-loop` reports it, and hand it to the caller: `$quest` continues the count into
+the branch review, and a direct invocation is reporting to the operator who is paying
+for it. The observed failure was 11 rounds under two charters before implementation
+existed, with every individual report accurate.
+
 ## 2. Adversarial-review the ADR
 
 If step 1 wrote or updated an ADR, harden it as a review target **before** the spec
