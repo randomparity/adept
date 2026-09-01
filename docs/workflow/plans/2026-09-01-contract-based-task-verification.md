@@ -66,25 +66,25 @@ Verification:
   - Mode: `task-test-not-applicable`.
   - Changed surface: normative instructions for producing and validating a task's contract
     inventory.
-  - Reason: no executable plan parser consumes these instructions; a focused task test could only
+  - Reason: no executable plan parser consumes these instructions. A focused task test could only
     pin wording rather than prove the judgment.
 - Contract: Forge verification routing and task closure.
   - Mode: `task-test-not-applicable`.
   - Changed surface: normative Cast/Party routing, validation, closure, prohibition, and TDD
     instructions.
-  - Reason: Forge is an instruction surface rather than executable orchestration code; a focused
+  - Reason: Forge is an instruction surface rather than executable orchestration code. A focused
     task test could only search or snapshot its prose.
   - Additional evidence: the specification's bounded EVAL-01 through EVAL-05 behavior matrix.
 - Contract: Party implementer-report evidence.
   - Mode: `task-test-not-applicable`.
   - Changed surface: Forge dispatch requirements and the implementer prompt's free-form private
     report contract.
-  - Reason: no executable report parser validates the Markdown report; a focused task test would
+  - Reason: no executable report parser validates the Markdown report. A focused task test would
     pin wording without proving that a future implementer exercises judgment correctly.
 - Contract: Cast ledger evidence.
   - Mode: `task-test-not-applicable`.
   - Changed surface: human-readable private evidence-line vocabulary and read-back instructions.
-  - Reason: no executable consumer parses these lines; a focused task test would assert prose or
+  - Reason: no executable consumer parses these lines. A focused task test would assert prose or
     reproduce a parser this change explicitly does not add.
 - Contract: README public build description.
   - Mode: `task-test-not-applicable`.

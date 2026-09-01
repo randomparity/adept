@@ -1,15 +1,17 @@
 ---
 name: forge
-description: "Implement an approved plan with test-driven development, direct or worker-driven execution, focused verification, and the repository guardrail suite. Use when asked to build with TDD, execute an implementation plan, or continue the build phase of an issue workflow."
+description: "Implement an approved plan with contract-based task verification, direct or worker-driven execution, focused tests where applicable, and the repository guardrail suite. Use when asked to build with TDD, execute an implementation plan, or continue the build phase of an issue workflow."
 ---
-# Build With TDD
+# Build With Contract Evidence
 
-Implement the design using test-driven development throughout. Set up the
-workspace with **pocket dimension**, then pick an execution mode by what
+Implement each material changed contract with the verification mode its evidence supports. Use
+red-green TDD for executable behavior and machine-checkable structure; record a concrete
+non-applicability reason only when no task-specific executable or structural observation can fail
+meaningfully. Set up the workspace with **pocket dimension**, then pick an execution mode by what
 `$spellcraft` produced:
 
 - **A plan exists and its tasks are mostly independent** → **party**: a fresh
-  implementer worker per task, each closed on its own green tests and
+  implementer worker per task, each closed on its own verified contract evidence and
   guardrails, and one whole-branch review at the end.
 - **No plan, because this is a trivial bugfix or a caller-verified
   `governed-small-change` — or a plan whose tasks are too tightly coupled to
@@ -30,11 +32,28 @@ an instruction its template does not state.
 This binds both modes and every worker either one dispatches; the implementer
 template restates it as part of that precondition.
 
-When the caller supplies a governed-small-change classification with its revalidated decision reference, decision kind, accepted status, governed behavior, and acceptance criteria, reject any supplied or auto-discovered plan and write and run the focused failing test as the first executable proof.
+When the caller supplies a governed-small-change classification with its revalidated decision
+reference, decision kind, accepted status, governed behavior, and acceptance criteria, reject any
+supplied or auto-discovered plan and construct the Cast inventory. A focused entry starts with its
+failing test; a non-applicable entry starts with implementation and retains its exact reason.
 
 Otherwise, if no plan path is supplied, look for one under `docs/workflow/plans/`.
 No plan is valid only for a trivial bugfix. Any other non-trivial change without a plan
 stops and returns to `$spellcraft`.
+
+For every planned task, validate its `Verification` inventory before implementation. It must name
+every material changed contract and give each exactly one supported mode:
+
+- `focused-test` names the test file or case, expected red failure, and exact green command.
+- `task-test-not-applicable` names the changed surface and explains why no task-specific
+  executable or structural observation could fail meaningfully.
+
+Reject an omitted, vague, or contradicted entry at the plan checkpoint. File type, task size,
+convenience, and repository guardrails are not reasons. Changed script behavior, parsers, schemas,
+record shapes, validation rules, generated artifacts, and other machine-checkable contracts use
+`focused-test`. A described human-readable report or ledger shape is not machine-checkable when no
+executable consumer validates it. Never search for or snapshot prose wording to manufacture
+evidence.
 
 Build-time scope expansion stops implementation, re-freezes scope, and runs full design without automatically reselecting the abbreviated path.
 
@@ -178,6 +197,11 @@ bite-sized; improvising past them discards that work, and a task marked complete
 before its verification ran is the false green everything else here exists to
 prevent.
 
+In Cast, construct the same inventory directly when no planned task exists. Run each focused entry
+red then green; implement a non-applicable entry without a fabricated task test. Before closure,
+inventory the actual diff and reconcile every material contract one-to-one with the inventory. A
+missing or reclassified contract returns to the plan checkpoint and records no evidence.
+
 Stop on a genuine blocker — a missing dependency, a test that will not pass, an
 instruction you do not understand, a verification that fails repeatedly — and
 say so. When a test or verification remains red and its cause is not established by the current
@@ -193,7 +217,7 @@ lack of a whole-branch reviewer as an implicit no-review mode.
 
 ## Party — worker-driven execution
 
-A fresh implementer worker per task, each closed on its own green tests and
+A fresh implementer worker per task, each closed on its own verified contract evidence and
 guardrails, and one broad whole-branch review at the end. The isolated context
 is the mechanism: a worker that inherits your session's history loses focus, so
 construct exactly what each one needs instead of letting it inherit. It also
@@ -257,7 +281,7 @@ worktree state are reconciliation evidence. Do not replace or reclaim a worker o
 3. If it asks questions, answer them fully before it proceeds. A question asked
    before the work is the cheapest one there is; hurrying it produces a defect
    instead of an answer.
-4. It implements, tests, self-reviews, and commits.
+4. It implements, produces the selected contract evidence, self-reviews, and commits.
 5. Verify the reported commits landed on the assigned branch before accepting
    the task. In the assigned worktree, every SHA the implementer reported must
    satisfy `git merge-base --is-ancestor <sha> <BRANCH_NAME>`, and
@@ -266,14 +290,19 @@ worktree state are reconciliation evidence. Do not replace or reclaim a worker o
    commit in some other tree, and an empty range is a task that committed
    nowhere. Either one is a stop-and-reconcile, because a worker that got lost
    is exactly the one whose self-report cannot be trusted.
-6. Read the report for the test and guardrail commands this task ran and what
-   they returned. A report naming no executable evidence for the task is
-   `NEEDS_CONTEXT`, not a finished task: that evidence is now the whole of the
-   task's gate.
-7. Mark the task complete in the todo list and the progress ledger.
+6. Read the report and verify one entry per planned contract. A focused entry contains the red
+   command and expected failure plus the green command and passing result. A non-applicable entry
+   repeats the plan's exact reason and confirms the implemented contract remained non-executable
+   and non-structural. Missing or incomplete evidence is `NEEDS_CONTEXT`.
+7. Inventory the actual task diff and reconcile its material contracts one-to-one with the plan
+   and report. An unmatched or reclassified contract returns to the plan checkpoint.
+8. Mark the task complete in the todo list and append exactly one line, using `mixed` when both
+   modes occur: `Task N: complete (commits <base-sha>..<head-sha>, verification
+   <focused-test|task-test-not-applicable|mixed>)`.
 
-**A task's gate is its tests, not a review.** There is no per-task reviewer.
-TDD already ends each task at a runnable pass/fail gate, and a task-scoped
+**A task's gate is its contract evidence, not a review.** There is no per-task reviewer.
+Focused tests end testable contracts at a runnable pass/fail gate; non-applicable contracts end at
+an explicit, diff-confirmed reason. A task-scoped
 adversarial pass over surface the previous one just wrote spends a dispatch
 mostly re-reading the loop's own output. What such a pass could see, the
 whole-branch review sees too; what it could not see — the defect spanning
@@ -436,7 +465,7 @@ party workers.
 - your resolution of any ambiguity you noticed in the brief
 - applicable `AGENTS.md` conventions
 - exact guardrail commands to run before committing
-- the TDD requirements below
+- the task's complete Verification inventory and the contract-evidence rules below
 - the report-file path, named after the brief (`…/task-N-brief.md` →
   `…/task-N-report.md`)
 - the **worker report contract** (`AGENTS.md`), last, so the implementer
@@ -547,15 +576,16 @@ A failure there means that write was refused or reverted, not that a further
 ignore step is owed. Do not reach for `.git/info/exclude`: a sandboxed agent may
 be denied writes to `.git/` entirely.
 
-When a task's commits are verified on the branch and its report names the tests
-and guardrails that passed, append one line:
-`Task N: complete (commits <base-sha>..<head-sha>, tests green)`. After any
+When a task's commits are verified on the branch, its report contains every selected evidence
+entry, its actual diff reconciles to the inventory, and its guardrails passed, append one line:
+`Task N: complete (commits <base-sha>..<head-sha>, verification
+<focused-test|task-test-not-applicable|mixed>)`. After any
 compaction the ledger and `git log` outrank whatever you seem to remember: the
 commits they name are on disk whether or not you recall making them.
 
 ### Never
 
-- Close a task on a report naming no test or guardrail evidence for it, or on
+- Close a task on a report missing any selected contract evidence or guardrail result, or on
   commits you have not verified onto the assigned branch.
 - Let the branch reach handoff without the whole-branch review, or accept
   "close enough" on what the plan asked a task for.
@@ -575,10 +605,10 @@ withholding a verdict over one. GitHub priority, unattended-execution
 `risk:*` labels, restock coverage exposure, and a reviewer's named concern are
 separate classifications and never map to severity.
 
-## TDD rules
+## Contract-evidence rules
 
-Whoever writes code — a worker or this session — works to the standard in
-[trial-by-fire](../../references/trial-by-fire.md):
+For every `focused-test` entry, whoever writes code — a worker or this session — works to the
+standard in [trial-by-fire](../../references/trial-by-fire.md):
 
 1. Write the failing test first.
 2. Run it and confirm it fails for the expected reason.
@@ -589,6 +619,15 @@ Whoever writes code — a worker or this session — works to the standard in
 Test behavior and edge/error paths, not implementation details: empty input,
 null or missing values, malformed input, boundaries, timeouts, partial
 failure, permission failures, and degraded dependencies where relevant.
+
+For `task-test-not-applicable`, preserve the exact reason and do not create a prose search,
+snapshot, or unrelated assertion. This removes only the focused task test; repository guardrails
+and the whole-branch review required by Party or the caller remain mandatory.
+
+When a plan defines bounded agent-behavior evaluation cases, run them against the changed
+instructions with a fresh evaluator and compare observable routes and forbidden traits directly to
+the plan. Keep private inputs and reports private. One pass is expected; after an evidence-backed
+correction, allow one confirming pass. A second failure parks instead of starting a third pass.
 
 ### Language-agnostic implementation rules
 
@@ -635,9 +674,20 @@ guardrail blocks the commit, where a flaked task test does not.
 
 ## Context checkpoint
 
-The **durable artifacts** of this phase are the committed code and tests and the
-plan's completed tasks — not the TDD red/green output or implementer transcripts.
+The **durable artifacts** of this phase are the committed implementation, selected verification
+evidence, and completed plan tasks — not raw red/green output or implementer transcripts.
 Before handing off to review, confirm the branch name and the exact guardrail
 commands are recorded somewhere durable (the plan, the campaign manifest, or a
 note), so a post-compaction resume can recover them. Do **not** run `context compaction`
 proactively; just keep the artifacts complete.
+
+Before returning a Cast result, append and read back one private ledger line per reconciled
+contract. Every substituted value must be non-empty and contain no semicolon, CR, LF, or NUL:
+
+`Cast verification: <contract> = focused-test (red command <command>; red exit <status>; red
+observation <summary>; green command <command>; green exit <status>; green observation <summary>)`
+
+`Cast verification: <contract> = task-test-not-applicable (reason <reason>)`
+
+Commands are exact, statuses are decimal, observations are concise single-line summaries, and raw
+output remains transient. Refuse an unrepresentable value; do not add escaping or a parser.
