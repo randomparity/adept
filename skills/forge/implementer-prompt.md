@@ -166,6 +166,8 @@ Worker (implementer):
 
     - what you built, or attempted, if you could not finish;
     - what you tested, and what the tests said;
+    - the guardrail commands you were given, and what each returned — the
+      orchestrator closes the task on this evidence and nothing else;
     - **any test you ran more than once**, whatever the reason — both outcomes,
       the test's name. A test that
       failed and then passed is the one the reviewer most needs told about;

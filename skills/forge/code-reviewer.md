@@ -1,8 +1,9 @@
 # Whole-branch code reviewer prompt
 
 The dispatch template for the single review that reads the finished branch as
-one thing. Every task already had its own reviewer; this pass exists for the
-defect that only appears once the tasks sit together.
+one thing. It is the branch's only adversarial pass: each task was closed on its
+own green tests and guardrails, and this one exists for the defect that only
+appears once the tasks sit together.
 
 **Purpose:** judge completed work against the plan it came from and against
 ordinary engineering standards, while the findings are still cheap to act on.
@@ -42,11 +43,11 @@ Worker (reviewer):
     package is not there, you have nothing to review: send back
     `PACKAGE_MISSING` and stop.
 
-    Unlike a task review, you are not confined to the package. This pass exists
-    for what a task-scoped reviewer could not see: the plan the branch was built
-    from, the call sites of a contract it changed, the documentation it left
-    stale. Read beyond the package where the work requires it, and record in the
-    review what you read and why.
+    You are not confined to the package. This pass exists for what the diff
+    alone cannot settle: the plan the branch was built from, the call sites of a
+    contract it changed, the documentation it left stale. Read beyond the
+    package where the work requires it, and record in the review what you read
+    and why.
 
     ## Read-Only Review
 
@@ -118,8 +119,8 @@ Worker (reviewer):
     Where the branch leaves the plan in a way that matters, say so plainly and
     separately, so the implementer can confirm it was deliberate. And where the
     fault lies in the plan rather than in the code following it, that is a
-    finding too — report it as one. Label such a finding `plan-mandated`, the
-    same word the task reviewer uses, and count it in what you send back.
+    finding too — report it as one. Label such a finding `plan-mandated` and
+    count it in what you send back.
 
     ## Where your review goes
 
@@ -150,15 +151,6 @@ Worker (reviewer):
 
     #### low
     [Naming, polish, or an optional improvement with no concrete failure]
-
-    #### Low triage
-    Triage the low findings carried over from earlier tasks, listed in
-    [LOW_LEDGER], against the merge bar. Where that placeholder is empty, say
-    so in one line rather than omitting this heading — the orchestrator reads it
-    by name, and an absent heading is indistinguishable from a skipped triage.
-
-    These are carried over, not found by you: they do not count toward
-    `low N`, which is your own findings on this branch.
 
     ### Recommendations
     [Worth doing to the code, the design, or the way this was built; not
@@ -217,10 +209,6 @@ Worker (reviewer):
   package's contents never pass through the orchestrator's own context.
 - `[REVIEW_FILE]` — REQUIRED. Where the reviewer writes the review. The
   orchestrator clears this path before dispatching and reads it afterwards.
-- `[LOW_LEDGER]` — the low findings accumulated from the task reviews, for
-  triage against the merge bar. `SKILL.md` already requires this handover; until
-  now it had no named slot. Pass an explicit "none" when the ledger carried no
-  low findings.
 - `[BASE_SHA]` — the branch's fork point from the base branch
 - `[HEAD_SHA]` — the commit it ends on
 
