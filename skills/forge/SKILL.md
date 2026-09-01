@@ -9,8 +9,8 @@ workspace with **pocket dimension**, then pick an execution mode by what
 `$spellcraft` produced:
 
 - **A plan exists and its tasks are mostly independent** → **party**: a fresh
-  implementer worker per task, each followed by a two-stage review — spec
-  compliance, then code quality.
+  implementer worker per task, each closed on its own green tests and
+  guardrails, and one whole-branch review at the end.
 - **No plan, because this is a trivial bugfix or a caller-verified
   `governed-small-change` — or a plan whose tasks are too tightly coupled to
   hand out** → **cast**: implement directly in this session.
@@ -19,7 +19,7 @@ workspace with **pocket dimension**, then pick an execution mode by what
 `$dispel`, `$deliver` and `$return-to-town` follow and own integration,
 so neither mode presents an integration menu and neither takes a merge, push, or
 discard. That is a property of the run, and each dispatched worker learns it
-only from its own prompt: the reviewer templates carry it as their read-only
+only from its own prompt: the reviewer template carries it as its read-only
 contract — the checkout left exactly as found, with the whole-branch reviewer's
 single writable review file as the one exception — and the implementer template
 carries it in its Placement section, beside the worktree-and-branch precondition
@@ -193,11 +193,11 @@ lack of a whole-branch reviewer as an implicit no-review mode.
 
 ## Party — worker-driven execution
 
-A fresh implementer worker per task, a two-stage task review after each, and
-one broad whole-branch review at the end. The isolated context is the mechanism:
-a worker that inherits your session's history loses focus, so construct
-exactly what each one needs instead of letting it inherit. It also keeps your
-own context for coordination.
+A fresh implementer worker per task, each closed on its own green tests and
+guardrails, and one broad whole-branch review at the end. The isolated context
+is the mechanism: a worker that inherits your session's history loses focus, so
+construct exactly what each one needs instead of letting it inherit. It also
+keeps your own context for coordination.
 
 Honor repo-level worker and worktree rules. If repo instructions require
 mutating workers to use separate worktrees, obey that. Otherwise,
@@ -229,17 +229,18 @@ either choice could be wrong.
 
 ### Silent party workers
 
-**The per-task loop is serial, so dispatch it blocking** — set `background: false` on the
-implementer, the task reviewer, the fix worker, and the whole-branch review. Nothing in the loop
-can proceed until the current worker returns: the review package needs the implementer's commits,
-the fix worker needs the review, and the re-review needs the fix. A backgrounded dispatch buys no
-parallelism there and costs a turn every time this session wonders how it is going. A dispatcher
-blocked on a worker cannot poll it, which removes the failure mode instead of governing it.
+**The party's dispatches are serial, so dispatch them blocking** — set `background: false` on the
+implementer, the whole-branch review, and the fix worker that follows it. Nothing here can proceed
+until the current worker returns: the next task builds on the previous one's commits, the review
+package needs every task's commits, and the fix worker needs the review. A backgrounded dispatch
+buys no parallelism there and costs a turn every time this session wonders how it is going. A
+dispatcher blocked on a worker cannot poll it, which removes the failure mode instead of governing
+it.
 
 The contract below still applies to a blocking dispatch, because a blocking dispatch can still end
 without a report.
 
-The implementer, task reviewer, fix worker, and whole-branch reviewer are separate report waits.
+The implementer, whole-branch reviewer, and fix worker are separate report waits.
 Apply [dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md) to
 each. Before any replacement, append the worker, wait site, observations, recovery-chain
 identifier, `unused` or `consumed` replacement budget, and artifact dispositions to
@@ -257,34 +258,33 @@ worktree state are reconciliation evidence. Do not replace or reclaim a worker o
    before the work is the cheapest one there is; hurrying it produces a defect
    instead of an answer.
 4. It implements, tests, self-reviews, and commits.
-5. Generate the review package: `scripts/review-package BASE HEAD`, using the
-   BASE you noted **before** the dispatch. `HEAD~1` is wrong and fails quietly:
-   where a task produced several commits it shows the reviewer only the final
-   one, and the diff still looks plausible. The script must exit 0 and print a
-   non-zero commit count — an empty range now fails the script, and a task
-   whose range is empty has committed nowhere. Stop and reconcile rather than
-   reviewing; an empty diff is not a clean task.
-6. Verify the reported commits landed on the assigned branch before accepting
+5. Verify the reported commits landed on the assigned branch before accepting
    the task. In the assigned worktree, every SHA the implementer reported must
    satisfy `git merge-base --is-ancestor <sha> <BRANCH_NAME>`, and
-   `<BRANCH_NAME>`'s tip must have moved past BASE. A SHA that fails is a
-   stray commit in some other tree — stop and reconcile before any review,
-   because a worker that got lost is exactly the one whose self-report cannot
-   be trusted.
-7. Dispatch the task reviewer with
-   [task-reviewer-prompt.md](task-reviewer-prompt.md) and that path.
-   A `CLEANUP_FAILED` return must match the exact three-line reviewer contract;
-   reject any mixed verdict/count return and stop with the residual worktree.
-8. On critical, high, or medium findings, dispatch a fix worker, then re-review.
-   The fix worker carries the same placement contract as the implementer: the
-   assigned worktree path and branch name, verified before its first edit.
-   Do not move on with any still open. Record low findings in the ledger; they
-   may be dispositioned and advanced, but the review remains `needs-attention`.
-9. Mark the task complete in the todo list and the progress ledger.
+   `git rev-list --count <BASE>..<BRANCH_NAME>` — with the BASE you noted
+   **before** the dispatch — must be non-zero. A SHA that fails is a stray
+   commit in some other tree, and an empty range is a task that committed
+   nowhere. Either one is a stop-and-reconcile, because a worker that got lost
+   is exactly the one whose self-report cannot be trusted.
+6. Read the report for the test and guardrail commands this task ran and what
+   they returned. A report naming no executable evidence for the task is
+   `NEEDS_CONTEXT`, not a finished task: that evidence is now the whole of the
+   task's gate.
+7. Mark the task complete in the todo list and the progress ledger.
 
-After the last task, dispatch the whole-branch review with
-[code-reviewer.md](code-reviewer.md), on the most capable model. The per-task
-reviews are task-scoped by design and cannot see a defect that spans tasks.
+**A task's gate is its tests, not a review.** There is no per-task reviewer.
+TDD already ends each task at a runnable pass/fail gate, and a task-scoped
+adversarial pass over surface the previous one just wrote spends a dispatch
+mostly re-reading the loop's own output. What such a pass could see, the
+whole-branch review sees too; what it could not see — the defect spanning
+tasks — is why that review exists. ADR 0052 records the decision.
+
+After the last task, run the guardrail suite under *Guardrails* over the
+assembled branch and fix anything red before going further. With no per-task
+reviewer, this is the first executable check that has seen every task's work
+together. Then dispatch the whole-branch review with
+[code-reviewer.md](code-reviewer.md), on the most capable model. It is the
+branch's only adversarial pass.
 
 Its base is the branch's fork point — `git merge-base HEAD <BASE_BRANCH>`,
 recomputed here rather than carried forward, because a rebase moves it. Capture
@@ -318,12 +318,7 @@ asked report it as a blocker and return. Never default to `main`.
 3. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
    directory `scripts/sdd-workspace` prints. Remove anything already at that
    path before dispatching, so a file there afterwards is this dispatch's.
-   `[LOW_LEDGER]` is the low findings you have been accumulating; pass the
-   literal `none` when there were none.
-4. When the reviewer returns, `[REVIEW_FILE]` must exist and be non-empty. If
-   you passed a non-empty `[LOW_LEDGER]`, read that file's `#### Low triage`
-   heading whatever the verdict — that heading, not the whole file. On `approve`
-   nothing else reads the answer you asked for.
+4. When the reviewer returns, `[REVIEW_FILE]` must exist and be non-empty.
 5. **Append the ledger line once that check passes**, before the fix wave —
    `Final review <base-sha>..<head-sha>: <verdict> (review <path>)` — and a
    second, `Final review <base-sha>..<head-sha>: closed`, when the wave finishes.
@@ -379,9 +374,9 @@ as a shipping-without-review path.
 
 Four statuses, four responses:
 
-- **DONE** — generate the review package and dispatch the task reviewer.
+- **DONE** — verify its commits and close the task.
 - **DONE_WITH_CONCERNS** — read the concerns first. Correctness or scope
-  concerns get addressed before review; observations get noted.
+  concerns get addressed before the task is closed; observations get noted.
 - **NEEDS_CONTEXT** — supply what was missing and re-dispatch.
 - **CANNOT_COMPLETE** — assess it. A context problem gets more context; a reasoning
   problem gets a more capable model; an oversized task gets split; a wrong plan
@@ -390,17 +385,11 @@ Four statuses, four responses:
 **Never retry an unchanged prompt after `CANNOT_COMPLETE`, and never ignore an
 escalation.** If the implementer says it is stuck, something has to change.
 
-**A reported flake is dispositioned here, before the review package is
-generated** — fix the determinism, or file it and record the reference. Filing
-is yours to do, not the implementer's, and doing it now is what stops the task
-reviewer raising a finding nothing downstream can close.
-
-A task reviewer may also report "⚠️ Cannot verify from diff" — requirements
-living in unchanged code or spanning tasks. The rest of the review proceeds
-around them, but none may be left open when you close the task. Settle each one: the
-plan and everything the neighbouring tasks established are yours to see and the
-reviewer's to guess at. If it turns out to be a genuine gap, the spec review
-failed.
+**A reported flake is dispositioned here, before the task is closed** — fix the
+determinism, or file it and record the reference. Filing is yours to do, not the
+implementer's, and doing it now is what stops a nondeterministic run standing as
+the whole of a task's evidence, where nothing between here and the whole-branch
+review would look at it again.
 
 ### Choosing a model
 
@@ -416,9 +405,9 @@ capable and most expensive.
 **Turn count beats token price.** Give a weak model something multi-step and it
 will often need two or three times as many turns to finish, which is more
 expensive than the stronger model would have been. Use a mid-tier floor for
-reviewers and for implementers working from prose; reserve the cheapest tier for
-transcription — where the plan text already contains the code to write — and for
-single-file mechanical fixes.
+implementers working from prose; reserve the cheapest tier for transcription —
+where the plan text already contains the code to write — and for single-file
+mechanical fixes.
 
 **This governs your own model too.** A coordinating session runs on the most
 capable model by default and then pays that rate for every turn it spends
@@ -462,21 +451,22 @@ that accumulated history.
 
 Hand artifacts over as **files**, not pasted text. Anything you paste into a
 prompt, and anything a worker prints back, stays resident in your context and
-is re-read on every later turn. The reviewer gets three paths — the brief, the
-report, and the review package — plus the constraints that bind the task. Fix
-dispatches append to the same report file.
+is re-read on every later turn. The whole-branch reviewer gets two paths — the
+review package and the review file it writes — plus the plan and the constraints
+that bind the branch. Fix dispatches append to the same report file.
 
-**Constructing a reviewer prompt**, the rules that matter most:
+**Constructing the reviewer prompt**, the rules that matter most:
 
 - **Never rule on a finding before the reviewer has made it.** Watch for the
   shape: you are about to tell the reviewer that something is out of bounds, is
   settled, is at worst cosmetic, or was chosen deliberately. Every one of those
   is a verdict, written by the party a review exists to check, and the motive is
   almost always to avoid another round. Let it be raised; decide it after.
-- Copy the plan's binding requirements **verbatim** into the global-constraints
-  block: exact values, formats, and stated relationships ("same layout as X").
-  That block is the reviewer's attention lens, and a paraphrase changes what it
-  looks at. The template already carries the process rules.
+- Copy the plan's binding requirements **verbatim** into
+  `[PLAN_OR_REQUIREMENTS]`: exact values, formats, and stated relationships
+  ("same layout as X"). That slot is the reviewer's attention lens, and a
+  paraphrase changes what it looks at. The template already carries the process
+  rules.
 - Give no instruction whose scope you cannot state. "Look at everything that
   touches this" and "try the concurrency suite if it seems worthwhile" are
   invitations to wander; name the reason and the target, or leave them out.
@@ -491,7 +481,7 @@ assigned worktree path and branch name, verified before the first edit. Re-run
 the tests covering
 the change and report the command and its output. Name the covering test files —
 a one-line fix does not need the whole suite. Confirm the report has all three
-before re-dispatching the reviewer. One finding cannot take that contract: a
+before closing the fix wave. One finding cannot take that contract: a
 flaked test, where re-running it is the evidence the flake policy under
 *Guardrails* rejects. Dispose of it where reported flakes are dispositioned,
 above, rather than by dispatching a fix that re-runs it.
@@ -517,8 +507,8 @@ beside the plan text it disputes; a count alone asks them to rule on work they
 have not seen. Then carry their answer into the dispatch by naming the upheld
 findings. Nothing further is prescribed.
 
-Put low findings in the ledger as they arrive, and hand the final review that
-list to triage against the merge bar. A summary nobody is directed to read is
+Put the review's low findings in the ledger with the disposition you gave each
+one — named into the fix wave, or left. A summary nobody is directed to read is
 indistinguishable from having thrown the findings away. Where a finding and the
 plan disagree, neither one wins by default and neither is yours to overrule: put
 both in front of the human and ask which holds. That means not waving the
@@ -557,28 +547,29 @@ A failure there means that write was refused or reverted, not that a further
 ignore step is owed. Do not reach for `.git/info/exclude`: a sandboxed agent may
 be denied writes to `.git/` entirely.
 
-When a review comes back clean, append one line:
-`Task N: complete (commits <base-sha>..<head-sha>, review clean)`. After any
+When a task's commits are verified on the branch and its report names the tests
+and guardrails that passed, append one line:
+`Task N: complete (commits <base-sha>..<head-sha>, tests green)`. After any
 compaction the ledger and `git log` outrank whatever you seem to remember: the
 commits they name are on disk whether or not you recall making them.
 
 ### Never
 
-- Let a task through unreviewed, or settle for a report carrying only one of the
-  a spec-compliance check and canonical verdict. Both are required.
-- Accept "close enough" on spec compliance, or let an implementer's self-review
-  stand in for the task review.
+- Close a task on a report naming no test or guardrail evidence for it, or on
+  commits you have not verified onto the assigned branch.
+- Let the branch reach handoff without the whole-branch review, or accept
+  "close enough" on what the plan asked a task for.
 - Make a worker read the whole plan file instead of its brief.
-- Dispatch any reviewer without a review-package file.
+- Dispatch the reviewer without a review-package file.
 
-**Review vocabulary.** Task and whole-branch reviewers use `$gauntlet`'s canonical
+**Review vocabulary.** The whole-branch reviewer uses `$gauntlet`'s canonical
 `critical | high | medium | low` severity and `approve | needs-attention` verdict
 directly. `approve` requires zero **blocking** (`critical` or `high`) findings;
 `medium` and `low` are notes and do not withhold it.
 
 Forge's *routing* is unchanged by that gate and is deliberately stricter than it:
-step 8 still dispatches a fix worker on `medium` as well, and still records `low` in
-the ledger. A verdict states what the reviewer found; routing states what this
+the fix wave takes `medium` as well, and `low` findings go to the
+ledger. A verdict states what the reviewer found; routing states what this
 orchestrator does with it, and forge choosing to fix a note is not the reviewer
 withholding a verdict over one. GitHub priority, unattended-execution
 `risk:*` labels, restock coverage exposure, and a reviewer's named concern are

@@ -13,13 +13,13 @@ passes, until it returns `approve` or a bounded stop fires. The reviewer default
 `--reviewer detect-evil` selects `$detect-evil`. This is both a standalone skill and a subroutine
 of `$quest` and `$spellcraft`.
 
-Callers own most of the timing: `$forge` reviews after every task and once
-across the whole branch, `$deliver` before a merge. Beyond those, petition the
-council when you are stuck and want a reading that owes nothing to how you got
-here, before a refactor to establish what the baseline actually is, and after
-fixing a bug that was hard to find. Never skip a review because the change looks
-simple — a simple-looking change is where an unexamined assumption survives all
-the way to merge.
+Callers own most of the timing: `$forge` reviews once across the whole branch —
+its tasks are gated by their own tests — and `$deliver` before a merge. Beyond
+those, petition the council when you are stuck and want a reading that owes
+nothing to how you got here, before a refactor to establish what the baseline
+actually is, and after fixing a bug that was hard to find. Never skip a review
+because the change looks simple — a simple-looking change is where an unexamined
+assumption survives all the way to merge.
 
 Input: accept an optional `--reviewer gauntlet|detect-evil`, then pass through the user-supplied
 review target and focus text.
