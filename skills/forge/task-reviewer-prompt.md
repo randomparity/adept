@@ -213,9 +213,10 @@ Worker (reviewer):
 
 **What comes back:** a Spec Compliance check (✅ / ❌ / ⚠️), Strengths, Issues
 graded critical / high / medium / low, and a canonical verdict. `approve` is
-valid only when there are zero findings. A `low` finding therefore keeps the
-reviewer's verdict at `needs-attention`; the orchestrator may disposition it in
-the ledger and advance.
+valid when there are zero **blocking** (`critical` or `high`) findings. A `medium`
+or `low` finding is a note: it is reported in full and does **not** hold the verdict
+at `needs-attention`. The orchestrator still routes it — `medium` to a fix, `low` to
+the ledger — and advances on that disposition.
 
 One fix dispatch can answer spec gaps and quality findings together, and the
 re-review that follows covers both the check and the canonical verdict.

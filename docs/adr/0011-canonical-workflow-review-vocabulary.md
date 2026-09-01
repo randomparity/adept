@@ -4,6 +4,16 @@
 
 Accepted (2026-08-13)
 
+> **Amended by [0049](0049-review-verdicts-gate-on-blocking-severity.md)**
+(2026-08-31): the `## Decision` rule that `approve` means no defensible finding, and
+that any finding produces `needs-attention`, is replaced by a severity gate —
+`approve` requires no `critical` or `high` finding, and `medium` and `low` findings
+are notes that ride along with it. Everything else in this record stands as written:
+the four-value scale, the verdict pair, the role names, the domain-enum conversion
+rules, forge's routing of `critical`/`high`/`medium` to fixes and `low` to the ledger,
+and the artifact contract. Where this text and 0049 disagree on the verdict rule, 0049
+governs.
+
 ## Context
 
 Adept composes review, build, dependency, and shipping skills by passing findings and
