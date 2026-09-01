@@ -1,13 +1,13 @@
 ---
 name: spellcraft
-description: "Design a non-trivial code change before implementation by writing a spec or ADR, adversarially reviewing the ADR and spec, producing an implementation plan, and reviewing the plan. Use for issues or changes involving public contracts, schemas, auth, concurrency, migrations, persistence, dependencies, AI surfaces, security boundaries, or external services."
+description: "Design a non-trivial code change before implementation by writing a spec or ADR, producing an implementation plan, and adversarially reviewing the whole design set in one loop. Use for issues or changes involving public contracts, schemas, auth, concurrency, migrations, persistence, dependencies, AI surfaces, security boundaries, or external services."
 ---
 # Design First
 
 Tighten the design before writing code. Defects are cheapest to fix in the
 spec, then the plan, then the source. This covers the full design phase:
-spec + ADR, adversarial review of the ADR, adversarial review of the spec,
-implementation plan, adversarial review of the plan.
+spec + ADR, implementation plan, and one adversarial review over the whole
+design set.
 
 Skip this entire command only for a trivial bugfix (all acceptance criteria
 clear; no API, schema, auth, permission, concurrency, migration, dependency,
@@ -168,7 +168,7 @@ the spec. Run the relevant doc guardrails and commit the spec/ADR.
 
 ### Spec self-review
 
-Before the adversarial reviews below, read the spec back with fresh eyes and fix
+Before the design review in step 3, read the spec back with fresh eyes and fix
 what you find inline:
 
 - **Placeholders** — "TBD", "TODO", an unfinished section, a requirement too
@@ -181,7 +181,8 @@ what you find inline:
   ways. Settle it and say which reading the spec means.
 
 This pass is cheap and catches the defects an adversarial review would otherwise
-spend an iteration discovering. It does not replace steps 2 and 3.
+spend an iteration discovering. It does not replace step 3 — and with the plan now derived
+from a spec no adversarial pass has seen, it is the cheapest place a spec defect stops.
 
 An ADR-producing change should touch **only its own ADR file**. A hand-maintained
 index table serializes parallel ADR PRs on one merge conflict — N such PRs cost
@@ -300,9 +301,9 @@ point of writing it down first.
 `$trial-loop` is a separate skill, so the charter does cross a boundary here.
 Pass all eight fields frozen in *External scope authority* — `interaction`,
 `scope identity`, `outcome`, `completion criteria`, `provenance`, `exclusions`,
-`surface`, `ambiguities` — unchanged, to every ADR, spec, and plan trial-loop
-call. `scope identity` stays the external one and never becomes the reviewed
-target.
+`surface`, `ambiguities` — unchanged, to the design review's single `$trial-loop`
+call and to the scope audit that follows it. `scope identity` stays the external
+one and never becomes the reviewed target.
 
 The target remains evidence for review, never a source of authority. If a design-changing
 ambiguity appears, end the current review cycle and use `SCOPE CHECKPOINT`; do not let the
@@ -310,124 +311,44 @@ reviewer resolve it by extending the target.
 
 ## Design-review depth
 
-The three reviews below — ADR, spec, plan — each run at the depth routed under
+The single design review in step 3 runs at the depth routed under
 [risk-routed review depth](../../references/review-depth.md), from the caller's assessment
 where `$quest` passed one and from your own reading of the same four fields on a direct
 invocation. Judge the reference's fourth condition on the change's **intent**, using the
-security triggers in *Security-relevant changes require a threat model* below: no diff exists
+security triggers in *Security-relevant changes require a threat model* above: no diff exists
 at design time, and a design that will touch a trust boundary is security-relevant before a
 line of it is written.
 
-`iterating` runs `$trial-loop` exactly as each step states. `single-pass` dispatches one
-reviewer pass per target instead, with that step's `challenge_args` and focus unchanged, and
-gives each finding its single disposition; a blocking finding escalates that target to
-`$trial-loop` at its ordinary budget under the reference's escalation rule. Route each target
-separately — the ADR set, the spec, and the plan are three reviews — and name each routed depth
-in the audit line the step already asks for, or beside its invocation where it asks for none.
+`iterating` runs `$trial-loop` exactly as step 3 states. `single-pass` dispatches one
+reviewer pass instead, with that step's `challenge_args` and focus unchanged, and gives each
+finding its single disposition; a blocking finding escalates to `$trial-loop` at its ordinary
+budget under the reference's escalation rule. The design set is **one** target, so this is one
+routing decision, not one per artifact — name the routed depth in the audit line step 3 asks
+for.
 
-This is where the cost the routing exists to bound actually lands: three design reviews plus a
-scope audit is the depth that produced a complete, twice-audited design and zero
-implementation. It is also where a wrong route is cheapest to correct, because the escalation
-happens before any code exists.
+This is where the cost the routing exists to bound actually lands, and it is where a wrong
+route is cheapest to correct, because the escalation happens before any code exists.
 
-**Count the rounds across all of them.** The ADR, spec, and plan reviews are separate
-`$trial-loop` runs over one change, each drawing its own iteration budget, so the design
-phase's real review cost appears in no single loop's report. Start at `0/0`, pass each
-loop's reported cumulative figure into the next as its `prior_rounds` — the ADR set's
-runs in order, then the spec review, then the plan review — and count a `single-pass`
-dispatch as one round the same way, since it cost a reviewer pass whether or not a loop
-wrapped it. When the phase ends, report the design-phase total in the form
-`$trial-loop` reports it, and hand it to the caller: `$quest` continues the count into
-the branch review, and a direct invocation is reporting to the operator who is paying
-for it. The observed failure was 11 rounds under two charters before implementation
-existed, with every individual report accurate.
+**Count the rounds.** Start from the caller's cumulative figure — `0/0` where there is
+none — pass it into the review as `prior_rounds`, and count a `single-pass` dispatch as one
+round the same way, since it cost a reviewer pass whether or not a loop wrapped it. When the
+phase ends, report the design-phase total in the form `$trial-loop` reports it, and hand it
+to the caller: `$quest` continues the count into the branch review, and a direct invocation
+is reporting to the operator who is paying for it. The figure used to be a sum across three
+separate loops that no single report stated — 11 rounds under two charters before any
+implementation existed, with every individual report accurate. One loop is now the whole
+design phase, and the carry is what keeps the branch review's count continuous with it.
 
-## 2. Adversarial-review the ADR
-
-If step 1 wrote or updated an ADR, harden it as a review target **before** the spec
-review, so the spec review is not leaning on an unreviewed decision. Detect the
-ADR(s) this design produced with a git predicate — not your recollection of whether
-step 1 wrote one, which a post-compaction resume loses. The changed-ADR set is the
-union of:
-
-- target-repository path: `git diff --name-only <BASE_BRANCH>...HEAD -- docs/adr/ ':(exclude)docs/adr/README.md'`
-  — ADRs already committed on the branch, and
-- target-repository path: `git status --short --untracked-files=all -- docs/adr/ ':(exclude)docs/adr/README.md'`
-  — ADRs written but not yet committed (`--untracked-files=all` so a brand-new,
-  never-staged ADR is seen regardless of the user's `status.showUntrackedFiles`
-  config).
-
-The target-repository `':(exclude)docs/adr/README.md'` pathspec drops the index — an index-row edit is
-not an ADR to challenge. **Echo an audit line before proceeding** —
-`ADR review: changed-ADR set = <paths, or empty> → reviewed | skipped` — so a
-mis-evaluated predicate leaves an inspectable trace rather than silently reopening
-the F7 shield (the repo's only verification is reading the transcript). **If the set
-is empty, skip this step** and continue to the spec review — most designs record no
-ADR, and an empty set is the common case. Do not invoke `$trial-loop` with a
-missing path: `$trial-loop` appends a `CHARTER` block on every invocation, and under
-a charter an unresolvable target is a hard error naming the token, with `--out`
-suppressing both the artifact and the compact object — the loop gets no verdict and
-stops as blocked. So the skip must happen here, at the call site.
-
-For each ADR path in the set, run `$trial-loop` in file-list mode:
-
-- challenge_args: `<path-to-adr.md>`
-- focus: `Focus on the soundness of the decision under its stated context; the
-  completeness and honesty of the "Considered & rejected" list — alternatives
-  dismissed too quickly, or not considered at all, including the null "do nothing"
-  option; unstated or understated consequences and residuals; and whether a simpler
-  decision would meet the same context. Size is in scope: a record arguing for its
-  decision at greater length than the decision governs is a finding, and its remedy
-  is cutting rather than more text. Evidence class is in scope: a rejection whose ground
-  is stated as fact but carries no command, result, or source is a finding, as is a claim
-  about a rejected alternative's behaviour that you cannot reproduce from what the bullet
-  states — whichever tag precedes it, since a judgment resting on an unrun behaviour claim
-  is the same defect relabelled. The command and result a factual ground carries are the
-  ground, not argument, so the size clause above does not ask for them to be cut. A record
-  carrying no tags at all either predates this contract or ignores it wholesale: report
-  that once rather than filing a finding per bullet. This ADR file is the review target,
-  not settled ground — challenge its decision on the merits.`
-
-Do **not** pass the spec/plan reviews' "don't reopen settled ADR choices" focus
-here: it would tell the review to treat its own target as settled and neuter it.
-Editing the ADR to address findings is legitimate — it is pre-merge on the design
-branch, and `AGENTS.md`'s immutability applies only once the ADR is merged. If the
-loop reports blocked — including cap exhaustion at its iteration budget — stop as blocked
-per `$trial-loop`'s stop contract; do not run the spec review against an unhardened
-ADR. A *sound with record notes* exit is **not** that case — a pass confirmed every
-load-bearing claim it named in the ADR, and the standing findings carry no consequence —
-so continue to the spec review and carry the outstanding notes into the spec.
-
-*converged with deferrals* and *converged on own surface* are **not** that case either.
-Both are terminal non-blocking exits, so continue to the spec review on either.
-`$trial-loop` reports the exit by name and owns the condition each one fires on; this step
-does not re-derive them. Route on that name rather than on the last verdict, which on a
-named exit is ordinarily `needs-attention` and never by itself means the ADR is unhardened.
-
-Carry every deferral from every run in this ADR set — each entry with its owning record
-path or tracker issue — into the spec whichever way each run ended, `approve` included.
-The set can hold more than one path, so a later run must not erase an earlier one's
-entries. The loop discloses its deferrals on every exit, and the spec is what step 4's
-plan is derived from, so that is where a later implementer meets them. Not the ADR — it
-merges append-only, and an entry there cannot be struck when its tracker closes.
-
-## 3. Adversarial-review the spec
-
-Run `$trial-loop` with:
-
-- challenge_args: `<path-to-spec.md>`
-- focus: `Focus on hidden assumptions, vague or unfalsifiable success
-  criteria, missing edge cases, and under-specified failure modes. If the
-  spec covers an AI surface, also challenge the eval plan: failure modes
-  without cases, unmeasurable pass traits, and uncalibrated LLM-judge
-  evidence. Do not reopen choices already settled in linked ADR rejected
-  alternatives unless the spec contradicts them or introduces a new risk.`
-
-## 4. Inscribe — the implementation plan
+## 2. Inscribe — the implementation plan
 
 Write the plan under `docs/workflow/plans/`, named
-`YYYY-MM-DD-<feature-name>.md`, derived from the hardened spec. Do not choose an
+`YYYY-MM-DD-<feature-name>.md`, derived from the spec. Do not choose an
 execution mode here: `$forge` picks that from what the plan looks like.
+
+The spec has not been adversarially reviewed yet — step 3 reviews it together with this
+plan, once, as one design. So the spec self-review above is the only pass standing between a
+spec defect and a plan that inherits it, and the plan self-review at the end of this step is
+where that inheritance is cheapest to catch. Neither is a shortcut past step 3.
 
 Write for an engineer who has zero context for this codebase and whose taste you
 cannot vouch for — a skilled developer who knows almost nothing about the
@@ -473,6 +394,19 @@ together: two dependencies whose versions do not resolve against each other
 are a plan defect, and a lookup scoped to one package never catches it.
 Every task's requirements implicitly include that section, so it is written
 once instead of re-derived per task.
+
+The header also carries one line, exactly:
+
+    Expected implementation size: <low>–<high> changed lines (<S|M|L>) — <one clause naming what the range was derived from>
+
+The range is a by-product of the file map and the task list you have just written, not new
+analysis: count what each task creates and changes and add it up. Exclude the design
+artifacts themselves — this measures the implementation the plan produces. The band is the
+`$divination` complexity verdict where the caller supplied one, and your own reading of the
+same three fields where it did not; a band that disagrees with your own range means one of
+them is wrong, and saying which is part of writing the line. This is the denominator step 3
+measures the design against, so an inflated range is a defeated control rather than a
+generous one.
 
 Give each task:
 
@@ -523,18 +457,139 @@ resolve. Fix what you find inline.
 
 Run relevant guardrails and commit the plan.
 
-## 5. Adversarial-review the plan
+## 3. Adversarial-review the design
 
-Run `$trial-loop` with:
+One review, over the whole design set, run once the set is complete. The ADRs, the spec, and
+the plan are one change: they get one charter, one iteration budget, and one report — not
+three targets reviewed in sequence, each drawing a full budget nobody was totalling. That
+shape is what produced 13 review rounds and a 1,469-line design before a line of
+implementation existed.
 
-- challenge_args: `<path-to-plan.md>`
-- focus: `Focus on phase ordering, missing prerequisites, steps that cannot
-  run in the claimed order, rollback and cleanup paths, verification gaps,
-  ungrounded references — a type, function, or signature borrowed from the
-  codebase or a dependency without confirmation it exists with the assumed
-  signature — and tasks that are not self-contained enough for an
-  implementer. Do not reopen choices already settled in linked ADR rejected
-  alternatives unless the plan contradicts them or introduces a new risk.`
+### Assemble the set
+
+Detect the artifacts this design produced with git predicates — not your recollection of
+what steps 1 and 2 wrote, which a post-compaction resume loses. The design set is the union
+of:
+
+- target-repository path: `git diff --name-only <BASE_BRANCH>...HEAD -- docs/adr/ docs/workflow/specs/ docs/workflow/plans/ ':(exclude)docs/adr/README.md'`
+  — artifacts already committed on the branch, and
+- target-repository path: `git status --short --untracked-files=all -- docs/adr/ docs/workflow/specs/ docs/workflow/plans/ ':(exclude)docs/adr/README.md'`
+  — artifacts written but not yet committed (`--untracked-files=all` so a brand-new,
+  never-staged file is seen regardless of the user's `status.showUntrackedFiles` config).
+
+The target-repository `':(exclude)docs/adr/README.md'` pathspec drops the index — an
+index-row edit is not a decision to challenge. Most designs record no ADR, so an ADR-free
+set is the common case and reviews exactly the same way; there is no ADR-specific skip left
+to get wrong. A set missing **the spec or the plan** is a resume that lost its own artifacts:
+stop as blocked rather than reviewing whatever remains. Never invoke `$trial-loop` with a
+path that does not resolve — it appends a `CHARTER` block on every invocation, and under a
+charter an unresolvable target is a hard error naming the token, with `--out` suppressing
+both the artifact and the compact object, so the loop returns no verdict and stops as
+blocked.
+
+### Measure the proportionality inputs
+
+Measure them here, in the orchestrator, so the reviewer judges numbers instead of producing
+them — a reviewer asked to both measure and judge will do neither reproducibly:
+
+- `wc -l` over every path in the set, summed — the **design size**.
+- the plan header's `Expected implementation size` range — the **implementation estimate**.
+- the design size over the range's high end, to one decimal place — the **ratio**.
+
+**Echo an audit line before proceeding**, so a mis-evaluated predicate or an unmeasured
+ratio leaves an inspectable trace rather than silently reopening the shield (the repo's only
+verification is reading the transcript):
+
+    design review: set = <paths>; design <n> lines vs implementation estimate <low>–<high>; ratio <n.n>x; depth = iterating | single-pass
+
+A plan carrying no `Expected implementation size` line is a step 2 defect: derive the range
+from the plan's own file map and task list, write it into the plan, and say in the audit
+line that you did.
+
+### Run the review
+
+Run `$trial-loop` in file-list mode:
+
+- challenge_args: `<every path in the design set, space-separated>`
+- focus: `This is one design reviewed as one artifact set — ADR(s), specification, and
+  implementation plan. Read them together and challenge them together: a defect that
+  crosses files is one finding, not one per file, and a spec defect the plan inherited is
+  reported once against both.
+
+  Decisions (each ADR in the set): the soundness of the decision under its stated context;
+  the completeness and honesty of the "Considered & rejected" list — alternatives dismissed
+  too quickly, or not considered at all, including the null "do nothing" option; unstated or
+  understated consequences and residuals; and whether a simpler decision would meet the same
+  context. Evidence class is in scope: a rejection whose ground is stated as fact but
+  carries no command, result, or source is a finding, as is a claim about a rejected
+  alternative's behaviour that you cannot reproduce from what the bullet states — whichever
+  tag precedes it, since a judgment resting on an unrun behaviour claim is the same defect
+  relabelled. The command and result a factual ground carries are the ground, not argument,
+  so the size clause below does not ask for them to be cut. A record carrying no tags at all
+  either predates this contract or ignores it wholesale: report that once rather than filing
+  a finding per bullet. The ADRs in this set are review targets, not settled ground —
+  challenge their decisions on the merits. An ADR the spec merely links to, and that is not
+  in this set, stays settled unless the spec or plan contradicts it or introduces a new
+  risk.
+
+  Specification: hidden assumptions, vague or unfalsifiable success criteria, missing edge
+  cases, and under-specified failure modes. If the spec covers an AI surface, also challenge
+  the eval plan: failure modes without cases, unmeasurable pass traits, and uncalibrated
+  LLM-judge evidence.
+
+  Plan: phase ordering, missing prerequisites, steps that cannot run in the claimed order,
+  rollback and cleanup paths, verification gaps, ungrounded references — a type, function,
+  or signature borrowed from the codebase or a dependency without confirmation it exists
+  with the assumed signature — and tasks that are not self-contained enough for an
+  implementer. This plan was derived from a spec no adversarial pass had seen, so check it
+  back against the spec in this same set: a spec requirement with no task, and a task
+  serving no requirement, are both findings.
+
+  Proportionality, over the whole set: the orchestrator measured <design size> lines of
+  design against an expected implementation of <low>–<high> changed lines, a ratio of
+  <n.n>x. Above 3x is a blocking finding; 2x to 3x is a note. The remedy is cutting the
+  design — never adding text to defend its length, and never widening the estimate to move
+  the ratio. Judge the estimate too: a range the plan's own file map and task list do not
+  support is a finding in its own right, and the honest range is the one the file map
+  yields. Size is in scope per artifact as well as in aggregate — a record arguing for its
+  decision at greater length than the decision governs is a finding, and its remedy is also
+  cutting.`
+
+### Exits
+
+If the loop reports blocked — including cap exhaustion at its iteration budget — stop as
+blocked per `$trial-loop`'s stop contract. The design does not go on to the scope audit.
+
+*sound with record notes*, *converged with deferrals*, and *converged on own surface* are
+**not** that case. All three are terminal non-blocking exits, and the phase continues on
+any of them. `$trial-loop` reports the exit by name and owns the condition each one fires
+on; this step does not re-derive them. Route on that name rather than on the last verdict,
+which on a named exit is ordinarily `needs-attention` and never by itself means the design
+is unhardened.
+
+Editing an ADR in the set to address a finding is legitimate — it is pre-merge on the design
+branch, and the immutability rule applies only once the ADR is merged.
+
+Carry every deferral — each entry with its owning record path or tracker issue — into the
+**plan**, whichever way the run ended, `approve` included. The loop discloses its deferrals
+on every exit, and the plan is what `$forge` reads, so that is where a later implementer
+meets them. Not the ADR: it merges append-only, and an entry there cannot be struck when its
+tracker closes.
+
+## 4. Scope audit
+
+The design phase ends with exactly one `$oathbind` pass over the reviewed set. This skill
+does not invoke it: `$quest` step 4 owns the report path, the `.agent/` ignore check, and
+the dispatch, and it runs immediately after this review. A direct invocation of this skill
+runs no audit; an operator who wants one invokes `$oathbind` themselves, with the same
+frozen charter and the paths this review just hardened.
+
+One pass is the whole of it, and that is a property of what the audit can produce rather
+than a budget imposed on it. `$oathbind` is read-only and audits authority, so every remedy
+it can legitimately yield is a cut, a split, or a `SCOPE CHECKPOINT` back to the operator —
+and a cut cannot invalidate an audit that already approved the larger surface. An edit that
+would *widen* the surface is not a responsive remedy in the first place; it is a checkpoint.
+Re-auditing after an edit the audit itself asked for is the second pass this removes.
 
 ## Context checkpoint
 

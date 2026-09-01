@@ -257,8 +257,9 @@ exclusions: <frozen external exclusions>
 surface: <frozen permitted surface>
 ambiguities: <frozen ambiguity list>
 
-Run `$spellcraft <issue-number>`: write the spec and ADR, adversarial-review the
-spec, write the implementation plan, adversarial-review the plan. Skip only for
+Run `$spellcraft <issue-number>`: write the spec and ADR, write the
+implementation plan, then adversarially review the whole design set — ADRs,
+spec, and plan — in one loop under one charter. Skip only for
 a trivial bugfix or a revalidated governed small change. The spec, the ADR
 (under `docs/adr/`, not with the plan), and the plan are the durable design
 record; brainstorm transcripts and spec-review payloads are droppable once they
@@ -316,16 +317,26 @@ Record exactly one disposition per finding before editing anything:
 
 Continue on the unchanged report only when every finding is
 rejected-with-evidence, or accepted-fixed because the reviewed design already
-satisfies its remedy. Otherwise send an accepted design edit back through its
-applicable review and a new audit, rerun after a verified ownership change,
-park a `blocked` finding per *On a Blocker*, and return a verified material
-expansion to SCOPE CHECKPOINT. A classification alone never changes scope. Do
-not rerun unchanged inputs to seek `approve`.
+satisfies its remedy. **The design-edit round trip is gone: an accepted remedy
+does not send the design back through its review and a second audit.** Every
+remedy the audit can legitimately yield is a cut, a split, or a checkpoint, and
+a cut cannot invalidate an audit that already approved the larger surface. So
+apply an accepted cut to the design artifacts, re-run over the cut only the two
+self-review passes `$spellcraft` already defines -- the spec's fresh-eyes
+checklist and the plan-against-spec walk, which are what catch a reference the
+cut stranded -- and continue on the same report. Park a `blocked` finding per
+*On a Blocker*, and return a verified material expansion -- or any remedy that
+would widen the surface -- to SCOPE CHECKPOINT rather than editing toward it. A
+classification alone never changes scope. Do not rerun unchanged inputs to seek
+`approve`.
 
 Carry the report path and candidate approved surface forward as the
-design-to-build checkpoint. If a reviewed design artifact is known or observed
-to change before TDD, invalidate the report and audit again -- the workflow
-does not claim to detect arbitrary out-of-band edits.
+design-to-build checkpoint. A cut this step applied in response to a finding is
+accounted for by the report that asked for it. Two things are not, and each
+warrants a fresh audit on `$oathbind`'s own terms: a verified ownership change,
+and a reviewed design artifact otherwise known or observed to change before TDD.
+On either, invalidate the report and audit again -- the workflow does not claim
+to detect arbitrary out-of-band edits.
 
 ## 5. Build With TDD
 

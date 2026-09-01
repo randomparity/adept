@@ -5,8 +5,9 @@ description: "Audit a complete reviewed design against its frozen scope before i
 
 # Scope Audit
 
-Audit the caller's reviewed design collectively after its ADR, specification, and plan reviews
-and before implementation. This is one independent, read-only pass over an unchanged input set.
+Audit the caller's reviewed design collectively after the single design review over its ADRs,
+specification, and plan, and before implementation. This is one independent, read-only pass
+over an unchanged input set.
 
 ## Inputs
 
@@ -68,6 +69,8 @@ Otherwise return `needs-attention`. Missing or unclear verdicts or semantic sect
 incomplete reports.
 
 This is one pass, not a loop: do not rerun unchanged inputs to seek `approve`. A known or
-observed reviewed-artifact change, or a verified ownership change, warrants a new pass. Do not
+observed reviewed-artifact change, or a verified ownership change, warrants a new pass — but
+a cut the caller applied because this report asked for it is not such a change, since it can
+only shrink a surface this pass already approved. Do not
 claim detection of arbitrary out-of-band edits, proof of context isolation, or live-model
 quality. Add no schema, parser, identifier graph, hash, reservation, or transaction protocol.
