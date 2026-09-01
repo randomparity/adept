@@ -36,17 +36,13 @@ The decision is evidence-based, not categorical. Documentation, Markdown, config
 small scripts receive focused tests whenever they change a machine-checkable contract or
 executable behavior. A file category or small diff is never itself a reason to omit one.
 
-Party implementers record each contract's selected mode and evidence in the existing private task
-report; forge validates it when closing the task and records `focused-test`,
-`task-test-not-applicable`, or `mixed` in the durable progress ledger. Cast has no implementer
-report, so it appends and reads back one private ledger evidence line per contract. Resume trusts
-completed ledger entries as forge already does; this decision adds no evidence-envelope parser or
-revalidation protocol.
+`$spellcraft` records the inventory and evidence. `$forge` checks it before work and reconciles it
+against the completed diff before closure; an unmatched or reclassified contract returns to the
+plan checkpoint. Party keeps detailed evidence in its existing report, while Cast records it in
+its existing private ledger. This adds no evidence-envelope parser or resume protocol.
 
-`$spellcraft` writes the mode and its evidence into every task. `$forge` checks that choice
-against the task before work starts and returns an unsupported or vague choice to the scope or
-plan checkpoint. The implementer reports either red-green evidence or the exact non-applicability
-reason. The orchestrator verifies that report before closing the task.
+Because Forge is an agent instruction surface, a bounded behavior evaluation also exercises the
+routing decision over representative prose, structural, script, mixed, and invalid-reason cases.
 
 Repository guardrails remain mandatory at every commit and over the assembled branch. The
 whole-branch review remains mandatory. A non-applicability reason removes only a task-specific
@@ -63,10 +59,9 @@ meaningful executable or structural observation. Those contracts lose direct exe
 assurance; the accepted trade is explicit judgment plus unchanged repository guardrails and
 whole-branch review. Testable contracts remain under ADR 0052's executable gate.
 
-Plans, reports, and task-completion ledger lines gain small verification-mode fields.
-Orchestrators and reviewers must judge the reason, so two agents can disagree; requiring the
-changed contract and the missing observation to be named gives that disagreement concrete
-evidence to inspect.
+Plans, reports, and ledger lines gain small verification fields. Orchestrators and reviewers must
+judge the inventory and reasons, so two agents can disagree; the final diff reconciliation and
+behavior evaluation make that disagreement observable.
 
 Existing structural and behavioral tests remain load-bearing. ADR status, numbering, manifest
 shape, link resolution, and script behavior are still tested when a task changes those contracts.
