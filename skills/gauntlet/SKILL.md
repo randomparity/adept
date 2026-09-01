@@ -14,8 +14,9 @@ Emitting the verdict is a **checkpoint, not a turn boundary** — hand it back a
 let the caller continue; stop only if a human asked for a one-shot review with
 nothing queued after. **Read-only** except for the optional `--out` findings file:
 never edit reviewed files, run formatters, post PR comments, or change git state.
-`approve` only when no defensible finding exists. Full detail in *Caller contract*
-and *Hard constraints* below.
+`approve` only when no **blocking** finding exists — `medium` and `low` findings are
+**notes**, and they ride along with an `approve` rather than withholding it. Full
+detail in *Severity vocabulary*, *Caller contract*, and *Hard constraints* below.
 
 ## Argument parsing
 
@@ -61,7 +62,7 @@ Walk the remaining tokens left-to-right and classify each:
 1. `--base <ref>` — review the diff `<ref>...HEAD`. Consumes the next token as the ref.
 2. `--working-tree` — review uncommitted changes (status + staged + unstaged + untracked).
 3. `--json` — emit JSON (schema below) instead of markdown.
-4. `--out <path>` — write the full JSON artifact to `<path>` and emit only a compact `{verdict, findings_count, suppressed_count, path, run_id}` inline. Consumes the next token as the path. Implies `--json`. Without `--out`, output is unchanged.
+4. `--out <path>` — write the full JSON artifact to `<path>` and emit only a compact `{verdict, findings_count, blocking_count, suppressed_count, path, run_id}` inline. Consumes the next token as the path. Implies `--json`. Without `--out`, output is unchanged.
 5. Tokens that resolve to a file (`Read`/`ls`) or expand to a non-empty glob (`Glob`) → target list.
 6. Anything left → focus text.
 
@@ -228,6 +229,20 @@ A finding whose smallest honest fix would add more to the target than the risk i
 
 A document target makes the imbalance concrete, because there the fix is text: a 19-line state machine does not earn a 514-line record hardening it.
 
+**Justify before you grade.** Every finding carries a `reasoning` field, and it is
+written **first** — before `severity`, before `confidence`, before the body. State what
+makes this material and why it lands at the severity you are about to assign,
+naming which *Finding bar* answers carry it. Then assign the severity, and let it
+follow the reasoning rather than the reasoning being assembled to defend a grade
+already chosen.
+
+The order is the point, not the field. Instructing a reviewer to skip low-value
+findings has little effect on its own; requiring the justification to exist before the
+label is what makes a finding that cannot be justified visibly fail to survive
+writing it down. A `reasoning` field that restates the title, or that would read
+identically at two different severities, is the signal that the finding is not
+material — drop it rather than grade it.
+
 ## Focus text
 
 If focus text was extracted from the arguments, treat it as the user's stated priority. Reorder attack surfaces accordingly and, in the summary, distinguish findings the focus surfaced from findings you found independently.
@@ -243,10 +258,18 @@ For every finding use real line numbers from the file you read or the diff hunk.
 
 **Summary:** <one-paragraph ship/no-ship assessment, terse>
 
-**Findings**
+**Findings (blocking)**
 
-1. **[severity] Title** — `path/to/file:line_start-line_end` (confidence: 0.0–1.0)
+1. **[critical|high] Title** — `path/to/file:line_start-line_end` (confidence: 0.0–1.0)
+   *Reasoning:* <why this is material and why this severity — written before the grade>
    <body: what can go wrong, why it's vulnerable, likely impact>
+   **Recommendation:** <concrete change>
+
+**Notes (non-blocking)**
+
+1. **[medium|low] Title** — `path/to/file:line_start-line_end` (confidence: 0.0–1.0)
+   *Reasoning:* <as above>
+   <body>
    **Recommendation:** <concrete change>
 
 **Next steps**
@@ -259,11 +282,15 @@ For every finding use real line numbers from the file you read or the diff hunk.
 
 Include the **Suppressed (governing ADR)** block whenever you dropped a finding as
 governing-ADR re-litigation — it is the markdown counterpart of the `suppressions`
-array and **persists even on an `approve` verdict** (when Findings is omitted),
-because an approve that suppressed a real finding is the case a reader most needs
-to see. Omit the block only when nothing was suppressed.
+array and **persists even on an `approve` verdict** — whichever finding sections that
+verdict carries — because an approve that suppressed a real finding is the case a
+reader most needs to see. Omit the block only when nothing was suppressed.
 
-If the verdict is `approve`, omit the Findings section.
+Omit either section when it is empty. An `approve` has no **Findings (blocking)**
+section by definition, but it keeps its **Notes (non-blocking)** section whenever notes
+exist — an approve that reported nothing and an approve carrying four notes are
+different results, and collapsing them is what would make the severity gate a way to
+lose findings rather than a way to stop iterating on them.
 
 ### JSON (`--json`)
 
@@ -275,6 +302,7 @@ When `--json` is present, the skill's **output artifact** is exactly this JSON o
   "summary": "...",
   "findings": [
     {
+      "reasoning": "why this is material and why this severity — written before the fields below",
       "severity": "critical | high | medium | low",
       "title": "...",
       "body": "...",
@@ -292,7 +320,13 @@ When `--json` is present, the skill's **output artifact** is exactly this JSON o
 }
 ```
 
-`verdict` is `approve` only when no defensible finding exists; otherwise `needs-attention`. `findings`, `next_steps`, and `suppressions` may be empty arrays but must be present. `suppressions` is the machine-readable form of the "Disclose every suppression" rule — populate it whenever you drop a finding as governing-ADR re-litigation, **even when the verdict is `approve`** (that is exactly the case a caller cannot see from the verdict alone).
+`verdict` is `approve` when no **blocking** (`critical` or `high`) finding exists, and `needs-attention` otherwise. `findings`, `next_steps`, and `suppressions` may be empty arrays but must be present.
+
+**One `findings` array, not two.** Blocking findings and notes live in the same array and are told apart by `severity` — the markdown rendering splits them into two sections, the JSON does not. A second array would be a second place for a severity to be recorded, free to disagree with the first.
+
+`reasoning` is required on every finding and is emitted **first**, per *Finding bar*. A consumer may read it; its job is done before any consumer sees it.
+
+`suppressions` is the machine-readable form of the "Disclose every suppression" rule — populate it whenever you drop a finding as governing-ADR re-litigation, **even when the verdict is `approve`** (that is exactly the case a caller cannot see from the verdict alone).
 
 ### Severity vocabulary
 
@@ -305,11 +339,30 @@ These four values — `critical | high | medium | low` — are the **canonical f
   fixed or explicitly dispositioned;
 - `low`: bounded polish, naming, or optimization with no demonstrated correctness failure.
 
-`$forge`, `$trial-loop`, and `$spellcraft` use this scale directly. `approve` means zero
-defensible findings; any finding produces `needs-attention` until the orchestrator dispositions
-it. Domain classifications and outcomes remain separate and map only under their owning skill's
-explicit rules. GitHub `priority:P0–P3` ranks queue order, `risk:*` governs unattended execution,
-and neither maps to finding severity.
+**The blocking line runs between `high` and `medium`.** `critical` and `high` are
+**blocking**: correctness, stated requirements, security, and data loss — the classes
+whose presence means the change should not ship as it stands. `medium` and `low` are
+**notes**: defensible, reported in full, and not a reason to withhold the verdict.
+
+`verdict` is `approve` when no blocking finding exists, **even when notes are
+present**, and `needs-attention` otherwise. This is the whole severity gate: a
+reviewer asked to find gaps will usually find some, so a verdict that requires zero
+findings is one no real target reaches, and a loop keyed on it iterates until its cap
+instead of until the work is sound. Notes are the mechanism that lets a sound target
+leave review in one pass carrying its residue, rather than spending a round per
+observation.
+
+The gate does not lower the finding bar. A note is reported with the same rigor and
+the same *Finding bar* answers as a blocking finding — what changes is only whether it
+holds the verdict. Under-reporting to reach `approve` is the failure this section
+does not license: raising a genuine `high` to keep a loop running and demoting a
+genuine `high` to end one are the same defect, and *Hard constraints* forbids both.
+
+`$forge`, `$trial-loop`, and `$spellcraft` use this scale directly; callers iterate on
+blocking findings and disposition notes once. Domain classifications and outcomes
+remain separate and map only under their owning skill's explicit rules. GitHub
+`priority:P0–P3` ranks queue order, `risk:*` governs unattended execution, and neither
+maps to finding severity.
 
 ### Artifact lifecycle
 
@@ -324,8 +377,10 @@ and never disposes of it. Fixed filenames are unsafe when reviews can overlap.
 Otherwise, when `--out <path>` is present, mint a fresh `run_id` (a unique token for this invocation), write the full `--json` object (the schema above) **plus a top-level `"run_id"`** to `<path>` with the `Write` tool, and emit inline **only**:
 
 ```json
-{ "verdict": "approve | needs-attention", "findings_count": 0, "suppressed_count": 0, "path": "<path>", "run_id": "<same token>" }
+{ "verdict": "approve | needs-attention", "findings_count": 0, "blocking_count": 0, "suppressed_count": 0, "path": "<path>", "run_id": "<same token>" }
 ```
+
+`findings_count` is the length of the whole `findings` array; `blocking_count` is how many of those are `critical` or `high`. Both are required. The pair is what lets a looping caller decide whether to iterate **without opening the artifact**: `blocking_count` drives the loop, and the difference between the two counts is the note residue the caller must still disposition once. A `blocking_count` above zero with an `approve` verdict, or a `blocking_count` exceeding `findings_count`, is a malformed return — a caller that sees either should treat it as it treats any malformed object rather than reconciling it.
 
 `suppressed_count` is the length of the `suppressions` array — it lets a looping caller notice suppressions **without opening the file even on an `approve` verdict**, so a wrongly-suppressed finding cannot advance the loop invisibly. The matching `run_id` in the compact object and the file lets a looping caller confirm the file it reads is *this* run's, not a stale one left when a write silently failed. This keeps the full findings payload out of the caller's context — the caller reads `<path>` only when it must act on findings. `--out` implies `--json`. Overwrite `<path>` if it exists, so a caller looping over a target supersedes the prior iteration's file rather than accumulating one per pass. This single artifact is the only file `$gauntlet` ever writes. Without `--out`, behavior is exactly as before (no file written, full JSON or markdown inline) — so the CI workflow, which never passes `--out`, is unchanged.
 
@@ -338,16 +393,18 @@ verdict:
 
 - Return control to the calling workflow and continue its next step.
 - Do **not** end your turn merely because a verdict was produced. A
-  `needs-attention` verdict means the caller will fix the findings and re-invoke
-  you; an `approve` verdict means the caller advances to the next phase. Either
-  way, there is more work after this skill.
+  `needs-attention` verdict means the caller will fix the blocking findings and
+  re-invoke you; an `approve` verdict means the caller advances to the next phase,
+  dispositioning any notes as it goes. Either way, there is more work after this
+  skill.
 - Only treat the verdict as a stopping point when you have no caller — i.e. a human
   explicitly asked for a one-shot review with nothing queued after it.
 
 ## Hard constraints
 
 - Read-only with respect to the target and git state: do not edit reviewed files, run formatters, post PR comments, or change git state. The **sole** exception is `--out`, which writes the review JSON to the given path — nothing else.
-- Do not paraphrase the verdict — `approve` only when no defensible finding exists.
+- Do not paraphrase the verdict — `approve` only when no **blocking** finding exists.
+- Do not move a finding across the blocking line to reach a verdict. Grading a genuine `critical` or `high` down to `medium` to produce an `approve`, or a genuine note up to `high` to withhold one, are the same defect: the severity states what you found, never what you want the caller to do next.
 - Do not invent files, lines, or behavior. If a finding depends on inference, state that in the body and lower the confidence honestly.
 
 ## Examples

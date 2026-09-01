@@ -23,7 +23,8 @@ mode of a security review is a confident sweep that never enumerated the surface
 usually one step inside `$quest`. Emitting the verdict is a **checkpoint, not a turn
 boundary** — hand it back and let the caller continue; stop only if a human asked for a
 one-shot scan with nothing queued after. **Read-only** except for the optional `--out` file.
-`approve` only when no defensible finding exists.
+`approve` only when no **blocking** (`critical` or `high`) finding exists; `medium` and
+`low` findings are notes and ride along with it.
 
 A direct `$detect-evil` invocation remains a one-pass, read-only checkpoint. When a standalone
 caller wants findings iterated and dispositioned to a settled state, invoke
@@ -68,7 +69,7 @@ point where data or control crosses a change in trust level:
 
 State the inventory explicitly in the summary, even when it is empty. An empty inventory is
 a legitimate and common result — say so. The verdict still follows the rule in *Output*:
-`approve` requires no defensible finding, including one raised by the claims below or by a
+`approve` requires no blocking finding, including one raised by the claims below or by a
 standing category. A scan that reports findings without ever naming a boundary has skipped
 the method.
 
@@ -245,7 +246,18 @@ Three differences in how the fields are filled:
   A security finding that cites a fact outside that record is new risk, not re-litigation —
   report it. An accepted ADR never settles a vulnerability in the code implementing it.
 
-`verdict` is `approve` only when no defensible finding exists; otherwise `needs-attention`.
+`verdict` is `approve` when no **blocking** (`critical` or `high`) finding exists, and
+`needs-attention` otherwise — the same severity gate and the same `blocking_count` in the
+compact object as `$gauntlet`, whose *Severity vocabulary* governs both. The `reasoning`
+field is required here too, and emitted first.
+
+**The gate does not soften the scan.** An exploitable exposure, a violated authority
+boundary, or a missing check at a trust boundary the diff introduces is `critical` or
+`high` by the scale's own definitions, so it blocks exactly as before. What becomes a note
+is what the scale already called bounded: a defect with no demonstrated path to
+exploitation, or hardening worth doing that nothing in the diff makes urgent. Grading a
+real exposure down to `medium` to produce an `approve` is the *Hard constraints* violation
+below, not a use of this gate.
 
 ## Hard constraints
 
@@ -257,6 +269,8 @@ Three differences in how the fields are filled:
   rests on*, not by this bullet.
 - Do not invent files, lines, routes, or callers. If a finding depends on inference about an
   unseen caller, say so in the body and lower the confidence honestly.
+- Do not move a finding across the blocking line to reach a verdict. The severity states the
+  exposure you found, never what you want the caller to do next.
 - This is a diff-scoped pass, not a codebase audit. Pre-existing weaknesses the change
   neither introduces nor touches are out of scope — note them once in `next_steps` if they
   bear on the change, and do not let them hold the verdict.

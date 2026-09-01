@@ -573,7 +573,14 @@ commits they name are on disk whether or not you recall making them.
 
 **Review vocabulary.** Task and whole-branch reviewers use `$gauntlet`'s canonical
 `critical | high | medium | low` severity and `approve | needs-attention` verdict
-directly. `approve` requires zero findings. GitHub priority, unattended-execution
+directly. `approve` requires zero **blocking** (`critical` or `high`) findings;
+`medium` and `low` are notes and do not withhold it.
+
+Forge's *routing* is unchanged by that gate and is deliberately stricter than it:
+step 8 still dispatches a fix worker on `medium` as well, and still records `low` in
+the ledger. A verdict states what the reviewer found; routing states what this
+orchestrator does with it, and forge choosing to fix a note is not the reviewer
+withholding a verdict over one. GitHub priority, unattended-execution
 `risk:*` labels, restock coverage exposure, and a reviewer's named concern are
 separate classifications and never map to severity.
 
