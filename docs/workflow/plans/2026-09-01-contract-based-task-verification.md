@@ -48,31 +48,40 @@ Interfaces:
   `Mode: task-test-not-applicable` and the evidence defined in the specification.
 - `task-brief` carries the block unchanged because it already copies the whole task section.
 - An implementer report returns red-green evidence or the exact non-applicability reason.
-- A forge progress entry identifies the selected verification mode.
+- A forge progress entry uses one exact line from the specification, names the private report,
+  and is trusted on resume only after that report's evidence is revalidated.
 
 Verification:
 
-- Mode: `task-test-not-applicable`.
-- Changed surface: workflow and public documentation prose plus an existing manifest version.
-- Reason: the task adds no executable behavior or machine-checkable structural contract. A
-  focused test could only pin Markdown wording; existing repository gates already validate the
-  manifest, record structure, skill shape, links, formatting, and shell assets.
+- Mode: `focused-test`.
+- Observable contract: a changed plugin tree must increment the manifest version above the base
+  version.
+- Red command: `BASE_SHA=$(git merge-base HEAD main) just version-check` before the manifest
+  bump; expect exit 1 with `the tree differs from <base-sha> but the version did not increase:
+  4.0.0 at the base ref, 4.0.0 here`.
+- Green command: the same command after the manifest bump; expect exit 0.
+- The focused test covers only the machine-checkable version contract. Do not add a test that
+  asserts the changed Markdown wording.
 
 Steps:
 
 1. Update Spellcraft's task-authoring rules to require the two-mode `Verification` block, define
    the evidence for each mode, and reject categorical or vague non-applicability reasons.
 2. Update Forge's entry contract, Cast and Party execution, per-task closure, dispatch content,
-   ledger format, prohibitions, and TDD section so it validates and preserves the selected mode.
+   the specification's exact ledger lines and resume validation, prohibitions, and TDD section so
+   it validates and preserves the selected mode.
 3. Update the implementer template to follow the selected mode, reject contradictions, and report
    red-green evidence or the exact confirmed non-applicability reason.
 4. Update README's build description and skill table to describe meaningful focused tests or a
    recorded non-applicability reason, with guardrails always required.
-5. Bump `.claude-plugin/plugin.json` from `0.10.0` to `0.10.1`.
-6. Run `just verify`; expect every repository gate to pass with zero warnings.
-7. Review the diff against the five acceptance checks in the specification and correct any
+5. Run `BASE_SHA=$(git merge-base HEAD main) just version-check`; expect the red result named in
+   Verification because the changed tree still declares `4.0.0`.
+6. Bump `.claude-plugin/plugin.json` from `4.0.0` to `4.0.1`.
+7. Run the same base-aware version command; expect exit 0.
+8. Run `just verify`; expect every repository gate to pass with zero warnings.
+9. Review the diff against the five acceptance checks in the specification and correct any
    missing route or stale universal-TDD claim in the changed surfaces.
-8. Commit as `feat(forge): require evidence-based task verification`.
+10. Commit as `feat(forge): require evidence-based task verification`.
 
 Acceptance:
 

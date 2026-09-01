@@ -44,9 +44,19 @@ contains either:
 - the exact non-applicability reason from the plan, confirmed against the implemented diff.
 
 The orchestrator closes a task only after verifying its commits, that report evidence, and every
-required guardrail result. Ledger entries distinguish `focused-test` from
-`task-test-not-applicable`; they no longer claim that every completed task has green focused
-tests.
+required guardrail result. It appends one exact completion line:
+
+```text
+Task N: complete (commits <base-sha>..<head-sha>, verification focused-test, report <report-path>)
+Task N: complete (commits <base-sha>..<head-sha>, verification task-test-not-applicable, report <report-path>)
+```
+
+`<report-path>` is the task's existing private report file. Before appending either line and on
+every resume that trusts it, forge requires the report to exist and match the task, commit range,
+and selected mode. A focused-test report must contain the red command and expected failure plus
+the green command and passing result. A non-applicable report must contain the exact plan reason
+and confirm that the implemented diff introduced no executable or structural contract. A stale
+`tests green` line or a missing, mismatched, or incomplete report does not close the task.
 
 The assembled-branch guardrail run and whole-branch reviewer are unchanged. They remain the proof
 that tasks compose and the adversarial check on prose and judgment calls.
@@ -76,11 +86,12 @@ verbatim, so the verification block needs no parser change.
 
 ## Verification strategy
 
-The implementation changes instruction and documentation contracts only. It introduces no
-machine-checkable runtime or structural contract, so no task-specific regression test applies:
-asserting exact Markdown wording would recreate the defect this issue removes. Run `just verify`
-bare for the repository's structural, shell, manifest, record, and plugin checks. Review the
-finished branch adversarially through forge and quest as already required.
+The implementation changes instruction and documentation contracts and also increments the
+machine-checkable plugin version. Use the existing base-aware version gate as the task's focused
+red-green test: before the bump it must reject a changed tree whose version still equals the base;
+after the bump it must pass. Do not add a test that asserts exact Markdown wording. Run
+`just verify` bare for the repository's structural, shell, manifest, record, and plugin checks.
+Review the finished branch adversarially through forge and quest as already required.
 
 Acceptance checks:
 

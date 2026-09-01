@@ -35,6 +35,10 @@ The decision is evidence-based, not categorical. Documentation, Markdown, config
 small scripts receive focused tests whenever they change a machine-checkable contract or
 executable behavior. A file category or small diff is never itself a reason to omit one.
 
+Task completion records the selected mode and the private implementer-report path in the durable
+forge ledger. On resume, forge re-reads that report and revalidates the mode's required evidence;
+a completion line never replaces the evidence it points to.
+
 `$spellcraft` writes the mode and its evidence into every task. `$forge` checks that choice
 against the task before work starts and returns an unsupported or vague choice to the scope or
 plan checkpoint. The implementer reports either red-green evidence or the exact non-applicability
@@ -50,9 +54,10 @@ Prose-only tasks can complete without tests that duplicate their wording. Their 
 established by applicable repository guardrails and the branch review, with the absence of a
 focused test visible as an explicit judgment rather than an omitted field.
 
-Plans and reports gain a small verification-mode field. Orchestrators and reviewers must judge
-the reason, so two agents can disagree; requiring the changed contract and the missing
-observation to be named gives that disagreement concrete evidence to inspect.
+Plans, reports, and task-completion ledger lines gain a small verification-mode field.
+Orchestrators and reviewers must judge the reason, so two agents can disagree; requiring the
+changed contract and the missing observation to be named gives that disagreement concrete
+evidence to inspect.
 
 Existing structural and behavioral tests remain load-bearing. ADR status, numbering, manifest
 shape, link resolution, and script behavior are still tested when a task changes those contracts.
