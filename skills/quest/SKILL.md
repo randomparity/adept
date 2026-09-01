@@ -13,10 +13,10 @@ stale evidence from another failure is not enough; without current causal eviden
 `$detect-curse` before proposing a correction. If the same artifact recurs after the same
 evidence-backed correction with no new evidence, stop instead of repeating the diagnose-fix cycle.
 Don't advance past a red guardrail, an undispositioned `$gauntlet` finding, a dirty-tree surprise,
-or an ambiguous user-facing design decision. A finding a `$trial-loop` exit disposed of — as
-`deferred-tracked` with an owner, or `rejected-with-evidence` — is dispositioned; all three named
-exits fire while such findings stand, and treating them as advancement blockers is the reading
-those exits exist to remove.
+or an ambiguous user-facing design decision. A finding a `$trial-loop` run disposed of — as
+`deferred-tracked` with an owner, or `rejected-with-evidence` — is dispositioned; the loop
+finishes while such findings stand, and treating them as advancement blockers is the
+reading the loop's residual blocking figure exists to remove.
 
 > **One continuous task.** Preflight through hand-off -- or through cleanup on
 > the authorized merge path -- is a single turn, and the checkpoints inside
@@ -26,9 +26,8 @@ those exits exist to remove.
 > the finished merge and cleanup, if the operator authorized merging; or a
 > blocker you have parked per *On a Blocker* -- naming it in chat is not
 > enough, the issue must carry the state. As a background worker, an
-> `approve` from the review loop — or a *converged with deferrals*, *sound with
-> record notes*, or *converged on own surface* exit — means proceed now, not
-> wait.
+> `approve` from the review loop — or any other finished run, whatever its last
+> verdict — means proceed now, not wait.
 
 > **Keep the durable facts durable.** Raw phase context -- brainstorm
 > transcripts, `$gauntlet` payloads, TDD output -- is droppable once the spec,
@@ -484,8 +483,7 @@ escalation and the finding that caused it, then run the `$trial-loop` invocation
 the same branch at its ordinary budget, starting at iteration 1 — the single pass is not one of
 that run's iterations. From that point this step reads exactly as it does for a run routed
 `iterating` at step 1. A `single-pass` review that returns `approve` carrying only notes is a
-completed review: it reaches none of the named exits below, and step 8's summary records it as
-`exit: none` with `iterations: 1`.
+completed review, and step 8's summary records it as `exit: none` with `iterations: 1`.
 
 **Carry the issue's cumulative review-round figure through every run here.** Seed it with
 the design phase's total where `$spellcraft` reported one, `0/0` otherwise, pass it to each
@@ -495,22 +493,20 @@ count each `single-pass` dispatch as one round. Report the figure the loop retur
 transcript beside the routed depth. It is what makes the issue's whole review cost visible in
 one place; per-run reports are individually accurate and sum to nothing a reader can see.
 
-The loop has three named non-blocking exits — *converged with deferrals*, *sound
-with record notes*, and *converged on own surface* — and **each advances this
-workflow**. None of them is blocked and none of them is the `approve` exit; the
-exit name, not the verdict, is what says the run finished. `$trial-loop` owns the
-condition each one fires on and reports the exit by name, so route on the name it
-reported rather than on conditions re-derived here. Proceed on any of the three.
+**Route on finished-versus-blocked, which the loop states outright** — never on the
+last verdict. A finished run's last verdict is `approve` when the reviewer cleared the
+branch, and `needs-attention` when the only blocking findings left were ones that run
+had already dispositioned as owned deferrals or rejected with evidence. Both advance
+this workflow. Reading the second as blocked reports a finished branch as stuck.
 
 Carry every deferral from any `$trial-loop` run on this branch — each entry with
 its owning record path or tracker issue — into the `WORK:REVIEW` comment and the
-PR body, on every exit and `approve` included. The loop discloses its deferrals
-however it ended, so an `exit: none` run carries a list exactly as a named exit
-does, and a second run after a security round trip does not erase the first run's
-records. On a *sound with record notes* exit carry the outstanding notes and the
-confirmed claim list the same way. Those lists are the part a reader cannot
-reconstruct, and they are the only thing holding the orchestrator's own
-consequence judgment to account.
+PR body, however the run ended, `approve` included. Carry the run's
+`rejected-with-evidence` findings and its outstanding notes the same way. The loop
+discloses all three however it ended, and a second run after a security round trip
+does not erase the first run's records. Those lists are the part a reader cannot
+reconstruct, and they are the only thing holding the orchestrator's own disposition
+judgment to account.
 
 Step 8 publishes these lists through ADR 0028's two writable destinations: the
 publication helper's payload slot puts them in the `WORK:REVIEW` comment, and step 8's
@@ -518,9 +514,8 @@ named write moment appends them to the PR body. Compose nothing here — carry t
 disclosure forward intact as a resume fact until step 8 writes it, because a compaction
 between the last loop run and step 8 would otherwise shorten it invisibly.
 
-Step 8's review summary names the exit in its own `exit:` field and defines which
-value each ending writes; nothing here repeats that. Route on the exit name rather
-than on the verdict.
+Step 8's review summary records how the run ended in its own `exit:` field and
+defines which value each ending writes; nothing here repeats that.
 
 Leave the iteration budget to the loop's default of 2 — one full review pass plus
 one confirming pass over the fixes — whatever the step 1 classification. Non-trivial
@@ -533,9 +528,9 @@ confirming pass they mostly re-review surface the earlier passes' own fixes adde
 The budget lowers cost, not the bar: an unresolved **blocking** finding at the budget
 still blocks per the loop's stop conditions, and if that happens on a change you
 classified trivial, re-examine the classification before re-entering — a trivial
-change that cannot clear two passes was not trivial. A consequence-free finding at the budget is a
-different outcome: on a pass that confirmed the branch's load-bearing claims it
-exits *sound with record notes*, which is not blocked.
+change that cannot clear two passes was not trivial. A blocking finding the run already
+dispositioned is not that case: the loop subtracts it from the residual figure the stop
+condition reads, so it does not block.
 
 ### Approved continuation from a budget stop
 
@@ -563,8 +558,8 @@ resume:
   Security-pass terms (below in this skill), recording `security: not triggered` where
   its trigger does not fire.
 - **Carry the stop's disclosure** into step 8's payload destinations: the three lists
-  this step already carries (deferrals with their owning records, outstanding notes,
-  confirmed claims) plus the remaining-findings summary the cap bullet makes the stop
+  this step already carries (deferrals with their owning records, rejected findings,
+  outstanding notes) plus the remaining-findings summary the cap bullet makes the stop
   produce. In the ordinary case — no behavior-changing settlement — the summary writes
   `exit: blocked-at-budget`, per step 8 and ADR 0021.
 
@@ -695,15 +690,13 @@ delivered-head-sha: <full exact delivered PR head SHA>
 `verdict:` and `exit:` are two facts about the same run — the last `$trial-loop`
 run on the branch, the one `findings:` and `iterations:` already count.
 `verdict:` is the verdict the selected reviewer actually returned on the last
-pass, never derived from the exit. `exit:` is one of five values, by how that run
+pass, never derived from the exit. `exit:` is one of two values, by how that run
 ended:
 
-- `none` — the reviewer returned `approve` and the run took no named exit.
-- `converged-with-deferrals`, `sound-with-record-notes`, or
-  `converged-on-own-surface` — the loop's three named non-blocking exits, each
-  written under its own name. A named exit outranks `none` wherever a run matches
-  both, so `none` is only for a run that reached `approve` having taken none of
-  them.
+- `none` — the run finished. Its last verdict is `approve` where the reviewer
+  cleared the branch and `needs-attention` where the only blocking findings left
+  were ones the run had already dispositioned; `exit:` does not distinguish those,
+  because neither is blocked and `verdict:` already carries the difference.
 - `blocked-at-budget` — a run stopped as blocked at the iteration budget, then
   continued through step 6's approved-continuation resume path. `verdict:`,
   `findings:`, and `iterations:` describe that stopped run; the approval is its
@@ -711,20 +704,18 @@ ended:
 
 Every other stop parks the quest before `$deliver` and publishes no summary at
 all, a cycle ended for rescoping without new authority included, so there is no
-run that reaches this field with nothing to write. Step 6 routes all three named
-exits as non-blocking outcomes that advance the workflow, so each of them reaches
-this field under its own name.
+run that reaches this field with nothing to write.
 
-ADR 0021 is the authority for the field set and these values; the exits
-themselves belong to `$trial-loop`. A run's payload — the lists step 6 carries:
-deferrals with their owning paths or tracker issues, outstanding notes, the confirmed
-claim list, and a budget stop's remaining-findings summary — stays out of
+ADR 0053 is the authority for this field's values, amending ADR 0021, which
+remains the authority for the field set. A run's payload — the lists step 6 carries:
+deferrals with their owning paths or tracker issues, rejected findings, outstanding
+notes, and a budget stop's remaining-findings summary — stays out of
 the summary and out of every field: ADR 0028 sends it through the helper's payload
 slot into `WORK:REVIEW` and through this step's named write moment into the PR body,
 which is where `$trial-loop`'s own report obligation sends it.
 
-If step 6 carried any of the lists it specifies — a deferral list, outstanding notes, a
-confirmed claim list, or a budget stop's remaining-findings summary — compose
+If step 6 carried any of the lists it specifies — a deferral list, rejected findings,
+outstanding notes, or a budget stop's remaining-findings summary — compose
 the run's payload file once, immediately after the summary: write only the lists step 6
 specifies into a `mktemp` file beside the ledger — no headings; each destination adds
 its own — atomically rename it only after the write, reject carriage return, NUL, and

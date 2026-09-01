@@ -85,15 +85,13 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   A run this skill receives is `iterating` by definition and starts at 2 — including a
   run a caller escalated to after a single pass returned a blocking finding. That pass
   belongs to the caller and is **not** iteration 1 here: it reviewed a different state of
-  the target, and the charter, the cycle-start self-collision baseline, and the
-  disclosure obligations all begin with this run.
+  the target, and the charter and the disclosure obligations both begin with this run.
 
   This inverts the earlier rule, which defaulted to 5 and let a caller only lower it.
   The reason is measured rather than stylistic: review quality saturates after roughly
   three passes, and later passes overwhelmingly re-review surface the earlier passes'
-  own fixes wrote — the self-collision the stop conditions below already had to detect
-  and end. Each pass is a fresh full-context reviewer, the loop's dominant cost, so the
-  budget that used to be the default was paying most of its cost after the point where
+  own fixes wrote. Each pass is a fresh full-context reviewer, the loop's dominant cost,
+  so the budget that used to be the default was paying most of its cost after the point where
   it stopped buying anything.
 
   A lower budget is not a lower bar. The final-iteration stop condition still blocks on
@@ -207,11 +205,11 @@ Nothing in either supported reviewer lets focus text retire a defensible finding
 to weight focus heavily and *still* report any material issue it can defend, and to
 approve only when no blocking finding exists. So expect an owned deferral to recur
 on every pass. What protects the cap is cheap re-disposition, not reviewer silence:
-a finding matching a concern already disposed of as `deferred-tracked` this run is
-**re-affirmed in one transcript line** citing the prior disposition and its owner. It
-does not re-enter verification, does not earn a second deferral record, and **does not
-on its own hold the verdict at `needs-attention`** for cap purposes — otherwise one
-owned deferral consumes all five iterations by itself.
+a finding matching a concern already disposed of this run is **re-affirmed in one
+transcript line** citing the prior disposition and, for a deferral, its owner. It
+does not re-enter verification, does not earn a second deferral record, and does not
+count toward the residual blocking figure step 2 defines — otherwise one owned
+deferral consumes the whole budget by itself.
 
 Watch the other branch too. If the reviewer *does* honor an exclusion and drops a
 finding, that drop is invisible: `suppressions` and `suppressed_count` cover
@@ -229,8 +227,8 @@ catch.
 The reset is bounded and visible, or it is just a longer cap. Name in the report
 who authorized each charter change and what changed, carry every prior cycle's
 deferrals forward, and **stop for a human decision at the third cycle** — two
-rescopes in one run means the boundary was never understood, and a third set of
-five passes will not find that out.
+rescopes in one run means the boundary was never understood, and a third budget
+of passes will not find that out.
 
 ## The Loop
 
@@ -380,16 +378,14 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    treat the reproduction report as absent unless the pass actually produced one.
 
    The read-only bound is not decoration. In working-tree mode the reviewer's
-   target is resolved from `git status`, and the cycle-start `git stash create`
-   snapshot is the baseline the self-collision fraction measures against — so a
-   reviewer's build artifacts would become the next pass's target *and* count as
-   lines that did not exist at cycle start.
+   target is resolved from `git status`, so a reviewer's build artifacts would
+   become the next pass's target.
 
    Nothing about the schema changes: the report rides in `summary` and the
    failures ride in `findings`, so the compact object is unchanged and step 2
-   reads the block from the artifact it already opens. This is what the *sound
-   with record notes* exit keys on — a run whose passes reproduce nothing simply
-   never satisfies that exit's first condition and behaves exactly as before.
+   reads the block from the artifact it already opens. A claim the pass could not
+   reproduce reaches the loop as an ordinary finding, graded on the same scale as
+   any other, so no separate accounting is needed for it.
 
    One exception is structural rather than optional: a deferral record you wrote is a file
    in the target, so a later pass reads it. That is disclosure by design — a record states
@@ -403,7 +399,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    full findings; it returns only `{verdict, findings_count, suppressed_count,
    path, run_id}` — `run_id` included, because steps 4 and 5 assert it against the
    artifact and a four-field contract degrades that check to a no-op. That isolation
-   keeps a 5-iteration loop from stacking five full payloads in the caller's window.
+   keeps the loop from stacking a full payload per pass in the caller's window.
 
    **One exception, and it is the whole point of the error path.** Both supported reviewers use
    `$gauntlet`'s target-resolution taxonomy; when the selected reviewer
@@ -439,32 +435,29 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    a non-zero `blocking_count`, and a `blocking_count` above `findings_count`. Treat
    either exactly as the malformed compact object above — rerun once, then stop as
    blocked — rather than reconciling it into a verdict of your own.
+
+   **Then subtract what this run already resolved.** The **residual blocking figure** is
+   `blocking_count` minus every blocking finding matching a concern already dispositioned
+   this run as `deferred-tracked` with a verified owner or `rejected-with-evidence`. The
+   reviewer is naive of the run's history by design, so an owned adjacent defect recurs at
+   its own severity on every pass; counting it again each time is how a finished target
+   reaches the cap. The subtraction is bookkeeping, not a lowered bar — the finding is
+   real, it keeps its severity in the artifact, and *Stop conditions* discloses it on the
+   way out. Nothing else may be subtracted: a blocking finding you fixed this pass still
+   counts, because the fix has not been reviewed yet.
+
+   Record the figure with the pass. It is what *Stop conditions* reads, and the loop has
+   nowhere else to keep it — the artifact is superseded on the next pass.
 3. Paste an audit line into the transcript:
    `review iteration <n>: reviewer=<gauntlet|detect-evil>, verdict=<verdict>, findings=<count>,
-   blocking=<blocking_count>, suppressed=<suppressed_count>, self_collision=<k>/<count>,
-   cumulative=<rounds>/<charters>`.
+   blocking=<blocking_count>, residual=<residual blocking figure>,
+   suppressed=<suppressed_count>, cumulative=<rounds>/<charters>`.
 
    `cumulative` counts this pass and every round `prior_rounds` carried in, over the
    charters they were spent under — the change's running total, not this cycle's. It
    goes on **every** pass rather than into the final report alone, because the point of
    naming the cost is to name it while the run can still be stopped; a total that first
    appears in a report of a finished run has already been paid.
-
-   Count `<k>` on **every** pass using the self-collision definition under *Stop
-   conditions* — a finding whose cited lines did not exist at the cycle-start
-   baseline. The fraction is the loop's convergence signal, and a signal
-   computed only when suspicion has already formed never fires; the run that
-   motivated this line ground to the cap while every late pass was majority
-   self-collision, unmeasured.
-
-   Then paste the pass's **claims block** beneath it, taken from the artifact's
-   `summary`: each load-bearing claim the pass named, marked **confirmed**,
-   **refuted**, or **not checkable here** — the three outcomes the reproduction
-   instruction defines, and only the first satisfies the *sound with record notes*
-   exit. Nothing else preserves this — the compact object does not carry it and the
-   artifact is superseded next pass — and that exit reads it back. A pass that named
-   none records `claims: none named`, which is what keeps the exit shut rather than
-   a gap you rediscover at iteration 5.
 3a. **Seek external help before disposition when the pass needs it.** Immediately after the
    first pass's audit, and before step 4 or step 5, check whether correctness depends on a
    platform, ecosystem, protocol, or product practice the repository evidence does not settle,
@@ -505,9 +498,9 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    fix it here if it is cheap and in charter, otherwise defer or reject it with
    evidence and move on. A note that recurs on a later pass — because the reviewer is
    naive of the run's history by design — is re-affirmed in one transcript line citing
-   the prior disposition, exactly as an owned deferral is. What ends a cycle is
-   `blocking_count` reaching zero, not the findings list emptying; waiting for silence
-   on notes is how a loop reaches its cap with nothing left to fix.
+   the prior disposition, exactly as an owned deferral is. What ends a cycle is the
+   residual blocking figure reaching zero, not the findings list emptying; waiting for
+   silence on notes is how a loop reaches its cap with nothing left to fix.
 6. Record exactly one disposition per finding:
    - `accepted-fixed` — in scope or a direct dependency of it, and fixed here. A
      finding whose severity **this change increases** is in scope to the extent of
@@ -520,9 +513,9 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
      defect fixes its own contribution under `accepted-fixed` and defers the rest
      here, stating the non-regression boundary;
    - `rejected-with-evidence` — unsupported, or it presumes a requirement or
-     threat model nothing claims; or real but **consequence-free**, carrying nothing for
-     the decision, the behaviour, or a future maintainer's actions — the *sound with record
-     notes* test under *Stop conditions*, with that test as the evidence; or
+     threat model nothing claims. The evidence is what makes it a disposition rather
+     than a dismissal: name what the finding assumes and what refutes it. "It is only
+     about wording" is not evidence, and neither is the cost of the fix; or
    - `blocked` — required for correctness, but needs authority, a design
      decision, or a material charter expansion.
 
@@ -588,8 +581,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    **A record is inside the permitted surface only when external authority put it there.**
    Adding one or appending an exclusion without that authority is a material charter change,
    even when described as bookkeeping. For an authorized record, fix findings on it like
-   anything else in scope and exclude those findings from the self-collision fraction. The
-   exemption affects convergence accounting only; it never grants write authority.
+   anything else in scope.
 
    Write the record **once per run**, not once per pass. The concern recurs on later
    iterations by design; the second sighting is the same deferral, so re-affirm it in
@@ -644,9 +636,8 @@ Two consequences of deferring, both of which you own rather than discover. **Dur
 fixes live only in the tree for the whole run, so an interrupted run loses them with no commit
 to recover from. Take a `git stash create` snapshot before the cycle's first pass and after each
 pass, and note each object id in the transcript — it costs nothing, leaves the tree untouched, and
-turns a crash from data loss into a recovery. The pre-first-pass one does double duty: it is the
-cycle-start baseline the self-collision count below measures against, which a working-tree run has
-no commit to supply. **Splitting:** the exit commit may carry several logical changes overlapping
+turns a crash from data loss into a recovery. **Splitting:** the exit commit may carry
+several logical changes overlapping
 within one file, which path-only staging cannot separate and `git add -p` cannot do
 non-interactively. Do not answer that with one omnibus commit — this repo keeps commits small so
 `git bisect` can pin a regression. Commit in the order the fixes were made, staging the paths
@@ -659,162 +650,46 @@ resolves its target from a `git status` the commit just emptied, reviews nothing
 returns `approve` with a fresh artifact and a matching `run_id`. That is the least
 supervised path in the whole loop.
 
-Then disclose every suppression (concern + ADR),
-every `deferred-tracked` concern (concern + owning record path or tracker issue), and every
-`rejected-with-evidence` finding taken on the **consequence-free** ground (concern + the
-pass that raised it) recorded anywhere in the **run**, across all cycles — not just the
-current one. The third is there because the consequence test is a judgment you apply to
-yourself: step 6 lets you take it on any pass, so binding its disclosure to the *sound with
-record notes* exit alone would leave every other exit carrying the judgment unaudited.
-This holds for every exit below. Cap exhaustion and rescoping are the exits a human is most likely to
-pick up cold later, so they are the ones where a silently dropped deferral does the
-most damage.
+Then disclose every suppression (concern + ADR), every `deferred-tracked` concern
+(concern + owning record path or tracker issue), and every `rejected-with-evidence`
+finding (concern + the pass that raised it) recorded anywhere in the **run**, across all
+cycles — not just the current one. The last two are what the residual blocking figure
+subtracts, so they are the findings a reader would otherwise never learn stood at the
+exit: the subtraction is a judgment you apply to yourself, and disclosure is what holds
+it to account. This holds for every exit below. Cap exhaustion and rescoping are the
+exits a human is most likely to pick up cold later, so they are the ones where a
+silently dropped deferral does the most damage.
 
 - The selected reviewer returns `approve` → exit the loop and continue the workflow.
-- A pass returns **no finding that is both new and not self-collision**, and you changed
-  nothing since the previous pass → exit as *converged with deferrals*. A finding is
-  **new** when it is not a concern already disposed of this run — an already-recorded
-  deferral, or anything re-affirmed under the one-line re-disposition rule above;
-  **self-collision** is defined in the last bullet below. So a pass carrying three owned
-  deferrals and two findings on surface an earlier fix in this cycle added satisfies this
-  half, where the previous wording — *only* already-recorded deferrals — did not. A pass
-  is almost never purely deferrals, which left this exit close to unreachable and sent a
-  finished target to the cap instead.
+  Notes may ride along with it (ADR 0049); they are dispositioned on that pass and are
+  not a reason to spend another.
+- A pass returns `needs-attention` with a **residual blocking figure of zero**, and
+  dispositioning that pass's findings edited nothing in the target → exit the loop and
+  continue the workflow, the same as `approve`. Every blocking finding it carries is one
+  this run already dispositioned as an owned deferral or rejected with evidence, and the
+  reviewer repeats it only because each pass is naive of the run's history.
 
-  The second half is unchanged and holds for a different reason: if the pass that applied
-  fixes is also the pass that exits, no pass ever reviewed the fixed state and the fixes
-  ship unreviewed. So a pass that fixes something always leads to another pass; this exit
-  fires on the confirming one. Resolve the self-collision findings **at the size of the
-  risk** (step 6) rather than by reflex: a defect a fix genuinely introduced is
-  `accepted-fixed` and gets fixed — it is not independent of the charter, so it is not a
-  deferral — while one whose remedy costs more than it removes is discharged by recording
-  the consequence or by `rejected-with-evidence`. Every resolution that edits the target is
-  new surface, so the pass after it is the earliest that can exit, and this exit lands on a
-  pass whose findings you can dispose of without touching the target at all.
+  The no-edit half is not a formality: if the pass that applied fixes is also the pass
+  that exits, no pass ever reviewed the fixed state and the fixes ship unreviewed. So a
+  pass whose dispositions touch the target always leads to another pass, and this exit
+  fires on the confirming one.
 
-  This exit takes precedence over the rescope exit below when both apply. Their inputs
-  overlap, and the no-change half is what separates them: a pass that repeats findings
-  against a target you did not touch is stable, not growing.
-
-  It is a real terminal state because it is where a target with owned adjacent defects
-  lands — the selected reviewer cannot return `approve` while a blocking finding stands, so a
-  loop that only exits on `approve` grinds to the cap and reports blocked on a target that
-  is finished. Report it distinctly — it is not `approve` — and list the records.
-- A pass **in this cycle** named the target's load-bearing factual claims and **confirmed
-  every one it named**, nothing you changed since has altered what those claims assert, and
-  every standing finding is **consequence-free** → exit as *sound with record notes*,
-  listing the notes.
-
-  **Confirmed, and all of them.** A claim the pass refuted, or reported as not checkable in
-  its environment, is not confirmed, so the condition fails on it — one claim reproduced out
-  of four named does not satisfy this, and neither does a claim silently dropped. Named
-  claims, not a verdict about claims, either: the reviewer picks which claims are
-  load-bearing, so "this target asserts nothing reproducible" satisfies the reproduction
-  instruction and not this condition. A target whose claims nobody confirmed leaves through
-  `approve`, *converged with deferrals*, or the cap, as it does today. That is the price of
-  the exit's name — *sound* is earned, and an unchecked claim earns nothing. Whether the
-  reviewer also filed the unconfirmed claim as a finding is its own judgment under its
-  finding bar, and does not change this condition either way.
-
-  **Record the claim list as you go**, beside step 3's audit line, from the `summary` in the
-  artifact step 2 already opens. Nothing else in the loop preserves it and this condition
-  reads it back, so a run that does not record it cannot satisfy the condition however well
-  the pass reproduced. The scoping is per **cycle**: a confirmation made before a rescope
-  widened the charter does not carry into the new one, because the claims that matter
-  changed with it.
-
-  **Apply the consequence test to each standing finding.** If it is never addressed: does
-  the decision the target records change? does any behaviour change? would a future
-  maintainer, acting on the target as it stands, do something different? One yes makes the
-  finding consequential, cancels this exit, and returns the loop to its ordinary course. One
-  case needs no test — a finding that a later pass could not reproduce a claim condition 1
-  relies on is consequential by definition, since a load-bearing claim is one whose falsity
-  changes the conclusion. The "nothing you changed since" clause guards against your own
-  edits, not against later evidence.
-
-  **The test is on consequence, never on subject matter.** "It is only about wording" is not
-  the trigger and never was. The run that motivated this exit also produced the
-  counterexample: a branch review whose top finding was about ADR prose — text that would
-  have led a future maintainer to delete a load-bearing line. That finding answers yes on
-  the third question, so it is consequential and this exit must not fire on it. A loop
-  reading this bullet as "prose findings are free" has reproduced the failure the bullet
-  exists to prevent.
-
-  The exit also requires that you can dispose of the pass's findings **without editing the
-  target**, for the reason *converged with deferrals* requires an unchanged target: if the
-  pass that applies a fix is the pass that exits, the fix ships unreviewed. So an edit means
-  another pass, and that pass is the earliest this exit can fire. Each outstanding note
-  still takes a step 6 disposition, and it is `rejected-with-evidence` with the consequence
-  test as the evidence — `accepted-fixed` and `deferred-tracked` both edit the target, which
-  this exit forbids on the exiting pass.
-
-  This is an ordinary run-ending exit: the on-every-exit obligations above apply in full.
-  Report it distinctly — it is not `approve`, and it is not the cap — listing every
-  outstanding note with the finding it came from, and every claim a pass named, marked
-  confirmed, refuted, or not-checkable-here, with the pass that reported it. The
-  unconfirmed ones are the part a reader most needs, so they must not be lost to a report
-  shape that names only confirmations. Where this and *converged with deferrals* both apply,
-  report *converged with deferrals*: its no-change half covers the whole target, where this
-  exit's first condition covers only what the confirmed claims assert. The rescope and
-  self-collision exits outrank this one too — they carry obligations it does not.
+  This is not a separate outcome for a caller to route on. The run is finished, it is not
+  blocked, and the report says so through the deferral and rejection lists the paragraph
+  above already requires — plus the last verdict, which stays whatever the reviewer
+  returned. What ends the loop is that no blocking finding is left for it to act on.
 - Final budgeted iteration of a cycle (the 2nd by default, or the caller's
-  `iteration_budget`) still returns `needs-attention` → stop as blocked and
-  summarize the remaining findings. Do not continue to the next workflow step
-  without explicit user approval. The trigger is unchanged: `needs-attention` at
-  the budget. What the exit above removes from it is the one case of a target
-  whose load-bearing claims a pass confirmed and whose standing findings carry
-  no consequence; everything else reaching the budget still stops as blocked —
-  including a target with nothing reproducible to confirm, and a run whose
-  reviewer produced no reproduction report at all. `blocked` at the cap stays the
-  honest outcome whenever consequence-bearing work is outstanding, however many
-  passes confirmed the mechanism.
+  `iteration_budget`) still returns a **residual blocking figure above zero** → stop as
+  blocked and summarize the remaining findings. Do not continue to the next workflow step
+  without explicit user approval. This is the loop's only blocked ending short of a
+  `blocked` disposition, and it fires on outstanding work the run could not resolve —
+  never on a finding it already dispositioned, which is what the subtraction removes.
 - Remediation would pull in a migration, public contract, dependency, subsystem,
   or threat model outside the charter → **end the cycle** for rescoping. Report what
   the fix would require; do not widen the charter yourself to keep the loop running.
-- Two successive passes return findings that are **half or more self-collision** → end
-  the cycle: for rescoping, or through the own-surface convergence route below.
-  Count this mechanically rather than by impression. A finding
-  is a **self-collision** when the lines it cites did not exist at the **start of the
-  cycle** — the loop is reporting on text its own fixes wrote. Record that baseline when
-  the cycle starts, because nothing else preserves it: step 8's per-pass commits move
-  `HEAD` under you, so by iteration 3 `HEAD` is the loop's own output. It is the
-  cycle-start commit for a committed target, and the pre-first-pass `git stash create`
-  snapshot for a working-tree run. Take the fraction over the pass's findings and end the
-  cycle when it reaches half on two passes in a row.
 
-  Half, not a majority: the run that motivated this threshold reported "findings 2, 3 and
-  5 are collisions between my own successive fixes" — three of six, which a
-  strict-majority test misses. Two passes, not one: a single pass concentrated on the fix
-  you just made can be legitimate scrutiny of that fix, and it is the repetition that
-  distinguishes growth from scrutiny. The earlier wording — findings **only** on surface
-  the previous fix added — is what a pass essentially never satisfies, so this guard sat
-  unreachable while describing the failing run exactly.
-
-  That pattern is scope growth, not convergence: the loop is now reviewing its own
-  output, and another iteration adds surface rather than removing risk.
-
-  Route this exit by where the collisions sit. Self-collision findings citing
-  **production** lines are the scope growth above — end the cycle for rescoping.
-  But when, across those two passes, every standing finding sits in **test or
-  verification surface this run itself added** and no finding cites production
-  lines — the reviewer is affirming the chartered change and polishing the test
-  harness the loop wrote to prove it — the target is finished and the loop is
-  reviewing its own proof. Dispose the defensible findings at the size of the
-  risk, run **one** confirming pass, and exit as *converged on own surface* —
-  reported distinctly, like *converged with deferrals* — even if that confirming
-  pass returns more findings of the same class; the class that triggered this
-  exit cannot re-arm it. A finding that cites production lines, on this pass or
-  the confirming one, cancels the exit and re-enters the ordinary loop. This
-  exit is not a license to ship broken tests: each final-class finding still
-  gets a real disposition — a defect a fix introduced is `accepted-fixed`; only
-  a remedy costing more than it removes is discharged by recording the
-  consequence or `rejected-with-evidence`.
-
-  Deferral records
-  this run wrote sit outside the count entirely — neither self-collision nor new ground.
-  They are bookkeeping inside the charter, and counting them either way distorts the
-  fraction: as self-collision they rescope the loop over its own audit trail, as new
-  ground they dilute the fraction and hold the exit shut.
+  The zero-residual exit above takes precedence when both apply: a pass whose blocking
+  findings this run has already dispositioned is stable, not growing.
 
 Ending a cycle for rescoping ends the **run** unless someone with the authority to
 change the charter grants it. If they do, a new cycle begins with a fresh count and
@@ -849,8 +724,8 @@ trust boundaries and applies its own finding bar; selecting it changes coordinat
 
 Report the **run**, not the last cycle: the number of cycles, each cycle's iteration
 count, and for every charter change what changed and who authorized it — otherwise two
-rescopes read as three short clean cycles rather than the up-to-fifteen adversarial
-passes they were. Name the selected reviewer.
+rescopes read as three short clean cycles rather than the full budget per cycle they
+were. Name the selected reviewer.
 
 Report the change's cumulative total on its own line, in the form the next loop takes
 back as its `prior_rounds`:
@@ -862,17 +737,19 @@ report was accurate, and the total existed nowhere except in a reader willing to
 several of them. A caller that ran no earlier loop reports its own figure against a
 `0/0` carry, which is the same line and needs no special case.
 
-Then report the final verdict, the fixes made, the
-verification performed, every unresolved finding, and every `deferred-tracked` concern from any
-cycle with its owning record path or tracker issue. When the run took a named exit — *converged
-with deferrals*, *sound with record notes*, or *converged on own surface* — say so by that
-name; the caller routes on it and has nothing else that distinguishes a finished run from a
-blocked one. On *sound with record notes* also list the outstanding notes and name every
-load-bearing claim a pass reported — confirmed, refuted, or not checkable here, with the pass
-that reported it. The caller cannot reconstruct either list. References, not payloads: cite `<findings-path>` rather
-than pasting findings into the caller's context. The deferral list is the part a
-caller cannot reconstruct: it is the difference between "this branch is clean" and
-"this branch is clean and three known defects now have owners."
+Then report **whether the run finished or stopped as blocked** — that is the one fact the
+caller routes on, and the last verdict does not carry it: a run can finish on
+`needs-attention` when every blocking finding it carries was already dispositioned. Say
+which, in those words.
+
+Then report the final verdict, the final residual blocking figure, the fixes made, the
+verification performed, every unresolved finding, every `deferred-tracked` concern from any
+cycle with its owning record path or tracker issue, every `rejected-with-evidence` finding
+with the pass that raised it, and the notes outstanding at the exit. References, not
+payloads: cite `<findings-path>` rather than pasting findings into the caller's context.
+The dispositioned lists are the part a caller cannot reconstruct: they are the difference
+between "this branch is clean" and "this branch is clean and three known defects now have
+owners."
 
 ## Caller contract — do not stop on the verdict
 
@@ -888,26 +765,21 @@ are almost always one step inside a larger workflow. After the loop exits:
   do this: the loops span targets and run tokens, and nothing inside a run can see the
   one before it. A dispatch that is one reviewer pass rather than a loop still spent a
   round; count it.
-- An `approve` verdict means the caller advances to the next phase.
-- A *sound with record notes* exit means the same — it is not blocked — and the caller
-  carries the outstanding notes into its own report.
-- A *converged with deferrals* or *converged on own surface* exit means the same again —
-  neither is blocked, both are terminal, and the caller advances carrying the run's
-  deferral list, each entry with its owning record path or tracker issue, into its own
-  report.
-- **Route on the exit name, not on the verdict alone.** Every named exit above fires while
-  findings still stand that no reviewer cleared, so the last verdict on all three is
-  ordinarily `needs-attention` — *converged on own surface* is the one that may end on
-  `approve`, when its confirming pass returns nothing. Reading "not `approve`, therefore
-  blocked" is the failure these exits exist to prevent: it reports a finished target as
-  stuck. The bullet below applies to a `needs-attention` verdict on a pass that took **no**
-  named exit and has not reached the iteration budget.
-- A `needs-attention` verdict means you fix findings and re-enter the loop.
+- **A run reported as finished means the caller advances to the next phase**, carrying
+  the run's deferral list — each entry with its owning record path or tracker issue — its
+  rejected findings, and its outstanding notes into the caller's own report. Route on
+  finished-versus-blocked, which the run states outright. Do **not** derive it from the
+  verdict: a finished run's last verdict is `approve` when the reviewer cleared the target
+  and `needs-attention` when the only blocking findings left were ones this run already
+  dispositioned, and reading the second as blocked reports a finished target as stuck.
 - A run stopped as blocked at the iteration budget does not re-enter the loop, and the
   caller does not advance without explicit human approval. An approval that advances
   the caller belongs to the caller's own contract — `$quest` documents the
   approved-continuation resume path in its step 6. A cycle ended for rescoping
   that nobody granted new authority for ends the run the same way.
+- A `needs-attention` verdict on a pass **inside** a run — the loop has not exited — is
+  not a caller's business at all: the loop dispositions the findings and runs the next
+  pass itself.
 - Only treat the loop as a stopping point when you have no caller — i.e. a
   human explicitly asked for a one-shot review loop with nothing queued after
   it.
@@ -917,6 +789,6 @@ are almost always one step inside a larger workflow. After the loop exits:
 Before or while running this skill, the user may type a `/goal` (a Codex
 harness built-in, not a command defined in this repo) whose
 condition mirrors the loop's stop state, for example:
-`/goal $gauntlet --json <target> returns approve, or 5 iterations are
+`/goal $gauntlet --json <target> returns approve, or 2 iterations are
 complete`. This is optional and only the user can set it. Only one `/goal` can
 be active per session, so it can enforce one loop at a time.

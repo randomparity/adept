@@ -267,9 +267,12 @@ Sections:
    a number the cited entry contradicts; a finding about the instrumented
    cohort must not quietly lean on the combined context figures. Causal
    phrasing is allowed only to the extent the cited metric supports it.
-   When narrating a review loop from `exit`, remember: the field takes one
-   of five enumerated values (ADR 0021); absence is not `none`, so keep
-   today's verdict-only reading when `exit` is missing or unrecognized.
+   When narrating a review loop from `exit`, remember: the field takes
+   `none` or `blocked-at-budget` (ADR 0053, amending ADR 0021), and
+   annotations published before that record carry one of three retired
+   named-exit values, each of them a run that was not blocked. Absence is
+   not `none`, so keep today's verdict-only reading when `exit` is missing
+   or unrecognized.
    Lead time carries a standing caveat: where issues are batch-filed by
    `$saga` or `$bounty` and worked later, `lead_time_hours` is dominated by
    queue position rather than effort — findings must not read it as
