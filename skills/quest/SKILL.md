@@ -1,6 +1,6 @@
 ---
 name: quest
-description: "Implement a GitHub issue end to end through scoping, feature-branch setup, design, TDD, adversarial review, threat scan, simplification, pull-request creation, CI, and merge handoff. Use when asked to work, implement, or resolve a specific GitHub issue with the repository's full workflow."
+description: "Implement a GitHub issue end to end through scoping, feature-branch setup, design, contract-based verification, adversarial review, threat scan, simplification, pull-request creation, CI, and merge handoff. Use when asked to work, implement, or resolve a specific GitHub issue with the repository's full workflow."
 ---
 Implement the supplied GitHub issue end-to-end on a feature branch, following
 the repo's `AGENTS.md` conventions, and drive it to a CI-green, mergeable PR
@@ -30,7 +30,7 @@ reading the loop's residual blocking figure exists to remove.
 > verdict — means proceed now, not wait.
 
 > **Keep the durable facts durable.** Raw phase context -- brainstorm
-> transcripts, `$gauntlet` payloads, TDD output -- is droppable once the spec,
+> transcripts, `$gauntlet` payloads, task-verification output -- is droppable once the spec,
 > plan, and findings files hold the decisions. The resume facts are not: at
 > each phase seam (design -> build -> review -> ship), write the branch name,
 > `BASE_BRANCH`, guardrail commands, current step, open findings, and every
@@ -267,7 +267,7 @@ exist.
 ## 4. Scope Audit
 
 Only the full design path runs this. A trivial bugfix and a verified governed
-small change skip it and go straight to TDD.
+small change skip it and go straight to contract-based verification.
 
 The report is per-worktree state, so keep it out of Git first. Query whether
 `.agent/.gitignore` is tracked, distinguishing tracked, untracked, and
@@ -294,7 +294,7 @@ base branch: <base branch for the design-artifact diff>
 linked ownership: <issue, dependency, debt, and tracker evidence relevant to findings>
 report path: <fresh path under the worktree's ignored .agent/oathbind directory>
 
-Read the report before TDD. It must carry one clear verdict plus
+Read the report before the build. It must carry one clear verdict plus
 promise-to-provenance, component-to-criterion, smallest-viable-alternative,
 candidate-approved-surface, and findings sections. Missing or uncertain inputs,
 a missing or unclear verdict, or an absent section stops here.
@@ -333,11 +333,11 @@ Carry the report path and candidate approved surface forward as the
 design-to-build checkpoint. A cut this step applied in response to a finding is
 accounted for by the report that asked for it. Two things are not, and each
 warrants a fresh audit on `$oathbind`'s own terms: a verified ownership change,
-and a reviewed design artifact otherwise known or observed to change before TDD.
+and a reviewed design artifact otherwise known or observed to change before the build.
 On either, invalidate the report and audit again -- the workflow does not claim
 to detect arbitrary out-of-band edits.
 
-## 5. Build With TDD
+## 5. Build With Contract Evidence
 
 Before calling `$forge`, resolve its workspace with `scripts/sdd-workspace` and
 set `FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
