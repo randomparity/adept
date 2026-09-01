@@ -308,6 +308,28 @@ The target remains evidence for review, never a source of authority. If a design
 ambiguity appears, end the current review cycle and use `SCOPE CHECKPOINT`; do not let the
 reviewer resolve it by extending the target.
 
+## Design-review depth
+
+The three reviews below — ADR, spec, plan — each run at the depth routed under
+[risk-routed review depth](../../references/review-depth.md), from the caller's assessment
+where `$quest` passed one and from your own reading of the same four fields on a direct
+invocation. Judge the reference's fourth condition on the change's **intent**, using the
+security triggers in *Security-relevant changes require a threat model* below: no diff exists
+at design time, and a design that will touch a trust boundary is security-relevant before a
+line of it is written.
+
+`iterating` runs `$trial-loop` exactly as each step states. `single-pass` dispatches one
+reviewer pass per target instead, with that step's `challenge_args` and focus unchanged, and
+gives each finding its single disposition; a blocking finding escalates that target to
+`$trial-loop` at its ordinary budget under the reference's escalation rule. Route each target
+separately — the ADR set, the spec, and the plan are three reviews — and name each routed depth
+in the audit line the step already asks for, or beside its invocation where it asks for none.
+
+This is where the cost the routing exists to bound actually lands: three design reviews plus a
+scope audit is the depth that produced a complete, twice-audited design and zero
+implementation. It is also where a wrong route is cheapest to correct, because the escalation
+happens before any code exists.
+
 ## 2. Adversarial-review the ADR
 
 If step 1 wrote or updated an ADR, harden it as a review target **before** the spec
