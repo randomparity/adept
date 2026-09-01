@@ -193,6 +193,14 @@ For each queued issue, check for artifacts from prior runs:
 
 - **verdict**: `close-candidate` | `close-not-planned` | `fix` (subtype:
   `trivial-bugfix` | `governed-small-change` | `non-trivial`)
+- **decomposition**: `one-pr` | `split`, on a `fix` verdict only. Read the issue's latest
+  complete `WORK:DIVINATION` block for its decompose verdict; where there is none, or its
+  validation fails, derive the field from the same live evidence the rest of the triage
+  reads. A `split` also returns the proposed breakdown, one line per piece, so the operator
+  can act on it without re-reading the issue
+- **review depth**: `single-pass` | `iterating`, on a `fix` verdict only, derived under
+  [risk-routed review depth](../../references/review-depth.md) from that same block or the
+  same live evidence. An absent, rejected, or unprovable derivation returns `iterating`
 - **evidence**: citations (`file:line`, commit SHA, PR number)
 - **rationale**: ≤300 tokens explaining why
 
@@ -211,7 +219,7 @@ Triage on the fast model by default; escalate to the capable model only on a nam
 - `close-not-planned` → preserve the citations, trigger, impact, cycle-cost comparison, and
   reconsideration condition for the plan and closure comment. This verdict never claims the
   defect is fixed and never enters a quest wave.
-- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler.
+- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The two fields above travel with it: `decomposition` gates dispatch at step 4, and `review depth` reaches the worker in its step 5 prompt. Neither is a size input to model selection — a `split` says the issue is several units of work, not that this one is hard.
 
 Record verdicts in manifest `Verdict` column. Reconcile states (`ready-to-merge`, already-closed) live in `Status`.
 
@@ -227,7 +235,32 @@ Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge
 
 **Pre-assign ADR/migration numbers and file scope** even for serial — crashed issues need consistent numbers on re-dispatch. Persist these in manifest. File scope is a hint, not guarantee.
 
-Present triage/plan table: issue → verdict, wave, assigned numbers, file scope.
+Present triage/plan table: issue → verdict, decomposition, review depth, wave, assigned
+numbers, file scope.
+
+**A `split` row is held from dispatch.** This is the checkpoint the decompose verdict was
+always missing a consumer for: you own the queue, so you are the one actor that can turn one
+row into several, and here is the last moment before a branch, a claim, and a design exist. A
+worker cannot do this — `$quest` claims one issue and creates one branch for it, and says so.
+
+Present each `split` row's proposed breakdown with the plan table and take **one** explicit
+operator decision per row, before the first dispatch of the wave that contains it:
+
+- **Split it** → decompose the issue through `$saga` (an epic with born-triaged sub-issues) or
+  `$bounty` (a flat set), then treat the result as newly discovered work: remove the parent row
+  from the queue with an outcome recording the split, and take the children through step 7's
+  enqueue confirmation. The parent is not dispatched.
+- **Dispatch as one** → the row proceeds unchanged. Record the decision in the row's Outcomes
+  entry so the run report says the split was seen and declined, not missed.
+
+Nothing about that decision is persisted as its own state. Like step 6's hold, it is recomputed
+rather than read back: a resumed campaign re-derives the field from the same evidence and asks
+again, which is cheap and idempotent, where a stored answer would be one more thing to keep
+true. Neither answer blocks the rest of the queue — hold the one row and keep draining.
+
+An unattended root has no operator to ask. It holds the `split` row, names it in the run output,
+and drains the rest; it never splits an issue on its own authority and never dispatches past the
+gate.
 
 Emit the after-plan progress update before the first close or dispatch.
 
@@ -270,6 +303,9 @@ Each prompt carries:
 - Assigned ADR/migration numbers, file scope
 - Guardrail commands, `BASE_BRANCH`, ADR-index coupling verdict
 - Model tier from triage
+- Routed review depth from triage, passed as evidence rather than instruction: `$quest`
+  re-derives it at its step 1 and again against the branch diff at its step 6, so a stale
+  value costs a re-derivation and never a skipped review
 - Mandatory follow-up return contract: every discovered/finalized issue and complete bounty
   occurrence tuple (occurrence, sweep, rationale, state, state reason), including verified
   closures

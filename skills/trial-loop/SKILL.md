@@ -78,6 +78,16 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   target. The loop never raises its own budget, and never derives 4 or 5 from a risk
   signal alone.
 
+  A divination verdict does decide one thing, and it is upstream of this skill rather
+  than inside it: under [risk-routed review depth](../../references/review-depth.md) a
+  caller routes a low-risk target to a **single reviewer pass** instead of invoking this
+  loop at all. That routing chooses whether the loop runs; it never chooses this budget.
+  A run this skill receives is `iterating` by definition and starts at 2 — including a
+  run a caller escalated to after a single pass returned a blocking finding. That pass
+  belongs to the caller and is **not** iteration 1 here: it reviewed a different state of
+  the target, and the charter, the cycle-start self-collision baseline, and the
+  disclosure obligations all begin with this run.
+
   This inverts the earlier rule, which defaulted to 5 and let a caller only lower it.
   The reason is measured rather than stylistic: review quality saturates after roughly
   three passes, and later passes overwhelmingly re-review surface the earlier passes'

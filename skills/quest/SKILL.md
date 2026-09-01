@@ -84,6 +84,22 @@ four fields from the live issue and repository as before. In either case, re-che
 assessment against the issue body. Never use divination content to fill any of the frozen charter's
 eight authority fields; only the external sources and decisions listed below can do that.
 
+The assessment stays advisory for scope and becomes load-bearing for exactly one thing: it routes
+this run's review depth under
+[risk-routed review depth](../../references/review-depth.md). Derive `single-pass` or
+`iterating` from the four fields now, record it with the tracking metadata below, and carry it to
+step 6. An absent or rejected assessment routes `iterating`, so the failure path is the expensive
+one and never the cheap one.
+
+**A lone quest never splits its own issue.** You claim one issue number and create one branch for
+it, so a `split` decompose verdict is not yours to act on. It is the caller's: `$campaign` gates
+dispatch on it at its plan table, before any branch exists. What this run owes a `split` is
+visibility while splitting is still cheap — an interactive root raises it at SCOPE CHECKPOINT
+before design and takes the operator's answer; an unattended root whose caller did not already
+gate it records the verdict in `WORK:SCOPE` with the rest of the tracking metadata and proceeds as
+one unit. Do not read the verdict as an implied stop condition. The distance between producing it
+and acting on it is a documented boundary here, not a control this skill exercises.
+
 If any required persisted-evidence read or validation fails and the independent live
 issue/repository derivation read also fails, stop before changing `status:*` or posting
 `WORK:SCOPE`. Report non-adoption, name only the failed operation, and give a safe retry action.
@@ -152,9 +168,9 @@ Record all eight fields:
 - `interaction` -- the root value above.
 
 Also retain the tracking metadata (blast radius, change hazards, complexity,
-decompose verdict, classification -- plus the decision evidence and acceptance
-criteria for a `governed-small-change`) and read everything back before
-proceeding.
+decompose verdict, routed review depth, classification -- plus the decision
+evidence and acceptance criteria for a `governed-small-change`) and read
+everything back before proceeding.
 
 Keep every public annotation to the minimum its fields need: public-safe source
 labels for provenance, never secrets, auth headers, host paths, hostnames, IPs,
@@ -432,12 +448,33 @@ There are three forge modes:
 
 ## 6. Adversarial-Review the Branch
 
-Set the issue to `status:in-review` (single-active swap), then run
-`$trial-loop --base <BASE_BRANCH> Focus on auth, permissions, data loss or
-corruption, rollback, idempotency, races, empty or malformed inputs, degraded
-dependencies, compatibility, migrations, observability, and whether the chosen
-approach is simpler or safer than viable alternatives.` Address every
-defensible finding and commit after each accepted fix.
+**Route the depth before dispatching anything.** Step 1 derived this run's review depth from
+the divination assessment; re-derive it now against the branch diff, because the fourth
+condition in [risk-routed review depth](../../references/review-depth.md) is a
+security-relevance judgment and no diff existed at step 1. A diff that trips the security
+triggers listed below in this step routes `iterating` whatever step 1 recorded, and so does any
+other condition that has since stopped holding. Name the routed depth in the transcript, with
+what moved it if it changed.
+
+Set the issue to `status:in-review` (single-active swap), then review the branch at that depth
+with this focus:
+
+> Focus on auth, permissions, data loss or corruption, rollback, idempotency, races, empty or
+> malformed inputs, degraded dependencies, compatibility, migrations, observability, and whether
+> the chosen approach is simpler or safer than viable alternatives.
+
+On `iterating`, run `$trial-loop --base <BASE_BRANCH> <that focus>`. On `single-pass`, dispatch
+the one reviewer pass the reference specifies, with the same `--base` and the same focus, and
+give each finding its single disposition. Address every defensible finding and commit after each
+accepted fix, on either route.
+
+**A blocking finding on a single pass escalates rather than being fixed in place.** Record the
+escalation and the finding that caused it, then run the `$trial-loop` invocation above against
+the same branch at its ordinary budget, starting at iteration 1 — the single pass is not one of
+that run's iterations. From that point this step reads exactly as it does for a run routed
+`iterating` at step 1. A `single-pass` review that returns `approve` carrying only notes is a
+completed review: it reaches none of the named exits below, and step 8's summary records it as
+`exit: none` with `iterations: 1`.
 
 The loop has three named non-blocking exits — *converged with deferrals*, *sound
 with record notes*, and *converged on own surface* — and **each advances this
@@ -469,7 +506,9 @@ than on the verdict.
 Leave the iteration budget to the loop's default of 2 — one full review pass plus
 one confirming pass over the fixes — whatever the step 1 classification. Non-trivial
 work does not buy extra passes here: the loop's ceiling is 3, and raising it takes
-explicit human authorization the classification cannot supply. Review passes are the
+explicit human authorization the classification cannot supply. The depth routing above
+chooses **whether** the loop runs, never what its budget is, and an escalated run gets
+the same default 2 as any other. Review passes are the
 pipeline's dominant cost — each is a fresh full-context reviewer — and past the
 confirming pass they mostly re-review surface the earlier passes' own fixes added.
 The budget lowers cost, not the bar: an unresolved **blocking** finding at the budget
