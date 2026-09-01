@@ -9,7 +9,7 @@ implementer. The task report and forge ledger preserve the chosen evidence. No n
 dependency is introduced.
 
 Tech stack: Markdown workflow instructions and JSON plugin manifest.
-Expected implementation size: 95–160 changed lines (M) — summed from the per-file allocations in
+Expected implementation size: 95–165 changed lines (M) — summed from the per-file allocations in
 the file map below.
 
 ## Global Constraints
@@ -29,8 +29,8 @@ the file map below.
 
 - Modify `skills/spellcraft/SKILL.md` (20–35 lines): require a material-contract inventory and
   define each contract's verification decision.
-- Modify `skills/forge/SKILL.md` (55–90 lines): validate and route per-contract modes across entry,
-  Cast, Party, closure, dispatch, ledger, prohibitions, TDD, and durability sections.
+- Modify `skills/forge/SKILL.md` (55–95 lines): validate and route per-contract modes across
+  entry, Cast, Party, closure, dispatch, ledger, prohibitions, TDD, and durability sections.
 - Modify `skills/forge/implementer-prompt.md` (15–25 lines): execute and report each contract's
   selected evidence.
 - Modify `README.md` (4–8 lines): describe contract-based verification publicly.
@@ -58,12 +58,34 @@ Interfaces:
 
 Verification:
 
-- Contract: Forge, Spellcraft, implementer-template, and README instruction behavior.
+- Contract: Spellcraft plan authoring.
   - Mode: `task-test-not-applicable`.
-  - Changed surface: normative workflow and public explanatory prose.
-  - Reason: these edits add no executable behavior or machine-checkable structural contract; a
-    focused task test could only pin wording. Existing structural guardrails and the required
-    design, branch, and forge reviews still run but do not substitute for this reason.
+  - Changed surface: normative instructions for producing and validating a task's contract
+    inventory.
+  - Reason: no executable plan parser consumes these instructions; a focused task test could only
+    pin wording rather than prove the judgment.
+- Contract: Forge verification routing and task closure.
+  - Mode: `task-test-not-applicable`.
+  - Changed surface: normative Cast/Party routing, validation, closure, prohibition, and TDD
+    instructions.
+  - Reason: Forge is an instruction surface rather than executable orchestration code; a focused
+    task test could only search or snapshot its prose.
+- Contract: Party implementer-report evidence.
+  - Mode: `task-test-not-applicable`.
+  - Changed surface: Forge dispatch requirements and the implementer prompt's free-form private
+    report contract.
+  - Reason: no executable report parser validates the Markdown report; a focused task test would
+    pin wording without proving that a future implementer exercises judgment correctly.
+- Contract: Cast ledger evidence.
+  - Mode: `task-test-not-applicable`.
+  - Changed surface: human-readable private evidence-line vocabulary and read-back instructions.
+  - Reason: no executable consumer parses these lines; a focused task test would assert prose or
+    reproduce a parser this change explicitly does not add.
+- Contract: README public build description.
+  - Mode: `task-test-not-applicable`.
+  - Changed surface: explanatory prose describing the installed workflow.
+  - Reason: README wording is not a machine contract, and repository policy forbids a gate that
+    asserts it.
 - Contract: changed plugin trees increment the manifest version above the base version.
   - Mode: `focused-test`.
   - Red command: `BASE_SHA=$(git merge-base HEAD main) just version-check` before the manifest
@@ -95,7 +117,8 @@ Steps:
 
 Acceptance:
 
-- Each plan task carries one reviewable verification mode before implementation.
+- Each plan task carries one reviewable mode for every material changed contract before
+  implementation; mixed tasks may carry both modes.
 - Forge rejects unsupported omissions and does not invent prose-only tests.
 - Testable structural and behavioral contracts still use red-green TDD.
 - Reports and ledger entries identify the evidence actually used.

@@ -10,8 +10,11 @@ changed contracts. A contract gets a focused red-green test when it changes exec
 or machine-checkable structure. Otherwise it carries a concrete non-applicability reason.
 Repository guardrails and the whole-branch review remain mandatory.
 
-This change does not create categorical exemptions, weaken an existing test gate, alter forge's
-whole-branch review result contract, or automate assertions over prose.
+This change creates no categorical exemption, does not alter forge's whole-branch review result
+contract, and automates no assertion over prose. It deliberately narrows ADR 0052's task-specific
+executable-evidence gate only for contracts with no meaningful executable or structural
+observation. The compensating evidence is the explicit reason, unchanged repository guardrails,
+and mandatory whole-branch review; testable contracts remain under the existing gate.
 
 ## Verification decision
 
@@ -65,14 +68,16 @@ Cast has no implementer report. Before returning its existing forge result, it a
 back one single-line private ledger entry per material contract:
 
 ```text
-Cast verification: <contract> = focused-test (red <command-and-result>; green <command-and-result>)
+Cast verification: <contract> = focused-test (red command <command>; red exit <status>; red observation <summary>; green command <command>; green exit <status>; green observation <summary>)
 Cast verification: <contract> = task-test-not-applicable (reason <reason>)
 ```
 
-Commands, results, contract names, and reasons must be non-empty single-line text. Cast rejects
-carriage return or NUL rather than inventing escaping. Its existing result record remains the
-phase boundary; the new evidence lines explain the verification judgment without changing resume
-routing.
+Each command is exact, each status is the decimal exit status, and each observation is a concise
+single-line statement naming the expected failure or pass; raw command output remains transient.
+Every substituted value must be non-empty and contain no semicolon, CR, LF, or NUL. Cast refuses
+an unrepresentable value rather than adding escaping or another artifact. Its existing result
+record remains the phase boundary; the new human-readable ledger vocabulary explains the
+verification judgment without changing resume routing or adding a parser.
 
 The assembled-branch guardrail run and whole-branch reviewer are unchanged. They remain the proof
 that tasks compose and the adversarial check on prose and judgment calls.
@@ -81,13 +86,14 @@ that tasks compose and the adversarial check on prose and judgment calls.
 
 - `skills/spellcraft/SKILL.md` defines the task verification block and plan-quality checks.
 - `skills/forge/SKILL.md` validates and routes the two modes in Cast and Party, updates task
-  closure and ledger wording, and narrows its TDD rules to applicable tasks.
+  closure and the human-readable ledger vocabulary, and narrows its TDD rules to applicable tasks.
 - `skills/forge/implementer-prompt.md` reports the selected evidence without inventing tests.
 - `README.md` describes the public build behavior without promising universal TDD.
 - `.claude-plugin/plugin.json` receives the required patch version bump.
 
-No executable helper or data format changes. Existing task briefs already copy a task section
-verbatim, so the verification block needs no parser change.
+The Party completion line and Cast evidence lines are small human-readable data-format changes;
+no executable parser consumes them. No executable helper changes. Existing task briefs already
+copy a task section verbatim, so the verification block needs no parser change.
 
 ## Failure handling
 

@@ -55,8 +55,13 @@ test; it removes neither executable repository checks nor adversarial review.
 ## Consequences
 
 Prose-only tasks can complete without tests that duplicate their wording. Their correctness is
-established by applicable repository guardrails and the branch review, with the absence of a
-focused test visible as an explicit judgment rather than an omitted field.
+judged through the explicit non-applicability reason, applicable repository guardrails, and the
+branch review, with the absence of a focused test visible rather than omitted.
+
+This deliberately narrows ADR 0052's task-specific executable-evidence gate for contracts with no
+meaningful executable or structural observation. Those contracts lose direct executable
+assurance; the accepted trade is explicit judgment plus unchanged repository guardrails and
+whole-branch review. Testable contracts remain under ADR 0052's executable gate.
 
 Plans, reports, and task-completion ledger lines gain small verification-mode fields.
 Orchestrators and reviewers must judge the reason, so two agents can disagree; requiring the
