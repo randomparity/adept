@@ -79,8 +79,9 @@ who can answer, and it records everything else. What you see, in order:
 3. **Design.** For non-trivial work it writes a spec and an ADR, has both attacked by a
    fresh reviewer, fixes what survives, then writes an implementation plan and does it
    again. Trivial changes skip straight to the build.
-4. **Build.** Test first: the failing test, the confirmation that it *does* fail, then
-   the smallest implementation that passes. Guardrails green at every commit.
+4. **Build.** Forge inventories each changed contract. Executable behavior and
+   machine-checkable structure get a focused red-green test; otherwise Forge records why a
+   task-specific test is not applicable. Guardrails stay green at every commit.
 5. **Review.** The whole branch goes to an adversarial reviewer — auth, data loss,
    races, rollback, degraded dependencies, and whether a simpler approach was available.
    If the diff touches a trust boundary, a security pass runs on top. You see a verdict,
