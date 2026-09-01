@@ -560,12 +560,12 @@ Run `$trial-loop` in file-list mode:
 If the loop reports blocked — including cap exhaustion at its iteration budget — stop as
 blocked per `$trial-loop`'s stop contract. The design does not go on to the scope audit.
 
-*sound with record notes*, *converged with deferrals*, and *converged on own surface* are
-**not** that case. All three are terminal non-blocking exits, and the phase continues on
-any of them. `$trial-loop` reports the exit by name and owns the condition each one fires
-on; this step does not re-derive them. Route on that name rather than on the last verdict,
-which on a named exit is ordinarily `needs-attention` and never by itself means the design
-is unhardened.
+A run the loop reports as **finished** is not that case, whatever its last verdict. The
+loop finishes on `approve`, and also on `needs-attention` where the only blocking findings
+left were ones it had already dispositioned as owned deferrals or rejected with evidence.
+The phase continues on either. Route on finished-versus-blocked, which the loop states
+outright; a last verdict of `needs-attention` never by itself means the design is
+unhardened.
 
 Editing an ADR in the set to address a finding is legitimate — it is pre-merge on the design
 branch, and the immutability rule applies only once the ADR is merged.

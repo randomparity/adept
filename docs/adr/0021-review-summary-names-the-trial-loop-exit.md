@@ -10,6 +10,17 @@ Accepted (2026-08-18)
 path. This record's decision sections stand as written at their decision date; where
 this text and 0029 disagree, 0029 governs.
 
+> **Amended by [0053](0053-one-loop-ending-replaces-the-named-exits.md)**
+(2026-09-01): `exit:` takes two values, `none` and `blocked-at-budget`. The three
+named-exit values — `converged-with-deferrals`, `sound-with-record-notes`,
+`converged-on-own-surface` — are removed with the `$trial-loop` exits they named, and
+the outranks-`none` precedence rule goes with them. `none` becomes any run that
+finished; `verdict:` still carries the reviewer's last verdict and is where the two
+finished shapes differ. Everything else in this record stands: the six-field set,
+`exit:` second, the two-facts rule keeping `verdict:` underived, the last-run scoping,
+and the exclusion of exit payloads from the summary. Where this text and 0053 disagree
+on the value set, 0053 governs.
+
 ## Context
 
 **Every `skills/` line citation in this record is at `ea43def`**, the merge-base of the change

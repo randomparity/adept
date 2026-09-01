@@ -78,7 +78,7 @@ Every finding takes exactly one disposition from step 6's vocabulary —
 `accepted-fixed`, `deferred-tracked`, `rejected-with-evidence`, `blocked` — under
 [heed-counsel](heed-counsel.md), and a `deferred-tracked` disposition owes the same
 `docs/debt/` record on the same terms. The pass's deferrals, suppressions, and
-consequence-free rejections are disclosed exactly as a loop run discloses them.
+`rejected-with-evidence` findings are disclosed exactly as a loop run discloses them.
 
 ## Escalation — the single pass is refutable
 
@@ -90,8 +90,8 @@ support, because no pass would ever review the fix.
 Escalate instead. Record the escalation and the finding that caused it, then run
 `$trial-loop` against the same target at its ordinary budget, starting at iteration 1.
 The single pass is **not** one of that run's iterations: it reviewed a different state
-of the target, and the loop's charter, its cycle-start self-collision baseline, and its
-disclosure obligations all belong to the run that owns them.
+of the target, and the loop's charter and its disclosure obligations both belong to the
+run that owns them.
 
 This is not a risk signal buying passes, which ADR 0049 forbids. A blocking finding is
 a defect a reviewer found and defended, not a forecast of what might go wrong, and the

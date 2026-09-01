@@ -4,6 +4,16 @@
 
 Accepted (2026-08-18)
 
+> **Amended by [0053](0053-one-loop-ending-replaces-the-named-exits.md)**
+(2026-09-01): the *sound with record notes* exit and the consequence test it applies
+are removed, along with the per-pass claims block the orchestrator recorded for the
+exit to read back. ADR 0049 made `approve` reachable with notes riding along, which is
+what that exit approximated. Everything else in this record stands as written: the
+reproduction obligation in `$gauntlet`'s Method, `$trial-loop`'s transmission of it
+inside focus, the read-only bound, and the rule that an unreproducible claim is an
+ordinary finding under the existing schema. Where this text and 0053 disagree on the
+exit, 0053 governs.
+
 ## Context
 
 **Every `skills/` line citation in this record is at `dd3f5b0`**, the merge-base of the
