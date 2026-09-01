@@ -5,24 +5,27 @@ Decision: [ADR 0054](../../adr/0054-task-tests-follow-observable-contracts.md)
 
 ## Scope
 
-Change `$forge` from universal task-level TDD to an evidence-based choice per task. A task gets a
-focused red-green test when it changes executable behavior or a machine-checkable structural
-contract. Otherwise it carries a concrete non-applicability reason. Repository guardrails and
-the whole-branch review remain mandatory.
+Change `$forge` from universal task-level TDD to evidence-based choices over each task's material
+changed contracts. A contract gets a focused red-green test when it changes executable behavior
+or machine-checkable structure. Otherwise it carries a concrete non-applicability reason.
+Repository guardrails and the whole-branch review remain mandatory.
 
 This change does not create categorical exemptions, weaken an existing test gate, alter forge's
 whole-branch review result contract, or automate assertions over prose.
 
 ## Verification decision
 
-`$spellcraft` adds a `Verification` block to every implementation-plan task before its steps:
+`$spellcraft` adds a `Verification` block to every implementation-plan task before its steps. The
+block inventories every material changed contract; each entry uses one mode:
 
 - `Mode: focused-test` names the observable contract, the test file or case, the expected red
   failure, and the focused green command.
 - `Mode: task-test-not-applicable` names the changed surface and explains why no task-specific
   executable or structural observation could fail meaningfully.
 
-The second mode is invalid when its reason is only a file type, task size, convenience, or the
+Focused evidence must cover the contract named by its entry. It cannot stand in for another
+material changed contract in the same task. The second mode is invalid when its reason is only a
+file type, task size, convenience, or the
 existence of repository guardrails. It is also invalid for a new or changed script behavior,
 parser, schema, record shape, validation rule, generated artifact, or other machine-checkable
 contract. A test that only searches for or snapshots prose wording is not meaningful evidence.
@@ -33,30 +36,43 @@ discovery of a testable contract returns to the caller's scope or plan checkpoin
 
 ## Build behavior
 
-Cast mode makes the same decision directly when it has no planned task. Focused-test work follows
-the existing red-green sequence. Non-applicable work starts with the implementation and proves it
-through the applicable repository guardrails.
+Cast mode makes the same per-contract decisions directly when it has no planned task. Focused-test
+work follows the existing red-green sequence. Non-applicable work starts with the implementation
+and remains subject to the applicable repository guardrails.
 
-Party mode passes the plan's decision and evidence through the task brief. The implementer report
-contains either:
+Party mode passes the plan's contract inventory and evidence through the task brief. The existing
+private implementer report contains one entry per contract, each with either:
 
 - the red command, expected failure, green command, and passing result; or
 - the exact non-applicability reason from the plan, confirmed against the implemented diff.
 
-The orchestrator closes a task only after verifying its commits, that report evidence, and every
-required guardrail result. It appends one exact completion line:
+The orchestrator closes a task only after verifying its commits, every report entry, and every
+required guardrail result. It appends one exact completion line, using `mixed` when the report
+contains both entry modes:
 
 ```text
-Task N: complete (commits <base-sha>..<head-sha>, verification focused-test, report <report-path>)
-Task N: complete (commits <base-sha>..<head-sha>, verification task-test-not-applicable, report <report-path>)
+Task N: complete (commits <base-sha>..<head-sha>, verification <focused-test|task-test-not-applicable|mixed>)
 ```
 
-`<report-path>` is the task's existing private report file. Before appending either line and on
-every resume that trusts it, forge requires the report to exist and match the task, commit range,
-and selected mode. A focused-test report must contain the red command and expected failure plus
-the green command and passing result. A non-applicable report must contain the exact plan reason
-and confirm that the implemented diff introduced no executable or structural contract. A stale
-`tests green` line or a missing, mismatched, or incomplete report does not close the task.
+Before appending the line, forge requires the focused-test entries to contain the red command and
+expected failure plus the green command and passing result. Each non-applicable entry must repeat
+the plan's exact reason and confirm that its implemented contract remained non-executable and
+non-structural. A missing, contradicted, or incomplete entry does not close the task. On resume,
+the completed progress-ledger line remains authoritative under forge's existing contract; no task
+report is re-parsed.
+
+Cast has no implementer report. Before returning its existing forge result, it appends and reads
+back one single-line private ledger entry per material contract:
+
+```text
+Cast verification: <contract> = focused-test (red <command-and-result>; green <command-and-result>)
+Cast verification: <contract> = task-test-not-applicable (reason <reason>)
+```
+
+Commands, results, contract names, and reasons must be non-empty single-line text. Cast rejects
+carriage return or NUL rather than inventing escaping. Its existing result record remains the
+phase boundary; the new evidence lines explain the verification judgment without changing resume
+routing.
 
 The assembled-branch guardrail run and whole-branch reviewer are unchanged. They remain the proof
 that tasks compose and the adversarial check on prose and judgment calls.
@@ -95,14 +111,18 @@ Review the finished branch adversarially through forge and quest as already requ
 
 Acceptance checks:
 
-1. A future prose-only plan can select `task-test-not-applicable` with a contract-based reason.
+1. A future prose-only contract can select `task-test-not-applicable` with a contract-based reason.
 2. A future structural Markdown or functional script task is still required to select
    `focused-test`.
 3. Forge rejects a missing, categorical, or diff-contradicted non-applicability reason.
-4. Implementer and orchestrator reports preserve which verification mode actually ran.
+4. Party reports and Cast ledger evidence preserve which verification mode ran for every material
+   changed contract.
 5. Repository guardrails and whole-branch review remain unconditional.
 
 ## Rollback
 
-Revert the instruction, documentation, ADR, and manifest changes together. No persisted or
-external data migration is required.
+Create a rollback PR that restores the previous workflow instructions and README wording, bumps
+the plugin version above the currently published version, and adds a new ADR superseding 0054 and
+restoring the prior decision. Keep this specification, plan, and ADR 0054 as historical records;
+do not delete or rewrite them. Run `just verify`. No persisted or external data migration is
+required.

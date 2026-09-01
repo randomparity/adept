@@ -22,7 +22,8 @@ useful distinction is whether the task changes an observable executable or struc
 
 ## Decision
 
-Each planned task states one of two verification modes before implementation:
+Each planned task inventories its material changed contracts before implementation. Every
+contract receives one of two verification modes, so a mixed task may carry both:
 
 1. **Focused test required.** A task that creates or changes executable behavior or a
    machine-checkable structural contract follows red-green TDD. Its plan names the test, the
@@ -35,9 +36,12 @@ The decision is evidence-based, not categorical. Documentation, Markdown, config
 small scripts receive focused tests whenever they change a machine-checkable contract or
 executable behavior. A file category or small diff is never itself a reason to omit one.
 
-Task completion records the selected mode and the private implementer-report path in the durable
-forge ledger. On resume, forge re-reads that report and revalidates the mode's required evidence;
-a completion line never replaces the evidence it points to.
+Party implementers record each contract's selected mode and evidence in the existing private task
+report; forge validates it when closing the task and records `focused-test`,
+`task-test-not-applicable`, or `mixed` in the durable progress ledger. Cast has no implementer
+report, so it appends and reads back one private ledger evidence line per contract. Resume trusts
+completed ledger entries as forge already does; this decision adds no evidence-envelope parser or
+revalidation protocol.
 
 `$spellcraft` writes the mode and its evidence into every task. `$forge` checks that choice
 against the task before work starts and returns an unsupported or vague choice to the scope or
@@ -54,7 +58,7 @@ Prose-only tasks can complete without tests that duplicate their wording. Their 
 established by applicable repository guardrails and the branch review, with the absence of a
 focused test visible as an explicit judgment rather than an omitted field.
 
-Plans, reports, and task-completion ledger lines gain a small verification-mode field.
+Plans, reports, and task-completion ledger lines gain small verification-mode fields.
 Orchestrators and reviewers must judge the reason, so two agents can disagree; requiring the
 changed contract and the missing observation to be named gives that disagreement concrete
 evidence to inspect.

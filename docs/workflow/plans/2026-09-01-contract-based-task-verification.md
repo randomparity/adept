@@ -3,13 +3,14 @@
 Goal: Let forge omit task-specific tests only when no meaningful executable or structural
 contract exists, while preserving guardrails and whole-branch review.
 
-Architecture: Spellcraft records one verification mode per task; forge validates and routes that
-mode; the existing task brief carries it unchanged to the implementer. The task report and forge
-ledger preserve the chosen evidence. No new helper or dependency is introduced.
+Architecture: Spellcraft records one verification mode per material changed contract; forge
+validates and routes those modes; the existing task brief carries them unchanged to the
+implementer. The task report and forge ledger preserve the chosen evidence. No new helper or
+dependency is introduced.
 
 Tech stack: Markdown workflow instructions and JSON plugin manifest.
-Expected implementation size: 75–115 changed lines (M) — derived from five focused instruction,
-documentation, and manifest edits in the file map below.
+Expected implementation size: 95–160 changed lines (M) — summed from the per-file allocations in
+the file map below.
 
 ## Global Constraints
 
@@ -26,11 +27,14 @@ documentation, and manifest edits in the file map below.
 
 ## File map
 
-- Modify `skills/spellcraft/SKILL.md`: require and define each task's verification decision.
-- Modify `skills/forge/SKILL.md`: validate, route, close, and ledger the two verification modes.
-- Modify `skills/forge/implementer-prompt.md`: execute and report the selected evidence.
-- Modify `README.md`: describe contract-based verification publicly.
-- Modify `.claude-plugin/plugin.json`: bump the patch version.
+- Modify `skills/spellcraft/SKILL.md` (20–35 lines): require a material-contract inventory and
+  define each contract's verification decision.
+- Modify `skills/forge/SKILL.md` (55–90 lines): validate and route per-contract modes across entry,
+  Cast, Party, closure, dispatch, ledger, prohibitions, TDD, and durability sections.
+- Modify `skills/forge/implementer-prompt.md` (15–25 lines): execute and report each contract's
+  selected evidence.
+- Modify `README.md` (4–8 lines): describe contract-based verification publicly.
+- Modify `.claude-plugin/plugin.json` (1–2 lines): bump the patch version.
 
 ## Task 1 — Route task verification by observable contract
 
@@ -44,34 +48,40 @@ Files:
 
 Interfaces:
 
-- A plan task exposes `Verification` with `Mode: focused-test` or
-  `Mode: task-test-not-applicable` and the evidence defined in the specification.
+- A plan task exposes a `Verification` inventory with one `Mode: focused-test` or
+  `Mode: task-test-not-applicable` entry for every material changed contract.
 - `task-brief` carries the block unchanged because it already copies the whole task section.
-- An implementer report returns red-green evidence or the exact non-applicability reason.
-- A forge progress entry uses one exact line from the specification, names the private report,
-  and is trusted on resume only after that report's evidence is revalidated.
+- A Party implementer report returns each contract's red-green evidence or exact
+  non-applicability reason.
+- Party progress uses the specification's exact summary line after validating the report once;
+  Cast appends and reads back the specification's exact per-contract evidence lines.
 
 Verification:
 
-- Mode: `focused-test`.
-- Observable contract: a changed plugin tree must increment the manifest version above the base
-  version.
-- Red command: `BASE_SHA=$(git merge-base HEAD main) just version-check` before the manifest
-  bump; expect exit 1 with `the tree differs from <base-sha> but the version did not increase:
-  4.0.0 at the base ref, 4.0.0 here`.
-- Green command: the same command after the manifest bump; expect exit 0.
-- The focused test covers only the machine-checkable version contract. Do not add a test that
-  asserts the changed Markdown wording.
+- Contract: Forge, Spellcraft, implementer-template, and README instruction behavior.
+  - Mode: `task-test-not-applicable`.
+  - Changed surface: normative workflow and public explanatory prose.
+  - Reason: these edits add no executable behavior or machine-checkable structural contract; a
+    focused task test could only pin wording. Existing structural guardrails and the required
+    design, branch, and forge reviews still run but do not substitute for this reason.
+- Contract: changed plugin trees increment the manifest version above the base version.
+  - Mode: `focused-test`.
+  - Red command: `BASE_SHA=$(git merge-base HEAD main) just version-check` before the manifest
+    bump; expect exit 1 with `the tree differs from <base-sha> but the version did not increase:
+    4.0.0 at the base ref, 4.0.0 here`.
+  - Green command: the same command after the manifest bump; expect exit 0.
 
 Steps:
 
-1. Update Spellcraft's task-authoring rules to require the two-mode `Verification` block, define
-   the evidence for each mode, and reject categorical or vague non-applicability reasons.
+1. Update Spellcraft's task-authoring rules to require a per-contract `Verification` inventory,
+   define the evidence for each mode, require focused evidence to cover its named contract, and
+   reject categorical or vague non-applicability reasons.
 2. Update Forge's entry contract, Cast and Party execution, per-task closure, dispatch content,
-   the specification's exact ledger lines and resume validation, prohibitions, and TDD section so
-   it validates and preserves the selected mode.
-3. Update the implementer template to follow the selected mode, reject contradictions, and report
-   red-green evidence or the exact confirmed non-applicability reason.
+   the specification's exact Party summary and Cast evidence lines, prohibitions, TDD, and
+   durability sections so it validates and preserves every contract's selected mode without a
+   new resume parser.
+3. Update the implementer template to follow each selected mode, reject contradictions, and
+   report red-green evidence or the exact confirmed non-applicability reason per contract.
 4. Update README's build description and skill table to describe meaningful focused tests or a
    recorded non-applicability reason, with guardrails always required.
 5. Run `BASE_SHA=$(git merge-base HEAD main) just version-check`; expect the red result named in
@@ -93,5 +103,6 @@ Acceptance:
 
 ## Rollback
 
-Revert the implementation commit. Do not retain README or manifest claims that the installed forge
-contract does not implement.
+Create a rollback PR that restores the previous workflow and README text, increments the plugin
+version above the current release, and adds an ADR superseding 0054 and restoring the prior
+decision. Preserve the merged ADR, specification, and plan as history, and run `just verify`.
