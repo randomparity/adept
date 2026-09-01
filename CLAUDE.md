@@ -43,9 +43,17 @@ Plans and specs name the checkout root as `$WORK` rather than writing it out: th
 `just verify` is the guardrail suite. CI runs it as `just ci`, and prek runs its `commit-check` subset on every commit, so it is the same chain in all three places — never a re-typed command string.
 
 ```sh
-just hooks    # once per clone: installs prek and the managed pre-push hook
+just setup    # once per clone: installs the gate tools, then runs just hooks
 just verify
 ```
+
+`just setup` runs `scripts/setup.sh` and then `just hooks`. The script's tool list is the
+one `.github/workflows/verify.yml` installs, so a workstation can run every gate CI
+hard-gates; it takes each tool from the host's package manager (Homebrew on macOS;
+`apt-get`, `dnf` or `pacman` on Linux) and falls back to a tool's own upstream channel only
+where no supported manager carries it. `just` itself is a prerequisite rather than
+something it installs — the recipe cannot install what is running it. `./scripts/setup.sh
+--dry-run` prints the plan without touching the host.
 
 Run gates bare — no pipes that swallow an exit code, no `|| true`. A gate's exit status is the verdict.
 

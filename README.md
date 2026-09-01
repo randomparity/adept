@@ -139,8 +139,20 @@ condition that would reopen it.
 
 ## Working on this repository
 
+    just setup      # once per clone: installs the gate tools, then the hooks
     just verify     # the guardrail suite: gates, suites, linters, manifests
-    just hooks      # once per clone: installs prek and the pre-push hook
+    just hooks      # installs prek and the pre-push hook; `just setup` runs it
+
+`just setup` needs `just` and `git` already present — it runs from a just recipe, so it
+cannot install the thing running it — and on macOS it needs Homebrew. On Linux it uses
+`apt-get`, `dnf` or `pacman`, whichever it finds. Tools those managers do not carry come
+from their own upstream channels: `prek` and the pinned `zizmor` through `uv`, `claude`
+through `npm`, and `actionlint` through its own download script on apt and dnf. Anything
+already on `PATH` is left alone, so a re-run installs only what is missing.
+
+    ./scripts/setup.sh --dry-run
+
+prints every command it would run and changes nothing.
 
 To try un-pushed changes in Claude Code without installing anything:
 

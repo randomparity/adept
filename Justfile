@@ -3,6 +3,16 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 default:
   just --list
 
+# Installs the tools `just verify` needs, then the hooks. `&&` makes hooks a
+# subsequent dependency, so it runs after the script rather than before it --
+# `just hooks` needs the prek the script installs. The body stays one
+# unconditional line: a Justfile recipe body is invisible to
+# list-shell-sources.sh, so logic written here would be unseen by shellcheck and
+# shfmt and could carry no suite (ADR 0036). Use `./scripts/setup.sh --dry-run`
+# to see what it would install without installing anything.
+setup: && hooks
+  ./scripts/setup.sh
+
 hooks:
   #!/usr/bin/env bash
   set -euo pipefail
