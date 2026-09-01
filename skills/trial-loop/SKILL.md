@@ -119,9 +119,11 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   aggregate ceiling would block a second review that is genuinely warranted.
 
   It is **not** keyed on the run token. That token is minted per run and unique per
-  target, and the runs this figure exists to make visible are a spec review and then a
-  plan review — different targets, so different tokens. The carry belongs to the caller,
-  the only party that knows two runs reviewed one change; see *Caller contract*.
+  target, and the runs this figure exists to make visible are different targets, so
+  different tokens — a spec review and then a plan review in the run described above,
+  and a design review and then a branch review now that `$spellcraft` reviews its
+  design set once. The carry belongs to the caller, the only party that knows two runs
+  reviewed one change; see *Caller contract*.
 - `charter`: the scope boundary you freeze before iteration 1 (below). Not an
   argument the caller types — you derive it.
 
@@ -830,12 +832,13 @@ fastest when the focus is dropped after pass 1.
 
 Respecting accepted ADRs is built into `$gauntlet`: it reads a target's
 governing ADRs and treats settled decisions as supersede-only, so a caller need
-not paste "don't reopen settled choices" focus text for the behavior to hold. Some
-callers still pass it as explicit reinforcement (`$spellcraft`'s spec- and plan-review
-calls) — harmless because the ADR it points at is genuinely settled: `$spellcraft` now
-runs a dedicated ADR-review step (as a `$gauntlet` file-list target) before the
-spec review, so the companion ADR is hardened on its merits first and the later
-spec/plan reviews reinforce an already-reviewed decision, not an unreviewed shield.
+not paste "don't reopen settled choices" focus text for the behavior to hold.
+
+`$spellcraft`'s design review is the one call that needs the opposite said explicitly. Its
+target is a file-list holding the design's own ADRs alongside the spec and plan, so the
+default would treat the change's new decision as settled ground and neuter the review of
+it. Its focus text draws the line the default cannot: an ADR **in** the target set is a
+review target challenged on its merits, while an ADR the spec merely links to stays settled.
 You may add focus to emphasise a specific ADR, but the default behavior already holds
 without it. `$detect-evil` delegates the same schema and suppression contract to `$gauntlet`:
 accepted ADRs can settle re-litigation, never a vulnerability fact outside the record, and every
