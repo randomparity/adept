@@ -256,8 +256,8 @@ Add to the spec:
    after spot-checked agreement with a human-reviewed sample; a model grading
    its own output is not evidence.
 
-The eval cases are acceptance criteria: `$forge` implements them as
-tests alongside the feature, not after it ships.
+The eval cases are acceptance criteria: `$forge` implements them as executable tests when their
+observable contract supports one, or as the spec's bounded evaluation when it does not.
 
 ### Security-relevant changes require a threat model
 
@@ -372,14 +372,14 @@ a file you are modifying that has grown unwieldy.
 plausibly differ on either side of it: if no reviewer could accept the work
 before the line while rejecting the work after it, there is one task there, not
 two. Setup, configuration, scaffolding and documentation are not tasks — they
-belong to whichever deliverable needs them. Each task ends at something testable
+belong to whichever deliverable needs them. Each task ends at something verifiable
 on its own.
 
-**Size the steps to one action each**, two to five minutes' work, in the order
-that makes the test do the proving: write the failing test, run it and confirm
-it fails, write the minimal implementation, run it and confirm it passes,
-commit. The confirm-it-fails step is the one that gets skipped and the one that
-establishes the test can fail at all.
+**Size the steps to one action each**, two to five minutes' work. For each
+machine-checkable contract, order them so the focused test does the proving:
+write it, confirm the expected failure, implement, confirm the pass, then commit.
+For a contract with no meaningful executable or structural observation, start
+with implementation and retain its exact non-applicability reason instead.
 
 Start the plan with a header carrying the goal in a sentence, the architecture
 in two or three, the tech stack, and a **Global Constraints** section holding
@@ -423,6 +423,22 @@ Give each task:
 - the repo conventions and guardrail commands that bind it
 - rollback or cleanup expectations where they apply
 
+Before its steps, give each task a **Verification** inventory with one entry per material changed
+contract. An entry names the contract and uses exactly one mode:
+
+- `Mode: focused-test` names the observable contract, test file or case, expected red failure,
+  and exact focused green command.
+- `Mode: task-test-not-applicable` names the changed surface and the concrete reason no
+  task-specific executable or structural observation could fail meaningfully.
+
+Focused evidence covers only its named contract; one passing test cannot stand in for an unrelated
+contract in a mixed task. Reject the second mode when its reason is only file type, task size,
+convenience, or the existence of repository guardrails. It is also invalid for changed executable
+behavior, parsers, schemas, record shapes, validation rules, generated artifacts, or other
+machine-checkable structure. A described human-readable report or ledger shape is not
+machine-checkable when no executable consumer validates it. Never invent a test that searches for
+or snapshots prose wording.
+
 Repeat code across tasks rather than cross-referencing another task. This is the
 one place DRY is deliberately not applied, and the reason is that tasks get read
 out of order: "similar to Task 3" is unreadable to someone who has not read
@@ -435,7 +451,8 @@ plan containing one is not finished:
   "fill this in", "decide later"
 - an instruction whose object is unnamed: handle the errors, validate the
   input, cover the edge cases. *Which* errors, and what should happen?
-- an instruction to write tests, with no test written
+- a `focused-test` entry that names no concrete test, red observation, or green command
+- a missing contract entry, or a categorical or vague `task-test-not-applicable` reason
 - a cross-reference used to avoid repeating something — "as in Task 4"
 - a step naming an outcome without the means to reach it
 - a type, function, or signature used but defined by no task
@@ -446,6 +463,8 @@ plan containing one is not finished:
 **Then self-review the finished plan against the spec, with fresh eyes.** Walk
 each spec requirement and point to the task implementing it; a requirement with
 no task means adding the task. Sweep for the placeholder patterns above. Check
+that every material changed contract has exactly one supported verification mode and that mixed
+tasks do not let one focused test stand in for another contract. Check
 that the names, signatures, and properties used in later tasks match what
 earlier tasks defined — a function called `clearLayers()` in Task 3 and
 `clearFullLayers()` in Task 7 is a defect the implementer inherits. Ground every

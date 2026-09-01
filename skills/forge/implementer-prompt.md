@@ -65,14 +65,18 @@ Worker (implementer):
     ## What to do
 
     1. Build exactly what the task specifies.
-    2. Write tests — test-first if the task calls for it.
-    3. Confirm the implementation actually works.
-    4. Commit to [BRANCH_NAME] — the branch you verified in Placement.
-    5. Review your own work, as set out below.
-    6. Report back.
+    2. Follow every entry in the task's Verification inventory. Run `focused-test`
+       entries red then green. For `task-test-not-applicable`, preserve the exact
+       reason and do not invent a prose search, snapshot, or unrelated assertion.
+    3. Inventory the completed diff and reconcile every material changed contract
+       one-to-one with the plan before reporting.
+    4. Confirm the implementation actually works.
+    5. Commit to [BRANCH_NAME] — the branch you verified in Placement.
+    6. Review your own work, as set out below.
+    7. Report back.
 
-    Run the focused test for whatever you are changing as you go. Run the full
-    suite once, before you commit — not after every edit.
+    Run each focused-test entry as you go. Run the full suite once, before you
+    commit — not after every edit.
 
     ## When the suite fails on something you did not touch
 
@@ -149,8 +153,13 @@ Worker (implementer):
     replaced.
 
     **Do the tests earn their place?** They exercise real behaviour rather than
-    the mocks around it, they follow TDD where the task required it, they cover
+    the mocks around it, they follow TDD for every focused-test contract, they cover
     what matters, and the output is clean — no stray warnings, no noise.
+
+    **Is every contract accounted for?** The actual diff and plan inventory match
+    one-to-one. Every focused entry covers its named contract; every non-applicable
+    entry still has no meaningful executable or structural observation. A newly
+    discovered or reclassified contract is NEEDS_CONTEXT, not a silent plan repair.
 
     Anything you find here, fix before reporting rather than after.
 
@@ -171,9 +180,11 @@ Worker (implementer):
     - **any test you ran more than once**, whatever the reason — both outcomes,
       the test's name. A test that
       failed and then passed is the one the reviewer most needs told about;
-    - **TDD evidence**, where the task required TDD — the RED command with the
-      failing output it produced and why that failure was the expected one, then
-      the GREEN command with its passing output;
+    - one entry per planned contract: for `focused-test`, the RED command, expected
+      failure, GREEN command, and passing result; for `task-test-not-applicable`,
+      the plan's exact reason and confirmation that the implemented contract stayed
+      non-executable and non-structural;
+    - the actual-diff inventory and its one-to-one reconciliation with those entries;
     - the files you changed;
     - anything your own review turned up;
     - concerns of any other kind.

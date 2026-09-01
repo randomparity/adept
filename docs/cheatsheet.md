@@ -39,7 +39,7 @@ attunement (preflight)
   -> branch
   -> spellcraft (spec, ADR, plan — skipped for trivial work)
        -> oathbind (scope audit, non-trivial only)
-  -> forge (TDD build)
+  -> forge (contract-based verification)
   -> trial-loop (adversarial review + fix loop)
        -> detect-evil (security pass, when the diff is security-relevant)
   -> dispel (simplify)
@@ -61,7 +61,7 @@ read-only step, not a new stage of `/quest` itself.
 | `attunement` | Discover repo conventions, base branch, guardrail commands, gh auth | `quest`, `campaign`, `deliver`, `forge`, `spellcraft` |
 | `spellcraft` | Write a spec/ADR and implementation plan for a non-trivial change, with adversarial review of both | `quest` |
 | `oathbind` | Audit a completed design against its frozen scope before implementation | `quest` (step 4) |
-| `forge` | Implement an approved plan with TDD and the guardrail suite | `quest`, `deliver`, `return-to-town` |
+| `forge` | Implement an approved plan with focused TDD where applicable, recorded non-applicability reasons, and the guardrail suite | `quest`, `deliver`, `return-to-town` |
 | `trial-loop` | Iterative adversarial review → fix → re-review loop, with deferral records for disposed findings | `quest`, `forge`, `gauntlet`, `spellcraft` |
 | `gauntlet` | One-shot hostile/adversarial review of code, diffs, specs, or plans | `trial-loop`, `forge` |
 | `detect-evil` | Diff-scoped security pass: validation, auth, secrets, crypto, supply chain | `quest` (step 6, when diff is security-relevant) |

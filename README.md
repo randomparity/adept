@@ -24,6 +24,11 @@ converges or stops and says why. The same loop runs again on the finished branch
 Defects are cheapest in the spec, then the plan, then the source, and this is what
 spends the effort there.
 
+**Verification follows the changed contract.** Forge uses focused red-green tests for executable
+behavior and machine-checkable structure. When no meaningful task-specific observation exists, it
+records why instead of inventing a brittle prose assertion; repository guardrails and branch
+review still run.
+
 **The vocabulary names the phase, not the tool.** `/quest` an issue, `/forge` the build,
 run the `/gauntlet` over it, `/dispel` what's overcomplicated, `/deliver` it, then
 `/return-to-town`. The D&D framing is deliberate and it earns its keep: the names are
@@ -74,8 +79,9 @@ who can answer, and it records everything else. What you see, in order:
 3. **Design.** For non-trivial work it writes a spec and an ADR, has both attacked by a
    fresh reviewer, fixes what survives, then writes an implementation plan and does it
    again. Trivial changes skip straight to the build.
-4. **Build.** Test first: the failing test, the confirmation that it *does* fail, then
-   the smallest implementation that passes. Guardrails green at every commit.
+4. **Build.** Forge inventories each changed contract. Executable behavior and
+   machine-checkable structure get a focused red-green test; otherwise Forge records why a
+   task-specific test is not applicable. Guardrails stay green at every commit.
 5. **Review.** The whole branch goes to an adversarial reviewer — auth, data loss,
    races, rollback, degraded dependencies, and whether a simpler approach was available.
    If the diff touches a trust boundary, a security pass runs on top. You see a verdict,
@@ -103,7 +109,7 @@ for which situation — is the [cheat sheet](docs/cheatsheet.md).
 | **End-to-end** | `quest` drives one issue through the whole pipeline; `campaign` drives a set of them, in parallel where safe, merging serially |
 | **Planning** | `saga` turns an idea into an epic; `bounty` files a verified issue; `divination` sizes one; `sort-board` triages a backlog; `seek-quest` picks what's next |
 | **Design** | `attunement` reads the repo's conventions, base branch, and guardrail commands before anything runs; `spellcraft` writes and hardens the spec, ADR, and plan; `oathbind` audits the finished design against its frozen scope before any code |
-| **Build & review** | `forge` builds test-first; `trial-loop` runs review-and-fix until it converges; `gauntlet` is a one-shot hostile review; `detect-evil` is the security pass; `detect-curse` root-causes a failure before you change anything; `dispel` simplifies; `summon-swarm` fans high-volume generation out to parallel Codex workers |
+| **Build & review** | `forge` requires meaningful contract evidence and uses TDD where behavior or structure is testable; `trial-loop` runs review-and-fix until it converges; `gauntlet` is a one-shot hostile review; `detect-evil` is the security pass; `detect-curse` root-causes a failure before you change anything; `dispel` simplifies; `summon-swarm` fans high-volume generation out to parallel Codex workers |
 | **Shipping** | `deliver` opens the PR and drives CI green; `return-to-town` hands off or merges; `counterspell` reverses a merged PR that turned out bad |
 | **Hygiene** | `reincarnate` rebuilds stale AI guidance from current repository evidence; `resurrection` reconciles stale labels; `clear-map` prunes landed branches; `restock` handles Dependabot; `warding` sweeps for maintenance work |
 | **Knowledge** | `grimoire` records a hard-won solution; `bards-tale` mines the workflow telemetry into a retrospective |
