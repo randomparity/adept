@@ -66,17 +66,31 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   hash.
 - `focus`: optional focus text appended after the target arguments. This is
   also part of the supplied challenge arguments — challenge extracts it.
-- `iteration_budget`: optional caller-supplied cycle cap, 2 through 5; omission
-  means 5. Only a caller holding a validated risk assessment — a triage subtype,
-  a divination verdict, an explicit human instruction, or a reversal-cost assessment
-  recorded under the `$counterspell` path (ADR 0031) — may lower it; the loop
-  never derives a lower budget itself. The floor is 2 because a pass that
-  applied fixes always needs a confirming pass. A lower budget is not a lower
-  bar: the final-iteration stop condition still blocks on unresolved
-  **consequential** findings — it just fires earlier, because on a small
-  well-understood change the passes a
-  full budget adds mostly re-review surface earlier passes wrote, and each pass
-  is a fresh full-context reviewer, the loop's dominant cost.
+- `iteration_budget`: optional caller-supplied cycle cap. **Omission means 2 — one
+  fixing pass and one confirming pass — and the ordinary ceiling is 3.** The floor is
+  2 because a pass that applied fixes always needs a confirming pass.
+
+  **Raising it past 3 takes explicit human authorization**, recorded in the run report
+  with who gave it and what it authorized. A triage subtype, a divination verdict, or a
+  reversal-cost assessment recorded under the `$counterspell` path (ADR 0031) is not
+  that authorization: those are evidence a change is risky, and the loop's answer to
+  risk is a blocking finding it will not approve past, not more passes over the same
+  target. The loop never raises its own budget, and never derives 4 or 5 from a risk
+  signal alone.
+
+  This inverts the earlier rule, which defaulted to 5 and let a caller only lower it.
+  The reason is measured rather than stylistic: review quality saturates after roughly
+  three passes, and later passes overwhelmingly re-review surface the earlier passes'
+  own fixes wrote — the self-collision the stop conditions below already had to detect
+  and end. Each pass is a fresh full-context reviewer, the loop's dominant cost, so the
+  budget that used to be the default was paying most of its cost after the point where
+  it stopped buying anything.
+
+  A lower budget is not a lower bar. The final-iteration stop condition still blocks on
+  unresolved **blocking** findings; it just fires sooner. What made a 5-budget feel
+  necessary was a verdict that could not be `approve` while any defensible finding
+  stood — so every note held the loop open. With notes no longer withholding the
+  verdict (ADR 0049), 2 passes is the common case rather than a squeeze.
 - `charter`: the scope boundary you freeze before iteration 1 (below). Not an
   argument the caller types — you derive it.
 
@@ -111,7 +125,7 @@ and starts a new cycle under the existing rescope caps.
 
 Two terms, used precisely below. A **run** is one `$trial-loop` invocation, start
 to report. A **cycle** is one charter's iterations, up to the `iteration_budget`
-(five unless the caller lowered it); a charter change
+(two unless the caller raised it); a charter change
 starts a new cycle inside the same run. Disclosure and the final report are always
 **run**-scoped.
 
@@ -152,7 +166,7 @@ When docs/debt is outside surface, return SCOPE CHECKPOINT or park; never write 
 **Transmitted exclusions are advisory, and cannot be your convergence mechanism.**
 Nothing in either supported reviewer lets focus text retire a defensible finding: each contract is
 to weight focus heavily and *still* report any material issue it can defend, and to
-approve only when no defensible finding exists. So expect an owned deferral to recur
+approve only when no blocking finding exists. So expect an owned deferral to recur
 on every pass. What protects the cap is cheap re-disposition, not reviewer silence:
 a finding matching a concern already disposed of as `deferred-tracked` this run is
 **re-affirmed in one transcript line** citing the prior disposition and its owner. It
@@ -194,7 +208,8 @@ surface: <frozen permitted surface>
 ambiguities: <frozen ambiguity list>
 focus: <review focus, unchanged>
 
-Repeat up to `iteration_budget` iterations (5 unless the caller lowered it):
+Repeat up to `iteration_budget` iterations (2 unless the caller raised it, 3 without
+recorded human authorization):
 
 Each selected-reviewer dispatch below is a report wait governed by
 [dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md). Retain the
@@ -360,7 +375,8 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    worker cannot construct, so the orchestrator sees only "did not return the compact
    object" — indistinguishable from a crashed worker, a denied permission, or a
    missing `Write` tool — and a diagnosable failure becomes an undiagnosed one.
-2. Read the returned `verdict`, `findings_count`, and `suppressed_count`. If the
+2. Read the returned `verdict`, `findings_count`, `blocking_count`, and
+   `suppressed_count`. If the
    return is not the expected compact object (or `<findings-path>` was not written),
    rerun once; if still malformed, stop as blocked — and **quote whatever the worker
    returned** in that report rather than discarding it. One return is *specified* rather
@@ -376,9 +392,17 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    the previous pass's artifact in place, which satisfies an existence check and lets a
    stale `approve` exit the loop. A mismatch means a stale or failed write: rerun once,
    then stop as blocked rather than act on a stale file.
+
+   **`blocking_count` is what drives the loop.** It is how many of the pass's findings
+   are `critical` or `high`; the difference between it and `findings_count` is the note
+   residue — reported in full, dispositioned once under step 6, never a reason to spend
+   another pass. Two shapes are malformed rather than informative: an `approve` carrying
+   a non-zero `blocking_count`, and a `blocking_count` above `findings_count`. Treat
+   either exactly as the malformed compact object above — rerun once, then stop as
+   blocked — rather than reconciling it into a verdict of your own.
 3. Paste an audit line into the transcript:
    `review iteration <n>: reviewer=<gauntlet|detect-evil>, verdict=<verdict>, findings=<count>,
-   suppressed=<suppressed_count>, self_collision=<k>/<count>`.
+   blocking=<blocking_count>, suppressed=<suppressed_count>, self_collision=<k>/<count>`.
    Count `<k>` on **every** pass using the self-collision definition under *Stop
    conditions* — a finding whose cited lines did not exist at the cycle-start
    baseline. The fraction is the loop's convergence signal, and a signal
@@ -428,6 +452,15 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    [heed-counsel](../../references/heed-counsel.md) to
    every finding, verifying each instead of agreeing reflexively — a finding you
    cannot defend on re-reading is `rejected-with-evidence`, not a fix.
+
+   **Notes are dispositioned, never iterated.** A `medium` or `low` finding gets a
+   step 6 disposition on the pass that raised it and does not earn a pass of its own:
+   fix it here if it is cheap and in charter, otherwise defer or reject it with
+   evidence and move on. A note that recurs on a later pass — because the reviewer is
+   naive of the run's history by design — is re-affirmed in one transcript line citing
+   the prior disposition, exactly as an owned deferral is. What ends a cycle is
+   `blocking_count` reaching zero, not the findings list emptying; waiting for silence
+   on notes is how a loop reaches its cap with nothing left to fix.
 6. Record exactly one disposition per finding:
    - `accepted-fixed` — in scope or a direct dependency of it, and fixed here. A
      finding whose severity **this change increases** is in scope to the extent of
@@ -617,7 +650,7 @@ most damage.
   against a target you did not touch is stable, not growing.
 
   It is a real terminal state because it is where a target with owned adjacent defects
-  lands — the selected reviewer cannot return `approve` while a defensible finding stands, so a
+  lands — the selected reviewer cannot return `approve` while a blocking finding stands, so a
   loop that only exits on `approve` grinds to the cap and reports blocked on a target that
   is finished. Report it distinctly — it is not `approve` — and list the records.
 - A pass **in this cycle** named the target's load-bearing factual claims and **confirmed
@@ -677,7 +710,7 @@ most damage.
   report *converged with deferrals*: its no-change half covers the whole target, where this
   exit's first condition covers only what the confirmed claims assert. The rescope and
   self-collision exits outrank this one too — they carry obligations it does not.
-- Final budgeted iteration of a cycle (the 5th by default, or the caller's
+- Final budgeted iteration of a cycle (the 2nd by default, or the caller's
   `iteration_budget`) still returns `needs-attention` → stop as blocked and
   summarize the remaining findings. Do not continue to the next workflow step
   without explicit user approval. The trigger is unchanged: `needs-attention` at

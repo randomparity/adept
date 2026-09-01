@@ -466,17 +466,16 @@ Step 8's review summary names the exit in its own `exit:` field and defines whic
 value each ending writes; nothing here repeats that. Route on the exit name rather
 than on the verdict.
 
-Pass the loop an iteration budget derived from the step 1 classification: a
-trivial bugfix or a revalidated governed small change passes
-`iteration budget: 2` — one full review pass plus one confirming pass over the
-fixes; non-trivial work leaves the loop's default of 5. Review passes are the
-pipeline's dominant cost — each is a fresh full-context reviewer — and on a
-small governed change the later passes mostly re-review test surface the
-earlier passes added. The budget lowers cost, not the bar: an unresolved
-**consequential** defensible finding at the budget still blocks per the loop's
-stop conditions, and if that happens on a change you classified trivial,
-re-examine the classification before re-entering — a trivial change that cannot
-clear two passes was not trivial. A consequence-free finding at the budget is a
+Leave the iteration budget to the loop's default of 2 — one full review pass plus
+one confirming pass over the fixes — whatever the step 1 classification. Non-trivial
+work does not buy extra passes here: the loop's ceiling is 3, and raising it takes
+explicit human authorization the classification cannot supply. Review passes are the
+pipeline's dominant cost — each is a fresh full-context reviewer — and past the
+confirming pass they mostly re-review surface the earlier passes' own fixes added.
+The budget lowers cost, not the bar: an unresolved **blocking** finding at the budget
+still blocks per the loop's stop conditions, and if that happens on a change you
+classified trivial, re-examine the classification before re-entering — a trivial
+change that cannot clear two passes was not trivial. A consequence-free finding at the budget is a
 different outcome: on a pass that confirmed the branch's load-bearing claims it
 exits *sound with record notes*, which is not blocked.
 
@@ -541,6 +540,10 @@ dispatch exists to avoid. Two properties make it safe:
   another's branch. Assert the compact object's `run_id` matches the artifact's
   before acting -- the only detector.
 - **Open the artifact when `findings_count > 0` *or* `suppressed_count > 0`.**
+  `blocking_count` says whether the loop iterates; `findings_count` is what says
+  whether there is anything to read, and an `approve` carrying notes has a non-zero
+  `findings_count` with a zero `blocking_count` — those notes still need their one
+  disposition, so the trigger stays on `findings_count`.
   A non-zero `suppressed_count` on `approve` means an accepted ADR silenced a
   security finding -- the one case the verdict cannot show. Record any
   suppression in `WORK:REVIEW` and the PR body whatever the verdict; the

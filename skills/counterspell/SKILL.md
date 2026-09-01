@@ -119,11 +119,13 @@ Urgency compresses the standard lifecycle; it does not remove its guards.
    evidence that convicted the PR — the test or command that failed now passes. For a
    hotfix, build minimally; scope discipline matters more here than anywhere, because
    every extra change widens the blast radius of an already-bad day.
-4. `$trial-loop` adversarial review with **iteration budget 2** — one full pass plus one
-   confirming pass. Never zero. The budget's lowering authority is the validated risk
-   assessment step 2 produced and recorded. A pure revert still meets a reviewer: partial
-   reverts and conflict-driven adaptations are the dominant revert failure, and urgency
-   is why the budget shrinks, not why the review disappears.
+4. `$trial-loop` adversarial review at the loop's default **iteration budget 2** — one
+   full pass plus one confirming pass. Never zero, and never raised here: the validated
+   risk assessment step 2 recorded is evidence about the change, not the human
+   authorization the loop requires to go past its ceiling. A pure revert still meets a
+   reviewer: partial reverts and conflict-driven adaptations are the dominant revert
+   failure, and urgency is why the budget stays at the floor, not why the review
+   disappears.
 
    Two exits leave the pipeline here: a finding requiring a design decision means the
    change has outgrown this path (release the claim, hand the working issue to full
