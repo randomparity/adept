@@ -406,7 +406,8 @@ artifacts themselves — this measures the implementation the plan produces. The
 same three fields where it did not; a band that disagrees with your own range means one of
 them is wrong, and saying which is part of writing the line. This is the denominator step 3
 measures the design against, so an inflated range is a defeated control rather than a
-generous one.
+generous one. That ratio is the range's only authority: it is an estimate, not a budget or
+ceiling on the implementation.
 
 Give each task:
 
