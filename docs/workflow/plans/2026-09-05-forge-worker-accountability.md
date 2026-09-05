@@ -12,19 +12,23 @@ non-test paths to the task base inside the party worktree, runs a focused entry'
 requires a non-zero exit, and restores the tree under a trap. Contract text in
 `skills/forge/SKILL.md` puts that invocation into the per-task loop and adds a `Forge-Dispatch`
 trailer check beside the existing ancestry check; `skills/forge/implementer-prompt.md` makes the
-trailer a placement value the worker verifies and emits.
+trailer a placement value the worker verifies and emits. A fixture builder under
+`tests/fixtures/forge/` supplies the repository shapes the ten agent-behaviour evaluation cases
+run against, so the instruction change is evaluated rather than merely reviewed.
 
 **Tech stack.** Bash and Markdown. No dependencies, no build step. Gates are `just verify`.
 
-**Expected implementation size: 470–580 changed lines (M) — summed from the file map below: the
-script and its behaviour suite are the bulk, and the suite is sized against its three siblings in
-`tests/fixtures/forge/`, which run 325–366 lines each.**
+**Expected implementation size: 750–870 changed lines (L) — summed from the file map below, and
+from the four code blocks this plan carries verbatim: 261 (verify-red suite) + 259 (verify-red) +
+67 (eval-fixtures suite) + 84 (eval-fixtures) = 671, plus roughly 100 lines of contract text in
+`skills/forge/SKILL.md`, 22 in `implementer-prompt.md`, and the one-line version bump. The two
+verify-red files are sized against their three siblings in `tests/fixtures/forge/`, which run
+325–366 lines each.**
 
-The design-to-implementation ratio sits in the note band. It is deliverable-driven rather than
-argument-driven: this repository's plans carry complete code in every step that changes code, so
-the script and the suite appear here in full and again in the tree. Recorded rather than cut —
-trimming the embedded deliverable to move a ratio would remove the thing that makes the plan
-executable by a context-free implementer.
+The design-to-implementation ratio is deliverable-driven rather than argument-driven: this
+repository's plans carry complete code in every step that changes code, so all four files appear
+here in full and again in the tree. The estimate is the one the file map yields — it grew because
+Task 3 was added, not to move a ratio.
 
 ## Global constraints
 
@@ -53,6 +57,8 @@ executable by a context-free implementer.
 |---|---|---|
 | `skills/forge/scripts/verify-red` | create | reverting, running, restoring, and reporting one focused entry's red outcome |
 | `tests/fixtures/forge/verify-red-test.sh` | create | every exit code and every restoration path of that script |
+| `tests/fixtures/forge/eval-fixtures.sh` | create | deterministic fixture repositories for the ten agent-behaviour evaluation cases |
+| `tests/fixtures/forge/eval-fixtures-test.sh` | create | that builder's five shapes and its error paths |
 | `skills/forge/SKILL.md` | modify | when the orchestrator invokes it, how each outcome routes, the trailer check, the dispatch value |
 | `skills/forge/implementer-prompt.md` | modify | the trailer as a placement value the worker verifies and emits |
 | `.claude-plugin/plugin.json` | modify | version bump |
@@ -84,6 +90,7 @@ Exit codes, which are the interface Task 2 routes on:
 | 3 | precondition failure, printed on stderr |
 | 4 | `verify-red: red-not-separable (every path changed in BASE..HEAD is a named test path)` |
 | 5 | restoration failure, printed on stderr |
+| 6 | the verdict line on stdout, plus `verify-red: red-command-dirtied-tree (tracked paths left modified)` and the paths on stderr |
 
 ### Verification
 
@@ -271,18 +278,48 @@ run_script --base "$SPACE_BASE" --head "$SPACE_HEAD" --test impl-test.sh -- bash
 assert_status 0 "path with a space"
 assert_clean "path with a space"
 
-# A rename is a delete and an add inside one range, so both halves have to come back.
+# A rename is a delete and an add inside one range, and both halves have to be undone. The probe
+# reads the rename's *source* at its base content, so it exits 0 only when the source really was
+# restored -- which the script then reports as red-not-reproduced, exit 1. Asserting exit 1 here
+# is what makes the case bite: drop --no-renames from the script and the source is never restored,
+# the probe fails, and this asserts 1 against an actual 0.
 make_repo
 git -C "$REPO" mv impl.sh renamed.sh
 printf '#!/usr/bin/env bash\ngrep -q new renamed.sh\n' >"$REPO/impl-test.sh"
 git -C "$REPO" add -A
 git -C "$REPO" commit -qm rename-impl
 REN_HEAD=$(git -C "$REPO" rev-parse HEAD)
-run_script --base "$HEAD_SHA" --head "$REN_HEAD" --test impl-test.sh -- bash impl-test.sh
-assert_status 0 "renamed implementation file"
-assert_clean "renamed implementation file"
-[ -f "$REPO/renamed.sh" ] || fail "renamed implementation file: not restored"
-[ ! -f "$REPO/impl.sh" ] || fail "renamed implementation file: old path left behind"
+run_script --base "$HEAD_SHA" --head "$REN_HEAD" --test impl-test.sh -- grep -q new impl.sh
+assert_status 1 "rename source restored to its base content"
+assert_clean "rename source restored to its base content"
+[ -f "$REPO/renamed.sh" ] || fail "rename: destination not restored"
+[ ! -f "$REPO/impl.sh" ] || fail "rename: source left behind after restoration"
+
+# Every focused entry's test file is passed on every invocation. Otherwise a sibling entry's test
+# file is classified as implementation and reverted, and the command then fails because its helper
+# vanished rather than because the implementation did -- a vacuous red-confirmed. The helper reads
+# the reverted implementation, so with both files passed the command exits 0 and the script says
+# red-not-reproduced (exit 1); drop one --test and the helper is gone, the command dies, and this
+# asserts 1 against an actual 0.
+make_repo
+printf 'helper() { grep -q old impl.sh; }\n' >"$REPO/helper-test.sh"
+printf '#!/usr/bin/env bash\n. ./helper-test.sh\nhelper\n' >"$REPO/impl-test.sh"
+git -C "$REPO" add -A
+git -C "$REPO" commit -qm sibling-test
+SIB_HEAD=$(git -C "$REPO" rev-parse HEAD)
+run_script --base "$BASE" --head "$SIB_HEAD" --test impl-test.sh --test helper-test.sh \
+	-- bash impl-test.sh
+assert_status 1 "sibling test file preserved"
+assert_clean "sibling test file preserved"
+
+# A command that modifies a tracked path this script did not revert gets its own exit, so the
+# residue is reported against the command that made it rather than stopping the next entry.
+make_repo
+run_script --base "$BASE" --head "$HEAD_SHA" --test impl-test.sh -- \
+	bash -c 'printf tainted >>impl-test.sh; exit 1'
+assert_status 6 "command modified a tracked path"
+grep -q 'red-confirmed' "$SCRATCH/out" ||
+	fail "command modified a tracked path: verdict not reported alongside the residue"
 
 # A red command that writes an artifact must still report the verdict, not an unrestored tree.
 make_repo
@@ -360,6 +397,8 @@ the red state: the suite runs and the script is absent.
 #                             pending tracked modifications, empty range, untouched --test path
 #   4  red-not-separable      every changed path is a named test path; nothing to revert
 #   5  restoration failure    a reverted path is not back at HEAD; nothing may proceed
+#   6  command dirtied tree   the verdict is on stdout, but the command modified tracked paths
+#                             this script did not revert and cannot restore
 #
 # A command containing shell operators must be passed as `bash -c '<command>'`: the argument
 # vector after `--` is executed directly, not through a shell.
@@ -444,7 +483,11 @@ pending=$(git status --porcelain --untracked-files=no) ||
 # leaving a diff that could not run indistinguishable from a range that changed nothing.
 listing=$(mktemp "${TMPDIR:-/tmp}/verify-red.XXXXXX") ||
 	precondition 'could not create a scratch file for the path list'
-if ! git diff -z --name-only "$base_sha" "$head_sha" >"$listing"; then
+# --no-renames is load-bearing. With rename detection on, `--name-only` prints only a rename's
+# destination, so the source path never enters the set, never gets checked out from BASE, and the
+# command runs against a tree missing a file the task base had. Turning detection off reports the
+# rename as the delete and the add it physically is, which is exactly what has to be undone.
+if ! git diff -z --no-renames --name-only "$base_sha" "$head_sha" >"$listing"; then
 	rm -f -- "$listing"
 	precondition "could not diff $base..$head"
 fi
@@ -575,12 +618,27 @@ git diff --quiet HEAD -- "${implementation[@]}" ||
 
 if [ "$red_status" -ne 0 ]; then
 	printf 'verify-red: red-confirmed (command exit %s)\n' "$red_status"
-	exit 0
+	verdict=0
+else
+	printf 'verify-red: red-not-reproduced (command exit 0 with %s implementation path(s) at %s)\n' \
+		"${#implementation[@]}" "$(git rev-parse --short "$base_sha")"
+	verdict=1
 fi
 
-printf 'verify-red: red-not-reproduced (command exit 0 with %s implementation path(s) at %s)\n' \
-	"${#implementation[@]}" "$(git rev-parse --short "$base_sha")"
-exit 1
+# The verdict is printed first because it is real either way: the command ran and its status is
+# the answer. What follows is a separate fact -- the command modified tracked paths this script
+# did not revert, so it cannot restore them and will not guess. Reported as its own exit rather
+# than folded into the verdict, because leaving it silent would hand the next focused entry a
+# dirty tree and stop it on exit 3, one entry away from the command that caused it.
+residue=$(git status --porcelain --untracked-files=no) ||
+	restoration_failed 'could not read the working tree status'
+if [ -n "$residue" ]; then
+	printf 'verify-red: red-command-dirtied-tree (tracked paths left modified):\n%s\n' \
+		"$residue" >&2
+	exit 6
+fi
+
+exit "$verdict"
 ```
 
 **1.4 — Run the suite green.**
@@ -604,8 +662,13 @@ Expect exit 0. Commit as `feat(forge): re-derive a task's red claim with verify-
 - `skills/forge/scripts/verify-red` exists, is executable, and starts `#!/usr/bin/env bash` with
   `set -euo pipefail`.
 - `just test verify-red` exits 0.
-- Every exit code in the Interfaces table — 0, 1, 2, 3, 4 and 5 — is asserted by at least one
+- Every exit code in the Interfaces table — 0, 1, 2, 3, 4, 5 and 6 — is asserted by at least one
   case in the suite.
+- The suite's assertions bite. Each of these mutations must redden it: replacing `git rm` with a
+  bare `rm` in `restore`; dropping `--no-renames`; dropping either the `--head` or the `--test`
+  precondition; inverting `red_status`; and replacing the scoped restoration proof with a
+  whole-tree `git diff --quiet HEAD` — that last one is what the exit-6 case exists to catch,
+  since the scoping decision is otherwise argued for in three documents and exercised by none.
 - After every case that reaches the command, `git status --porcelain --untracked-files=no` in the
   fixture is empty. Untracked output the command left is deliberately not asserted away: the
   suite asserts what the script promises, and the script promises the reverted paths.
@@ -640,7 +703,7 @@ Provided to nothing further in this plan.
   that the skill still shapes correctly and that every reference link resolves — are covered by
   `just shape-check` inside `just verify`, which this task runs.
 
-The agent-behavior evaluation cases `EV-1` through `EV-9` in the design's *AI surface* section
+The agent-behavior evaluation cases `EV-1` through `EV-10` in the design's *AI surface* section
 are run against the changed instructions after this task, with a fresh evaluator, comparing
 observable routes to that table.
 
@@ -713,8 +776,11 @@ currently ends with the stray-commit reasoning. Append to it:
 and verifies one entry per planned contract. Append to it:
 
 ```
-   A focused entry's red half is then re-derived rather than read. From the
-   assigned worktree, for each focused entry:
+   A focused entry's red half is then re-derived rather than read. Run with the
+   assigned worktree as the working directory, invoking the skill's own
+   `scripts/verify-red` the way `scripts/task-brief` and `scripts/review-package`
+   are already invoked — the script ships beside this skill, not in the target
+   repository. For each focused entry:
 
        scripts/verify-red --base <BASE> --head <HEAD> --test <the entry's test file> -- <the entry's exact red command>
 
@@ -724,12 +790,19 @@ and verifies one entry per planned contract. Append to it:
    operators as `bash -c '<command>'` — the argument vector runs directly, not
    through a shell.
 
-   `--test` takes **files**. Where the entry names a case rather than a file,
-   pass the file part — everything before the `::` or the runner's selector
-   flag. Where the entry names a test file this task did not change, the check
-   does not apply to it: that entry returns to the plan checkpoint, because an
-   inventory naming a test the task never touched is a plan defect rather than a
-   verdict about red.
+   `--test` takes **files**, and on every invocation you pass **every** test
+   file the task's Verification inventory names — not just the entry under
+   check. A test file left out is classified as implementation and reverted, so
+   the command then fails because a sibling entry's test file vanished rather
+   than because the implementation did. That is a vacuous `red-confirmed`: the
+   check manufacturing its own evidence. Only the command after `--` changes
+   from entry to entry.
+
+   Where an entry names a case rather than a file, pass the file part —
+   everything before the `::` or the runner's selector flag. Where an entry
+   names a test file this task did not change, the check does not apply to it:
+   that entry returns to the plan checkpoint, because an inventory naming a test
+   the task never touched is a plan defect rather than a verdict about red.
 
    Route on its exit status, which is the interface:
 
@@ -740,6 +813,12 @@ and verifies one entry per planned contract. Append to it:
    - **4** (`red-not-separable`) — every path the task changed is a named test
      file, so there was nothing to revert. Record the outcome and continue; the
      entry is not verified and must not be described as though it were.
+   - **6** (`red-command-dirtied-tree`) — the verdict on stdout is real, but the
+     red command modified tracked paths `verify-red` did not revert and cannot
+     restore. Stop and resolve the tree. Do not close the entry on the verdict
+     alone: the residue belongs to the command that made it, and carrying it
+     forward stops the next entry on a precondition one entry away from its
+     cause.
    - **2**, **3**, or **5** — the check could not run, or the tree is not back
      at HEAD. Stop. A 5 leaves the worktree unresolved and nothing may proceed
      past it, exactly as a reviewer's `CLEANUP_FAILED` does.
@@ -759,10 +838,15 @@ Task N: complete (commits <base-sha>..<head-sha>, verification <focused-test|tas
 to
 
 ```
-Task N: complete (commits <base-sha>..<head-sha>, verification <focused-test|task-test-not-applicable|mixed>, red <confirmed=<n>, not-separable=<n>>, dispatch <DISPATCH_ID>)
+Task N: complete (commits <base-sha>..<head-sha>, verification <focused-test|task-test-not-applicable|mixed>, red <confirmed=<n>, not-separable=<n>>, chain <every distinct Forge-Dispatch value observed in the range, comma-separated>)
 ```
 
 Both occurrences change; they are the same line stated twice and must stay identical.
+
+`chain` is where the late-report race becomes a durable fact. One value is the ordinary case; two
+values for the same unit means a replacement and a late original both committed into this range,
+and the reconciliation dispatch-liveness requires is recorded here rather than inferred later
+from the order in which ledger lines were appended.
 
 **2.6 — Add the dispatch identity to *every* statement of the placement contract.**
 `skills/forge/SKILL.md` states it four times, and a contract that says "two values" in three
@@ -853,14 +937,245 @@ Expect exit 0. Commit as `feat(forge): verify red and dispatch identity in the p
 - The task-complete ledger line is stated identically in step 8 and in *Durable progress*.
 - `.claude-plugin/plugin.json` reads `4.1.0`.
 - `just verify` exits 0.
-- `EV-1` through `EV-9` run against the changed instructions and match their observable routes.
+- `EV-1` through `EV-10` run against the changed instructions and match their observable routes.
+
+---
+
+## Task 3 — Fixtures for the agent-behaviour evaluation, and the evaluation run
+
+Creates `tests/fixtures/forge/eval-fixtures.sh` and `tests/fixtures/forge/eval-fixtures-test.sh`,
+then runs `EV-1` through `EV-10` and records their outcomes. Task 2's acceptance criteria name
+those cases; without this task they are a criterion with no step behind them.
+
+### Interfaces
+
+Consumed from Task 2: the changed instruction text in `skills/forge/SKILL.md` and
+`skills/forge/implementer-prompt.md`, which is what the evaluation reads.
+
+Provided:
+
+```
+eval-fixtures.sh SHAPE DESTINATION
+```
+
+`SHAPE` is one of `normal`, `tests-only`, `no-trailer`, `foreign-unit`, `both-attempts`. Exit 0
+on success, 2 on a usage error or unknown shape, 3 when `DESTINATION` already exists.
+
+### Verification
+
+- `focused-test` — `tests/fixtures/forge/eval-fixtures-test.sh`. Expected red: the suite fails
+  because the builder does not exist. Green command: `just test eval-fixtures`.
+
+The evaluation run in step 3.5 is not a test and is not gated by `just verify`; its outcomes are
+recorded as this task's evidence.
+
+### Steps
+
+**3.1 — Write the failing suite.** Create `tests/fixtures/forge/eval-fixtures-test.sh`, `chmod
++x`, and `git add` it.
+
+```bash
+#!/usr/bin/env bash
+# Behaviour suite for tests/fixtures/forge/eval-fixtures.sh.
+#
+# The evaluation cases themselves are judged by a fresh evaluator, never by this suite. What is
+# pinned here is that each fixture is built deterministically and has the git shape the spec's
+# table claims for it -- an evaluation run against a mis-built fixture measures nothing, and
+# would do so silently.
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=SCRIPTDIR/../../../scripts/test-fixture-helpers.sh
+. "$SCRIPT_DIR/../../../scripts/test-fixture-helpers.sh"
+
+# Hooks export repository-local Git variables that override `git -C`. Clear
+# Git's complete reported set before any fixture repository is discovered.
+clear_git_env
+
+fixture_init eval-fixtures-test
+
+SCRIPT="$SCRIPT_DIR/eval-fixtures.sh"
+[ -x "$SCRIPT" ] || fail "not executable: $SCRIPT"
+
+build() { # shape -- sets REPO
+	REPO="$SCRATCH/$1"
+	"$SCRIPT" "$1" "$REPO" >/dev/null
+}
+
+trailers() { # rev-range
+	git -C "$REPO" log --format='%(trailers:key=Forge-Dispatch,valueonly,separator=%x2C)' "$1"
+}
+
+changed() { # rev-range
+	git -C "$REPO" diff --no-renames --name-only "$1"
+}
+
+status=0
+"$SCRIPT" >/dev/null 2>&1 || status=$?
+[ "$status" -eq 2 ] || fail "no arguments: expected exit 2, got $status"
+
+status=0
+"$SCRIPT" nosuch "$SCRATCH/nosuch" >/dev/null 2>&1 || status=$?
+[ "$status" -eq 2 ] || fail "unknown shape: expected exit 2, got $status"
+
+build normal
+[ "$(trailers -1)" = "task-4.1" ] || fail "normal: trailer is $(trailers -1)"
+[ "$(changed 'HEAD~1..HEAD' | sort | tr '\n' ' ')" = "impl-test.sh impl.sh " ] ||
+	fail "normal: changed set is $(changed 'HEAD~1..HEAD' | tr '\n' ' ')"
+
+build tests-only
+[ "$(changed 'HEAD~1..HEAD' | tr -d '\n')" = "impl-test.sh" ] ||
+	fail "tests-only: changed set is $(changed 'HEAD~1..HEAD' | tr '\n' ' ')"
+
+build no-trailer
+[ -z "$(trailers -1)" ] || fail "no-trailer: carries $(trailers -1)"
+
+build foreign-unit
+[ "$(trailers -1)" = "task-9.1" ] || fail "foreign-unit: trailer is $(trailers -1)"
+
+build both-attempts
+[ "$(trailers 'HEAD~2..HEAD' | sort | tr '\n' ' ')" = "task-4.1 task-4.2 " ] ||
+	fail "both-attempts: trailers are $(trailers 'HEAD~2..HEAD' | tr '\n' ' ')"
+
+status=0
+"$SCRIPT" normal "$SCRATCH/normal" >/dev/null 2>&1 || status=$?
+[ "$status" -eq 3 ] || fail "existing destination: expected exit 3, got $status"
+
+printf 'eval-fixtures-test: all cases passed\n'
+```
+
+**3.2 — Run it and confirm it fails.** `just test eval-fixtures` exits non-zero with
+`eval-fixtures-test: not executable:` naming the missing builder.
+
+**3.3 — Write the builder.** Create `tests/fixtures/forge/eval-fixtures.sh` and `chmod +x` it.
+
+```bash
+#!/usr/bin/env bash
+# Build one deterministic fixture repository for the agent-behaviour evaluation cases in
+# docs/workflow/specs/2026-09-05-forge-worker-accountability-design.md.
+#
+# The evaluation is a fresh evaluator reading changed instructions. What it needs from here is a
+# repository whose git state is exactly the shape a case names, built identically every run, so
+# two evaluations of the same case are comparable.
+#
+# Usage: eval-fixtures.sh SHAPE DESTINATION
+#
+#   normal         one implementation file and one test file changed by the task commit
+#   tests-only     the task commit changes only the named test file
+#   no-trailer     normal, but the task commit carries no Forge-Dispatch trailer
+#   foreign-unit   normal, but the task commit carries task-9.1 while the task under test is 4
+#   both-attempts  two task commits, task-4.1 and task-4.2, inside one range
+set -euo pipefail
+
+[ $# -eq 2 ] || {
+	printf 'usage: eval-fixtures.sh SHAPE DESTINATION\n' >&2
+	exit 2
+}
+shape=$1
+destination=$2
+
+# Refused rather than reused: a fixture built on top of a previous one is not the shape its case
+# names, and the evaluation would report against a repository nobody described.
+[ ! -e "$destination" ] || {
+	printf 'eval-fixtures: %s already exists\n' "$destination" >&2
+	exit 3
+}
+
+case $shape in
+normal | tests-only | no-trailer | foreign-unit | both-attempts) ;;
+*)
+	printf 'eval-fixtures: unknown shape: %s\n' "$shape" >&2
+	exit 2
+	;;
+esac
+
+mkdir -p "$destination"
+git -C "$destination" init -q
+git -C "$destination" config user.email fixture@example.invalid
+git -C "$destination" config user.name Fixture
+
+printf 'old\n' >"$destination/impl.sh"
+git -C "$destination" add -A
+git -C "$destination" commit -qm 'base'
+base=$(git -C "$destination" rev-parse HEAD)
+
+commit_task() { # message trailer-or-empty
+	git -C "$destination" add -A
+	if [ -n "$2" ]; then
+		git -C "$destination" commit -qm "$1" -m "Forge-Dispatch: $2"
+	else
+		git -C "$destination" commit -qm "$1"
+	fi
+}
+
+case $shape in
+normal | no-trailer | foreign-unit)
+	printf 'new\n' >"$destination/impl.sh"
+	printf '#!/usr/bin/env bash\ngrep -q new impl.sh\n' >"$destination/impl-test.sh"
+	case $shape in
+	normal) commit_task 'feat: implement' 'task-4.1' ;;
+	no-trailer) commit_task 'feat: implement' '' ;;
+	foreign-unit) commit_task 'feat: implement' 'task-9.1' ;;
+	esac
+	;;
+tests-only)
+	printf '#!/usr/bin/env bash\ntrue\n' >"$destination/impl-test.sh"
+	commit_task 'test: add a case' 'task-4.1'
+	;;
+both-attempts)
+	printf 'new\n' >"$destination/impl.sh"
+	commit_task 'feat: first attempt' 'task-4.1'
+	printf '#!/usr/bin/env bash\ngrep -q new impl.sh\n' >"$destination/impl-test.sh"
+	commit_task 'feat: replacement' 'task-4.2'
+	;;
+esac
+
+printf 'eval-fixtures: %s at %s (base %s, head %s)\n' \
+	"$shape" "$destination" \
+	"$(git -C "$destination" rev-parse --short "$base")" \
+	"$(git -C "$destination" rev-parse --short HEAD)"
+```
+
+**3.4 — Run the suite green.** `just test eval-fixtures` exits 0 with
+`eval-fixtures-test: all cases passed`.
+
+**3.5 — Run the evaluation.** For each of `EV-1` through `EV-10` in the spec's *AI surface*
+table, build the fixture its row names — `EV-1`, `EV-2`, `EV-7` and `EV-10` use `normal`, `EV-3`
+uses `tests-only`, `EV-5` uses `no-trailer`, `EV-8` uses `foreign-unit`, `EV-9` uses
+`both-attempts`; `EV-4` needs no repository, only a `verify-red` stub that exits 5; `EV-6` needs
+no repository at all, only a dispatch prompt with the identity omitted. Give a fresh evaluator
+the changed `skills/forge/SKILL.md` and `skills/forge/implementer-prompt.md`, the fixture, and
+the task report the row implies, and record for each case the observable route it took against
+the row's pass and forbidden traits. One pass is expected; after an evidence-backed correction to
+the instruction text, allow one confirming pass. A second failure parks rather than starting a
+third pass.
+
+Record the ten outcomes in the forge workspace ledger, one line each:
+`EV-N: <pass|fail> (route <what the evaluator did>)`.
+
+**3.6 — Run the guardrails and commit.** `just verify` exits 0. Commit as
+`test(forge): add eval fixtures for the accountability contract`.
+
+### Acceptance criteria
+
+- `tests/fixtures/forge/eval-fixtures.sh` exists, is executable, and builds all five shapes.
+- `just test eval-fixtures` exits 0.
+- Every shape's trailer and changed-path set is asserted by the suite.
+- `EV-1` through `EV-10` have a recorded outcome line; a `fail` after its one confirming pass
+  parks the task rather than closing it.
+- `just verify` exits 0.
 
 ## Rollback
 
-Both tasks are additive. Reverting Task 2's commit returns the loop to reading the report;
-reverting Task 1's removes an executable nothing else references. Neither leaves persisted state:
-`verify-red` writes only inside the worktree it restores, and the trailer is commit metadata no
-gate reads.
+The tasks revert in reverse order, not independently. Task 2's commit is the only thing that
+references `verify-red`, so reverting it alone returns the loop to reading the report and leaves
+an unreferenced executable and its suite behind — harmless, and still green. Reverting Task 1
+while Task 2 stands is **not** available: step 6 would then invoke a script that no longer
+exists. Revert 3, then 2, then 1, or revert 2 and leave 1 in place.
+
+Nothing persists outside the repository: `verify-red` writes only inside the worktree it restores,
+and the trailer is commit metadata no gate reads. Commits already stamped with `Forge-Dispatch`
+keep their trailer after a revert; it is inert.
 
 ## Deferrals
 

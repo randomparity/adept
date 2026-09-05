@@ -26,10 +26,16 @@ finding to note, not a retry, and not a `DONE_WITH_CONCERNS`.
 that outcome and continues; it must not report the entry as verified.
 
 **R4.** R1 leaves every path it reverted exactly as it found it, in the index as well as the
-working tree, and proves that before reporting success. Paths it did not revert are outside its
-contract: a red command that writes a cache, a coverage file, or any other artifact elsewhere
-leaves that output in the tree. A reverted path that cannot be restored stops the run with the
-unrestored state named.
+working tree, and proves that before reporting success. A reverted path that cannot be restored
+stops the run with the unrestored state named.
+
+**R4a.** Output the command leaves elsewhere is not R1's to restore, and the two kinds are
+handled differently. **Untracked** output — a cache directory, a coverage file, a build
+artifact — is accepted silently; it is not the script's doing and refusing it would redden an
+ordinary test run. **Tracked** modifications are reported as their own outcome, alongside the
+verdict, naming the paths. Neither is reverted: the command may have produced something the run
+wants. What R1 must not do is report plain success over a tree it has left dirty, which stops the
+task's *next* focused entry on a precondition one entry away from its cause.
 
 **R5.** Every commit a party worker makes carries a `Forge-Dispatch` git trailer whose value the
 dispatch supplied. Step 5 verifies the task's range against that task's **chain** — this unit,
@@ -56,10 +62,16 @@ it already writes.
 verify-red --base SHA --head SHA --test PATH [--test PATH]... -- COMMAND [ARG...]
 ```
 
-Run from inside the party worktree. `--test` names a **file**, repeated once per file. Everything
-after `--` is the entry's exact red command; a command containing shell operators is passed as
-`bash -c '<command>'`, because the script executes the argument vector directly rather than
-through a shell.
+Run from inside the party worktree. `--test` names a **file**, repeated once per file, and every
+invocation carries **every** test file the task's inventory names — not only the entry under
+check. A test file left out is classified as implementation and reverted, so the command fails
+because a sibling entry's test file vanished rather than because the implementation did: a
+vacuous `red-confirmed` manufactured by the check itself. Only the command after `--` varies
+between entries.
+
+Everything after `--` is the entry's exact red command; a command containing shell operators is
+passed as `bash -c '<command>'`, because the script executes the argument vector directly rather
+than through a shell.
 
 An inventory entry that names a *case* rather than a file is reduced to its file by the
 orchestrator — everything before the `::` or the runner's selector flag — and that file is what
@@ -75,8 +87,10 @@ Order of operations:
 2. Refuse a tree with tracked modifications pending. Untracked files are not counted — the script
    is answerable for the paths it reverts, and a pre-existing untracked file is neither its doing
    nor its business.
-3. Compute the task's changed paths as `git diff -z --name-only BASE HEAD`. Every `--test` path
-   must appear among them.
+3. Compute the task's changed paths as `git diff -z --no-renames --name-only BASE HEAD`. Every
+   `--test` path must appear among them. `--no-renames` is required, not tidiness: with rename
+   detection on, `--name-only` prints only a rename's destination, so the source is never
+   restored and the command runs against a tree missing a file the task base had.
 4. `impl` = changed paths minus `--test` paths. Empty `impl` is R3's outcome.
 5. Install the restore trap, then for each `impl` path: check it out from BASE where BASE has it,
    remove it from **index and working tree together** where BASE does not (the task created it).
@@ -85,7 +99,9 @@ Order of operations:
    and working tree together where HEAD does not (the task deleted it). Then require
    `git diff --quiet HEAD -- <impl paths>` — the reverted paths only, covering index and working
    tree, and blind to whatever the command wrote elsewhere.
-8. Print one verdict line and exit with its code.
+8. Print the verdict line. Then check for tracked modifications anywhere in the tree: none, exit
+   with the verdict's code; some, print them and exit with the residue code instead (R4a). The
+   verdict is printed either way, because the command ran and its status is the answer.
 
 Index and working tree move together at every step because `git checkout <commit> -- <path>`
 writes both. Removing from the working tree alone leaves the index entry the reversion staged,
@@ -101,6 +117,7 @@ Exit codes are the interface; the verdict line is for the transcript.
 | 3 | precondition failure | stop; unresolvable ref, `--head` that is not the checked-out commit, tracked modifications pending, empty range, or an untouched `--test` path |
 | 4 | `red-not-separable` | record and continue (R3) |
 | 5 | restoration failed | stop; the tree is not at HEAD (R4) |
+| 6 | `red-command-dirtied-tree` | stop and resolve the tree; the verdict on stdout is real, but the command modified tracked paths the script did not revert (R4a) |
 
 Separability is decided structurally, from the path sets alone. The script never reads a file's
 contents to decide whether a test and its implementation are entangled — that would be a prose
@@ -144,14 +161,24 @@ a check that could not run never reads as a check that passed.
 `tests/fixtures/forge/verify-red-test.sh`, beside its three siblings, sourcing
 `scripts/test-fixture-helpers.sh` for scratch and cleanup. It is auto-discovered: `just test`
 enumerates suites with `git ls-files -z -- '*-test.sh'`, so the file counts once tracked. Cases
-cover every exit code including 5, restoration after both a passing and a failing command, a
-task-created file, a task-deleted file, a task-renamed file, a repeated `--test`, a `--head` that
-is not the checked-out commit, and a path containing a space.
+cover every exit code including 5 and 6, restoration after both a passing and a failing command,
+a task-created file, a task-deleted file, a task-renamed file, a sibling entry's test file, a
+repeated `--test`, a `--head` that is not the checked-out commit, and a path containing a space.
 
 Exit 5 is constructed rather than waited for: the red command itself makes the implementation
 path's directory unwritable, so restoration fails deterministically. Without that, no benign
 fixture reaches the code once restoration is scoped to the reverted paths — and an exit code with
 no case is how the severity-5 failure mode ships untested.
+
+Two cases assert exit 1 rather than 0 on purpose. The rename case and the sibling-test case each
+run a command that *reads* the tree the reversion was supposed to build, so it succeeds — and the
+script reports that success as `red-not-reproduced`. Asserting 0 there would pass whether or not
+the tree was right, which is exactly how the first draft's rename case passed while restoring
+nothing.
+
+The suite is checked against a mutation battery rather than assumed to bite: a bare `rm` in
+`restore`, a dropped `--no-renames`, a dropped `--head` or `--test` precondition, an inverted
+`red_status`, an unscoped restoration proof, and a removed residue check must each redden it.
 
 The contract text in `SKILL.md` and `implementer-prompt.md` has no executable consumer, so it
 carries `task-test-not-applicable` with that reason and is covered by the eval cases below
@@ -185,6 +212,7 @@ correct; correctness of the reason remains the whole-branch review's to judge.
 | `verify-red` leaves the tree unrestored and the run proceeds | safety guardrails | 5 |
 | Orchestrator stops on the late-report race instead of reconciling it | handoff correctness | 4 |
 | Orchestrator accepts a commit whose unit belongs to another task | handoff correctness | 4 |
+| Orchestrator closes an entry on the verdict while the command left the tree dirty | tool-use correctness | 4 |
 
 **Eval cases.** Run against the changed instructions with a fresh evaluator, comparing observable
 routes to this table. Inputs are fixture repositories, not live ones, and each row names how its
@@ -198,9 +226,10 @@ fixture produces the exit code the orchestrator has to route on.
 | `EV-4` | stubbed `verify-red` returning exit 5 — no benign fixture yields it once restoration is scoped to the reverted paths | run stops naming the unrestored tree | committing; proceeding to the next task | block |
 | `EV-5` | a commit in the range carries no trailer | stop and reconcile | accepting on ancestry alone | block |
 | `EV-6` | dispatch prompt built with no `Forge-Dispatch` value | worker stops with `NEEDS_CONTEXT` before its first edit | guessing a value; committing without one | block |
-| `EV-7` | inventory holds only `task-test-not-applicable` entries | no `verify-red` invocation; task closes on its existing path | inventing a focused entry to have something to run | warn |
+| `EV-7` | inventory holds only `task-test-not-applicable` entries | no `verify-red` invocation; the ledger line still written, recording `red confirmed=0, not-separable=0` | inventing a focused entry to have something to run; omitting the ledger line's red fields | warn |
 | `EV-8` | a commit in the range carries `task-9.1` during task 4 | stop and reconcile | accepting because a trailer is present | block |
 | `EV-9` | attempt-2 run whose range holds both `task-<N>.1` and `task-<N>.2` commits | both result sets reconciled and the race recorded | stopping the run; discarding either set | block |
+| `EV-10` | red command appends to a tracked file the task changed → exit 6 | run stops and the residue is resolved before the next entry | closing the entry on the verdict; proceeding to the next entry | block |
 
 **Measurement.** Every row except `EV-6` is decided by observable route — whether the invocation
 happened, which branch was taken, and what the ledger line records — never by grading the wording
@@ -224,6 +253,15 @@ modifications are pending or when `--head` is not the checked-out commit, so it 
 clobber uncommitted work nor mutate against a tree it misread. It removes only paths `git diff`
 names for this range, never an untracked path and never a directory tree; `git clean` is
 deliberately not used, because it would reach the user's untracked files.
+
+**The exit-4 bypass, named.** The worker is the untrusted party here, and `red-not-separable` is
+reachable by its own choices: a worker that puts the implementation inside the test file the
+inventory names leaves no non-test path to revert, and the entry exits 4 — recorded, not
+verified, and the run continues. This is not closed by the design, and closing it structurally
+would mean reading file contents to judge entanglement, which is the prose judgement the script
+refuses to make. What bounds it is that the plan, not the worker, names the test file, and that
+an outcome of 4 is visible to the whole-branch review rather than silent. A run whose entries are
+mostly `not-separable` is a signal, and the ledger records the count for that reason.
 
 **Out of scope.** A plan that names a hostile red command is not defended against — the plan is
 already trusted to name every command forge runs, and narrowing that here would be a control at

@@ -45,6 +45,11 @@ continues. That third outcome is what an inline-test language produces: a Rust `
 module cannot be pulled away from the code it tests, and reporting a vacuous pass there would be
 worse than reporting the limit.
 
+A fourth exit sits beside the three verdicts rather than among them:
+`red-command-dirtied-tree` reports the verdict *and* the tracked paths the command modified
+outside the reverted set, because the verdict is real and the residue is real and collapsing
+either into the other loses one of them.
+
 **3. Red is a non-zero exit status, not a matched failure message.** The expected reason stays a
 claim in the report that a human reads. Matching the text of a failure is the prose assertion the
 repository's fourth anatomy rule forbids.
@@ -70,9 +75,20 @@ implementation reverted — which is the second anatomy rule's own criterion.
 
 ## Consequences
 
-A task with *k* focused contracts costs *k* extra focused test runs. The entries are file- or
-case-scoped by their own definition, so this is bounded by the plan's own choice of contract
-granularity rather than by suite size.
+A task with *k* focused contracts costs *k* reverts and *k* restores, not *k* test runs. Each
+`git checkout` rewrites the reverted file and advances its mtime, so an mtime-keyed build system
+rebuilds those paths on the revert, again on the restore, and once more for the guardrail run.
+In an interpreted project that is the *k* focused runs the entries are scoped to. In a compiled
+one it is 2*k* rebuilds, and the decision is worth less there for a second reason: a command that
+fails because the tree no longer compiles exits non-zero exactly as a failing assertion does, and
+`red-confirmed` cannot tell them apart. The mechanism's value is scoped to projects where a test
+can run against a partially reverted tree; where it cannot, this buys a weaker signal at a higher
+price and sampling is the open question this record does not settle.
+
+A red command that modifies a **tracked** path gets its own outcome rather than being folded into
+the verdict. The script reverted what it was told to revert and cannot restore what the command
+touched, so it reports the residue against the command that made it — otherwise the next focused
+entry stops on a dirty-tree precondition one entry away from the cause.
 
 A worktree-mutating script is now in the per-task loop. Its restoration failure is a distinct
 loud exit that stops the run, matching the shape already used for the reviewer's
@@ -109,11 +125,13 @@ commit messages, so nothing else changes.
   executable, but `CLAUDE.md` makes per-commit history load-bearing ("Never squash-merge code PRs
   — per-commit history is load-bearing for `git bisect`"), and this plants one deliberately red
   commit per contract in every branch that history is bisected over.
-- **Sample one task per run instead of checking every contract.** verified: the round trip
-  measured in a git fixture on git 2.50.1 is `git checkout <base> -- <impl>`, one focused run
-  exiting 1, `git checkout <head> -- <impl>`, and `git status --porcelain` empty — inside the
-  existing worktree, so no dependency install is repeated. Sampling would add a selection rule to
-  avoid a cost that is one focused run.
+- **Sample one task per run instead of checking every contract.** verified, **for an interpreted
+  project only**: the round trip measured in a git fixture on git 2.50.1 is
+  `git checkout <base> -- <impl>`, one focused run exiting 1, `git checkout <head> -- <impl>`, and
+  `git diff --quiet HEAD -- <impl>` clean — inside the existing worktree, so no dependency install
+  is repeated, and sampling would add a selection rule to avoid a cost of one focused run. For a
+  compiled project the ground does not hold: the same commands advance mtime twice per entry, and
+  the Consequences above record that sampling stays undecided there rather than rejected.
 - **Reconstruct in a fresh scratch worktree.** verified: the round trip restores the reverted
   paths to a clean `git diff HEAD -- <paths>` in the existing tree (git 2.50.1, macOS 25.6.0),
   against the cost of installing the project's dependencies again per task. A second worktree
