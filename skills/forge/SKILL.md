@@ -338,7 +338,20 @@ and incrementing would spend a replacement budget no recovery consumed.
    path with the **assigned worktree** as the working directory. For each
    focused entry:
 
-       scripts/verify-red --base <BASE> --head <HEAD> --test <the entry's test file> -- <the entry's exact red command>
+       scripts/verify-red --base <BASE> --head <HEAD> --test <the entry's test file> -- <the inventory entry's exact command>
+
+   The command comes from the **plan's** Verification inventory, never from the
+   implementer's report. A focused entry names a test file, an expected red,
+   and a green command — and the red command *is* that green command, run
+   against the reverted tree. That is the whole of what makes red and green one
+   claim about one commit rather than two unrelated runs. The report also names
+   a red command, and the report is written by the party this check exists to
+   distrust; letting it supply the command would let a worker choose what
+   certifies its own red claim. Where the report's command and the inventory's
+   disagree, that disagreement is itself a stop-and-reconcile, not a choice for
+   you to make. An inventory command you judge to be weak — one that could not
+   observe the contract it names — is a plan defect that returns to the plan
+   checkpoint; it is never grounds to substitute a better one here.
 
    `<BASE>` is the task base you noted before the dispatch; `<HEAD>` is the
    branch tip you verified in step 5 (`git rev-parse <BRANCH_NAME>`), which is
@@ -396,9 +409,11 @@ and incrementing would spend a replacement budget no recovery consumed.
    precondition, disposition the pending modification before re-running — it
    belongs to the worker's report — rather than only stopping.
 
-   Never substitute the green command here. Running a test that passes proves
-   nothing about whether it could ever have failed, which is the whole of what
-   this step establishes.
+   Never run the entry's command against the implemented tree and call the
+   result red. `verify-red` is what turns that command into a red check: the
+   same command that passes at HEAD has to fail once the implementation is
+   reverted. Running it at HEAD proves nothing about whether it could ever have
+   failed, which is the whole of what this step establishes.
 7. Inventory the actual task diff and reconcile its material contracts one-to-one with the plan
    and report. An unmatched or reclassified contract returns to the plan checkpoint.
 8. Mark the task complete in the todo list and append exactly one line, using `mixed` when both
