@@ -61,6 +61,22 @@ Return a discovered new decision, ambiguity, or scope expansion to the caller's
 `SCOPE CHECKPOINT`; do not infer the decision or continue building. The caller records
 the new authority, if supplied, in provenance before re-freezing the charter.
 
+The plan's expected implementation size is not a build contract. When the completed diff exceeds
+that estimate, classify the discrepancy instead of reducing lines to satisfy the number:
+
+- If the estimate or the plan's task coverage was wrong while the work is required by the frozen
+  scope and reviewed design, correct the plan and estimate, record why, then return to the caller
+  to rerun `$spellcraft`'s review under the unchanged scope. Make no implementation change merely
+  to fit the estimate.
+- If the diff contains named work that neither the frozen scope nor the reviewed design requires,
+  delete that work.
+- If implementation exposed real complexity outside the frozen scope, return it to the caller's
+  `SCOPE CHECKPOINT` under the rule above.
+
+Whitespace removal, line joining, comment deletion, and test or fixture consolidation done for the
+number are not remedies. Simplify only when the result is independently clearer or removes actual
+unrequested work.
+
 **Caller contract.** If invoked inside `$quest`, completing the build and
 guardrails means proceed to the next step — do not end your turn. Stop only on
 a genuine blocker you have named (e.g. a guardrail that cannot be made green).
