@@ -16,9 +16,15 @@ trailer a placement value the worker verifies and emits.
 
 **Tech stack.** Bash and Markdown. No dependencies, no build step. Gates are `just verify`.
 
-**Expected implementation size: 405–515 changed lines (M) — summed from the file map below: the
+**Expected implementation size: 470–580 changed lines (M) — summed from the file map below: the
 script and its behaviour suite are the bulk, and the suite is sized against its three siblings in
 `tests/fixtures/forge/`, which run 325–366 lines each.**
+
+The design-to-implementation ratio sits in the note band. It is deliverable-driven rather than
+argument-driven: this repository's plans carry complete code in every step that changes code, so
+the script and the suite appear here in full and again in the tree. Recorded rather than cut —
+trimming the embedded deliverable to move a ratio would remove the thing that makes the plan
+executable by a context-free implementer.
 
 ## Global constraints
 
@@ -145,10 +151,12 @@ assert_status() { # expected, label
 	[ "$STATUS" -eq "$1" ] || fail "$2: expected exit $1, got $STATUS: $(cat "$SCRATCH/err")"
 }
 
+# Tracked state only, matching what the script promises: it is answerable for the paths it
+# reverted, not for whatever the red command left lying around.
 assert_clean() { # label
 	local pending
-	pending=$(git -C "$REPO" status --porcelain)
-	[ -z "$pending" ] || fail "$1: tree not restored: $pending"
+	pending=$(git -C "$REPO" status --porcelain --untracked-files=no)
+	[ -z "$pending" ] || fail "$1: tracked tree not restored: $pending"
 }
 
 # --- usage ---------------------------------------------------------------
@@ -179,6 +187,25 @@ printf 'dirty\n' >>"$REPO/impl.sh"
 run_script --base "$BASE" --head "$HEAD_SHA" --test impl-test.sh -- true
 assert_status 3 "modified tree"
 git -C "$REPO" checkout -- impl.sh
+
+# --head must be the checked-out commit. Restoration puts every reverted path back to it, so a
+# stale value would restore the tree to a commit it was never on -- and the check has to happen
+# before any mutation, not after.
+make_repo
+printf 'later\n' >>"$REPO/impl.sh"
+git -C "$REPO" add -A
+git -C "$REPO" commit -qm later
+run_script --base "$BASE" --head "$HEAD_SHA" --test impl-test.sh -- true
+assert_status 3 "stale --head"
+assert_clean "stale --head"
+
+# An untracked file is neither the script's doing nor its business: it must not refuse to start,
+# and it must not delete it.
+make_repo
+printf 'scratch\n' >"$REPO/notes.txt"
+run_script --base "$BASE" --head "$HEAD_SHA" --test impl-test.sh -- bash impl-test.sh
+assert_status 0 "untracked file present"
+[ -f "$REPO/notes.txt" ] || fail "untracked file present: the script removed it"
 
 # --- verdicts ------------------------------------------------------------
 
@@ -244,6 +271,62 @@ run_script --base "$SPACE_BASE" --head "$SPACE_HEAD" --test impl-test.sh -- bash
 assert_status 0 "path with a space"
 assert_clean "path with a space"
 
+# A rename is a delete and an add inside one range, so both halves have to come back.
+make_repo
+git -C "$REPO" mv impl.sh renamed.sh
+printf '#!/usr/bin/env bash\ngrep -q new renamed.sh\n' >"$REPO/impl-test.sh"
+git -C "$REPO" add -A
+git -C "$REPO" commit -qm rename-impl
+REN_HEAD=$(git -C "$REPO" rev-parse HEAD)
+run_script --base "$HEAD_SHA" --head "$REN_HEAD" --test impl-test.sh -- bash impl-test.sh
+assert_status 0 "renamed implementation file"
+assert_clean "renamed implementation file"
+[ -f "$REPO/renamed.sh" ] || fail "renamed implementation file: not restored"
+[ ! -f "$REPO/impl.sh" ] || fail "renamed implementation file: old path left behind"
+
+# A red command that writes an artifact must still report the verdict, not an unrestored tree.
+make_repo
+run_script --base "$BASE" --head "$HEAD_SHA" --test impl-test.sh -- \
+	bash -c 'mkdir -p .cache && : >.cache/x && bash impl-test.sh'
+assert_status 0 "command wrote an untracked artifact"
+assert_clean "command wrote an untracked artifact"
+
+# Two --test paths, where only one of them is what the command actually reads.
+make_repo
+printf '#!/usr/bin/env bash\ntrue\n' >"$REPO/extra-test.sh"
+git -C "$REPO" add -A
+git -C "$REPO" commit -qm second-test
+TWO_HEAD=$(git -C "$REPO" rev-parse HEAD)
+run_script --base "$BASE" --head "$TWO_HEAD" --test impl-test.sh --test extra-test.sh \
+	-- bash impl-test.sh
+assert_status 0 "two --test paths"
+assert_clean "two --test paths"
+
+# Exit 5 is constructed, not waited for: once restoration is scoped to the reverted paths no
+# benign fixture reaches it, and an exit code with no case is how the loudest stop in the
+# contract ships untested. The red command makes the implementation's directory unwritable, so
+# restoration cannot put the file back.
+make_repo
+mkdir -p "$REPO/pkg"
+git -C "$REPO" mv impl.sh pkg/impl.sh
+printf '#!/usr/bin/env bash\ngrep -q new pkg/impl.sh\n' >"$REPO/impl-test.sh"
+git -C "$REPO" add -A
+git -C "$REPO" commit -qm move-into-pkg
+PKG_BASE=$(git -C "$REPO" rev-parse HEAD)
+printf 'newer\n' >"$REPO/pkg/impl.sh"
+# The named test file has to move inside the range under test, or the run stops at the
+# untouched---test precondition before it ever reaches restoration.
+printf '#!/usr/bin/env bash\ngrep -q newer pkg/impl.sh\n' >"$REPO/impl-test.sh"
+git -C "$REPO" add -A
+git -C "$REPO" commit -qm change-in-pkg
+PKG_HEAD=$(git -C "$REPO" rev-parse HEAD)
+run_script --base "$PKG_BASE" --head "$PKG_HEAD" --test impl-test.sh -- \
+	bash -c 'chmod 0500 pkg; exit 1'
+chmod 0700 "$REPO/pkg"
+assert_status 5 "restoration blocked"
+grep -q 'could not restore' "$SCRATCH/err" ||
+	fail "restoration blocked: no restoration diagnostic on stderr"
+
 printf 'verify-red-test: all cases passed\n'
 ```
 
@@ -273,9 +356,13 @@ the red state: the suite runs and the script is absent.
 #   0  red-confirmed          the command failed with the implementation reverted
 #   1  red-not-reproduced     it passed anyway; the red claim is not supported
 #   2  usage error
-#   3  precondition failure   dirty tree, unresolvable ref, empty range, untouched --test path
+#   3  precondition failure   unresolvable ref, a --head that is not the checked-out commit,
+#                             pending tracked modifications, empty range, untouched --test path
 #   4  red-not-separable      every changed path is a named test path; nothing to revert
-#   5  restoration failure    the tree is not back at HEAD; nothing may proceed
+#   5  restoration failure    a reverted path is not back at HEAD; nothing may proceed
+#
+# A command containing shell operators must be passed as `bash -c '<command>'`: the argument
+# vector after `--` is executed directly, not through a shell.
 set -euo pipefail
 
 usage() {
@@ -332,9 +419,21 @@ base_sha=$(git rev-parse --verify --quiet "$base^{commit}") ||
 head_sha=$(git rev-parse --verify --quiet "$head^{commit}") ||
 	precondition "$head does not name a commit here"
 
-# Refusing a modified tree is what makes the reversion below safe: everything this script
-# restores it restores from a commit, so uncommitted work in the same paths would be lost.
-pending=$(git status --porcelain) || precondition 'could not read the working tree status'
+# Restoration puts every reverted path back to $head_sha, so a $head that is not what is
+# actually checked out would "restore" the tree to a commit it was never at -- silently, since
+# the reverted paths would then differ from the real HEAD and the proof below would fail after
+# the damage rather than before it. Checked here, ahead of every mutation.
+current_head=$(git rev-parse --verify --quiet HEAD) ||
+	precondition 'HEAD does not resolve; no commit is checked out here'
+[ "$head_sha" = "$current_head" ] ||
+	precondition "--head $head is not the checked-out commit ($current_head)"
+
+# Refusing pending tracked modifications is what makes the reversion below safe: everything this
+# script restores it restores from a commit, so uncommitted work in the same paths would be lost.
+# Untracked files are deliberately not counted -- they are neither this script's doing nor its
+# business, and counting them would refuse to start in any tree holding a stray scratch file.
+pending=$(git status --porcelain --untracked-files=no) ||
+	precondition 'could not read the working tree status'
 [ -z "$pending" ] || {
 	printf 'verify-red: refusing to run against a modified tree:\n%s\n' "$pending" >&2
 	exit 3
@@ -415,7 +514,13 @@ restore() {
 		index=$((index + 1))
 		if git cat-file -e "$head_sha:$path" 2>/dev/null; then
 			git checkout "$head_sha" -- "$path" || restore_status=1
-		elif [ -e "$path" ] && ! rm -f -- "$path"; then
+		elif ! git rm -q -f --ignore-unmatch -- "$path"; then
+			# `git rm`, not a bare `rm`: the reversion above used `git checkout`, which
+			# writes the index as well as the working tree, so a path the task deleted is
+			# staged as an addition by the time we get here. Removing it from the working
+			# tree alone leaves that index entry, and the tree reads as unrestored while
+			# looking correct on disk. --ignore-unmatch keeps this a no-op for a path the
+			# reversion never staged.
 			restore_status=1
 		fi
 	done
@@ -445,7 +550,7 @@ while [ "$index" -lt "${#implementation[@]}" ]; do
 			[ "$restore_status" -eq 0 ] || restoration_failed "reverting $path also failed"
 			precondition "could not revert $path to $base"
 		}
-	elif [ -e "$path" ] && ! rm -f -- "$path"; then
+	elif ! git rm -q -f --ignore-unmatch -- "$path"; then
 		restore
 		[ "$restore_status" -eq 0 ] || restoration_failed "removing $path also failed"
 		precondition "could not remove $path, which $base does not have"
@@ -461,9 +566,12 @@ set -e
 restore
 [ "$restore_status" -eq 0 ] || restoration_failed 'one or more paths could not be put back'
 
-pending=$(git status --porcelain) || restoration_failed 'could not read the working tree status'
-[ -z "$pending" ] || restoration_failed "the tree still differs:
-$pending"
+# Scoped to the paths this script reverted, and covering index and working tree together --
+# `git diff HEAD` sees both. Whatever the red command wrote elsewhere is outside the contract: a
+# cache directory or a coverage file is not this script's to police, and a whole-tree check would
+# turn an ordinary test run into exit 5, the one outcome nothing may proceed past.
+git diff --quiet HEAD -- "${implementation[@]}" ||
+	restoration_failed "still differing from $head: $(git diff --name-only HEAD -- "${implementation[@]}" | tr '\n' ' ')"
 
 if [ "$red_status" -ne 0 ]; then
 	printf 'verify-red: red-confirmed (command exit %s)\n' "$red_status"
@@ -496,8 +604,11 @@ Expect exit 0. Commit as `feat(forge): re-derive a task's red claim with verify-
 - `skills/forge/scripts/verify-red` exists, is executable, and starts `#!/usr/bin/env bash` with
   `set -euo pipefail`.
 - `just test verify-red` exits 0.
-- Every exit code in the Interfaces table is asserted by at least one case in the suite.
-- After every case that reaches the command, `git status --porcelain` in the fixture is empty.
+- Every exit code in the Interfaces table — 0, 1, 2, 3, 4 and 5 — is asserted by at least one
+  case in the suite.
+- After every case that reaches the command, `git status --porcelain --untracked-files=no` in the
+  fixture is empty. Untracked output the command left is deliberately not asserted away: the
+  suite asserts what the script promises, and the script promises the reverted paths.
 - `just verify` exits 0.
 
 ---
@@ -529,7 +640,7 @@ Provided to nothing further in this plan.
   that the skill still shapes correctly and that every reference link resolves — are covered by
   `just shape-check` inside `just verify`, which this task runs.
 
-The agent-behavior evaluation cases `EV-1` through `EV-7` in the design's *AI surface* section
+The agent-behavior evaluation cases `EV-1` through `EV-9` in the design's *AI surface* section
 are run against the changed instructions after this task, with a fresh evaluator, comparing
 observable routes to that table.
 
@@ -579,14 +690,23 @@ currently ends with the stray-commit reasoning. Append to it:
 
 ```
    Then verify the same range identifies its author. Every commit in
-   `<BASE>..<BRANCH_NAME>` must carry the dispatch identity you issued:
+   `<BASE>..<BRANCH_NAME>` must carry this task's dispatch chain:
 
        git log --format='%H %(trailers:key=Forge-Dispatch,valueonly,separator=%x2C)' <BASE>..<BRANCH_NAME>
 
-   A commit with no value, or with a value other than the one this dispatch was
-   given, is the same stop-and-reconcile as a stray commit. The identity is what
-   makes a late report racing a replacement reconcilable — without it, deciding
-   which worker wrote which commit is an inference over ledger ordering.
+   Verify the **chain**, not the exact value you issued. Every commit must carry
+   `task-<N>` for this task's N, with an attempt of 1 or 2:
+
+   - the value you dispatched — ordinary; the commit is this worker's.
+   - the same unit at the other attempt — the late report that raced a
+     replacement. Record it in the ledger's `dispatch` field and reconcile both
+     result sets per dispatch-liveness. **Not a stop.** Stopping here would
+     refuse the one case this identity was added to resolve.
+   - absent, or a different unit — the same stop-and-reconcile as a stray
+     commit.
+
+   A replacement dispatch reuses the original task base, so attempt 1's commits
+   stay inside this range rather than falling outside it.
 ```
 
 **2.4 — Add the red re-derivation to step 6 of the same loop.** Step 6 currently reads the report
@@ -597,6 +717,19 @@ and verifies one entry per planned contract. Append to it:
    assigned worktree, for each focused entry:
 
        scripts/verify-red --base <BASE> --head <HEAD> --test <the entry's test file> -- <the entry's exact red command>
+
+   `<BASE>` is the task base you noted before the dispatch; `<HEAD>` is the
+   branch tip you verified in step 5 (`git rev-parse <BRANCH_NAME>`), which is
+   the SHA the ledger line already records. Pass a command containing shell
+   operators as `bash -c '<command>'` — the argument vector runs directly, not
+   through a shell.
+
+   `--test` takes **files**. Where the entry names a case rather than a file,
+   pass the file part — everything before the `::` or the runner's selector
+   flag. Where the entry names a test file this task did not change, the check
+   does not apply to it: that entry returns to the plan checkpoint, because an
+   inventory naming a test the task never touched is a plan defect rather than a
+   verdict about red.
 
    Route on its exit status, which is the interface:
 
@@ -631,9 +764,21 @@ Task N: complete (commits <base-sha>..<head-sha>, verification <focused-test|tas
 
 Both occurrences change; they are the same line stated twice and must stay identical.
 
-**2.6 — Add the dispatch identity to *What goes in a dispatch*.** In the bulleted list of what
-every implementer prompt must include, extend the placement-contract bullet so the third value is
-mandatory alongside the other two:
+**2.6 — Add the dispatch identity to *every* statement of the placement contract.**
+`skills/forge/SKILL.md` states it four times, and a contract that says "two values" in three
+places and "three values" in one is a contract an implementer will satisfy by the count it read
+first. All four change together.
+
+(a) At the per-task loop's dispatch step:
+
+```
+2. Dispatch an implementer with [implementer-prompt.md](implementer-prompt.md),
+   carrying the placement contract from *What goes in a dispatch*: the
+   assigned worktree as an absolute path, the exact branch name, and the
+   dispatch identity `task-<N>.<attempt>`.
+```
+
+(b) In the bulleted list under *What goes in a dispatch*:
 
 ```
 - the **placement contract** — the assigned worktree as an absolute path, the
@@ -642,6 +787,22 @@ mandatory alongside the other two:
   three values is invalid: do not send it, and stop with `NEEDS_CONTEXT` if you
   receive one. The implementer template turns them into a precondition the
   worker verifies before its first edit, failing closed on a mismatch
+```
+
+(c) In the paragraph beginning "Every fix dispatch carries the implementer contract":
+
+```
+Every fix dispatch carries the implementer contract, placement included: the
+assigned worktree path, branch name, and the `review-fix.<attempt>` dispatch
+identity, verified before the first edit.
+```
+
+(d) In the paragraph describing the single fix worker after the final review:
+
+```
+It carries the same placement contract as any implementer: the
+branch's worktree path, branch name, and the `review-fix.<attempt>` dispatch
+identity, verified before the first edit.
 ```
 
 **2.7 — Mint the identity where the dispatch is described.** In *Silent party workers*, after the
@@ -656,10 +817,15 @@ this budget permits — so the commits of a worker whose late report raced its
 replacement are separable in `git log` rather than by ledger ordering.
 ```
 
-**2.8 — Carry the identity into the fix dispatch.** In the paragraph beginning "Every fix dispatch
-carries the implementer contract, placement included", change "the assigned worktree path and
-branch name" to "the assigned worktree path, branch name, and the `review-fix.<attempt>` dispatch
-identity".
+**2.8 — Verify the fix wave's own range.** In the fix-wave paragraph, after the sentence
+requiring the report to carry the command and its output, add:
+
+```
+Verify the fix wave's commits the way step 5 verifies a task's: every commit
+from the reviewed HEAD to the branch tip must carry `review-fix.<attempt>`.
+Absent or a different unit is a stop-and-reconcile. A stamp nobody checks is
+attribution the next reconciliation cannot rely on.
+```
 
 **2.9 — Bump the version.** In `.claude-plugin/plugin.json`, change `"version": "4.0.2"` to
 `"version": "4.1.0"`. MINOR: `$forge` gains a capability and no invocation's contract breaks.
@@ -676,13 +842,18 @@ Expect exit 0. Commit as `feat(forge): verify red and dispatch identity in the p
 
 - `skills/forge/implementer-prompt.md` names three mandatory placement values, and a dispatch
   missing any one of them is `NEEDS_CONTEXT`.
-- `skills/forge/SKILL.md` step 5 verifies the trailer over the task's range; step 6 invokes
-  `verify-red` per focused entry and routes all six exit codes; neither substitutes the green
-  command for the red one.
+- All four statements of the placement contract in `skills/forge/SKILL.md` name three values.
+  Check by count, the way step 2.5 checks the ledger line's two occurrences: `rg -c` for the
+  contract's phrasing must find no statement naming only two.
+- `skills/forge/SKILL.md` step 5 verifies the task's range against the **chain** — this unit,
+  attempt 1 or 2 — and routes the other-attempt commit to reconciliation rather than to a stop.
+- Step 6 invokes `verify-red` per focused entry, routes all six exit codes, and never substitutes
+  the green command for the red one.
+- The fix wave's range is verified against `review-fix.<attempt>`.
 - The task-complete ledger line is stated identically in step 8 and in *Durable progress*.
 - `.claude-plugin/plugin.json` reads `4.1.0`.
 - `just verify` exits 0.
-- `EV-1` through `EV-7` run against the changed instructions and match their observable routes.
+- `EV-1` through `EV-9` run against the changed instructions and match their observable routes.
 
 ## Rollback
 
