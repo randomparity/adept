@@ -75,6 +75,12 @@ implementation reverted — which is the second anatomy rule's own criterion.
 
 ## Consequences
 
+Every revert is task-wide, so *k* focused contracts are *k* checks against the same maximally
+reverted tree rather than *k* independent ones: the second entry's `red-confirmed` says its
+command failed with all of the task's implementation absent, not with its own. Independence
+belongs to the first entry only, and the whole-branch review is what separates the rest. This is accepted rather than fixed — per-entry reverts would grow the script for a residual
+review already reads.
+
 A task with *k* focused contracts costs *k* reverts and *k* restores, not *k* test runs. Each
 `git checkout` rewrites the reverted file and advances its mtime, so an mtime-keyed build system
 rebuilds those paths on the revert, again on the restore, and once more for the guardrail run.
@@ -124,6 +130,10 @@ already read the tree it lands in.
 The recovery-chain identifier now exists on every run instead of only on runs that had a silent
 worker, so dispatch-liveness's required record is populated before a recovery rather than during
 one.
+
+The trailer separates a silent worker from its replacement. It does not separate a re-dispatch
+after `NEEDS_CONTEXT` or `CANNOT_COMPLETE`, which reuses the unit's current attempt number —
+those workers returned, and their reports account for what they did.
 
 This repository's own commits carry the trailer whenever adept is built by adept. No gate reads
 commit messages, so nothing else changes.

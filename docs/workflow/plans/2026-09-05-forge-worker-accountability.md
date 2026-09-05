@@ -13,14 +13,14 @@ requires a non-zero exit, and restores the tree under a trap. Contract text in
 `skills/forge/SKILL.md` puts that invocation into the per-task loop and adds a `Forge-Dispatch`
 trailer check beside the existing ancestry check; `skills/forge/implementer-prompt.md` makes the
 trailer a placement value the worker verifies and emits. A fixture builder under
-`tests/fixtures/forge/` supplies the repository shapes the ten agent-behaviour evaluation cases
+`tests/fixtures/forge/` supplies the repository shapes the eleven agent-behaviour evaluation cases
 run against, so the instruction change is evaluated rather than merely reviewed.
 
 **Tech stack.** Bash and Markdown. No dependencies, no build step. Gates are `just verify`.
 
-**Expected implementation size: 840–960 changed lines (L) — summed from the file map below, and
+**Expected implementation size: 880–1000 changed lines (L) — summed from the file map below, and
 from the four code blocks this plan carries verbatim: 277 (verify-red suite) + 271 (verify-red) +
-77 (eval-fixtures suite) + 108 (eval-fixtures) = 733, plus roughly 125 lines of contract text in
+95 (eval-fixtures suite) + 130 (eval-fixtures) = 773, plus roughly 125 lines of contract text in
 `skills/forge/SKILL.md`, 22 in `implementer-prompt.md`, and the one-line version bump. The two
 verify-red files are sized against their three siblings in `tests/fixtures/forge/`, which run
 325–366 lines each.**
@@ -57,7 +57,7 @@ Task 3 was added, not to move a ratio.
 |---|---|---|
 | `skills/forge/scripts/verify-red` | create | reverting, running, restoring, and reporting one focused entry's red outcome |
 | `tests/fixtures/forge/verify-red-test.sh` | create | every exit code and every restoration path of that script |
-| `tests/fixtures/forge/eval-fixtures.sh` | create | deterministic fixture repositories for the ten agent-behaviour evaluation cases |
+| `tests/fixtures/forge/eval-fixtures.sh` | create | deterministic fixture repositories for the eleven agent-behaviour evaluation cases |
 | `tests/fixtures/forge/eval-fixtures-test.sh` | create | that builder's five shapes and its error paths |
 | `skills/forge/SKILL.md` | modify | when the orchestrator invokes it, how each outcome routes, the trailer check, the dispatch value |
 | `skills/forge/implementer-prompt.md` | modify | the trailer as a placement value the worker verifies and emits |
@@ -677,6 +677,18 @@ just test verify-red
 
 Expect exit 0 and `verify-red-test: all cases passed`.
 
+**1.4a — Prove the suite bites.** A green suite is not evidence that its assertions would fail if
+the script were wrong, and the acceptance criteria below claim it is. Copy
+`skills/forge/scripts/verify-red` and `tests/fixtures/forge/verify-red-test.sh` into a scratch
+directory outside the repository. There, one at a time, apply each of the eight mutations listed
+in the acceptance criteria, **print the mutated line** to confirm it landed on code rather than on
+the explanatory comment above it, run `bash -n` on the mutant, then run the suite and record
+`killed` or `survived`.
+
+A survivor is a missing test case, not a passing check: add the case before continuing. The
+tracked files are never mutated — every mutation happens on the scratch copies — so the guardrail
+run and the commit in 1.5 see the original.
+
 **1.5 — Run the guardrails and commit.**
 
 ```
@@ -733,7 +745,7 @@ Provided to nothing further in this plan.
   that the skill still shapes correctly and that every reference link resolves — are covered by
   `just shape-check` inside `just verify`, which this task runs.
 
-The agent-behaviour evaluation cases `EV-1` through `EV-10` are **Task 3's** verification, not
+The agent-behaviour evaluation cases `EV-1` through `EV-11` are **Task 3's** verification, not
 this task's. They read the instruction text this task writes, so they cannot run before it
 closes, and an acceptance criterion satisfied after its own task is not one. Task 3 carries them.
 
@@ -809,11 +821,13 @@ currently ends with the stray-commit reasoning. Append to it:
 and verifies one entry per planned contract. Append to it:
 
 ```
-   A focused entry's red half is then re-derived rather than read. Run with the
-   assigned worktree as the working directory, invoking the skill's own
-   `scripts/verify-red` the way `scripts/task-brief` and `scripts/review-package`
-   are already invoked — the script ships beside this skill, not in the target
-   repository. For each focused entry:
+   A focused entry's red half is then re-derived rather than read. Two
+   resolutions, and they are separate: resolve `scripts/verify-red` to an
+   absolute path against **this skill's own directory** first — the script ships
+   beside this skill, not in the target repository, the same as
+   `scripts/task-brief` and `scripts/review-package` — then run that absolute
+   path with the **assigned worktree** as the working directory. For each
+   focused entry:
 
        scripts/verify-red --base <BASE> --head <HEAD> --test <the entry's test file> -- <the entry's exact red command>
 
@@ -982,8 +996,9 @@ Expect exit 0. Commit as `feat(forge): verify red and dispatch identity in the p
 - `skills/forge/implementer-prompt.md` names three mandatory placement values, and a dispatch
   missing any one of them is `NEEDS_CONTEXT`.
 - All four statements of the placement contract in `skills/forge/SKILL.md` name three values.
-  Check by count, the way step 2.5 checks the ledger line's two occurrences: `rg -c` for the
-  contract's phrasing must find no statement naming only two.
+  The four sites are the per-task dispatch step, the *What goes in a dispatch* bullet, the "Every
+  fix dispatch" paragraph, and the final-review fix-worker paragraph. Read each; the criterion is
+  that all four say three.
 - `skills/forge/SKILL.md` step 5 verifies the task's range against the **chain** — this unit,
   attempt 1 or 2 — and routes the other-attempt commit to reconciliation rather than to a stop.
 - Step 6 invokes `verify-red` per focused entry, routes all six exit codes, and never substitutes
@@ -998,8 +1013,8 @@ Expect exit 0. Commit as `feat(forge): verify red and dispatch identity in the p
 ## Task 3 — Fixtures for the agent-behaviour evaluation, and the evaluation run
 
 Creates `tests/fixtures/forge/eval-fixtures.sh` and `tests/fixtures/forge/eval-fixtures-test.sh`,
-then runs `EV-1` through `EV-10` and records their outcomes. Task 2's acceptance criteria name
-those cases; without this task they are a criterion with no step behind them.
+then runs the evaluation cases and records their outcomes. The spec's eval plan names eleven
+cases; without this task no step runs them and no fixture makes them reproducible.
 
 ### Interfaces
 
@@ -1064,6 +1079,22 @@ changed() { # rev-range
 	git -C "$REPO" diff --no-renames --name-only "$1"
 }
 
+# The evaluator's non-git input has to be built too, or the cases drift between runs -- and a
+# fixed report would tell the evaluator a tests-only task changed an implementation file.
+assert_artefacts() { # label
+	local artefact
+	for artefact in inventory.md inventory-not-applicable.md inventory-dirty.md report.md; do
+		[ -f "$REPO/$artefact" ] || fail "$1: $artefact not emitted"
+	done
+	grep -q 'impl-test.sh' "$REPO/inventory.md" || fail "$1: inventory names no test file"
+	grep -q 'task-test-not-applicable' "$REPO/inventory-not-applicable.md" ||
+		fail "$1: not-applicable inventory does not carry that mode"
+	grep -q 'printf tainted' "$REPO/inventory-dirty.md" ||
+		fail "$1: dirty inventory's command does not modify a tracked path"
+	grep -q "$(git -C "$REPO" rev-parse --short HEAD)" "$REPO/report.md" ||
+		fail "$1: report does not name the task commit"
+}
+
 status=0
 "$SCRIPT" >/dev/null 2>&1 || status=$?
 [ "$status" -eq 2 ] || fail "no arguments: expected exit 2, got $status"
@@ -1077,29 +1108,31 @@ build normal
 [ "$(changed 'HEAD~1..HEAD' | sort | tr '\n' ' ')" = "impl-test.sh impl.sh " ] ||
 	fail "normal: changed set is $(changed 'HEAD~1..HEAD' | tr '\n' ' ')"
 
-# The evaluator's non-git input has to be built too, or the cases drift between runs.
-for artefact in inventory.md inventory-not-applicable.md report.md; do
-	[ -f "$REPO/$artefact" ] || fail "normal: $artefact not emitted"
-done
-grep -q 'impl-test.sh' "$REPO/inventory.md" || fail "normal: inventory names no test file"
-grep -q 'task-test-not-applicable' "$REPO/inventory-not-applicable.md" ||
-	fail "normal: not-applicable inventory does not carry that mode"
-grep -q "$(git -C "$REPO" rev-parse --short HEAD)" "$REPO/report.md" ||
-	fail "normal: report does not name the task commit"
+assert_artefacts normal
 
 build tests-only
 [ "$(changed 'HEAD~1..HEAD' | tr -d '\n')" = "impl-test.sh" ] ||
 	fail "tests-only: changed set is $(changed 'HEAD~1..HEAD' | tr '\n' ' ')"
+assert_artefacts tests-only
+grep -q 'Changed: impl-test.sh' "$REPO/report.md" ||
+	fail "tests-only: report claims a shape the repository does not have"
 
 build no-trailer
 [ -z "$(trailers -1)" ] || fail "no-trailer: carries $(trailers -1)"
 
 build foreign-unit
 [ "$(trailers -1)" = "task-9.1" ] || fail "foreign-unit: trailer is $(trailers -1)"
+assert_artefacts foreign-unit
+[ ! -f "$REPO/report-late.md" ] ||
+	fail "foreign-unit: emitted a late report for a shape with no race"
 
 build both-attempts
 [ "$(trailers 'HEAD~2..HEAD' | sort | tr '\n' ' ')" = "task-4.1 task-4.2 " ] ||
 	fail "both-attempts: trailers are $(trailers 'HEAD~2..HEAD' | tr '\n' ' ')"
+assert_artefacts both-attempts
+[ -f "$REPO/report-late.md" ] || fail "both-attempts: no late report to reconcile against"
+grep -q "$(git -C "$REPO" rev-parse --short 'HEAD~1')" "$REPO/report-late.md" ||
+	fail "both-attempts: the late report does not name the first attempt's commit"
 
 status=0
 "$SCRIPT" normal "$SCRATCH/normal" >/dev/null 2>&1 || status=$?
@@ -1212,11 +1245,33 @@ cat >"$destination/inventory-not-applicable.md" <<'NOTAPPLICABLE'
   consumer, so no task-specific executable or structural observation could fail meaningfully.
 NOTAPPLICABLE
 
+# EV-10's command has to dirty a tracked path, so it needs its own inventory rather than a note
+# telling the evaluator to improvise one.
+cat >"$destination/inventory-dirty.md" <<'DIRTY'
+## Verification
+
+- `focused-test` — `impl-test.sh`. Expected red: the assertion fails because `impl.sh` is at its
+  base content. Green command: `bash -c 'printf tainted >>impl-test.sh; bash impl-test.sh'`.
+DIRTY
+
+# `Changed:` is computed rather than written, so the report matches whatever shape was built --
+# a fixed report would tell the evaluator a `tests-only` task changed an implementation file.
 cat >"$destination/report.md" <<REPORT
 Status: DONE
 Commits: $(git -C "$destination" rev-parse --short HEAD)
+Changed: $(git -C "$destination" diff --no-renames --name-only "$base" HEAD | tr '\n' ' ')
 Verification: focused-test impl-test.sh — RED \`bash impl-test.sh\` failed, GREEN \`bash impl-test.sh\` passed
 REPORT
+
+# The race case needs two reports, not one: the replacement's, above, and the original's arriving
+# after it. Without this the evaluator has nothing to reconcile and EV-9 tests nothing.
+if [ "$shape" = both-attempts ]; then
+	cat >"$destination/report-late.md" <<LATE
+Status: DONE
+Commits: $(git -C "$destination" rev-parse --short 'HEAD~1')
+Note: the original worker's report, arriving after its replacement was dispatched
+LATE
+fi
 
 printf 'eval-fixtures: %s at %s (base %s, head %s)\n' \
 	"$shape" "$destination" \
@@ -1227,7 +1282,7 @@ printf 'eval-fixtures: %s at %s (base %s, head %s)\n' \
 **3.4 — Run the suite green.** `just test eval-fixtures` exits 0 with
 `eval-fixtures-test: all cases passed`.
 
-**3.5 — Run the evaluation.** For each of `EV-1` through `EV-10` in the spec's *AI surface*
+**3.5 — Run the evaluation.** For each of `EV-1` through `EV-11` in the spec's *AI surface*
 table, build the fixture its row names — `EV-1`, `EV-2`, `EV-7` and `EV-10` use `normal`, `EV-3`
 uses `tests-only`, `EV-5` uses `no-trailer`, `EV-8` uses `foreign-unit`, `EV-9` uses
 `both-attempts`; `EV-4` needs no repository, only a `verify-red` stub that exits 5; `EV-6` needs
@@ -1242,8 +1297,8 @@ third pass.
 `inventory.md`; every other row uses the `inventory.md` and `report.md` the builder emits beside
 its repository.
 
-Record the ten outcomes in the forge workspace ledger, one line each:
-`EV-N: <pass|fail> (route <what the evaluator did>)` — and carry the same ten lines into the pull
+Record the eleven outcomes in the forge workspace ledger, one line each:
+`EV-N: <pass|fail> (route <what the evaluator did>)` — and carry the same eleven lines into the pull
 request body. The ledger lives in ignored `.agent/` scratch, so a criterion recorded only there
 has no evidence anyone can check after the branch is cleaned up.
 
@@ -1255,7 +1310,7 @@ has no evidence anyone can check after the branch is cleaned up.
 - `tests/fixtures/forge/eval-fixtures.sh` exists, is executable, and builds all five shapes.
 - `just test eval-fixtures` exits 0.
 - Every shape's trailer and changed-path set is asserted by the suite.
-- `EV-1` through `EV-10` have a recorded outcome line; a `fail` after its one confirming pass
+- `EV-1` through `EV-11` have a recorded outcome line; a `fail` after its one confirming pass
   parks the task rather than closing it.
 - `just verify` exits 0.
 

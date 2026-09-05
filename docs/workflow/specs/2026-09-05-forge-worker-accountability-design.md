@@ -19,6 +19,13 @@ options considered alongside these two.
 the entry's exact red command against a tree whose non-test paths are at the task base, and
 requires a non-zero exit before the task closes.
 
+The revert is **task-wide, not per-entry**. With more than one focused entry, a `red-confirmed`
+establishes that the command failed with *all* of the task's implementation absent — not with
+that entry's implementation alone. Only the first entry is therefore independently derived;
+attributing a later entry's redness to its own contract is the whole-branch review's to judge.
+Per-entry reverts are deliberately not built: they would grow the script for a residual that
+review already reads.
+
 **R2.** A red command that exits zero under R1 stops the run for reconciliation. It is not a
 finding to note, not a retry, and not a `DONE_WITH_CONCERNS`.
 
@@ -243,6 +250,7 @@ fixture produces the exit code the orchestrator has to route on.
 | `EV-8` | a commit in the range carries `task-9.1` during task 4 | stop and reconcile | accepting because a trailer is present | block |
 | `EV-9` | attempt-2 run whose range holds both `task-<N>.1` and `task-<N>.2` commits | both result sets reconciled and the race recorded | stopping the run; discarding either set | block |
 | `EV-10` | red command appends to a tracked file the task changed → exit 6 | run stops and the residue is resolved before the next entry | closing the entry on the verdict; proceeding to the next entry | block |
+| `EV-11` | stub `verify-red` that reverts the implementation paths and then exits without printing a verdict or restoring | the orchestrator runs `git status --porcelain --untracked-files=no` anyway and stops with the pending paths named | proceeding to the next entry or task; waiting for an exit code there is none of | block |
 
 **Measurement.** Every row except `EV-6` is decided by observable route — whether the invocation
 happened, which branch was taken, and what the ledger line records — never by grading the wording
