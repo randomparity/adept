@@ -98,13 +98,23 @@ past.
 `red-not-separable` is an honest hole rather than a hidden one. Inline-test languages get no red
 re-derivation from this decision, and the whole-branch review sees the recorded outcome.
 
-`red-confirmed` means the named command fails without the implementation, not that it fails for
-the right reason. A command that cannot load or compile against the base tree — a missing import,
-an absent symbol — exits non-zero without reaching an assertion, so the outcome establishes that
-the entry is not vacuous rather than that it is correct. The expected reason stays a report claim
-the whole-branch review reads. A focused command that was already failing at the task base for an
-unrelated reason yields the same vacuous confirmation, bounded by the clean baseline the pocket
+`red-confirmed` establishes only that the named command **did not succeed** against the reverted
+tree. It does not establish that an assertion was evaluated. A command that cannot load or
+compile — a missing import, an absent symbol — exits non-zero without reaching one, and so does a
+test that asserts nothing. Whether the command failed for the entry's stated reason stays a
+report claim the whole-branch review reads.
+
+Two cases are excluded rather than accepted, because they are reachable without a hostile actor.
+Exit 126 and 127 — not executable, and not found — are a precondition failure, not a verdict: the
+implementer ran the green half in the worker's environment and this runs in the orchestrator's, so
+a runner present for one and absent for the other would otherwise confirm red for every entry of
+every task with nothing evaluated. A focused command already failing at the task base for an
+unrelated reason still yields a vacuous confirmation, bounded by the clean baseline the pocket
 dimension establishes before the first task — the guarantee the green half already rests on.
+
+The restoration trap covers an ordinary failure and an interrupt, not a `SIGKILL` or an abandoned
+invocation. Those leave the implementation reverted and no code inside the script can report it,
+so the orchestrator checks the tree after every invocation, including one that returned nothing.
 
 Restoration is proved over the reverted paths, not over the whole tree. Anything the red command
 writes elsewhere — a cache directory, a coverage file, a build artifact — stays where it landed.
@@ -144,6 +154,16 @@ commit messages, so nothing else changes.
 - **Record a SHA-to-worker table in the ledger instead of a trailer.** judgment: that table is the
   inference the trailer removes, and it is a second copy that disagrees with the commit in exactly
   the race it exists for.
+- **Have the orchestrator set the committer identity per worker, so the mark does not depend on
+  the worker cooperating.** verified: `git config` is per repository, not per worktree.
+  `git -C <linked-worktree> config user.email worker@e` then `git config user.email` in the main
+  worktree printed `worker@e` (git 2.50.1, macOS 25.6.0, `extensions.worktreeConfig` unset), so a
+  value set for one party worktree applies to the whole checkout — and it would overwrite the
+  human's authorship on every commit the branch carries.
+  This is the one alternative that does not rely on the untrusted party, and it loses on those
+  two grounds rather than on cost. The trailer's dependence on worker cooperation is therefore a
+  priced consequence: a worker that omits it is detected, and a worker that forges a sibling's
+  value is not.
 - **Put the dispatch identity in the commit subject.** verified: `git log
   --format='%(trailers:key=Forge-Dispatch,valueonly,separator=%x2C)'` returns the value on git
   2.50.1 and an empty string for an absent key, so a trailer is queryable without parsing

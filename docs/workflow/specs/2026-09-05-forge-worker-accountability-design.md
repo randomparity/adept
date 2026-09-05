@@ -37,6 +37,12 @@ verdict, naming the paths. Neither is reverted: the command may have produced so
 wants. What R1 must not do is report plain success over a tree it has left dirty, which stops the
 task's *next* focused entry on a precondition one entry away from its cause.
 
+**R4b.** The orchestrator confirms the tree after **every** invocation, including one that
+returned nothing. R4's restoration runs from an EXIT trap, which covers an ordinary failure and
+an interrupt but not a `SIGKILL` or an abandoned invocation; those leave the implementation
+reverted with no code left running to report it, so the check that catches them has to sit
+outside the script.
+
 **R5.** Every commit a party worker makes carries a `Forge-Dispatch` git trailer whose value the
 dispatch supplied. Step 5 verifies the task's range against that task's **chain** — this unit,
 attempt 1 or 2 — alongside the existing ancestry check. A commit with no trailer, or one naming a
@@ -63,11 +69,12 @@ verify-red --base SHA --head SHA --test PATH [--test PATH]... -- COMMAND [ARG...
 ```
 
 Run from inside the party worktree. `--test` names a **file**, repeated once per file, and every
-invocation carries **every** test file the task's inventory names — not only the entry under
-check. A test file left out is classified as implementation and reverted, so the command fails
-because a sibling entry's test file vanished rather than because the implementation did: a
-vacuous `red-confirmed` manufactured by the check itself. Only the command after `--` varies
-between entries.
+invocation carries **every** test, fixture, and test-support path in the task's diff — not only
+the entry under check, and whether or not the inventory names it. Anything left out is reverted
+as implementation, so the command fails because a helper vanished rather than because the
+implementation did: a vacuous `red-confirmed` the check manufactured itself. An unclassifiable
+path is passed as `--test`, because over-reverting fabricates a pass while under-reverting only
+stops the run. Only the command after `--` varies between entries.
 
 Everything after `--` is the entry's exact red command; a command containing shell operators is
 passed as `bash -c '<command>'`, because the script executes the argument vector directly rather
@@ -88,9 +95,8 @@ Order of operations:
    is answerable for the paths it reverts, and a pre-existing untracked file is neither its doing
    nor its business.
 3. Compute the task's changed paths as `git diff -z --no-renames --name-only BASE HEAD`. Every
-   `--test` path must appear among them. `--no-renames` is required, not tidiness: with rename
-   detection on, `--name-only` prints only a rename's destination, so the source is never
-   restored and the command runs against a tree missing a file the task base had.
+   `--test` path must appear among them. `--no-renames` is required: with detection on only a
+   rename's destination is reported, and its source is never restored.
 4. `impl` = changed paths minus `--test` paths. Empty `impl` is R3's outcome.
 5. Install the restore trap, then for each `impl` path: check it out from BASE where BASE has it,
    remove it from **index and working tree together** where BASE does not (the task created it).
@@ -99,9 +105,11 @@ Order of operations:
    and working tree together where HEAD does not (the task deleted it). Then require
    `git diff --quiet HEAD -- <impl paths>` — the reverted paths only, covering index and working
    tree, and blind to whatever the command wrote elsewhere.
-8. Print the verdict line. Then check for tracked modifications anywhere in the tree: none, exit
-   with the verdict's code; some, print them and exit with the residue code instead (R4a). The
-   verdict is printed either way, because the command ran and its status is the answer.
+8. A command status of 126 or 127 yields no verdict at all — the command could not be run, so
+   nothing was observed. Precondition failure.
+9. Otherwise print the verdict line. Then check for tracked modifications anywhere in the tree:
+   none, exit with the verdict's code; some, print them and exit with the residue code instead
+   (R4a). The verdict is printed either way, because the command ran and its status is the answer.
 
 Index and working tree move together at every step because `git checkout <commit> -- <path>`
 writes both. Removing from the working tree alone leaves the index entry the reversion staged,
@@ -114,7 +122,7 @@ Exit codes are the interface; the verdict line is for the transcript.
 | 0 | `red-confirmed` | close the entry |
 | 1 | `red-not-reproduced` | stop and reconcile (R2) |
 | 2 | usage error | stop; the dispatch built the call wrong |
-| 3 | precondition failure | stop; unresolvable ref, `--head` that is not the checked-out commit, tracked modifications pending, empty range, or an untouched `--test` path |
+| 3 | precondition failure | stop; unresolvable ref, `--head` that is not the checked-out commit, tracked modifications pending, empty range, an untouched `--test` path, or a red command that could not be run (126, 127) |
 | 4 | `red-not-separable` | record and continue (R3) |
 | 5 | restoration failed | stop; the tree is not at HEAD (R4) |
 | 6 | `red-command-dirtied-tree` | stop and resolve the tree; the verdict on stdout is real, but the command modified tracked paths the script did not revert (R4a) |
@@ -139,10 +147,15 @@ git log --format='%H %(trailers:key=Forge-Dispatch,valueonly,separator=%x2C)' BA
 Every commit in the range must carry this task's unit with an attempt of 1 or 2. Three outcomes:
 
 - the dispatched value — ordinary, the commit is this worker's;
-- the same unit at the other attempt — the late-report race. Record it in the ledger's `dispatch`
-  field and reconcile both result sets per dispatch-liveness. Not a stop: refusing here would
-  refuse the one case the identity was added for;
-- absent, or a different unit — a stop-and-reconcile, the same class as a stray commit.
+- the same unit at the other attempt — the late-report race. Record both values in the ledger
+  line's `chain` field and reconcile both result sets per dispatch-liveness. Not a stop: refusing
+  here would refuse the one case the identity was added for;
+- the same unit above attempt 2, absent, or a different unit — a stop-and-reconcile, the same
+  class as a stray commit.
+
+`attempt` counts only the dispatch-liveness replacement. A re-dispatch after `NEEDS_CONTEXT` or
+`CANNOT_COMPLETE` reuses the current attempt number: that worker was never silently lost, so no
+replacement budget was consumed.
 
 A replacement dispatch reuses the original task base, so attempt 1's commits remain inside the
 range this check reads. The fix wave is verified the same way over its own range (R7).
@@ -165,20 +178,18 @@ cover every exit code including 5 and 6, restoration after both a passing and a 
 a task-created file, a task-deleted file, a task-renamed file, a sibling entry's test file, a
 repeated `--test`, a `--head` that is not the checked-out commit, and a path containing a space.
 
-Exit 5 is constructed rather than waited for: the red command itself makes the implementation
-path's directory unwritable, so restoration fails deterministically. Without that, no benign
-fixture reaches the code once restoration is scoped to the reverted paths — and an exit code with
-no case is how the severity-5 failure mode ships untested.
+Exit 5 is constructed rather than waited for: the red command makes the implementation's directory
+unwritable, so restoration fails deterministically. No benign fixture reaches it once restoration
+is scoped to the reverted paths, and an exit code with no case is how a severity-5 failure mode
+ships untested.
 
-Two cases assert exit 1 rather than 0 on purpose. The rename case and the sibling-test case each
-run a command that *reads* the tree the reversion was supposed to build, so it succeeds — and the
-script reports that success as `red-not-reproduced`. Asserting 0 there would pass whether or not
-the tree was right, which is exactly how the first draft's rename case passed while restoring
-nothing.
+The rename and sibling-test cases assert exit **1**, not 0, on purpose: each runs a command that
+reads the tree the reversion was supposed to build, so it succeeds and the script reports
+`red-not-reproduced`. Asserting 0 would pass whether or not the tree was right — which is how the
+first draft's rename case passed while restoring nothing.
 
-The suite is checked against a mutation battery rather than assumed to bite: a bare `rm` in
-`restore`, a dropped `--no-renames`, a dropped `--head` or `--test` precondition, an inverted
-`red_status`, an unscoped restoration proof, and a removed residue check must each redden it.
+The suite is checked against a mutation battery rather than assumed to bite; the plan lists the
+mutations and makes killing all of them an acceptance criterion.
 
 The contract text in `SKILL.md` and `implementer-prompt.md` has no executable consumer, so it
 carries `task-test-not-applicable` with that reason and is covered by the eval cases below
@@ -196,8 +207,10 @@ retrying a stop, or inventing a `Forge-Dispatch` value the dispatch did not supp
 the existing stop-and-reconcile. Budget is one focused run per focused contract plus one `git
 log` per task. The success signal is that a task closes only when every focused entry has an
 outcome the orchestrator derived — not one it read — and every commit in its range resolves to
-the task's chain. `red-confirmed` signals that the entry is not vacuous, never that the test is
-correct; correctness of the reason remains the whole-branch review's to judge.
+the task's chain. `red-confirmed` establishes only that the named command did not succeed against
+the reverted tree; whether it failed for the entry's stated reason, or evaluated an assertion at
+all, remains the whole-branch review's to judge. A command that could not be run — exit 126 or
+127 — is excluded from the verdict entirely and reported as a precondition failure.
 
 **Failure modes.** Seeded from the multi-agent and tool-using-agent rows.
 

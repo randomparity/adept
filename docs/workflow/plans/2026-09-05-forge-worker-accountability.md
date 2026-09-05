@@ -18,9 +18,9 @@ run against, so the instruction change is evaluated rather than merely reviewed.
 
 **Tech stack.** Bash and Markdown. No dependencies, no build step. Gates are `just verify`.
 
-**Expected implementation size: 750–870 changed lines (L) — summed from the file map below, and
-from the four code blocks this plan carries verbatim: 261 (verify-red suite) + 259 (verify-red) +
-67 (eval-fixtures suite) + 84 (eval-fixtures) = 671, plus roughly 100 lines of contract text in
+**Expected implementation size: 840–960 changed lines (L) — summed from the file map below, and
+from the four code blocks this plan carries verbatim: 277 (verify-red suite) + 271 (verify-red) +
+77 (eval-fixtures suite) + 108 (eval-fixtures) = 733, plus roughly 125 lines of contract text in
 `skills/forge/SKILL.md`, 22 in `implementer-prompt.md`, and the one-line version bump. The two
 verify-red files are sized against their three siblings in `tests/fixtures/forge/`, which run
 325–366 lines each.**
@@ -320,6 +320,22 @@ run_script --base "$BASE" --head "$HEAD_SHA" --test impl-test.sh -- \
 assert_status 6 "command modified a tracked path"
 grep -q 'red-confirmed' "$SCRATCH/out" ||
 	fail "command modified a tracked path: verdict not reported alongside the residue"
+grep -q 'impl-test.sh' "$SCRATCH/err" ||
+	fail "command modified a tracked path: the residue path is not named"
+
+# A command that could not run is not a failing test. 127 (not found) and 126 (not executable)
+# are indistinguishable from a real failure by exit status, so they stop instead of confirming.
+make_repo
+run_script --base "$BASE" --head "$HEAD_SHA" --test impl-test.sh -- verify-red-no-such-command
+assert_status 3 "red command not found"
+assert_clean "red command not found"
+
+make_repo
+printf '#!/usr/bin/env bash\ntrue\n' >"$REPO/not-exec.sh"
+chmod 0644 "$REPO/not-exec.sh"
+run_script --base "$BASE" --head "$HEAD_SHA" --test impl-test.sh -- ./not-exec.sh
+assert_status 3 "red command not executable"
+assert_clean "red command not executable"
 
 # A red command that writes an artifact must still report the verdict, not an unrestored tree.
 make_repo
@@ -616,6 +632,18 @@ restore
 git diff --quiet HEAD -- "${implementation[@]}" ||
 	restoration_failed "still differing from $head: $(git diff --name-only HEAD -- "${implementation[@]}" | tr '\n' ' ')"
 
+# 126 and 127 are the shell's "could not run it" statuses -- not executable, and not found. By
+# exit status alone they are indistinguishable from a failing assertion, and they are reachable
+# without any hostile actor: the implementer ran the green half in the worker's environment while
+# this runs in the orchestrator's, so a test runner installed for one and absent for the other
+# would confirm red for every entry of every task with nothing ever evaluated. A check that could
+# not run must never read as a check that found something.
+case $red_status in
+126 | 127)
+	precondition "the red command could not be run (exit $red_status): $1"
+	;;
+esac
+
 if [ "$red_status" -ne 0 ]; then
 	printf 'verify-red: red-confirmed (command exit %s)\n' "$red_status"
 	verdict=0
@@ -664,11 +692,13 @@ Expect exit 0. Commit as `feat(forge): re-derive a task's red claim with verify-
 - `just test verify-red` exits 0.
 - Every exit code in the Interfaces table — 0, 1, 2, 3, 4, 5 and 6 — is asserted by at least one
   case in the suite.
-- The suite's assertions bite. Each of these mutations must redden it: replacing `git rm` with a
-  bare `rm` in `restore`; dropping `--no-renames`; dropping either the `--head` or the `--test`
-  precondition; inverting `red_status`; and replacing the scoped restoration proof with a
-  whole-tree `git diff --quiet HEAD` — that last one is what the exit-6 case exists to catch,
-  since the scoping decision is otherwise argued for in three documents and exercised by none.
+- The suite's assertions bite. Each of these eight mutations must redden it: replacing `git rm`
+  with a bare `rm` in `restore`; dropping `--no-renames`; dropping either the `--head` or the
+  `--test` precondition; inverting `red_status`; replacing the scoped restoration proof with a
+  whole-tree `git diff --quiet HEAD`; removing the residue check; and neutralising the 126/127
+  guard. Apply each to a **code** line and confirm it landed — a substitution that matches the
+  explanatory comment above a line leaves the code untouched, and the battery then reports a
+  clean sweep while having mutated nothing.
 - After every case that reaches the command, `git status --porcelain --untracked-files=no` in the
   fixture is empty. Untracked output the command left is deliberately not asserted away: the
   suite asserts what the script promises, and the script promises the reverted paths.
@@ -703,9 +733,9 @@ Provided to nothing further in this plan.
   that the skill still shapes correctly and that every reference link resolves — are covered by
   `just shape-check` inside `just verify`, which this task runs.
 
-The agent-behavior evaluation cases `EV-1` through `EV-10` in the design's *AI surface* section
-are run against the changed instructions after this task, with a fresh evaluator, comparing
-observable routes to that table.
+The agent-behaviour evaluation cases `EV-1` through `EV-10` are **Task 3's** verification, not
+this task's. They read the instruction text this task writes, so they cannot run before it
+closes, and an acceptance criterion satisfied after its own task is not one. Task 3 carries them.
 
 ### Steps
 
@@ -762,9 +792,12 @@ currently ends with the stray-commit reasoning. Append to it:
 
    - the value you dispatched — ordinary; the commit is this worker's.
    - the same unit at the other attempt — the late report that raced a
-     replacement. Record it in the ledger's `dispatch` field and reconcile both
-     result sets per dispatch-liveness. **Not a stop.** Stopping here would
-     refuse the one case this identity was added to resolve.
+     replacement. Record both values in the ledger line's `chain` field and
+     reconcile both result sets per dispatch-liveness. **Not a stop.** Stopping
+     here would refuse the one case this identity was added to resolve.
+   - the same unit at an attempt above 2 — a stop-and-reconcile. The replacement
+     budget is one, so a third attempt means the budget was exceeded somewhere
+     this check cannot see.
    - absent, or a different unit — the same stop-and-reconcile as a stray
      commit.
 
@@ -790,13 +823,18 @@ and verifies one entry per planned contract. Append to it:
    operators as `bash -c '<command>'` — the argument vector runs directly, not
    through a shell.
 
-   `--test` takes **files**, and on every invocation you pass **every** test
-   file the task's Verification inventory names — not just the entry under
-   check. A test file left out is classified as implementation and reverted, so
-   the command then fails because a sibling entry's test file vanished rather
-   than because the implementation did. That is a vacuous `red-confirmed`: the
-   check manufacturing its own evidence. Only the command after `--` changes
-   from entry to entry.
+   `--test` takes **files**, and on every invocation you pass **every** test,
+   fixture, and test-support path in the task's diff — whether or not the
+   inventory names it, and not just the entry under check. Anything left out is
+   classified as implementation and reverted, so the command then fails because
+   a helper, a fixture, or a sibling entry's test file vanished rather than
+   because the implementation did. That is a vacuous `red-confirmed`: the check
+   manufacturing its own evidence. Only the command after `--` changes from
+   entry to entry.
+
+   When you cannot classify a changed path, pass it as `--test`. Over-reverting
+   fabricates a pass; under-reverting at worst yields `red-not-reproduced`,
+   which stops the run. Err toward the stop.
 
    Where an entry names a case rather than a file, pass the file part —
    everything before the `::` or the runner's selector flag. Where an entry
@@ -822,6 +860,18 @@ and verifies one entry per planned contract. Append to it:
    - **2**, **3**, or **5** — the check could not run, or the tree is not back
      at HEAD. Stop. A 5 leaves the worktree unresolved and nothing may proceed
      past it, exactly as a reviewer's `CLEANUP_FAILED` does.
+
+   After **every** invocation — whatever its status, and including one that
+   returned nothing at all — confirm the tree came back:
+
+       git status --porcelain --untracked-files=no
+
+   Non-empty is a stop with the pending paths named. `verify-red` restores under
+   an EXIT trap, which covers an ordinary failure and an interrupt but not a
+   `SIGKILL` or an abandoned invocation; those leave the implementation reverted
+   and nothing inside the script can report it. On the exit-3 dirty-tree
+   precondition, disposition the pending modification before re-running — it
+   belongs to the worker's report — rather than only stopping.
 
    Never substitute the green command here. Running a test that passes proves
    nothing about whether it could ever have failed, which is the whole of what
@@ -899,6 +949,11 @@ the whole-branch review uses `review-fix.<attempt>`. `task-<N>` is the recovery
 chain, and `.<attempt>` is `1` for the original and `2` for the one replacement
 this budget permits — so the commits of a worker whose late report raced its
 replacement are separable in `git log` rather than by ledger ordering.
+
+`attempt` counts **only** the dispatch-liveness replacement. Re-dispatching a
+unit after `NEEDS_CONTEXT` or `CANNOT_COMPLETE` reuses its current attempt
+number: that worker was never silently lost, nothing of its work is in doubt,
+and incrementing would spend a replacement budget no recovery consumed.
 ```
 
 **2.8 — Verify the fix wave's own range.** In the fix-wave paragraph, after the sentence
@@ -937,7 +992,6 @@ Expect exit 0. Commit as `feat(forge): verify red and dispatch identity in the p
 - The task-complete ledger line is stated identically in step 8 and in *Durable progress*.
 - `.claude-plugin/plugin.json` reads `4.1.0`.
 - `just verify` exits 0.
-- `EV-1` through `EV-10` run against the changed instructions and match their observable routes.
 
 ---
 
@@ -1022,6 +1076,16 @@ build normal
 [ "$(trailers -1)" = "task-4.1" ] || fail "normal: trailer is $(trailers -1)"
 [ "$(changed 'HEAD~1..HEAD' | sort | tr '\n' ' ')" = "impl-test.sh impl.sh " ] ||
 	fail "normal: changed set is $(changed 'HEAD~1..HEAD' | tr '\n' ' ')"
+
+# The evaluator's non-git input has to be built too, or the cases drift between runs.
+for artefact in inventory.md inventory-not-applicable.md report.md; do
+	[ -f "$REPO/$artefact" ] || fail "normal: $artefact not emitted"
+done
+grep -q 'impl-test.sh' "$REPO/inventory.md" || fail "normal: inventory names no test file"
+grep -q 'task-test-not-applicable' "$REPO/inventory-not-applicable.md" ||
+	fail "normal: not-applicable inventory does not carry that mode"
+grep -q "$(git -C "$REPO" rev-parse --short HEAD)" "$REPO/report.md" ||
+	fail "normal: report does not name the task commit"
 
 build tests-only
 [ "$(changed 'HEAD~1..HEAD' | tr -d '\n')" = "impl-test.sh" ] ||
@@ -1130,6 +1194,30 @@ both-attempts)
 	;;
 esac
 
+# A repository is not the evaluator's whole input. Eight of the ten rows turn on what the
+# orchestrator reads *about* the task -- the inventory entry and the implementer's report -- so
+# those are built here too. Improvised input makes two evaluation runs similar rather than
+# comparable, and a case that drifts between runs measures the drift.
+cat >"$destination/inventory.md" <<'INVENTORY'
+## Verification
+
+- `focused-test` — `impl-test.sh`. Expected red: the assertion fails because `impl.sh` is at its
+  base content. Green command: `bash impl-test.sh`.
+INVENTORY
+
+cat >"$destination/inventory-not-applicable.md" <<'NOTAPPLICABLE'
+## Verification
+
+- `task-test-not-applicable` — the changed surface is prose in a record with no executable
+  consumer, so no task-specific executable or structural observation could fail meaningfully.
+NOTAPPLICABLE
+
+cat >"$destination/report.md" <<REPORT
+Status: DONE
+Commits: $(git -C "$destination" rev-parse --short HEAD)
+Verification: focused-test impl-test.sh — RED \`bash impl-test.sh\` failed, GREEN \`bash impl-test.sh\` passed
+REPORT
+
 printf 'eval-fixtures: %s at %s (base %s, head %s)\n' \
 	"$shape" "$destination" \
 	"$(git -C "$destination" rev-parse --short "$base")" \
@@ -1150,8 +1238,14 @@ the row's pass and forbidden traits. One pass is expected; after an evidence-bac
 the instruction text, allow one confirming pass. A second failure parks rather than starting a
 third pass.
 
+`EV-7` uses the `normal` repository with `inventory-not-applicable.md` in place of
+`inventory.md`; every other row uses the `inventory.md` and `report.md` the builder emits beside
+its repository.
+
 Record the ten outcomes in the forge workspace ledger, one line each:
-`EV-N: <pass|fail> (route <what the evaluator did>)`.
+`EV-N: <pass|fail> (route <what the evaluator did>)` — and carry the same ten lines into the pull
+request body. The ledger lives in ignored `.agent/` scratch, so a criterion recorded only there
+has no evidence anyone can check after the branch is cleaned up.
 
 **3.6 — Run the guardrails and commit.** `just verify` exits 0. Commit as
 `test(forge): add eval fixtures for the accountability contract`.
