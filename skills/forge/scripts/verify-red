@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+# Re-derive the red half of one focused-test contract.
+#
+# The implementer's report says a named test failed before the implementation existed. This runs
+# that claim instead of reading it: revert the task's non-test paths to the task base, run the
+# entry's exact command, and require it to fail. The tree is restored either way.
+#
+# Usage: verify-red --base SHA --head SHA --test PATH [--test PATH]... -- COMMAND [ARG...]
+#
+# Exit codes are the interface -- the orchestrator routes on them:
+#   0  red-confirmed          the command failed with the implementation reverted
+#   1  red-not-reproduced     it passed anyway; the red claim is not supported
+#   2  usage error
+#   3  precondition failure   unresolvable ref, a --head that is not the checked-out commit,
+#                             pending tracked modifications, empty range, untouched --test path
+#   4  red-not-separable      every changed path is a named test path; nothing to revert
+#   5  restoration failure    a reverted path is not back at HEAD; nothing may proceed
+#   6  command dirtied tree   the verdict is on stdout, but the command modified tracked paths
+#                             this script did not revert and cannot restore
+#
+# A command containing shell operators must be passed as `bash -c '<command>'`: the argument
+# vector after `--` is executed directly, not through a shell.
+set -euo pipefail
+
+usage() {
+	printf 'usage: verify-red --base SHA --head SHA --test PATH [--test PATH]... -- COMMAND [ARG...]\n' >&2
+	exit 2
+}
+
+base=
+head=
+test_paths=()
+saw_separator=0
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--base)
+		[ $# -ge 2 ] || usage
+		base=$2
+		shift 2
+		;;
+	--head)
+		[ $# -ge 2 ] || usage
+		head=$2
+		shift 2
+		;;
+	--test)
+		[ $# -ge 2 ] || usage
+		test_paths[${#test_paths[@]}]=$2
+		shift 2
+		;;
+	--)
+		saw_separator=1
+		shift
+		break
+		;;
+	*) usage ;;
+	esac
+done
+
+[ "$saw_separator" -eq 1 ] || usage
+[ $# -gt 0 ] || usage
+[ -n "$base" ] || usage
+[ -n "$head" ] || usage
+[ "${#test_paths[@]}" -gt 0 ] || usage
+
+precondition() {
+	printf 'verify-red: %s\n' "$1" >&2
+	exit 3
+}
+
+git rev-parse --git-dir >/dev/null 2>&1 || precondition 'not inside a git working tree'
+
+base_sha=$(git rev-parse --verify --quiet "$base^{commit}") ||
+	precondition "$base does not name a commit here"
+head_sha=$(git rev-parse --verify --quiet "$head^{commit}") ||
+	precondition "$head does not name a commit here"
+
+# Restoration puts every reverted path back to $head_sha, so a $head that is not what is
+# actually checked out would "restore" the tree to a commit it was never at -- silently, since
+# the reverted paths would then differ from the real HEAD and the proof below would fail after
+# the damage rather than before it. Checked here, ahead of every mutation.
+current_head=$(git rev-parse --verify --quiet HEAD) ||
+	precondition 'HEAD does not resolve; no commit is checked out here'
+[ "$head_sha" = "$current_head" ] ||
+	precondition "--head $head is not the checked-out commit ($current_head)"
+
+# Refusing pending tracked modifications is what makes the reversion below safe: everything this
+# script restores it restores from a commit, so uncommitted work in the same paths would be lost.
+# Untracked files are deliberately not counted -- they are neither this script's doing nor its
+# business, and counting them would refuse to start in any tree holding a stray scratch file.
+pending=$(git status --porcelain --untracked-files=no) ||
+	precondition 'could not read the working tree status'
+[ -z "$pending" ] || {
+	printf 'verify-red: refusing to run against a modified tree:\n%s\n' "$pending" >&2
+	exit 3
+}
+
+# Through a file rather than a pipeline or command substitution: -z output holds NUL, which a
+# shell variable cannot carry, and a process substitution would discard git's exit status --
+# leaving a diff that could not run indistinguishable from a range that changed nothing.
+listing=$(mktemp "${TMPDIR:-/tmp}/verify-red.XXXXXX") ||
+	precondition 'could not create a scratch file for the path list'
+# --no-renames is load-bearing. With rename detection on, `--name-only` prints only a rename's
+# destination, so the source path never enters the set, never gets checked out from BASE, and the
+# command runs against a tree missing a file the task base had. Turning detection off reports the
+# rename as the delete and the add it physically is, which is exactly what has to be undone.
+if ! git diff -z --no-renames --name-only "$base_sha" "$head_sha" >"$listing"; then
+	rm -f -- "$listing"
+	precondition "could not diff $base..$head"
+fi
+
+changed=()
+while IFS= read -r -d '' path; do
+	changed[${#changed[@]}]=$path
+done <"$listing"
+rm -f -- "$listing"
+
+[ "${#changed[@]}" -gt 0 ] || precondition "$base..$head changes no paths"
+
+contains() { # needle haystack...
+	local needle=$1 item
+	shift
+	for item in "$@"; do
+		if [ "$item" = "$needle" ]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+# A focused entry naming a file the task never touched is a report that does not describe this
+# range. Failing here rather than proceeding keeps a mis-specified entry from producing a verdict.
+index=0
+while [ "$index" -lt "${#test_paths[@]}" ]; do
+	candidate=${test_paths[$index]}
+	index=$((index + 1))
+	contains "$candidate" "${changed[@]}" ||
+		precondition "--test $candidate is not among the paths changed in $base..$head"
+done
+
+implementation=()
+index=0
+while [ "$index" -lt "${#changed[@]}" ]; do
+	candidate=${changed[$index]}
+	index=$((index + 1))
+	if contains "$candidate" "${test_paths[@]}"; then
+		continue
+	fi
+	implementation[${#implementation[@]}]=$candidate
+done
+
+# Separability is decided from the path sets alone. Reading a file to judge whether its tests and
+# its implementation are entangled would be a prose assertion; an empty implementation set is the
+# structural form of the same fact and covers the case that matters -- a language whose unit tests
+# live in the file under test.
+if [ "${#implementation[@]}" -eq 0 ]; then
+	printf 'verify-red: red-not-separable (every path changed in %s..%s is a named test path)\n' \
+		"$base" "$head"
+	exit 4
+fi
+
+restore_status=0
+restore_done=0
+
+# Always returns 0: it runs as an EXIT trap, and under `set -e` a trap's non-zero return becomes
+# the shell's exit status, which would overwrite the verdict this script exists to report. The
+# outcome is carried in restore_status and read by the caller below.
+restore() {
+	local index=0 path
+	[ "$restore_done" -eq 0 ] || return 0
+	restore_done=1
+	while [ "$index" -lt "${#implementation[@]}" ]; do
+		path=${implementation[$index]}
+		index=$((index + 1))
+		if git cat-file -e "$head_sha:$path" 2>/dev/null; then
+			git checkout "$head_sha" -- "$path" || restore_status=1
+		elif ! git rm -q -f --ignore-unmatch -- "$path"; then
+			# `git rm`, not a bare `rm`: the reversion above used `git checkout`, which
+			# writes the index as well as the working tree, so a path the task deleted is
+			# staged as an addition by the time we get here. Removing it from the working
+			# tree alone leaves that index entry, and the tree reads as unrestored while
+			# looking correct on disk. --ignore-unmatch keeps this a no-op for a path the
+			# reversion never staged.
+			restore_status=1
+		fi
+	done
+	return 0
+}
+
+restoration_failed() {
+	printf 'verify-red: could not restore the tree to %s -- %s\n' "$head" "$1" >&2
+	printf 'verify-red: resolve the working tree before anything else runs here\n' >&2
+	exit 5
+}
+
+# Installed before the first mutation, so an interrupt between here and the explicit restore
+# below still puts the implementation back.
+trap restore EXIT
+
+index=0
+while [ "$index" -lt "${#implementation[@]}" ]; do
+	path=${implementation[$index]}
+	index=$((index + 1))
+	# cat-file exits non-zero with its own diagnostic when the path is absent at that commit;
+	# any non-zero means absent, so the status is not inspected further. A path absent at base
+	# is one the task created, and reverting it means removing it.
+	if git cat-file -e "$base_sha:$path" 2>/dev/null; then
+		git checkout "$base_sha" -- "$path" || {
+			restore
+			[ "$restore_status" -eq 0 ] || restoration_failed "reverting $path also failed"
+			precondition "could not revert $path to $base"
+		}
+	elif ! git rm -q -f --ignore-unmatch -- "$path"; then
+		restore
+		[ "$restore_status" -eq 0 ] || restoration_failed "removing $path also failed"
+		precondition "could not remove $path, which $base does not have"
+	fi
+done
+
+# errexit is lifted for exactly one command: a non-zero status here is the result, not a fault.
+set +e
+"$@"
+red_status=$?
+set -e
+
+restore
+[ "$restore_status" -eq 0 ] || restoration_failed 'one or more paths could not be put back'
+
+# Scoped to the paths this script reverted, and covering index and working tree together --
+# `git diff HEAD` sees both. Whatever the red command wrote elsewhere is outside the contract: a
+# cache directory or a coverage file is not this script's to police, and a whole-tree check would
+# turn an ordinary test run into exit 5, the one outcome nothing may proceed past.
+git diff --quiet HEAD -- "${implementation[@]}" ||
+	restoration_failed "still differing from $head: $(git diff --name-only HEAD -- "${implementation[@]}" | tr '\n' ' ')"
+
+# 126 and 127 are the shell's "could not run it" statuses -- not executable, and not found. By
+# exit status alone they are indistinguishable from a failing assertion, and they are reachable
+# without any hostile actor: the implementer ran the green half in the worker's environment while
+# this runs in the orchestrator's, so a test runner installed for one and absent for the other
+# would confirm red for every entry of every task with nothing ever evaluated. A check that could
+# not run must never read as a check that found something.
+case $red_status in
+126 | 127)
+	precondition "the red command could not be run (exit $red_status): $1"
+	;;
+esac
+
+if [ "$red_status" -ne 0 ]; then
+	printf 'verify-red: red-confirmed (command exit %s)\n' "$red_status"
+	verdict=0
+else
+	printf 'verify-red: red-not-reproduced (command exit 0 with %s implementation path(s) at %s)\n' \
+		"${#implementation[@]}" "$(git rev-parse --short "$base_sha")"
+	verdict=1
+fi
+
+# The verdict is printed first because it is real either way: the command ran and its status is
+# the answer. What follows is a separate fact -- the command modified tracked paths this script
+# did not revert, so it cannot restore them and will not guess. Reported as its own exit rather
+# than folded into the verdict, because leaving it silent would hand the next focused entry a
+# dirty tree and stop it on exit 3, one entry away from the command that caused it.
+residue=$(git status --porcelain --untracked-files=no) ||
+	restoration_failed 'could not read the working tree status'
+if [ -n "$residue" ]; then
+	printf 'verify-red: red-command-dirtied-tree (tracked paths left modified):\n%s\n' \
+		"$residue" >&2
+	exit 6
+fi
+
+exit "$verdict"
