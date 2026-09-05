@@ -64,10 +64,12 @@ the new authority, if supplied, in provenance before re-freezing the charter.
 The plan's expected implementation size is not a build contract. When the completed diff exceeds
 that estimate, classify the discrepancy instead of reducing lines to satisfy the number:
 
-- If the plan's estimate was wrong, correct it and record why in the plan, then return to the
-  caller to rerun `$spellcraft`'s proportionality review under the unchanged scope. Make no
-  implementation change merely to fit the estimate.
-- If the diff contains work no plan task requested, delete that named work.
+- If the estimate or the plan's task coverage was wrong while the work is required by the frozen
+  scope and reviewed design, correct the plan and estimate, record why, then return to the caller
+  to rerun `$spellcraft`'s review under the unchanged scope. Make no implementation change merely
+  to fit the estimate.
+- If the diff contains named work that neither the frozen scope nor the reviewed design requires,
+  delete that work.
 - If implementation exposed real complexity outside the frozen scope, return it to the caller's
   `SCOPE CHECKPOINT` under the rule above.
 
