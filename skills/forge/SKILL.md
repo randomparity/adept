@@ -271,13 +271,26 @@ identifier, `unused` or `consumed` replacement budget, and artifact dispositions
 `progress.md`. The task brief, implementer report, review package, review file, branch commits, and
 worktree state are reconciliation evidence. Do not replace or reclaim a worker on silence alone.
 
+The chain identifier is minted at dispatch on every run, not when a silence
+recovery starts. An implementer's is `task-<N>.<attempt>`; the fix worker after
+the whole-branch review uses `review-fix.<attempt>`. `task-<N>` is the recovery
+chain, and `.<attempt>` is `1` for the original and `2` for the one replacement
+this budget permits — so the commits of a worker whose late report raced its
+replacement are separable in `git log` rather than by ledger ordering.
+
+`attempt` counts **only** the dispatch-liveness replacement. Re-dispatching a
+unit after `NEEDS_CONTEXT` or `CANNOT_COMPLETE` reuses its current attempt
+number: that worker was never silently lost, nothing of its work is in doubt,
+and incrementing would spend a replacement budget no recovery consumed.
+
 ### The per-task loop
 
 1. Generate the task brief: `scripts/task-brief PLAN_FILE N` writes it to a
    uniquely named file and prints the path.
 2. Dispatch an implementer with [implementer-prompt.md](implementer-prompt.md),
    carrying the placement contract from *What goes in a dispatch*: the
-   assigned worktree as an absolute path and the exact branch name.
+   assigned worktree as an absolute path, the exact branch name, and the
+   dispatch identity `task-<N>.<attempt>`.
 3. If it asks questions, answer them fully before it proceeds. A question asked
    before the work is the cheapest one there is; hurrying it produces a defect
    instead of an answer.
@@ -290,15 +303,124 @@ worktree state are reconciliation evidence. Do not replace or reclaim a worker o
    commit in some other tree, and an empty range is a task that committed
    nowhere. Either one is a stop-and-reconcile, because a worker that got lost
    is exactly the one whose self-report cannot be trusted.
+
+   Then verify the same range identifies its author. Every commit in
+   `<BASE>..<BRANCH_NAME>` must carry this task's dispatch chain:
+
+       git log --format='%H %(trailers:key=Forge-Dispatch,valueonly,separator=%x2C)' <BASE>..<BRANCH_NAME>
+
+   Verify the **chain**, not the exact value you issued. Every commit must carry
+   `task-<N>` for this task's N, with an attempt of 1 or 2:
+
+   - the value you dispatched — ordinary; the commit is this worker's.
+   - the same unit at the other attempt — the late report that raced a
+     replacement. Record both values in the ledger line's `chain` field and
+     reconcile both result sets per dispatch-liveness. **Not a stop.** Stopping
+     here would refuse the one case this identity was added to resolve.
+   - the same unit at an attempt above 2 — a stop-and-reconcile. The replacement
+     budget is one, so a third attempt means the budget was exceeded somewhere
+     this check cannot see.
+   - absent, or a different unit — the same stop-and-reconcile as a stray
+     commit.
+
+   A replacement dispatch reuses the original task base, so attempt 1's commits
+   stay inside this range rather than falling outside it.
 6. Read the report and verify one entry per planned contract. A focused entry contains the red
    command and expected failure plus the green command and passing result. A non-applicable entry
    repeats the plan's exact reason and confirms the implemented contract remained non-executable
    and non-structural. Missing or incomplete evidence is `NEEDS_CONTEXT`.
+
+   A focused entry's red half is then re-derived rather than read. Two
+   resolutions, and they are separate: resolve `scripts/verify-red` to an
+   absolute path against **this skill's own directory** first — the script ships
+   beside this skill, not in the target repository, the same as
+   `scripts/task-brief` and `scripts/review-package` — then run that absolute
+   path with the **assigned worktree** as the working directory. For each
+   focused entry:
+
+       scripts/verify-red --base <BASE> --head <HEAD> --test <the entry's test file> -- <the inventory entry's exact command>
+
+   The command comes from the **plan's** Verification inventory, never from the
+   implementer's report. A focused entry names a test file, an expected red,
+   and a green command — and the red command *is* that green command, run
+   against the reverted tree. That is the whole of what makes red and green one
+   claim about one commit rather than two unrelated runs. The report also names
+   a red command, and the report is written by the party this check exists to
+   distrust; letting it supply the command would let a worker choose what
+   certifies its own red claim. Where the report's command and the inventory's
+   disagree, that disagreement is itself a stop-and-reconcile, not a choice for
+   you to make. An inventory command you judge to be weak — one that could not
+   observe the contract it names — is a plan defect that returns to the plan
+   checkpoint; it is never grounds to substitute a better one here.
+
+   `<BASE>` is the task base you noted before the dispatch; `<HEAD>` is the
+   branch tip you verified in step 5 (`git rev-parse <BRANCH_NAME>`), which is
+   the SHA the ledger line already records. Pass a command containing shell
+   operators as `bash -c '<command>'` — the argument vector runs directly, not
+   through a shell.
+
+   `--test` takes **files**, and on every invocation you pass **every** test,
+   fixture, and test-support path in the task's diff — whether or not the
+   inventory names it, and not just the entry under check. Anything left out is
+   classified as implementation and reverted, so the command then fails because
+   a helper, a fixture, or a sibling entry's test file vanished rather than
+   because the implementation did. That is a vacuous `red-confirmed`: the check
+   manufacturing its own evidence. Only the command after `--` changes from
+   entry to entry.
+
+   When you cannot classify a changed path, pass it as `--test`. Over-reverting
+   fabricates a pass; under-reverting at worst yields `red-not-reproduced`,
+   which stops the run. Err toward the stop.
+
+   Where an entry names a case rather than a file, pass the file part —
+   everything before the `::` or the runner's selector flag. Where an entry
+   names a test file this task did not change, the check does not apply to it:
+   that entry returns to the plan checkpoint, because an inventory naming a test
+   the task never touched is a plan defect rather than a verdict about red.
+
+   Route on its exit status, which is the interface:
+
+   - **0** (`red-confirmed`) — the entry is closed.
+   - **1** (`red-not-reproduced`) — the command passed with the implementation
+     reverted, so the report's red claim is unsupported. Stop and reconcile, as
+     with a stray commit. Do not re-dispatch and do not accept the entry.
+   - **4** (`red-not-separable`) — every path the task changed is a named test
+     file, so there was nothing to revert. Record the outcome and continue; the
+     entry is not verified and must not be described as though it were.
+   - **6** (`red-command-dirtied-tree`) — the verdict on stdout is real, but the
+     red command modified tracked paths `verify-red` did not revert and cannot
+     restore. Stop and resolve the tree. Do not close the entry on the verdict
+     alone: the residue belongs to the command that made it, and carrying it
+     forward stops the next entry on a precondition one entry away from its
+     cause.
+   - **2**, **3**, or **5** — the check could not run, or the tree is not back
+     at HEAD. Stop. A 5 leaves the worktree unresolved and nothing may proceed
+     past it, exactly as a reviewer's `CLEANUP_FAILED` does.
+
+   After **every** invocation — whatever its status, and including one that
+   returned nothing at all — confirm the tree came back:
+
+       git status --porcelain --untracked-files=no
+
+   Non-empty is a stop with the pending paths named. `verify-red` restores under
+   an EXIT trap, which covers an ordinary failure and an interrupt but not a
+   `SIGKILL` or an abandoned invocation; those leave the implementation reverted
+   and nothing inside the script can report it. On the exit-3 dirty-tree
+   precondition, disposition the pending modification before re-running — it
+   belongs to the worker's report — rather than only stopping.
+
+   Never run the entry's command against the implemented tree and call the
+   result red. `verify-red` is what turns that command into a red check: the
+   same command that passes at HEAD has to fail once the implementation is
+   reverted. Running it at HEAD proves nothing about whether it could ever have
+   failed, which is the whole of what this step establishes.
 7. Inventory the actual task diff and reconcile its material contracts one-to-one with the plan
    and report. An unmatched or reclassified contract returns to the plan checkpoint.
 8. Mark the task complete in the todo list and append exactly one line, using `mixed` when both
    modes occur: `Task N: complete (commits <base-sha>..<head-sha>, verification
-   <focused-test|task-test-not-applicable|mixed>)`.
+   <focused-test|task-test-not-applicable|mixed>, red <confirmed=<n>,
+   not-separable=<n>>, chain <every distinct Forge-Dispatch value observed in
+   the range, comma-separated>)`.
 
 **A task's gate is its contract evidence, not a review.** There is no per-task reviewer.
 Focused tests end testable contracts at a runnable pass/fail gate; non-applicable contracts end at
@@ -453,10 +575,11 @@ party workers.
 
 - the task brief path, introduced as its requirements, with the exact values to
   use verbatim
-- the **placement contract** — the assigned worktree as an absolute path and
-  the exact branch name the worker commits to. A dispatch missing either value
-  is invalid: do not send it, and stop with `NEEDS_CONTEXT` if you receive one.
-  The implementer template turns these two values into a precondition the
+- the **placement contract** — the assigned worktree as an absolute path, the
+  exact branch name the worker commits to, and the dispatch identity
+  `task-<N>.<attempt>` it stamps on every commit. A dispatch missing any of the
+  three values is invalid: do not send it, and stop with `NEEDS_CONTEXT` if you
+  receive one. The implementer template turns them into a precondition the
   worker verifies before its first edit, failing closed on a mismatch
 - where this task fits in the wider change
 - the issue requirement and acceptance criteria
@@ -506,11 +629,18 @@ The whole-branch reviewer returns a bounded verdict and a path rather than the
 review itself.
 
 Every fix dispatch carries the implementer contract, placement included: the
-assigned worktree path and branch name, verified before the first edit. Re-run
-the tests covering
-the change and report the command and its output. Name the covering test files —
-a one-line fix does not need the whole suite. Confirm the report has all three
-before closing the fix wave. One finding cannot take that contract: a
+assigned worktree path, branch name, and the `review-fix.<attempt>` dispatch
+identity, verified before the first edit. Re-run the tests covering the change
+and report the command and its output. Name the covering test files — a
+one-line fix does not need the whole suite. Confirm the report carries the
+command, its output, and the covering test files before closing the fix wave.
+
+Verify the fix wave's commits the way step 5 verifies a task's: every commit
+from the reviewed HEAD to the branch tip must carry `review-fix.<attempt>`.
+Absent or a different unit is a stop-and-reconcile. A stamp nobody checks is
+attribution the next reconciliation cannot rely on.
+
+One finding cannot take that contract: a
 flaked test, where re-running it is the evidence the flake policy under
 *Guardrails* rejects. Dispose of it where reported flakes are dispositioned,
 above, rather than by dispatching a fix that re-runs it.
@@ -520,7 +650,8 @@ the review file's path rather than a list — a list is the resident context cos
 the review file exists to remove. Per-finding fixers each rebuild context and
 re-run suites, and one real session's final-review wave cost more than all its
 tasks combined. It carries the same placement contract as any implementer: the
-branch's worktree path and branch name, verified before the first edit.
+branch's worktree path, branch name, and the `review-fix.<attempt>` dispatch
+identity, verified before the first edit.
 
 Say in that dispatch what binds it, because a path carries none of the filtering
 a hand-picked list did: critical, high, and medium findings are to be fixed;
@@ -579,7 +710,9 @@ be denied writes to `.git/` entirely.
 When a task's commits are verified on the branch, its report contains every selected evidence
 entry, its actual diff reconciles to the inventory, and its guardrails passed, append one line:
 `Task N: complete (commits <base-sha>..<head-sha>, verification
-<focused-test|task-test-not-applicable|mixed>)`. After any
+<focused-test|task-test-not-applicable|mixed>, red <confirmed=<n>,
+not-separable=<n>>, chain <every distinct Forge-Dispatch value observed in
+the range, comma-separated>)`. After any
 compaction the ledger and `git log` outrank whatever you seem to remember: the
 commits they name are on disk whether or not you recall making them.
 

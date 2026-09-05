@@ -30,12 +30,14 @@ Worker (implementer):
 
     ## Placement — verify before your first edit
 
-    You are assigned exactly one working tree and one branch. Both values below
-    are mandatory; a dispatch that omits either one is invalid — stop and
-    report NEEDS_CONTEXT rather than guessing.
+    You are assigned exactly one working tree, one branch, and one dispatch
+    identity. All three values below are mandatory; a dispatch that omits any
+    one of them is invalid — stop and report NEEDS_CONTEXT rather than
+    guessing.
 
     - **Worktree:** [WORKTREE_PATH] (absolute path)
     - **Branch:** [BRANCH_NAME]
+    - **Dispatch identity:** [DISPATCH_ID] (e.g. `task-3.1`)
 
     Before touching anything, confirm you are where the dispatch placed you:
 
@@ -46,6 +48,16 @@ Worker (implementer):
     now and report NEEDS_CONTEXT, having changed nothing. This check runs
     before the first edit because by commit time the edits are already in the
     wrong tree, and recovery is a cherry-pick instead of a no-op.
+
+    Every commit you make carries [DISPATCH_ID] as a git trailer, on its own line
+    at the end of the commit message, separated from the body by a blank line:
+
+        Forge-Dispatch: [DISPATCH_ID]
+
+    Use the value exactly as given. Do not invent one, do not abbreviate it, and
+    do not carry one from another task. A dispatch that did not give you a
+    Dispatch identity is invalid: stop and report NEEDS_CONTEXT, as with a
+    missing worktree or branch.
 
     Never work on `main` or `master` without explicit consent from the
     dispatch that sent you: if [BRANCH_NAME] is either of those, stop and
@@ -195,7 +207,9 @@ Worker (implementer):
     - **Status:** DONE | DONE_WITH_CONCERNS | CANNOT_COMPLETE | NEEDS_CONTEXT
     - **Branch:** [BRANCH_NAME] — the branch every commit below landed on;
       the orchestrator verifies this rather than trusting it
-    - the commits you made, short SHA and subject
+    - the commits you made, short SHA and subject — every one carrying
+      `Forge-Dispatch: [DISPATCH_ID]`, which the orchestrator verifies rather
+      than trusting
     - one line on the tests, e.g. "14/14 passing, output pristine" — and name
       any test that flaked, however clean the final run looked
     - your concerns, if you have any
