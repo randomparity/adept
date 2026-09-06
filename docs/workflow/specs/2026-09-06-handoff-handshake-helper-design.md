@@ -52,9 +52,17 @@ it.
 
 **R2 — the helper owns the handshake line.** The helper composes
 `MERGE-READY: #<PR> @ <sha>` itself, as a bare whole line: no fence, no backticks, no list marker,
-no leading or trailing whitespace, no carriage return. A narrative file containing a line that
-begins `MERGE-READY:` is rejected before anything is posted — such a line would either duplicate
-the helper's or contradict its SHA, and the helper cannot tell which was intended.
+no leading or trailing whitespace, no carriage return. A narrative file containing the token
+`MERGE-READY:` **anywhere** — at a line start, inside backticks, or mid-sentence — is rejected
+before anything is posted. The scan is a substring scan, not a line-anchored one, and the
+difference is the whole point: the defect it closes wrapped the handshake in backticks, which no
+anchored pattern sees, and in a list item or indented block it does not begin its line at all. The
+narrative has no legitimate reason to carry the token, and a copy of it would either duplicate the
+helper's line or contradict its SHA, with no way to tell which was intended.
+
+The marker rejection in R1 is deliberately the opposite shape — whole-line only. A backticked
+marker in the narrative is harmless, because the helper writes the real one on its own line
+regardless.
 
 **R3 — the helper computes the SHA.** The SHA is read from
 `git ls-remote origin "refs/heads/<head-branch>"`, per `skills/return-to-town/SKILL.md:79-82`:
@@ -98,7 +106,7 @@ addresses, and credential shapes; the helper runs it on the composed body rather
 own patterns.
 
 **R10 — retry is safe by construction.** The helper only ever appends a fresh complete block.
-Latest-complete-wins (`skills/quest-log/SKILL.md:283-287`) makes a second successful run supersede
+Latest-complete-wins (`skills/quest-log/SKILL.md:296-298`) makes a second successful run supersede
 a first, so a caller that cannot tell whether its previous invocation completed may simply run it
 again. Nothing reads, modifies, or deletes an existing comment.
 
@@ -119,6 +127,31 @@ the width of the window and the ambiguity of what it leaves:
   not. Death before it leaves nothing posted; death during it leaves at most one unverified comment,
   and R10 makes the successor's remedy "run it again" rather than "work out what the corpse did".
 
+Two further limits, stated here rather than left to be discovered.
+
+**Exit 0 is not a promise about merge time.** R4's agreement binds the `ls-remote` read and the
+`headRefOid` read to each other; it binds neither to the moment the gate later computes its own
+`HEAD_SHA`. If the head branch moves after the hand-off — a CI fixup, a review commit — the posted
+block is complete, both markers anchored, and invisible to the gate's selection, which admits only a
+block carrying a line for the gate's `HEAD_SHA`. Exit 0 asserts the bytes GitHub stored, never that
+the SHA is still the tip. The remedy is R10. No writer-side control can do better, because nothing
+binds the head before `gh pr merge --match-head-commit`, so none is added.
+
+**Exit 1 does not imply nothing was published.** Three of the failure conditions below are checked
+after the comment is created — a failed readback, a stored copy differing from the composed one, and
+the three whole-line assertions. A comment the helper composed is gate-valid whether or not the
+readback succeeded, so an exit 1 from that side leaves a usable hand-off on the issue. The message
+names which condition failed, and the remedy is the same on either side of the post: re-run.
+
+**Assertion 5's evidence class.** No GitHub documentation guarantees that an issue comment's body
+round-trips byte for byte, and it is not checkable without posting to a live issue. The evidence is
+the shipped precedent — `skills/quest/scripts/publish-forge-review` runs the identical
+`jq -e --rawfile expected` equality against a newline-terminated body in production — plus the
+observation that bodies submitted through the web UI come back CRLF-normalized while API-posted LF
+bodies do not, which is why assertion 4 exists as a separate diagnostic. If the assumption ever
+fails, it fails loudly and specifically at assertion 5 rather than silently, which is the correct
+direction for an unverifiable premise.
+
 ## Interface
 
 ```
@@ -133,6 +166,9 @@ publish-handoff [--preflight] REPO ISSUE PR NOTES
 
 On success the sole stdout line is the verified comment URL. The exit taxonomy is the one the
 repository's other executables use: 0 success, 1 a condition failed, 2 the helper could not run.
+Exit 1 before the comment is posted means nothing was published; exit 1 after it means a complete
+block may be on the issue and merely unverified here. The distinction is carried by the message,
+which names the condition, and the remedy is the same either way — re-run, per R10.
 
 ## Failure modes and their messages
 
@@ -142,7 +178,7 @@ repository's other executables use: 0 success, 1 a condition failed, 2 the helpe
 | notes file missing, unreadable, empty, or not a regular file | the path |
 | notes not UTF-8, or carrying NUL or CR | which byte class |
 | notes carrying a whole-line `<!-- WORK:TRAJECTORY -->` or `<!-- TRAJECTORY:COMPLETE -->` | which marker |
-| notes carrying a line beginning `MERGE-READY:` | that the helper owns that line |
+| notes mentioning `MERGE-READY:` anywhere | that the helper owns that line |
 | notes over the size cap | the cap |
 | pull request not `OPEN`, or its number disagrees | the observed state |
 | `git ls-remote` returning no line, several lines, or a non-SHA | what it returned |

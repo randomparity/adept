@@ -19,18 +19,24 @@ remote. `skills/return-to-town/SKILL.md` replaces its composition prose with the
 **Tech stack.** Bash and Markdown. No dependencies, no build step. Gates are `just verify`.
 
 **Expected implementation size: 950–1050 changed lines (L) — summed from the file map below: 354
-(`publish-handoff`) + 619 (its suite), the two code files, plus roughly 25 lines of contract text in
+(`publish-handoff`) + 638 (its suite), the two code files, plus roughly 25 lines of contract text in
 `skills/return-to-town/SKILL.md` and the one-line version bump.**
 
 The band disagrees with the `M` this run recorded in its `WORK:SCOPE` tracking metadata, and the
 band is the one that is wrong there rather than here: `M` was read off the issue before any file
 map existed, and the range above is what the file map and task list actually yield. The suite is
 the larger half, and that is proportionate rather than inflated — its sibling
-`tests/fixtures/quest/publish-forge-review-test.sh` runs 928 lines for a helper of 311, and this
+`tests/fixtures/quest/publish-forge-review-test.sh` runs 928 lines for a helper of 310, and this
 one covers 28 cases including one regression per defect logged in the issue.
 
-The design-to-implementation ratio is deliverable-driven: this repository's plans carry complete
-code in every step that changes code, so both code files appear here in full and again in the tree.
+**How the two code files are specified here differs, deliberately.** The helper appears in full, at
+step 1.2, because its exact bytes are the contract — the markers, the handshake, and the assertion
+order are the deliverable. The suite is specified by an enumerated case list, at step 1.5: one line
+per case naming the case and the single assertion it makes. That is a complete specification of what
+the suite must do without transcribing 638 lines whose shape is mechanical once the case list and
+the fixture sketch are fixed, and it is what makes the pinned pass count derivable rather than
+asserted. An implementer who writes exactly the 28 enumerated cases reaches the acceptance criterion
+below.
 
 ## Global constraints
 
@@ -106,8 +112,12 @@ Consumed from the existing codebase, each confirmed to exist with the signature 
 
 - **Contract: the composed and posted block satisfies the merge gate's three anchored conditions.**
   Mode: focused-test. Test file `tests/fixtures/return-to-town/publish-handoff-test.sh`, case
-  `case_publishes_the_required_shape`. Expected red before the helper exists: the suite exits 1
-  with `expected exit 0, got 127`. Green command:
+  `case_publishes_the_required_shape`. Expected red with `"$handshake"` removed from
+  `compose_body`'s final `printf`: 3 cases FAIL, this one first, with
+  `expected exit 0, got 1` and stderr
+  `publish-handoff: the stored hand-off comment is missing the handshake on its own line:
+  MERGE-READY: #42 @ <sha>` — the helper's own readback assertion catches the omission before the
+  case inspects the posted body, which is the assertion doing its job. Green command:
   `./tests/fixtures/return-to-town/publish-handoff-test.sh`, expected final line
   `publish-handoff-test: 28 passed, 0 failed`, exit 0.
 - **Contract: a narrative carrying a handshake — backticked or bare — is rejected before posting.**
@@ -499,17 +509,61 @@ printf '%s\n' "$comment_url"
 
 **1.3** `chmod +x skills/return-to-town/scripts/publish-handoff`.
 
-**1.4** Confirm the expected red before the suite exists is unavailable — the suite *is* the red
-observation, so write it next and observe red against a helper that is present but whose individual
-guards are removed one at a time (step 1.6).
+**1.4** The suite is written after the helper, so no case can be observed red against an absent
+helper. Every red in this task is therefore a guard-removal red, taken in step 1.6 against a helper
+that is present and whose individual guards are removed one at a time. There is no `127` observation
+to take, and none is claimed.
 
-**1.5** Write `tests/fixtures/return-to-town/publish-handoff-test.sh` with the content given in the
-repository at that path. Its shape: `fixture_init publish-handoff-test`, a `write_fake_gh` that
-emits a `gh` handling `pr view`, `issue comment`, and `api` and branching on `GH_MODE`; a `new_case`
-that builds a bare `origin.git`, a `work` clone, pushes `refs/heads/feat/publish-handoff-308`, and
-records the real SHA into the fake's `head-ref-oid` state file; a `run_helper` that runs the script
-from `work` with the fake on `PATH`; and the 28 cases listed under Verification plus the failure
-table in the design. `chmod +x` it.
+**1.5** Write `tests/fixtures/return-to-town/publish-handoff-test.sh`. Its scaffold:
+`fixture_init publish-handoff-test`; a `write_fake_gh` emitting a `gh` that handles `pr view`,
+`issue comment`, and `api`, branching on `GH_MODE` and reading `FAKE_PR_STATE`, `FAKE_PR_NUMBER`,
+and `FAKE_BRANCH`; a `new_case` that builds a bare `origin.git` and a `work` clone, pushes
+`refs/heads/feat/publish-handoff-308`, and records the real SHA into the fake's `head-ref-oid` state
+file; a `run_helper` that runs the script from `work` with the fake on `PATH` and honours a
+per-case `FAKE_BRANCH` override; and `expect_status` / `expect_stderr` assertion helpers. `chmod +x`
+it.
+
+The 28 cases, one line each — case name, then the single thing it asserts:
+
+1. `case_usage` — no arguments exits 2 naming the usage line.
+2. `case_bad_repo` — `acme`, `a/b/c`, and `acme/wid gets` each exit 1 naming the repository.
+3. `case_bad_numbers` — issue `0` and PR `4x` each exit 1 naming which number.
+4. `case_notes_unreadable` — absent, empty, and symlinked notes each exit 1.
+5. `case_notes_bytes` — notes carrying NUL, CR, or non-UTF-8 each exit 1 naming the byte class.
+6. `case_notes_too_large` — 9000-byte notes exit 1 naming the cap, and `gh` was never called.
+7. `case_notes_carry_markers` — notes carrying either marker as a whole line exit 1.
+8. `case_notes_carry_handshake` — notes carrying the handshake backticked, and bare, each exit 1.
+9. `case_notes_unsafe` — notes carrying a denied path exit 1 naming public-safety, having posted
+   nothing. Build the denied string as a split literal, as `scripts/check-public-safety-test.sh`
+   does, or this suite trips the gate it is checking the helper calls.
+10. `case_pr_not_open` — a `CLOSED` pull request exits 1 naming the state.
+11. `case_pr_number_mismatch` — a pull request reporting `99` exits 1 naming it.
+12. `case_branch_absent` — a head branch deleted from origin exits 1.
+13. `case_multiple_refs` — a second `feat/` branch plus `FAKE_BRANCH=feat/*` exits 1 naming
+    "expected exactly one"; `git ls-remote` globs its patterns, which is what makes this reachable.
+14. `case_head_disagrees` — a `headRefOid` of all zeroes exits 1 naming both SHAs.
+15. `case_preflight` — `--preflight` exits 0 printing `preflight-ok`, having posted nothing.
+16. `case_publishes_the_required_shape` — exit 0; stdout is the comment URL; the posted body opens
+    with the marker, ends with the sentinel, carries the handshake as a whole line for the real
+    SHA, retains the narrative, carries no CR, and went to the right issue.
+17. `case_notes_without_trailing_newline` — notes with no final newline still yield a whole-line
+    handshake.
+18. `case_stored_missing_sentinel` — a stored copy with the sentinel stripped exits 1 naming it.
+19. `case_stored_missing_marker` — a stored copy with the marker stripped exits 1 naming it.
+20. `case_stored_missing_handshake` — a stored copy with the handshake stripped exits 1 quoting the
+    expected line.
+21. `case_stored_carries_cr` — a stored copy with CR on every line exits 1 naming the carriage
+    return, **not** the marker it also defeats.
+22. `case_stored_differs` — a stored copy replaced wholesale exits 1.
+23. `case_comment_creation_fails` — a failing `gh issue comment` exits 1 naming creation.
+24. `case_readback_fails` — a failing `gh api` exits 1 naming the readback.
+25. `case_bad_comment_url` — a foreign URL, a non-numeric id, no URL, and two URLs each exit 1.
+26. `case_pr_view_fails` — a failing `gh pr view` exits **2**, not 1.
+27. `case_missing_command` — a PATH holding only a `bash` symlink exits 2 naming the command.
+    `#!/usr/bin/env bash` resolves the interpreter through PATH, so an empty PATH fails at exec
+    with 127 and never reaches the check.
+28. `case_rerun_is_safe` — after a readback failure, a second run posts a fresh complete block
+    carrying both markers and the handshake, and exits 0.
 
 **1.6** Verify the tests bite. For each of these, introduce the fault, run
 `./tests/fixtures/return-to-town/publish-handoff-test.sh`, observe the named red, then revert:
@@ -519,6 +573,12 @@ table in the design. `chmod +x` it.
 | drop `"$SENTINEL"` from `compose_body`'s final `printf` | 4 cases FAIL |
 | replace the notes `grep -qF 'MERGE-READY:'` with `scan_status=1` | `FAIL regression: a backticked handshake in the notes is rejected` |
 | move the CR check after the whole-line checks in `assert_stored_body` | `FAIL a stored copy carrying a carriage return fails, naming it` |
+| drop `"$handshake"` from `compose_body`'s final `printf` | 3 cases FAIL, led by `FAIL the posted body carries both markers and a bare handshake line`, stderr naming the missing handshake |
+
+The fourth row exists because the first three bite three narrow guards and leave the task's primary
+contract — that the composed and posted block satisfies all three gate conditions — with no bite
+evidence at all. That case is the whole point of the change, so it is the one that least deserves an
+exemption from the repository's own "verify tests bite" standard.
 
 **1.7** Run `shellcheck -x` and `shfmt -d` over both new files. Expect no output and exit 0 from
 each.
@@ -569,8 +629,9 @@ handshake* — the one beginning `**That comment carries the handshake.**` and r
 `skills/return-to-town/scripts/publish-handoff` as what composes and posts the block; states that
 the caller writes the narrative only and must not write either marker or the handshake; states that
 the helper reads the SHA from `git ls-remote`, requires GitHub's `headRefOid` to agree, and asserts
-the stored copy; states the exit taxonomy; and states that a nonzero exit holds both paths and never
-authorizes a merge. Keep the surrounding paragraphs.
+the stored copy; states the exit taxonomy; and states that a nonzero exit holds both paths, is
+re-run rather than diagnosed by hand, and does not by itself mean nothing was posted — three of the
+conditions are checked after the comment is created. Keep the surrounding paragraphs.
 
 **2.2** Add the invocation, in a fenced `sh` block, immediately after that paragraph:
 

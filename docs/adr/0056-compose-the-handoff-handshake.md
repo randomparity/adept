@@ -46,8 +46,19 @@ stored, re-read through the API, not against the body it composed.
 - A disagreement between the remote tip and `headRefOid` now blocks the hand-off. That is a new
   refusal, and it is the intended one: it is precisely the moment the SHA a handshake would bind is
   already stale.
+- That agreement binds the two reads to each other, not to merge time. A push to the head branch
+  after the hand-off leaves a complete block the gate will not select, and exit 0 does not survive
+  that — it asserts the bytes GitHub stored, never that the SHA is still the tip. The remedy is
+  re-running, which appends a fresh block for the new head. Nothing binds the head before
+  `--match-head-commit`, so no writer-side control can do better and none is added.
+- Exit 1 does not mean nothing was published. Three conditions are checked after the comment is
+  created, and a comment the helper composed is gate-valid whether or not the readback succeeded.
+  The message names which condition failed, and the remedy is the same either way: re-run.
 - Park notes keep the sentinel-omission exposure the hand-off just lost. That is a real residual,
-  not an oversight, and it is left to a follow-up rather than absorbed here.
+  not an oversight, and it is left as accepted exposure rather than absorbed here: a park note
+  losing its sentinel makes a parked issue read as unparked, which a reader recovers from by
+  opening the issue — where the hand-off case had no such recovery, because the gate reads bytes
+  and no one reads the gate.
 - `$return-to-town` gains a dependency on a checkout whose `origin` is the repository being handed
   off. It already required one to read the SHA; the helper makes the requirement explicit and names
   it in its own failure message.
@@ -61,10 +72,11 @@ stored, re-read through the API, not against the body it composed.
 - **A `--kind hand-off|park` mode flag on one helper.** judgment: the flag is itself the confusion
   surface. A park note that acquired a handshake would authorize a merge of work that is parked —
   strictly worse than the defect being fixed — and the flag is the only way that becomes reachable.
-- **A validator the caller runs against a body it composed itself.** verified: issue #308's own
-  tally — it catches three of the four logged defects and not the backtick one, because composition
-  is the step being got wrong. The issue states this in its "Suggested fix" section and prefers
-  composition for that reason.
+- **A validator the caller runs against a body it composed itself.** judgment: issue #308 records
+  that a validator would catch three of the four logged defects; the one it misses is the dead
+  worker, which this decision also misses. Coverage is therefore not the discriminator — prevention
+  against detection is. A validator tells a competent agent it composed the wrong bytes; composition
+  denies it the chance to. The issue prefers composition for that reason.
 - **Extend `skills/quest/scripts/publish-forge-review` with a hand-off mode.** verified: it posts
   with `gh pr comment`, and `WORK:TRAJECTORY` is issue-side per `skills/quest-log/SKILL.md`'s
   annotation table; only the readback endpoint `/repos/.../issues/comments/<id>` is shared. Its
