@@ -323,9 +323,11 @@ line of it is written.
 `iterating` runs `$trial-loop` exactly as step 3 states. `single-pass` dispatches one
 reviewer pass instead, with that step's `challenge_args` and focus unchanged, and gives each
 finding its single disposition; a blocking finding escalates to `$trial-loop` at its ordinary
-budget under the reference's escalation rule. The design set is **one** target, so this is one
-routing decision, not one per artifact — name the routed depth in the audit line step 3 asks
-for.
+budget under the reference's escalation rule. Select the first `gauntlet`-compatible lens for the
+design's shape under [review lenses](../../references/review-lenses.md), and name it with the
+routed depth. If an unchanged single-pass target escalates, use the different lens that reference
+requires for the new loop. The design set is **one** target, so this is one routing decision, not
+one per artifact.
 
 This is where the cost the routing exists to bound actually lands, and it is where a wrong
 route is cheapest to correct, because the escalation happens before any code exists.
@@ -521,7 +523,7 @@ them — a reviewer asked to both measure and judge will do neither reproducibly
 ratio leaves an inspectable trace rather than silently reopening the shield (the repo's only
 verification is reading the transcript):
 
-    design review: set = <paths>; design <n> lines vs implementation estimate <low>–<high>; ratio <n.n>x; depth = iterating | single-pass
+    design review: set = <paths>; design <n> lines vs implementation estimate <low>–<high>; ratio <n.n>x; depth = iterating | single-pass; lens = <name>
 
 A plan carrying no `Expected implementation size` line is a step 2 defect: derive the range
 from the plan's own file map and task list, write it into the plan, and say in the audit
@@ -532,7 +534,8 @@ line that you did.
 Run `$trial-loop` in file-list mode:
 
 - challenge_args: `<every path in the design set, space-separated>`
-- focus: `This is one design reviewed as one artifact set — ADR(s), specification, and
+- focus: `<selected review-lens focus> followed by this target-specific context:
+  This is one design reviewed as one artifact set — ADR(s), specification, and
   implementation plan. Read them together and challenge them together: a defect that
   crosses files is one finding, not one per file, and a spec defect the plan inherited is
   reported once against both.

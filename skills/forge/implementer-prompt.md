@@ -76,6 +76,8 @@ Worker (implementer):
 
     ## What to do
 
+    Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification.
+
     1. Build exactly what the task specifies.
     2. Follow every entry in the task's Verification inventory. Run `focused-test`
        entries red then green. For `task-test-not-applicable`, preserve the exact
