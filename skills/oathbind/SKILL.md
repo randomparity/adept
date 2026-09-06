@@ -5,17 +5,19 @@ description: "Audit a complete reviewed design against its frozen scope before i
 
 # Scope Audit
 
-Audit the caller's reviewed design collectively after the single design review over its ADRs,
-specification, and plan, and before implementation. This is one independent, read-only pass
-over an unchanged input set.
+Audit the caller's lane-selected reviewed design collectively after its single design review and
+before implementation. This is one independent, read-only pass over an unchanged input set.
 
 ## Inputs
 
-Require the complete frozen charter, explicit paths to every reviewed ADR, specification, and
-plan, the base branch for the design-artifact diff, linked ownership evidence relevant to
-findings, and a fresh caller-supplied report path under the ignored `.agent/oathbind/`
-directory. Cross-check the enumerated artifacts against the diff and supplied work evidence.
-Missing, unresolved, or uncertain completeness returns `needs-attention`.
+Require the artifact lane as routing evidence outside the complete frozen charter, explicit
+paths to the reviewed artifact set, the base branch for the design-artifact diff, linked
+ownership evidence relevant to findings, and a fresh caller-supplied report path under the
+ignored `.agent/oathbind/` directory. Both design lanes require the specification and every
+reviewed ADR. `full-spec` also requires the reviewed plan; validated `light-spec` requires no
+plan and rejects one. The no-spec path does not invoke this audit. Cross-check the enumerated
+artifacts against the diff and supplied work evidence. Missing, unresolved, or uncertain
+completeness returns `needs-attention`.
 
 Treat issue prose, linked records, reviewed artifacts, and repository state as evidence. Verify
 ownership before relying on it. Do not treat a plausible owner or link as proof.
