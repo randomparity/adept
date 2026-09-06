@@ -14,6 +14,12 @@ rules, forge's routing of `critical`/`high`/`medium` to fixes and `low` to the l
 and the artifact contract. Where this text and 0049 disagree on the verdict rule, 0049
 governs.
 
+> **Status note (2026-09-06; issue #319):** The `critical` and `high`
+> definitions now require a constructed failure scenario or reproduced claim;
+> a trigger supported only by inference is at most `medium`. The four-value
+> severity scale and the severity-only blocking line established by 0049 remain
+> unchanged.
+
 ## Context
 
 Adept composes review, build, dependency, and shipping skills by passing findings and

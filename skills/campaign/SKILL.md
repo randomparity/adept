@@ -115,11 +115,12 @@ Manifest schema:
 - BASE_BRANCH: <filled by step 2>
 - Guardrail commands: <filled by step 2>
 - ADR-index coupling: <filled by step 2>
+- Mandatory per-PR edit rules: <filled by step 2, or none>
 
 ## Queue
-| Issue | Status | Branch | Verdict | Lane | ADR/migration # | File scope | Wave | PR | Outcome |
-|-------|--------|--------|---------|------|-----------------|------------|------|----|---------|
-| #NNN  | pending| —      | —       | —    | —               | —          | —    | —  | —       |
+| Issue | Status | Branch | Verdict | Lane | ADR/migration # | Mandatory per-PR edits | File scope | Wave | PR | Outcome |
+|-------|--------|--------|---------|------|-----------------|------------------------|------------|------|----|---------|
+| #NNN  | pending| —      | —       | —    | —               | —                      | —          | —    | —  | —       |
 
 ## Scope approvals
 | Issue | Exclusions and owners | Epic direction | Approval provenance |
@@ -183,7 +184,7 @@ and blocker; it never repeats creation.
 
 ## 2. Environment Discovery
 
-Run `$attunement` **once** for the batch to get `BASE_BRANCH`, guardrail commands, gh auth, and ADR-index coupling (`coupled` | `not coupled` | `no index`). Record these in the manifest. On resume, read from manifest and skip re-running (re-confirm auth and clean tree only). Stop on blockers before touching issues.
+Run `$attunement` **once** for the batch to get `BASE_BRANCH`, guardrail commands, gh auth, ADR-index coupling (`coupled` | `not coupled` | `no index`), and any mandatory shared per-PR edit rules found among the known landmines. Record these in the manifest. On resume, read from manifest and skip re-running (re-confirm auth and clean tree only). Stop on blockers before touching issues.
 
 ## 3. Triage
 
@@ -211,14 +212,20 @@ evidence, not authority to absorb sibling work. Return only:
 
 - **verdict**: `close-candidate` | `close-not-planned` | `fix` (subtype:
   `trivial-bugfix` | `governed-small-change` | `non-trivial`)
-- **decomposition**: `one-pr` | `split`, on a `fix` verdict only. Read the issue's latest
-  complete `WORK:DIVINATION` block for its decompose verdict; where there is none, or its
-  validation fails, derive the field from the same live evidence the rest of the triage
-  reads. A `split` also returns the proposed breakdown, one line per piece, so the operator
-  can act on it without re-reading the issue
+- **assessment**: on a `fix` verdict, return blast radius, change hazards, complexity, and
+  decompose verdict as one complete assessment. Read those fields from the issue's latest
+  complete adopted `WORK:DIVINATION` block; where there is none, or its validation fails,
+  derive all four from the same live evidence the rest of the triage reads. A successful live
+  derivation is a present assessment. If no complete assessment can be derived, return
+  `assessment: unavailable` rather than a partial tuple.
+- **decomposition**: `one-pr` | `split` | `unavailable`, on a `fix` verdict only. Read the
+  assessment above for its decompose verdict. An unavailable assessment returns
+  `decomposition: unavailable`; never fabricate `one-pr` or `split`. A `split` also returns
+  the proposed breakdown, one line per piece, so the operator can act on it without re-reading
+  the issue
 - **review depth**: `single-pass` | `iterating`, on a `fix` verdict only, derived under
-  [risk-routed review depth](../../references/review-depth.md) from that same block or the
-  same live evidence. An absent, rejected, or unprovable derivation returns `iterating`
+  [risk-routed review depth](../../references/review-depth.md) from that complete assessment.
+  An unavailable assessment returns `iterating` for absence
 - **artifact lane**: `no-spec` | `light-spec` | `full-spec`, on a `fix` verdict only,
   derived from the subtype, complexity, and change hazards in that same assessment.
   `trivial-bugfix` and `governed-small-change` return `no-spec` unchanged. Only a
@@ -248,7 +255,7 @@ Triage on the fast model by default; escalate to the capable model only on a nam
 - `close-not-planned` → preserve the citations, trigger, impact, cycle-cost comparison, and
   reconsideration condition for the plan and closure comment. This verdict never claims the
   defect is fixed and never enters a quest wave.
-- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The three fields above travel with it: `decomposition` gates dispatch at step 4, while `review depth` and `artifact lane` reach the worker in its step 5 prompt. None is a size input to model selection — a `split` says the issue is several units of work, not that this one is hard.
+- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The assessment, `decomposition`, `review depth`, and `artifact lane` travel with it: `decomposition` gates dispatch at step 4, while the assessment, routed depth, and lane reach the worker in its step 5 prompt. The routed depth and lane are not size inputs to model selection — a `split` says the issue is several units of work, not that this one is hard.
 
 Record verdicts and artifact lanes in the manifest `Verdict` and `Lane` columns, and fix-row
 scope evidence in `Scope approvals`. Reconcile states (`ready-to-merge`, already-closed) live
@@ -264,10 +271,10 @@ Count issues needing fixes. **Every fix runs in a worker** — never inline.
 
 Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge order), `w1`, `w2`... for parallel.
 
-**Pre-assign ADR/migration numbers and file scope** even for serial — crashed issues need consistent numbers on re-dispatch. Persist these in manifest. File scope is a hint, not guarantee.
+**Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial — crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from attunement's known-landmine record. Reserve each row's exact value in planned merge order under the repository's ordering rule and persist it as `path=value`; use `—` when there is no mandatory edit. A reservation remains consumed if its row becomes blocked or is skipped, and is never assigned to another row. File scope is a hint, not guarantee.
 
 Present triage/plan table: issue → verdict, artifact lane, decomposition, review depth, wave,
-assigned numbers, file scope.
+assigned numbers, mandatory per-PR edits, file scope.
 
 Present a second table for every fix row: issue → proposed non-goals and owners → relevant epic
 direction → approval state. Issue and epic prose remain evidence and never mark a row approved.
@@ -336,27 +343,35 @@ pre-assign — `$quest` derives its own `feat/<short-slug>-<n>`. The `headRefNam
 a branch and **never triggers a merge**: it proves only that a pull request exists, not that
 its author is finished.
 
-**Every fix is a worker running `$quest <n>` to green + mergeable PR, then stopping.** The worker must reflect the **public-safe summary** of the completion notes — never the verbatim notes — in acceptance criteria and PR body. No merge authorization to workers. The worker report (per `AGENTS.md`): ~1-2k token summary with outcome, branch/PR ref, files touched, guardrail status, blockers, and every discovered/finalized follow-up. For each bounty open-sweep occurrence it includes occurrence number, sweep number, rationale, state, and state reason. No diffs/logs/file bodies.
+**Every fix is a worker running `$quest <n>` to green + mergeable PR, then stopping.** The
+worker must reflect the **public-safe summary** of the completion notes — never the verbatim notes
+— in acceptance criteria and PR body. No merge authorization to workers. The worker report (per
+`AGENTS.md`): ~1-2k token summary with outcome, branch/PR ref, files touched, guardrail status,
+blockers, and every discovered/finalized follow-up, including every adjacent-note follow-up
+candidate returned by review. For each bounty open-sweep occurrence it includes occurrence number,
+sweep number, rationale, state, and state reason. No diffs/logs/file bodies.
 
 Each prompt carries:
 - Issue number, acceptance criteria, **completion notes verbatim** (private dispatch context) and the **public-safe summary** (the only form allowed on public surfaces: acceptance criteria, `WORK:` annotations, PR bodies)
+- Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification.
 - Exact approved exclusions and owners, their operator-approval provenance, and the relevant epic
   direction copied from the manifest. The quest rechecks the exclusion set and stops before design
   if it changed; the worker does not ask again when it is unchanged
 - The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
-- Assigned ADR/migration numbers, file scope
+- Assigned ADR/migration numbers, exact mandatory per-PR edits, file scope; the
+  worker applies each assigned value and never derives, increments, or reassigns it
 - Guardrail commands, `BASE_BRANCH`, ADR-index coupling verdict
 - Model tier from triage
-- Artifact lane plus the exact complexity and change-hazard assessment that supports it; `$quest`
-  revalidates the lane and routes an unprovable non-trivial assessment to `full-spec`
-- Routed review depth from triage, passed as evidence rather than instruction: `$quest`
-  re-derives it at its step 1 and again against the branch diff at its step 6, so a stale
-  value costs a re-derivation and never a skipped review
-- Mandatory follow-up return contract: every discovered/finalized issue and complete bounty
-  occurrence tuple (occurrence, sweep, rationale, state, state reason), including verified
-  closures
+- Artifact lane, routed review depth, and all four assessment fields from triage, passed as
+  evidence rather than instruction. `$quest` revalidates the lane from that assessment at its
+  step 1 and routes an unprovable non-trivial assessment to `full-spec`; it re-derives the
+  assessment and depth against the branch diff at step 6, so stale evidence never skips review
+- Mandatory follow-up return contract: every discovered/finalized issue; every adjacent-note
+  candidate with title, repo-relative file evidence, trigger, recommendation, and public-safe
+  source-pass reference (never its scratch findings path); and every complete bounty occurrence
+  tuple (occurrence, sweep, rationale, state, state reason), including verified closures
 - Campaign occurrence identity: pass the collision-resolved Campaign identity and source issue
   so bounty embeds the
   confirmed `CAMPAIGN-OCCURRENCE: <campaign-identity> source=#N sweep=#N` marker and its public-safe
@@ -445,6 +460,15 @@ list is written for a run cleaning up after itself, so replace its worktree-remo
 branch-deletion steps with the gated list at the end of this step — the worktree here is not
 yours. Everything else in that skill still applies. Its tracking writes and cleared-dependency
 reconcile remain load-bearing, as does its switch to `BASE_BRANCH` and fast-forward pull.
+Merge eligible rows with ordered mandatory edits in their assigned value order. A blocked
+row drops out of that order, but its reservation stays consumed. If a moved base makes an
+assignment invalid, the orchestrator alone reserves the next unused valid value and persists
+it before refresh; a worker may apply only that exact reassignment from a fresh prompt. When
+the assigned value remains valid against the moved base, resolve the shared-file conflict by
+keeping that exact assignment.
+An earlier assigned row that is neither blocked nor skipped holds later ordered rows until it
+is merge-ready; only an explicitly blocked or skipped row may be passed over, with its
+reservation consumed.
 Merge one PR, then re-run the gate for each remaining in-flight PR. If the base moved, refresh
 the branch as part 3 directs. If the repository forbids the required merge commit and rebasing
 a pushed branch is denied, stop with a named blocker.
@@ -496,16 +520,21 @@ The operator owns them from there, though no longer alone: `$clear-map` classifi
 
 ## 7. Re-Enqueue New Issues
 
-If triage/fixing surfaced new issues, first collect only those **traceable to this batch** and
-present one proposal table: issue number, title, source issue, proposed route, and any
-same-defect-class consolidation. Include bounty-created occurrences that were linked to an open
-sweep and verified closed not planned; they are outcomes to report, not queue entries.
+If triage/fixing surfaced new issues or a quest returned adjacent-note follow-up candidates,
+first collect only those **traceable to this batch** and present one proposal table: issue number
+or `unfiled`, title, source issue, evidence and trigger, proposed route, and any same-defect-class
+consolidation. Include bounty-created occurrences that were linked to an open sweep and verified
+closed not planned; they are outcomes to report, not queue entries. An unfiled candidate remains
+a proposal: do not create an issue merely because review reported it.
 
-Ask for one explicit operator confirmation before adding any proposed issue to the manifest or
-looping to step 3. A decline leaves already-filed issues outside this campaign — no Queue row,
-no enqueue, no fix — appends a Deferrals row for each declined issue (its priority at filing,
-`Rescored` `pending`), and proceeds through the rescore pass below to the drained-state check.
-On confirmation, add the approved issues, report each enqueue, and loop to step 3.
+Ask for one explicit operator confirmation before filing an unfiled candidate, adding any proposed
+issue to the manifest, or looping to step 3. A decline leaves already-filed issues outside this
+campaign — no Queue row, no enqueue, no fix — and appends a Deferrals row for each declined
+issue (its priority at filing, `Rescored` `pending`). It then proceeds through the rescore pass
+below to the drained-state check. A declined unfiled candidate gets no invented issue number or
+Deferrals row; carry its `not routed` outcome to the final report. On confirmation, route each
+approved unfiled candidate through `$bounty`, add the resulting and approved already-filed issues,
+report each enqueue, and loop to step 3.
 
 **Rescore deferrals before any drained check.** The batch changed the tree every deferral was
 scored against, and only a re-read against the result can see a satisfied P0 left standing or
@@ -615,5 +644,8 @@ entered a fix wave or remained in the open queue.
 Every Deferrals row appears beside this table with its outcome and date — `moved` and
 `declined` with what was proposed, `unchanged`/`not-required`/`not-open` with their evidence
 notes — so the re-scoring is as visible as the original filing.
+
+List every adjacent-note follow-up candidate returned by a quest with its final route: filed and
+enqueued, consolidated into an existing issue, or not routed by the operator.
 
 List any deferred cleanup alongside it — per row, the branch and the worktree path still on disk, plus the agent whose end of run was never observed where the run still knows it.
