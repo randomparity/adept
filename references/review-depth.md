@@ -104,11 +104,8 @@ change that drew a blocking finding was not the low-risk change the assessment
 described. Do not fix the finding and continue — that is the one outcome a
 single pass cannot support, because no pass would ever review the fix.
 
-Escalate instead. This also applies to any in-surface finding selected for
-`accepted-fixed`, whatever its severity: enter the loop before making the edit so
-its ordinary confirmation rule remains intact. Record the escalation and the finding
-that caused it, then run `$trial-loop` against the same target at its ordinary budget,
-starting at iteration 1.
+Escalate instead. Record the escalation and the finding that caused it, then run
+`$trial-loop` against the same target at its ordinary budget, starting at iteration 1.
 The single pass is **not** one of that run's iterations: it reviewed a different state
 of the target, and the loop's charter and its disclosure obligations both belong to the
 run that owns them.
@@ -119,7 +116,6 @@ escalation corrects a routing decision the evidence refuted. It is the same prin
 read forward: the loop's answer to risk is a blocking finding it will not approve past,
 and here that finding is what pays for the extra passes.
 
-Notes never escalate merely because they exist. A `single-pass` review returning
-`approve` with `medium` or `low` findings is complete after every adjacent note becomes a
-follow-up candidate and every in-surface note is deferred or rejected with evidence. If an
-in-surface note is accepted for a fix, the edit-triggered escalation above applies.
+Notes never escalate. A `single-pass` review returning `approve` with `medium` or `low`
+findings is a completed review — each note takes its one disposition, every adjacent note
+is recorded as a follow-up candidate, and the run advances.

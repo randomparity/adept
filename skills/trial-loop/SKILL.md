@@ -504,9 +504,8 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    so it must not advance invisibly. The exit-disclosure rule under *Stop conditions*
    also applies here, as it does on every exit. Before exiting, route each
    `surface: adjacent` note to the `follow-up-candidate` disposition defined in
-   step 6 and disclose its public-safe table row. Do not edit it. This addition
-   does not change how this approve branch handles in-surface notes or the
-   confirmation requirement after any fix. Then exit the loop **and immediately
+   step 6 and disclose its public-safe table row. Do not edit it. Then exit the
+   loop **and immediately
    continue to the next workflow step** — do not pause or hand back control.
 5. If `verdict` is `needs-attention`, apply
    [heed-counsel](../../references/heed-counsel.md) to
