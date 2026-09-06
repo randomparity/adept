@@ -4,6 +4,12 @@
 
 Accepted (2026-08-31)
 
+> **Amended by #317 (2026-09-06):** In rule 1, an absent assessment means that no
+> complete assessment could be derived. A complete live derivation of the four fields
+> is a present assessment and routes by its values; a missing, rejected, or stale
+> `WORK:DIVINATION` block is replaced by that derivation where possible. Everything
+> else in this record stands as written.
+
 Builds on [0049](0049-review-verdicts-gate-on-blocking-severity.md), which set the
 blocking line and the two-pass budget. That record governs what a pass costs and when
 a loop stops; this one governs whether a loop runs at all. Nothing in 0049 changes.

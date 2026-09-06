@@ -18,8 +18,8 @@ exits, because the escalation rule below takes that case away from it.
 
 Read the four assessment fields — blast radius, change hazards, complexity, decompose
 verdict — from an adopted `WORK:DIVINATION` block or, when there is none or it was
-rejected, from the caller's own live derivation. Route `single-pass` only when **all
-four** of these hold:
+rejected or stale, from the caller's own live derivation. A complete live derivation is
+a present assessment. Route `single-pass` only when **all four** of these hold:
 
 1. **Change hazards are `none`** — no migration, no auth/permission or tenancy change,
    no public API or contract change, no concurrency, no data loss or other
@@ -30,9 +30,11 @@ four** of these hold:
    to the diff — or, where no diff exists yet, by `$spellcraft`'s reading of the same
    triggers on intent.
 
-Everything else routes `iterating`. So does an assessment that is absent, rejected,
-stale, or one you could not derive: **absence routes toward depth, never away from
-it.** The four conditions are read as one unit, exactly as the assessment itself is
+Everything else routes `iterating`. When there is no adopted assessment, derive all
+four fields live before routing. Failure to derive a complete assessment routes
+`iterating` for absence: **absence routes toward depth, never away from it.** A missing,
+rejected, or stale block alone is not absence when its replacement live derivation
+succeeds. The four conditions are read as one unit, exactly as the assessment itself is
 adopted as one unit — there is no partial route, and no field is weighed against
 another.
 

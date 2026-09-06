@@ -82,11 +82,13 @@ The recipe uses just's `[positional-arguments]` attribute, so it requires `just`
 
 Bump `MAJOR` when a skill is removed or renamed or an invocation's contract breaks, `MINOR` when a skill or reference is added or gains a capability, `PATCH` otherwise. The version lives in `.claude-plugin/plugin.json` only; `plugin.json` outranks the marketplace entry in the harness's resolution order, so a second copy could only disagree with the first.
 
+Under ADR 0022, `.claude-plugin/plugin.json` is this repository's mandatory shared per-PR edit. A campaign reserves one distinct version per row in ascending planned merge order. A blocked row's reservation is skipped, never recycled; only the orchestrator reassigns a reservation made stale by a moved base.
+
 The bump rule needs `BASE_SHA`, which CI sets and a local run does not. `just verify` on a workstation therefore checks the first two rules only and says so; the forgotten bump is caught by the required check in CI.
 
 `just records` enables only the `adr` profile. A record profile fails when its directory exists at neither the base ref nor the tree, and `docs/debt/` cannot be created empty — the debt profile exempts no `README.md` the way the adr profile does. Add `debt` to the profile list in the same commit as the first deferral record.
 
-`git push` runs the managed pre-push hook (`scripts/pre-push-hook`, installed by `just hooks`), which re-runs the entire `just verify` suite in an isolated worktree — this regularly exceeds a 2-minute default tool timeout and is not a hang. Run `git push` as a background task with a long timeout (or a foreground call with `timeout` raised well above 2 minutes) rather than re-invoking it after an apparent timeout, which only restarts the same suite.
+`git push` runs the managed pre-push hook (`scripts/pre-push-hook`, installed by `just hooks`), which re-runs the entire `just verify` suite in an isolated worktree — this regularly exceeds a 2-minute default tool timeout and is not a hang. Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification. For `git push`, raise the timeout well above 2 minutes rather than re-invoking it after an apparent timeout, which only restarts the same suite.
 
 ## Conventions
 

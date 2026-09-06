@@ -159,6 +159,13 @@ re-invoking after an apparent timeout restarts the suite instead of ending
 it. Repo instruction files often name such hazards; carry them into the
 record so a reader of the task plan does not have to find them there.
 
+Also identify mandatory per-PR edits shared by concurrent branches: paths that
+a repository rule requires every pull request to change, such as release
+metadata. Record each path, its governing rule, its value or ordering
+constraint, and how a moved base can make an assigned value stale. Under
+`$campaign`, return these facts to the orchestrator for row-specific
+assignment; do not assign the values here.
+
 Before the first build, check prior art for exactly these facts. Search
 `docs/solutions/` for tooling-involved records (`rg -li '<tooling keyword>'
 docs/solutions/`, then scan the hits' frontmatter tags) — `$grimoire` fills
