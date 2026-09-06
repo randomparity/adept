@@ -87,8 +87,9 @@ The assessment stays advisory for scope and becomes load-bearing for exactly one
 this run's review depth under
 [risk-routed review depth](../../references/review-depth.md). Derive `single-pass` or
 `iterating` from the four fields now, record it with the tracking metadata below, and carry it to
-step 6. An absent or rejected assessment routes `iterating`, so the failure path is the expensive
-one and never the cheap one.
+step 6. A successful live derivation is a present assessment; failure to derive a complete
+assessment routes `iterating` for absence, so the failure path is the expensive one and never
+the cheap one.
 
 **A lone quest never splits its own issue.** You claim one issue number and create one branch for
 it, so a `split` decompose verdict is not yours to act on. It is the caller's: `$campaign` gates
