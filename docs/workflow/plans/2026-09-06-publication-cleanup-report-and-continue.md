@@ -16,9 +16,9 @@ fake `gh`/`trash`/`gio` binaries on `PATH`.
 Design: [spec](../specs/2026-09-06-publication-cleanup-report-and-continue-design.md),
 [ADR 0056](../../adr/0056-publication-cleanup-reports-and-continues.md).
 
-Expected implementation size: 145–210 changed lines (M) — from the file map below: ~50 in the
-helper, ~75 in the behaviour suite, ~30 in `skills/quest/SKILL.md`, ~8 in `skills/forge/SKILL.md`,
-1 in the manifest.
+Expected implementation size: 155–225 changed lines (M) — from the file map below: ~50 in the
+helper, ~63 in the behaviour suite, ~55 in `skills/quest/SKILL.md` (five multi-sentence runs
+replaced plus step 8's closing sentence), ~8 in `skills/forge/SKILL.md`, 1 in the manifest.
 
 ## Global Constraints
 
@@ -45,7 +45,7 @@ helper, ~75 in the behaviour suite, ~30 in `skills/quest/SKILL.md`, ~8 in `skill
 |---|---|---|
 | `skills/quest/scripts/publish-forge-review` | changed | best-effort disposal, the two ledger records, the exit-trap status |
 | `tests/fixtures/quest/publish-forge-review-test.sh` | changed | pinning the new failure contract and the unchanged happy path |
-| `skills/quest/SKILL.md` | changed | the `$quest` steps 5 and 8 record checks and the recovery predicates |
+| `skills/quest/SKILL.md` | changed | the `$quest` steps 5 and 8 record checks, step 8's closing forge-scratch sentence, and the recovery predicates |
 | `skills/forge/SKILL.md` | changed | the retention-suppression clause that reads the record |
 | `.claude-plugin/plugin.json` | changed | the version bump |
 | `docs/adr/0056-…`, `docs/workflow/specs/2026-09-06-…`, `docs/workflow/plans/2026-09-06-…` | created | the design record, committed before Task 1 |
@@ -64,8 +64,10 @@ and calls `fail` if either step fails; globals `disposer` (`trash` or `gio`, set
 Provides: ledger record `review-publication-disposed: <space-separated paths>`, emitted only when
 at least one path was disposed and naming exactly those; ledger record
 `review-publication-undisposed: <space-separated paths>`, emitted only when at least one path
-remains and naming exactly those; and the exit-status contract that nonzero means the helper did
-not publish.
+remains and naming exactly those; and the contract that the **ledger**, not the exit status, says
+whether publication happened — nonzero means the helper did not publish unless
+`review-publication-verified:` already reached the ledger, which a ledger append or readback
+failure after that line leaves true and fatal, unchanged by this task.
 
 ### Verification
 
@@ -114,6 +116,10 @@ not publish.
    		return
    	fi
    	case $disposed_line in
+   	*"$SUMMARY"*)
+   		fail "$name" 'disposed record named a path that was retained'
+   		return
+   		;;
    	"review-publication-disposed: $REVIEW "*.publish-forge-review.*) ;;
    	*)
    		fail "$name" 'partial disposal did not record the paths it disposed'
@@ -121,6 +127,10 @@ not publish.
    		;;
    	esac
    ```
+
+   The `*"$SUMMARY"*` arm is load-bearing and must come first: the following arm's leading `*`
+   spans anything between the review and body paths, so without the disjointness arm a helper
+   that names the retained summary in the disposed record passes the whole suite.
 
 3. Add this case immediately after `case_ledger_and_disposal_failures_retain_paths`, and register
    it by adding the line `case_total_disposal_failure_completes_publication` immediately after
@@ -221,10 +231,13 @@ not publish.
 8. Confirm the expected green: `just test publish-forge-review`. Expect exit 0 and
    `20 passed, 0 failed`.
 
-9. Verify the new assertions bite. Temporarily change `[ "${#remaining[@]}" -gt 0 ] || return 0`
-   to `return 0`, run `just test publish-forge-review`, and confirm `PFR-6` and `PFR-20` fail.
-   Revert, then temporarily restore `finish_body_lifecycle`'s two-line form, re-run, and confirm
-   `PFR-4` fails. Revert.
+9. Verify the new assertions bite, reverting after each. (a) Change
+   `[ "${#remaining[@]}" -gt 0 ] || return 0` to `return 0`; `just test publish-forge-review` must
+   fail `PFR-6` and `PFR-20`. (b) Restore `finish_body_lifecycle`'s two-line form; the run must
+   fail `PFR-4`. (c) Change the disposed append to
+   `append_ledger "review-publication-disposed: ${disposed[*]} ${remaining[*]}"` guarded by a
+   non-empty `remaining`; the run must fail `PFR-6` with `disposed record named a path that was
+   retained`.
 
 10. Run `just commit-check`. Expect exit 0.
 
@@ -239,8 +252,10 @@ not publish.
 - A disposer failure after `review-publication-verified:` exits 0, prints the comment URL on
   stdout, warns on stderr naming exactly the retained paths, and records exactly those paths in
   a `review-publication-undisposed:` line.
-- No path is named in both records; their union is every owned path.
-- Every pre-publication failure still exits nonzero and still writes neither record.
+- No path is named in both records — `PFR-6`'s `*"$SUMMARY"*` arm fails a helper that violates
+  this — and their union is every owned path.
+- Every pre-publication failure still exits nonzero and still writes neither record, and a ledger
+  append or readback failure after the verified line stays fatal and unchanged.
 
 ## Task 2 — Teach the consumers the second record
 
@@ -261,15 +276,16 @@ mode, then the summary, then the generated body, then the payload last.
   link in a `SKILL.md` resolves; these edits add no link, so the gate must stay green over the
   edited tree. Case: the repository-wide gate run, `just shape-check`. Expected red: pointing one
   edited relative link at a path that does not exist makes rule 5 fail and name that link —
-  produced deliberately in step 6 and reverted. Green: `just shape-check`.
+  produced deliberately in step 7 and reverted. Green: `just shape-check`.
 - **The manifest declares a well-formed, higher version.** Mode: `focused-test`. Contract:
   `check-plugin-version.sh` requires `version` to exist and to be `MAJOR.MINOR.PATCH` with no
   prerelease or build suffix. Case: the repository-wide gate run, `just version-check`. Expected
   red: setting the value to `4.1.2-rc1` fails the format rule and names it. Green:
   `just version-check`.
 - **The prose describing the record set.** Mode: `task-test-not-applicable`. Changed surface:
-  the normative sentences in `skills/quest/SKILL.md` steps 5 and 8, its recovery predicate list,
-  and the retention-suppression clause in `skills/forge/SKILL.md`. Reason: these sentences are
+  the normative sentences in `skills/quest/SKILL.md` steps 5 and 8, step 8's closing
+  forge-scratch sentence, its recovery predicate list, and the retention-suppression clause in
+  `skills/forge/SKILL.md`. Reason: these sentences are
   instructions read by a model, with no executable consumer that parses them; anatomy rule 4
   forbids a gate that greps Markdown for a sentence, and a test asserting on this wording would
   be exactly that gate.
@@ -294,7 +310,10 @@ mode, then the summary, then the generated body, then the payload last.
    > union must own all and only the helper's former paths, each record listing its own subset in
    > owned order and no path appearing in both. In `required` mode those paths are the exact
    > retained review, `REVIEW_SUMMARY`, and one helper-created body in the ledger directory. In
-   > `not-required` mode they are the exact `REVIEW_SUMMARY` and that one body.
+   > `not-required` mode they are the exact `REVIEW_SUMMARY` and that one body. An owned path may
+   > contain spaces, so never decide membership by splitting a record on whitespace: reconstruct
+   > the exact record text for the partition under test from the known owned paths and compare
+   > whole lines.
 
 3. In the same file, in step 8, replace the run of sentences from `Then require the subsequent
    disposal record to own all` through `named last in the record.` with:
@@ -305,17 +324,31 @@ mode, then the summary, then the generated body, then the payload last.
    > in `required` mode the exact review, `REVIEW_SUMMARY`, and one helper-created
    > `.publish-forge-review.*` body beside the ledger; in `not-required` mode the exact
    > `REVIEW_SUMMARY` and that one body; and, when this run carried a payload, the exact
-   > `REVIEW_PAYLOAD` in both modes, named last among the owned paths. An `undisposed` record is
-   > a completed publication whose cleanup did not finish: carry its retained paths into the
-   > hand-off rather than parking, because the helper exits nonzero only when it did not publish.
+   > `REVIEW_PAYLOAD` in both modes, named last among the owned paths. An owned path may contain
+   > spaces, so never decide membership by splitting a record on whitespace: reconstruct the exact
+   > record text for the partition under test from the known owned paths and compare whole lines.
+   > An `undisposed` record is a completed publication whose cleanup did not finish. Continue
+   > rather than parking: the ledger, not the exit status, says whether publication happened, and
+   > the helper's stderr and that record already name the retained paths. Add no field to the
+   > handoff for them — the `publication-verified` format admits none — and never name them in a
+   > `WORK:*` annotation, which is public.
 
-4. In the same file, in the *Human-authorized publication recovery* predicate list, extend the
+4. In the same file, at the end of step 8, replace the sentence `Carry that URL into step 9;
+   `$return-to-town` needs no forge-scratch cleanup.` with:
+
+   > Carry that URL into step 9. `$return-to-town` needs no forge-scratch cleanup after a
+   > `review-publication-disposed:` record that owns every path; after a
+   > `review-publication-undisposed:` record the paths it names are still in the private
+   > workspace, and removing them is the operator's, so report the incomplete cleanup in the
+   > private completion report without naming the paths publicly.
+
+5. In the same file, in the *Human-authorized publication recovery* predicate list, extend the
    bullet that begins `after the handoff's exact `forge-result-record`, the ledger contains no`
    so it also requires no `review-publication-undisposed:` line, alongside the existing
    `review-publication-verified:`, `review-publication-disposed:`, and
    `review-publication-recovery-authorized:` absences.
 
-5. In `skills/forge/SKILL.md`, replace the paragraph beginning `A `review-publication-disposed`
+6. In `skills/forge/SKILL.md`, replace the paragraph beginning `A `review-publication-disposed`
    line suppresses retention` with:
 
    > A `review-publication-disposed` or `review-publication-undisposed` line suppresses retention
@@ -326,23 +359,27 @@ mode, then the summary, then the generated body, then the payload last.
    > older range's closing record. Do not infer completion from a missing review file or from the
    > historical review line alone.
 
-6. Run `just shape-check`. Expect exit 0. To confirm the gate bites, temporarily point one
+7. Run `just shape-check`. Expect exit 0. To confirm the gate bites, temporarily point one
    relative link in `skills/quest/SKILL.md` at a path that does not exist, re-run, observe rule 5
    name it, and revert.
 
-7. In `.claude-plugin/plugin.json`, change `"version": "4.1.1"` to `"version": "4.1.2"`.
+8. In `.claude-plugin/plugin.json`, change `"version": "4.1.1"` to `"version": "4.1.2"`.
 
-8. Run `just version-check`. Expect exit 0. To confirm the gate bites, temporarily set the value
+9. Run `just version-check`. Expect exit 0. To confirm the gate bites, temporarily set the value
    to `4.1.2-rc1`, re-run, observe the format failure, and revert.
 
-9. Run `just verify`. Expect exit 0. It is the full guardrail suite and takes several minutes;
+10. Run `just verify`. Expect exit 0. It is the full guardrail suite and takes several minutes;
    run it as a background task rather than re-invoking it after an apparent timeout.
 
-10. Commit: `docs(quest): read both publication closing records`.
+11. Commit: `docs(quest): read both publication closing records`.
 
 ### Acceptance criteria
 
-- `skills/quest/SKILL.md` steps 5 and 8 and its recovery predicate list all name both records.
+- `skills/quest/SKILL.md` steps 5 and 8 and its recovery predicate list all name both records,
+  and each membership sentence forbids splitting a record on whitespace.
+- Step 8's closing sentence no longer claims `$return-to-town` needs no forge-scratch cleanup
+  unconditionally, and no step adds a handoff field or names a retained path in a `WORK:*`
+  annotation.
 - `skills/forge/SKILL.md` accepts either record as proof of a completed publication.
 - `.claude-plugin/plugin.json` declares `4.1.2`.
 - `just verify` exits 0.

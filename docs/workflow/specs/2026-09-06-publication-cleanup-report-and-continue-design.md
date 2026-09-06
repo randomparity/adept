@@ -7,26 +7,20 @@ behaviour, the boundaries it touches, and how it is tested.
 
 ## Behaviour
 
-Nonzero exit from `skills/quest/scripts/publish-forge-review` means it did not publish. After
-`review-publication-verified: <URL>` reaches the ledger, disposal is best-effort: the helper
-attempts every owned path, warns on stderr naming the retained ones, records the outcome, prints
-the verified comment URL, and exits 0.
-
-`dispose()` partitions the owned paths and writes at most two records:
+The ADR holds the decision. What it does not carry, and this section does, is the record shape:
 
 - `review-publication-disposed: <paths>` — emitted when at least one path was disposed.
-- `review-publication-undisposed: <paths>` — emitted when at least one path remains.
+- `review-publication-undisposed: <paths>` — emitted when at least one path remains, preceded by
+  an identical stderr warning.
 
-Each names exactly its own paths, in the helper's owned order: the required review (in
-`required` mode), the summary, the generated body, then the payload last. No path appears in
-both, and their union is all and only the owned paths — the completeness property `$quest`
-already asserts against the single record. An all-succeed run's ledger is byte-identical to
-today's.
+Each names exactly its own paths, joined by single spaces, in the helper's **owned order**: the
+required review (in `required` mode), the summary, the generated body, then the payload last. No
+path appears in both, and their union is all and only the owned paths. An all-succeed run's ledger
+is byte-identical to today's, so `PFR-1`, `PFR-15` and `PFR-16` pin the unchanged happy path.
 
-Every path is attempted rather than stopping at the first error: a filesystem that refuses one
-usually refuses all of them, while one odd path must not strand the rest. A ledger append
-failure inside either record stays fatal — the ledger is the only durable statement of what
-happened.
+An owned path may contain spaces, so a consumer never decides membership by splitting a record on
+whitespace. It knows the owned paths and their order, so it reconstructs the exact record text for
+the partition under test and compares whole lines.
 
 ### The exit trap
 
@@ -47,8 +41,16 @@ leak. Two changes:
 
 - `skills/quest/SKILL.md` step 5 (`publication-verified` resume) and step 8 (post-helper
   verification) assert against the closing **records** — either or both — requiring their union
-  to own all and only the former paths in owned order. Step 8 carries the retained paths into
-  the hand-off instead of parking.
+  to own all and only the former paths in owned order. Step 8 continues on an `undisposed` record
+  instead of parking, and does **not** carry the retained paths anywhere new: the private ledger
+  and the helper's stderr already name them, the `publication-verified` handoff format admits no
+  new field, and the step-9 hand-off is a public annotation that must not carry private workspace
+  paths at all.
+- `skills/quest/SKILL.md`'s closing sentence of step 8, `Carry that URL into step 9;
+  `$return-to-town` needs no forge-scratch cleanup.`, stops being true once an `undisposed` record
+  exists — the review, summary, and body are still in the workspace. It gains a clause saying so
+  and naming the operator as the one who removes them, since `$return-to-town` is outside this
+  change's surface.
 - `skills/quest/SKILL.md`'s human-authorized recovery predicates add "no
   `review-publication-undisposed:` line": that record is as much proof of a completed
   publication as the disposed one, and recovering past it would post a second comment.
@@ -66,8 +68,9 @@ to the change:
 - **Private scratch content at rest.** Retained paths live in the mode-0700, git-ignored forge
   workspace, which the helper already required to be private before publishing. The old failure
   path retained those same paths; only the exit status differs. What changes is that a human is
-  no longer forced to notice, so the stderr warning, the ledger record, and the hand-off are the
-  compensating disclosure.
+  no longer forced to notice, so the stderr warning and the private ledger record are the
+  compensating disclosure. Neither reaches a public annotation, which is deliberate: the paths
+  are absolute host paths and the step-9 hand-off is a public comment.
 
 Out of scope: concurrent publishers (ADR 0048 already records that the GitHub issue-comment API
 offers no atomic create-if-absent), and the disposer's own guarantees about where a trashed file
@@ -75,24 +78,21 @@ lands.
 
 ## Testing
 
-In `tests/fixtures/quest/publish-forge-review-test.sh`:
+Three contracts in `tests/fixtures/quest/publish-forge-review-test.sh`; the plan carries the case
+text.
 
-- **PFR-6's third block** currently pins the old contract for `FAIL_TRASH_ON=summary.md` —
-  nonzero exit, no disposal record, retained paths. It is rewritten for the same injected fault:
-  exit 0, the comment URL on stdout, review and body disposed, summary retained,
-  `review-publication-disposed:` naming the review and body, `review-publication-undisposed:`
-  naming the summary, and the warning naming it. This test encodes the contract being changed,
-  so it is changed deliberately rather than deleted or weakened.
-- **A new case** covers total disposer failure: exit 0, no `review-publication-disposed:` line,
-  one `review-publication-undisposed:` line owning all three paths in owned order, every path
-  still on disk, and no false `successful publication left its body behind`.
-- **PFR-4** gains one assertion: a pre-publication failure that retains the body must not print
-  `successful publication left its body behind`. The guard's positive direction — a zero-status
-  run with an unrecorded surviving body — is unreachable without new fault-injection machinery,
-  so it is verified by controlled fault during implementation rather than by a permanent fixture
-  mode.
-- **PFR-1, PFR-15 and PFR-16** already pin the happy path and must pass untouched, which is what
-  proves the change is confined to the failure path.
+- **Partial failure** (`PFR-6`'s third block, which today pins the old nonzero contract for
+  `FAIL_TRASH_ON=summary.md` and is therefore changed deliberately, not deleted or weakened):
+  the run completes, the disposed record names the review and body **and not the summary**, and
+  the undisposed record names the summary. The negative half is load-bearing — without it a
+  helper that reports a retained path as disposed passes.
+- **Total failure** (a new case): the run completes, no disposed record, one undisposed record
+  owning all three paths in owned order, every path on disk, and no false `successful publication
+  left its body behind`.
+- **Exit-guard status** (`PFR-4`): a pre-publication failure that retains the body does not print
+  that message. The guard's positive direction — a zero-status run with an unrecorded surviving
+  body — is unreachable without new fault-injection machinery, so it is verified by controlled
+  fault during implementation rather than by a permanent fixture mode.
 
 Each new assertion is verified to bite by inverting the helper's behaviour once, observing red,
 and reverting.
