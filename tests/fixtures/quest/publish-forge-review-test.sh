@@ -167,14 +167,10 @@ printf 'trash %s\n' "$name" >>"$FAKE_STATE/events"
 if [ "${FAIL_TRASH_ON:-}" = "$name" ] || [ "${FAIL_TRASH_ON:-}" = all ]; then
 	exit 1
 fi
-noop=${TRASH_NOOP_ON:-}
-if [ "$noop" = body ]; then
-	noop=''
-	case $name in .publish-forge-review.*) noop=$name ;; esac
-fi
-if [ -n "$noop" ] && [ "$noop" = "$name" ]; then
-	exit 0
-fi
+case ${TRASH_NOOP_ON:-} in
+"$name") exit 0 ;;
+body) case $name in .publish-forge-review.*) exit 0 ;; esac ;;
+esac
 mv "$path" "$FAKE_STATE/trash/$name"
 if [ "${REMOVE_THEN_FAIL_ON:-}" = "$name" ]; then
 	exit 1
