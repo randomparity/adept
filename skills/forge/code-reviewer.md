@@ -205,8 +205,9 @@ Worker (reviewer):
 - `[PLAN_OR_REQUIREMENTS]` — what it was supposed to do: a plan path, the task
   text, or the requirements themselves
 - `[DIFF_FILE]` — REQUIRED. Where the review package was written.
-  `scripts/review-package BASE HEAD` prints a path unique to that range, and the
-  package's contents never pass through the orchestrator's own context.
+  `$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/review-package BASE HEAD` prints a path
+  unique to that range, and the package's contents never pass through the
+  orchestrator's own context.
 - `[REVIEW_FILE]` — REQUIRED. Where the reviewer writes the review. The
   orchestrator clears this path before dispatching and reads it afterwards.
 - `[BASE_SHA]` — the branch's fork point from the base branch

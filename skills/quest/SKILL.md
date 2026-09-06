@@ -112,7 +112,7 @@ constrains the grammar), and resolve the producer login
 `gh` error). Then acquire the claim:
 
 ```sh
-skills/quest-log/assets/tracker.sh claim-acquire --target <owner/name> \
+"$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/tracker.sh" claim-acquire --target <owner/name> \
   <issue-number> --token <scope-token> --producer <login>
 ```
 
@@ -339,8 +339,11 @@ to detect arbitrary out-of-band edits.
 
 ## 5. Build With Contract Evidence
 
-Before calling `$forge`, resolve its workspace with `scripts/sdd-workspace` and
-set `FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
+Before calling `$forge`, resolve its workspace with
+`$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/sdd-workspace` — the harness exports
+`$CLAUDE_PLUGIN_ROOT` to the plugin's install root, and the script ships beside
+`$forge`, not in the target repository — and set
+`FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
 the frozen `WORK:SCOPE` annotation token that this quest already validated, then
 set `FORGE_HANDOFF=<workspace>/quest-forge-handoff-<issue>-<scope-token>.md`.
 The workspace must be a regular private mode-0700 directory; the ledger,
@@ -738,7 +741,7 @@ Before any PR-body write, invoke the helper in validation-only mode with the exa
 arguments:
 
 ```sh
-skills/quest/scripts/publish-forge-review --preflight \
+"$CLAUDE_PLUGIN_ROOT/skills/quest/scripts/publish-forge-review" --preflight \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```
@@ -776,7 +779,7 @@ before posting. Transfer the summary file's lifecycle to the publication helper
 and invoke it exactly once:
 
 ```sh
-skills/quest/scripts/publish-forge-review \
+"$CLAUDE_PLUGIN_ROOT/skills/quest/scripts/publish-forge-review" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```

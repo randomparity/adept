@@ -301,8 +301,9 @@ and incrementing would spend a replacement budget no recovery consumed.
 
 ### The per-task loop
 
-1. Generate the task brief: `scripts/task-brief PLAN_FILE N` writes it to a
-   uniquely named file and prints the path.
+1. Generate the task brief:
+   `$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/task-brief PLAN_FILE N` writes it to
+   a uniquely named file and prints the path.
 2. Dispatch an implementer with [implementer-prompt.md](implementer-prompt.md),
    carrying the placement contract from *What goes in a dispatch*: the
    assigned worktree as an absolute path, the exact branch name, and the
@@ -347,14 +348,16 @@ and incrementing would spend a replacement budget no recovery consumed.
    and non-structural. Missing or incomplete evidence is `NEEDS_CONTEXT`.
 
    A focused entry's red half is then re-derived rather than read. Two
-   resolutions, and they are separate: resolve `scripts/verify-red` to an
-   absolute path against **this skill's own directory** first — the script ships
-   beside this skill, not in the target repository, the same as
-   `scripts/task-brief` and `scripts/review-package` — then run that absolute
-   path with the **assigned worktree** as the working directory. For each
-   focused entry:
+   resolutions, and they are separate: the script is
+   `$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/verify-red`, an absolute path the
+   harness's `$CLAUDE_PLUGIN_ROOT` export resolves against **the plugin's install
+   root** — the script ships beside this skill, not in the target repository, the
+   same as `$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/task-brief` and
+   `$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/review-package` — then run that
+   absolute path with the **assigned worktree** as the working directory. For
+   each focused entry:
 
-       scripts/verify-red --base <BASE> --head <HEAD> --test <the entry's test file> -- <the inventory entry's exact command>
+       "$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/verify-red" --base <BASE> --head <HEAD> --test <the entry's test file> -- <the inventory entry's exact command>
 
    The command comes from the **plan's** Verification inventory, never from the
    implementer's report. A focused entry names a test file, an expected red,
@@ -481,12 +484,14 @@ asked report it as a blocker and return. Never default to `main`.
    file is still on disk. Do not match a generic marker, prefix, substring, or an
    older range's closing record. Do not infer completion from a missing review
    file or from the historical review line alone.
-2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
-   and print a non-zero commit count and a non-zero byte count. Report and stop
-   rather than dispatching: this file is the reviewer's whole input.
+2. `$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/review-package <fork-point> HEAD` for
+   `[DIFF_FILE]`. It must exit 0 and print a non-zero commit count and a non-zero
+   byte count. Report and stop rather than dispatching: this file is the
+   reviewer's whole input.
 3. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
-   directory `scripts/sdd-workspace` prints. Remove anything already at that
-   path before dispatching, so a file there afterwards is this dispatch's.
+   directory `$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/sdd-workspace` prints.
+   Remove anything already at that path before dispatching, so a file there
+   afterwards is this dispatch's.
 4. When the reviewer returns, `[REVIEW_FILE]` must exist and be non-empty.
 5. **Append the ledger line once that check passes**, before the fix wave —
    `Final review <base-sha>..<head-sha>: <verdict> (review <path>)` — and a
@@ -700,10 +705,12 @@ knows which tasks finished will hand out work already done, sometimes a whole
 run of it — the costliest failure this process has produced. Keep the record in
 a ledger; todos alone are not enough.
 
-Resolve the workspace with `scripts/sdd-workspace`, which prints its absolute
-path, and check for `<workspace>/progress.md`. Tasks marked complete there are
-done: resume at the first that is not, and never re-dispatch one the ledger has
-already closed.
+Resolve the workspace with `$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/sdd-workspace`
+— the harness exports `$CLAUDE_PLUGIN_ROOT` to the plugin's install root, and every
+script this skill runs ships there rather than in the target repository — which
+prints its absolute path, and check for `<workspace>/progress.md`. Tasks marked
+complete there are done: resume at the first that is not, and never re-dispatch
+one the ledger has already closed.
 
 **Only that script creates the workspace**, and that matters: it writes a
 self-ignoring `.gitignore` (`*`) into `.agent/`, which is the whole mechanism
