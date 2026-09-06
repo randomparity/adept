@@ -37,6 +37,11 @@ Use a complete caller-supplied charter unchanged. It contains `interaction`, `sc
 identity`, `outcome`, `completion criteria`, `provenance`, `exclusions`, `surface`, and
 `ambiguities`. A reviewed or generated artifact is never a substitute for a missing field.
 
+On every entry path, verify that `provenance` records the operator's explicit approval of the
+exact exclusions and their owners. This includes a charter supplied by interactive `$quest` or
+`$campaign`, not only direct and unattended invocations. Reuse a valid approval under the rule
+below; otherwise return `SCOPE CHECKPOINT` before design.
+
 An interactive direct invocation freezes its quoted request and approved exclusions into all
 eight fields.
 An unattended direct invocation without a complete charter parks before design.
