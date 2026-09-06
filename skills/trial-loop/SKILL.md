@@ -194,6 +194,12 @@ doing so does not make the document its own authority.
 Treat every exclusion as a claim the reviewer may attack. An excluded concern is
 still blocking when the target cannot be correct without it.
 
+Do not confuse the charter's `surface` field with a finding's `surface` field.
+The charter names what the author is permitted to change; the reviewer alone
+classifies each finding as `in` or `adjacent` by the change's correctness
+closure. The author's exclusions cannot make a correctness dependency
+`adjacent`, and the finding field never expands the permitted surface.
+
 **A verified deferral can join the exclusion list only when the frozen charter already
 authorizes that bookkeeping.** A verified owner proves the deferral exists; it does not
 authorize changing exclusions. When authorized, append the concern and owner and carry it
@@ -290,7 +296,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    finding-file check are both gone. Composing the invocation must preserve the
    block's newlines. If the transport cannot guarantee that, **stop as blocked** and
    report that it cannot carry a charter. Running uncharterd is not the fallback: the
-   charter is what establishes finding ownership, so without it every adjacent defect
+   charter is what establishes finding ownership, so without it every out-of-charter defect
    becomes the loop's to fix and the run drifts to the cap — the failure this charter
    prevents.
 
@@ -400,7 +406,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    but **its tool allowlist must include `Write`** — `--out` writes the findings
    file (the selected reviewer's sole write exception); without `Write`, `--out` silently
    no-ops and the loop dead-ends. The worker's context (not this one) holds the
-   full findings; it returns only `{verdict, findings_count, suppressed_count,
+   full findings; it returns only `{verdict, findings_count, blocking_count, suppressed_count,
    path, run_id}` — `run_id` included, because steps 4 and 5 assert it against the
    artifact and a four-field contract degrades that check to a no-op. That isolation
    keeps the loop from stacking a full payload per pass in the caller's window.
@@ -432,6 +438,16 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    stale `approve` exit the loop. A mismatch means a stale or failed write: rerun once,
    then stop as blocked rather than act on a stale file.
 
+   Validate the full artifact before routing it. Every finding must carry exactly one
+   recognized `surface` (`in | adjacent`) and `trigger` (`constructed |
+   reproduced | inferred`); a `critical` or `high` finding with `trigger:
+   inferred` is malformed. Require `findings_count` to equal the array length,
+   `blocking_count` to equal the number whose severity is `critical` or `high`,
+   and `suppressed_count` to equal the suppressions-array length. Rerun once on
+   any mismatch, then stop as blocked. Do not repair the artifact or infer a
+   missing field: that would let the consumer silently choose routing the
+   reviewer never supplied.
+
    **`blocking_count` is what drives the loop.** It is how many of the pass's findings
    are `critical` or `high`; the difference between it and `findings_count` is the note
    residue — reported in full, dispositioned once under step 6, never a reason to spend
@@ -443,7 +459,7 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    **Then subtract what this run already resolved.** The **residual blocking figure** is
    `blocking_count` minus every blocking finding matching a concern already dispositioned
    this run as `deferred-tracked` with a verified owner or `rejected-with-evidence`. The
-   reviewer is naive of the run's history by design, so an owned adjacent defect recurs at
+   reviewer is naive of the run's history by design, so an owned deferred defect recurs at
    its own severity on every pass; counting it again each time is how a finished target
    reaches the cap. The subtraction is bookkeeping, not a lowered bar — the finding is
    real, it keeps its severity in the artifact, and *Stop conditions* discloses it on the
@@ -490,7 +506,10 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    entry (concern + ADR) in the transcript — an `approve` that suppressed a
    governing-ADR finding is exactly the over-suppression case the verdict alone hides,
    so it must not advance invisibly. The exit-disclosure rule under *Stop conditions*
-   also applies here, as it does on every exit. Then exit the loop **and immediately
+   also applies here, as it does on every exit. Before exiting, route each
+   `surface: adjacent` note to the `follow-up-candidate` disposition defined in
+   step 6 and disclose its public-safe table row. Do not edit it. Then exit the
+   loop **and immediately
    continue to the next workflow step** — do not pause or hand back control.
 5. If `verdict` is `needs-attention`, apply
    [heed-counsel](../../references/heed-counsel.md) to
@@ -510,7 +529,16 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
      finding whose severity **this change increases** is in scope to the extent of
      restoring the prior behavior, even when the underlying gap is not yours: you own
      the worsening. Dispose of the residual gap separately;
-   - `deferred-tracked` — valid but independent: it predates or falls outside the
+   - `follow-up-candidate` — valid, `surface: adjacent`, and `medium` or `low`:
+     copy its title, repo-relative file evidence, trigger, recommendation, and
+     public-safe source-pass reference (for example, `main review pass 2`) into the run's
+     follow-up-candidates
+     table. Keep the private scratch findings path only in the local run report,
+     outside that table. This routing is its one disposition; do not fix it
+     here, invent an owner, or write to GitHub. A `critical` or `high` finding
+     can never take this disposition;
+   - `deferred-tracked` — valid but independent, and not a newly reported
+     `surface: adjacent` finding (whose routing is fixed above): it predates or falls outside the
      charter, it has a verified owner, and the target neither depends on it nor
      worsens it. The "nor worsens it" clause excludes the *worsening* from this
      disposition, not the residual gap — a change that aggravates a pre-existing
@@ -608,9 +636,15 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    that no one intends to schedule.
 
    Reserve `blocked` for what step 6 defines: correctness-required work you cannot do
-   here. Do not route an ordinary out-of-charter finding into it — `blocked` halts the
-   run, and halting on every adjacent defect is the failure this change removes. If
-   any finding is `blocked`, stop and report the blocker; do not proceed.
+   here. Do not route an ordinary out-of-charter note into it —
+   `follow-up-candidate` carries that concern without halting the run. A
+   defensible `critical` or `high` finding carrying `surface: adjacent` is
+   different: the severity says the target cannot ship while the surface says
+   the correctness closure does not own the remedy, so the pair refutes the
+   frozen surface and takes the `blocked` disposition. Return `SCOPE CHECKPOINT`
+   to an interactive root or park an unattended root; do not fix, defer,
+   subtract, or iterate it. If any finding is `blocked`, stop and report the
+   blocker; do not proceed.
 8. Run the relevant guardrails (discovered via `$attunement` if part of a
    workflow, or the repo's standard check suite) before committing. Commit one
    logical change at a time with an imperative subject of 72 characters or
@@ -654,7 +688,8 @@ resolves its target from a `git status` the commit just emptied, reviews nothing
 returns `approve` with a fresh artifact and a matching `run_id`. That is the least
 supervised path in the whole loop.
 
-Then disclose every suppression (concern + ADR), every `deferred-tracked` concern
+Then disclose every suppression (concern + ADR), every `follow-up-candidate`
+(its public-safe table row), every `deferred-tracked` concern
 (concern + owning record path or tracker issue), and every `rejected-with-evidence`
 finding (concern + the pass that raised it) recorded anywhere in the **run**, across all
 cycles — not just the current one. The last two are what the residual blocking figure
@@ -747,10 +782,13 @@ caller routes on, and the last verdict does not carry it: a run can finish on
 which, in those words.
 
 Then report the final verdict, the final residual blocking figure, the fixes made, the
-verification performed, every unresolved finding, every `deferred-tracked` concern from any
-cycle with its owning record path or tracker issue, every `rejected-with-evidence` finding
-with the pass that raised it, and the notes outstanding at the exit. References, not
-payloads: cite `<findings-path>` rather than pasting findings into the caller's context.
+verification performed, every unresolved finding, every `follow-up-candidate` row,
+every `deferred-tracked` concern from any cycle with its owning record path or tracker issue,
+every `rejected-with-evidence` finding with the pass that raised it, and the notes outstanding
+at the exit. References, not
+payloads: cite `<findings-path>` in the local report rather than pasting findings into the
+caller's context. A scratch findings path is private run provenance: never copy it into a
+`WORK:` comment, PR body, campaign handoff, or follow-up-candidates table.
 The dispositioned lists are the part a caller cannot reconstruct: they are the difference
 between "this branch is clean" and "this branch is clean and three known defects now have
 owners."
@@ -771,7 +809,8 @@ are almost always one step inside a larger workflow. After the loop exits:
   round; count it.
 - **A run reported as finished means the caller advances to the next phase**, carrying
   the run's deferral list — each entry with its owning record path or tracker issue — its
-  rejected findings, and its outstanding notes into the caller's own report. Route on
+  follow-up-candidates table, rejected findings, and outstanding notes into the caller's own
+  report. Route on
   finished-versus-blocked, which the run states outright. Do **not** derive it from the
   verdict: a finished run's last verdict is `approve` when the reviewer cleared the target
   and `needs-attention` when the only blocking findings left were ones this run already
