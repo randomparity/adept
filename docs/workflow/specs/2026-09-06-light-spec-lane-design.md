@@ -34,7 +34,7 @@ review contracts remain unchanged.
 3. Forge accepts the light spec, closes its complete Validation inventory, and uses one Cast unit.
 4. A light design receives design review and scope audit without inventing a plan denominator.
 5. A campaign worker receives the exact lane and supporting assessment derived during triage.
-6. Work that exceeds the cap or cannot remain one unit returns to lane selection.
+6. Cap overflow returns to the scope/assessment checkpoint; only changed evidence alters the lane.
 
 ## Validation
 

@@ -140,8 +140,10 @@ implementable unit, not a task breakdown. Its Validation section inventories eve
 changed contract using the same `focused-test` and `task-test-not-applicable` fields the full
 plan requires below, including the concrete non-applicability reason rather than a prose test.
 One page means no more than 500 words and 60 physical lines, including headings and blank lines;
-check both counts before review. If the design cannot stay complete and within both caps, or needs
-more than one implementation unit, reselect `full-spec` instead of compressing away correctness.
+check both counts before review. Cut redundant design before approaching either cap. If the design
+cannot stay complete within both caps, or needs more than one implementation unit, return to the
+scope and assessment checkpoint. Re-derive complexity, hazards, and decomposition from the
+demonstrated change; artifact length alone never authorizes `full-spec`.
 
 For decisions with viable alternatives — layer
 boundaries, interface or ownership splits, concurrency invariants, failure
@@ -627,8 +629,9 @@ Run `$trial-loop` in file-list mode:
   the ratio. Judge the estimate too: a range the plan's own file map and task list do not
   support is a finding in its own right, and the honest range is the one the file map
   yields. For light-spec, the orchestrator measured <words> words and <lines> lines: exceeding
-  either hard cap is blocking and returns the change to lane selection; do not ask for an
-  invented estimate. Omit the other lane's clause rather than leaving unused placeholders.
+  either hard cap is blocking and returns to the scope and assessment checkpoint; the breach
+  alone does not authorize `full-spec`. Do not ask for an invented estimate. Omit the other
+  lane's clause rather than leaving unused placeholders.
   Size is in scope per artifact as well as in aggregate — a record arguing for its
   decision at greater length than the decision governs is a finding, and its remedy is also
   cutting.`
@@ -653,7 +656,8 @@ full lane's **plan**, or the light spec's **Scope**, whichever way the run ended
 included. The loop discloses its deferrals on every exit, and the artifact `$forge` reads is
 where a later implementer meets them. Not the ADR: it merges append-only, and an entry there
 cannot be struck when its tracker closes. A light spec that cannot carry the deferral and remain
-complete within its caps returns to lane selection.
+complete within its caps returns to the scope and assessment checkpoint. Only a demonstrated
+complexity, hazard, or decomposition change can alter its lane; the overflow alone cannot.
 
 ## 4. Scope audit
 

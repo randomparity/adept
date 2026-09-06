@@ -64,9 +64,11 @@ record shapes, validation rules, generated artifacts, and other machine-checkabl
 executable consumer validates it. Never search for or snapshot prose wording to manufacture
 evidence.
 
-Build-time scope expansion stops implementation and returns to the caller to re-freeze scope and
-re-derive the artifact lane. It never keeps `light-spec` after complexity leaves `S` or `M`,
-or after any change hazard appears.
+Build-time scope expansion from a trivial bugfix or governed small change preserves the existing
+rule: stop implementation, re-freeze scope, and run full design without automatically reselecting
+the no-spec path. From `light-spec`, stop and return to the caller to re-freeze scope and re-derive
+complexity, hazards, decomposition, and the artifact lane. A demonstrated complexity or hazard
+change can make the lane full; artifact length alone cannot.
 
 Return a discovered new decision, ambiguity, or scope expansion to the caller's
 `SCOPE CHECKPOINT`; do not infer the decision or continue building. The caller records
