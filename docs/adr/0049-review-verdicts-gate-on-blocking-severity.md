@@ -13,6 +13,14 @@ needs-attention` verdict pair, the role names, the domain-enum rules, and the ar
 contract all stand exactly as 0011 wrote them. Only the sentence binding `approve` to
 zero defensible findings is replaced.
 
+> **Status note (2026-09-06; issue #319):** Reviewer findings now carry
+> `surface: in | adjacent` and `trigger: constructed | reproduced | inferred`.
+> The fields supply routing evidence for rules 1, 3, and 4; they add no blocking
+> axis. `blocking_count` remains exactly the number of `critical` and `high`
+> findings. An adjacent blocking finding refutes the frozen correctness surface
+> and routes to a scope checkpoint or unattended park; an adjacent note becomes
+> a follow-up candidate. An inferred trigger cannot support a blocking grade.
+
 ## Context
 
 ADR 0011 ruled that "`approve` means the review found no defensible finding. Any

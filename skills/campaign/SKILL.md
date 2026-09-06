@@ -293,7 +293,13 @@ pre-assign — `$quest` derives its own `feat/<short-slug>-<n>`. The `headRefNam
 a branch and **never triggers a merge**: it proves only that a pull request exists, not that
 its author is finished.
 
-**Every fix is a worker running `$quest <n>` to green + mergeable PR, then stopping.** The worker must reflect the **public-safe summary** of the completion notes — never the verbatim notes — in acceptance criteria and PR body. No merge authorization to workers. The worker report (per `AGENTS.md`): ~1-2k token summary with outcome, branch/PR ref, files touched, guardrail status, blockers, and every discovered/finalized follow-up. For each bounty open-sweep occurrence it includes occurrence number, sweep number, rationale, state, and state reason. No diffs/logs/file bodies.
+**Every fix is a worker running `$quest <n>` to green + mergeable PR, then stopping.** The
+worker must reflect the **public-safe summary** of the completion notes — never the verbatim notes
+— in acceptance criteria and PR body. No merge authorization to workers. The worker report (per
+`AGENTS.md`): ~1-2k token summary with outcome, branch/PR ref, files touched, guardrail status,
+blockers, and every discovered/finalized follow-up, including every adjacent-note follow-up
+candidate returned by review. For each bounty open-sweep occurrence it includes occurrence number,
+sweep number, rationale, state, and state reason. No diffs/logs/file bodies.
 
 Each prompt carries:
 - Issue number, acceptance criteria, **completion notes verbatim** (private dispatch context) and the **public-safe summary** (the only form allowed on public surfaces: acceptance criteria, `WORK:` annotations, PR bodies)
@@ -306,9 +312,10 @@ Each prompt carries:
 - Routed review depth from triage, passed as evidence rather than instruction: `$quest`
   re-derives it at its step 1 and again against the branch diff at its step 6, so a stale
   value costs a re-derivation and never a skipped review
-- Mandatory follow-up return contract: every discovered/finalized issue and complete bounty
-  occurrence tuple (occurrence, sweep, rationale, state, state reason), including verified
-  closures
+- Mandatory follow-up return contract: every discovered/finalized issue; every adjacent-note
+  candidate with title, repo-relative file evidence, trigger, recommendation, and public-safe
+  source-pass reference (never its scratch findings path); and every complete bounty occurrence
+  tuple (occurrence, sweep, rationale, state, state reason), including verified closures
 - Campaign occurrence identity: pass the collision-resolved Campaign identity and source issue
   so bounty embeds the
   confirmed `CAMPAIGN-OCCURRENCE: <campaign-identity> source=#N sweep=#N` marker and its public-safe
@@ -448,16 +455,21 @@ The operator owns them from there, though no longer alone: `$clear-map` classifi
 
 ## 7. Re-Enqueue New Issues
 
-If triage/fixing surfaced new issues, first collect only those **traceable to this batch** and
-present one proposal table: issue number, title, source issue, proposed route, and any
-same-defect-class consolidation. Include bounty-created occurrences that were linked to an open
-sweep and verified closed not planned; they are outcomes to report, not queue entries.
+If triage/fixing surfaced new issues or a quest returned adjacent-note follow-up candidates,
+first collect only those **traceable to this batch** and present one proposal table: issue number
+or `unfiled`, title, source issue, evidence and trigger, proposed route, and any same-defect-class
+consolidation. Include bounty-created occurrences that were linked to an open sweep and verified
+closed not planned; they are outcomes to report, not queue entries. An unfiled candidate remains
+a proposal: do not create an issue merely because review reported it.
 
-Ask for one explicit operator confirmation before adding any proposed issue to the manifest or
-looping to step 3. A decline leaves already-filed issues outside this campaign — no Queue row,
-no enqueue, no fix — appends a Deferrals row for each declined issue (its priority at filing,
-`Rescored` `pending`), and proceeds through the rescore pass below to the drained-state check.
-On confirmation, add the approved issues, report each enqueue, and loop to step 3.
+Ask for one explicit operator confirmation before filing an unfiled candidate, adding any proposed
+issue to the manifest, or looping to step 3. A decline leaves already-filed issues outside this
+campaign — no Queue row, no enqueue, no fix — and appends a Deferrals row for each declined
+issue (its priority at filing, `Rescored` `pending`). It then proceeds through the rescore pass
+below to the drained-state check. A declined unfiled candidate gets no invented issue number or
+Deferrals row; carry its `not routed` outcome to the final report. On confirmation, route each
+approved unfiled candidate through `$bounty`, add the resulting and approved already-filed issues,
+report each enqueue, and loop to step 3.
 
 **Rescore deferrals before any drained check.** The batch changed the tree every deferral was
 scored against, and only a re-read against the result can see a satisfied P0 left standing or
@@ -567,5 +579,8 @@ entered a fix wave or remained in the open queue.
 Every Deferrals row appears beside this table with its outcome and date — `moved` and
 `declined` with what was proposed, `unchanged`/`not-required`/`not-open` with their evidence
 notes — so the re-scoring is as visible as the original filing.
+
+List every adjacent-note follow-up candidate returned by a quest with its final route: filed and
+enqueued, consolidated into an existing issue, or not routed by the operator.
 
 List any deferred cleanup alongside it — per row, the branch and the worktree path still on disk, plus the agent whose end of run was never observed where the run still knows it.

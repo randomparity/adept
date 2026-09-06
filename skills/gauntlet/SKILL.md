@@ -214,12 +214,30 @@ Report only material findings. Skip style, naming, low-value cleanup, and specul
 4. What concrete change would reduce the risk?
 5. Is that change smaller than the risk it removes?
 6. How is the failure reached — what concrete input, state, or environment
-   triggers it, and was that trigger constructed or only inferred? A finding
-   demonstrable only by stubbing the failing component says so in those words.
+   triggers it, and was that trigger constructed, reproduced, or only inferred?
+   A finding demonstrable only by stubbing the failing component says so in
+   those words.
    Like question 5, this governs routing downstream, never whether the finding
    is reported: a real defect with no constructible trigger is still reported —
    and its disposition (fix, defer, or record-and-close) is made with the
    reachability stated rather than discovered later.
+
+Carry those routing answers on every finding:
+
+- `surface: in | adjacent` — `in` when the concern belongs to the change's
+  correctness closure; `adjacent` when it is a worthwhile independent concern
+  outside that closure. This is the reviewer's judgment, not a copy of a
+  caller's permitted-path list. An excluded concern that the target needs for
+  correctness is `in`, and labeling it `adjacent` cannot make it disappear.
+- `trigger: constructed | reproduced | inferred` — `constructed` names a
+  concrete input, state, environment, or reader path whose route through the
+  target the reviewer checked; `reproduced` records a directly observed failure or a
+  caller-supplied measurement already established by the caller's contract;
+  `inferred` is a plausible route that neither was constructed nor reproduced.
+  For a document target, `constructed` requires a named reader path or input the
+  author can check by reading, such as a consumer at `$CLAUDE_PLUGIN_ROOT`
+  resolving an invocation the reviewer traced.
+  An orchestrator-measured proportionality ratio is `reproduced`.
 
 Prefer one strong finding over several weak ones. If the change really does look safe, say so directly and return no findings.
 
@@ -262,6 +280,8 @@ For every finding use real line numbers from the file you read or the diff hunk.
 
 1. **[critical|high] Title** — `path/to/file:line_start-line_end` (confidence: 0.0–1.0)
    *Reasoning:* <why this is material and why this severity — written before the grade>
+   *Surface:* in | adjacent
+   *Trigger:* constructed | reproduced
    <body: what can go wrong, why it's vulnerable, likely impact>
    **Recommendation:** <concrete change>
 
@@ -269,6 +289,8 @@ For every finding use real line numbers from the file you read or the diff hunk.
 
 1. **[medium|low] Title** — `path/to/file:line_start-line_end` (confidence: 0.0–1.0)
    *Reasoning:* <as above>
+   *Surface:* in | adjacent
+   *Trigger:* constructed | reproduced | inferred
    <body>
    **Recommendation:** <concrete change>
 
@@ -304,6 +326,8 @@ When `--json` is present, the skill's **output artifact** is exactly this JSON o
     {
       "reasoning": "why this is material and why this severity — written before the fields below",
       "severity": "critical | high | medium | low",
+      "surface": "in | adjacent",
+      "trigger": "constructed | reproduced | inferred",
       "title": "...",
       "body": "...",
       "file": "path/to/file",
@@ -324,7 +348,10 @@ When `--json` is present, the skill's **output artifact** is exactly this JSON o
 
 **One `findings` array, not two.** Blocking findings and notes live in the same array and are told apart by `severity` — the markdown rendering splits them into two sections, the JSON does not. A second array would be a second place for a severity to be recorded, free to disagree with the first.
 
-`reasoning` is required on every finding and is emitted **first**, per *Finding bar*. A consumer may read it; its job is done before any consumer sees it.
+`reasoning`, `surface`, and `trigger` are required on every finding. `reasoning`
+is emitted **first**, per *Finding bar*. A consumer may read it; its job is done
+before any consumer sees it. `surface` routes the finding after review and never
+changes its severity or whether it contributes to `blocking_count`.
 
 `suppressions` is the machine-readable form of the "Disclose every suppression" rule — populate it whenever you drop a finding as governing-ADR re-litigation, **even when the verdict is `approve`** (that is exactly the case a caller cannot see from the verdict alone).
 
@@ -338,6 +365,11 @@ These four values — `critical | high | medium | low` — are the **canonical f
 - `medium`: a concrete bounded failure mode, coverage gap, or maintainability defect should be
   fixed or explicitly dispositioned;
 - `low`: bounded polish, naming, or optimization with no demonstrated correctness failure.
+
+`critical` and `high` also require `trigger: constructed` or `reproduced`. A
+finding whose reachability is only `inferred` is at most `medium`, whatever its
+`surface`. This is a precondition on the grade, not a second blocking axis:
+`blocking_count` remains exactly the count of `critical` and `high` findings.
 
 **The blocking line runs between `high` and `medium`.** `critical` and `high` are
 **blocking**: correctness, stated requirements, security, and data loss — the classes
@@ -405,7 +437,11 @@ verdict:
 - Read-only with respect to the target and git state: do not edit reviewed files, run formatters, post PR comments, or change git state. The **sole** exception is `--out`, which writes the review JSON to the given path — nothing else.
 - Do not paraphrase the verdict — `approve` only when no **blocking** finding exists.
 - Do not move a finding across the blocking line to reach a verdict. Grading a genuine `critical` or `high` down to `medium` to produce an `approve`, or a genuine note up to `high` to withhold one, are the same defect: the severity states what you found, never what you want the caller to do next.
-- Do not invent files, lines, or behavior. If a finding depends on inference, state that in the body and lower the confidence honestly.
+- Do not omit or invent `surface` or `trigger`. An inferred trigger cannot carry
+  `critical` or `high`; an excluded correctness dependency cannot be made
+  `adjacent` to evade the charter or severity gate.
+- Do not invent files, lines, or behavior. If a finding depends on inference,
+  record `trigger: inferred` and lower the confidence honestly.
 
 ## Examples
 
