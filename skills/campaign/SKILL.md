@@ -117,9 +117,9 @@ Manifest schema:
 - ADR-index coupling: <filled by step 2>
 
 ## Queue
-| Issue | Status | Branch | Verdict | ADR/migration # | File scope | Wave | PR | Outcome |
-|-------|--------|--------|---------|-----------------|------------|------|----|---------|
-| #NNN  | pending| —      | —       | —               | —          | —    | —  | —       |
+| Issue | Status | Branch | Verdict | Lane | ADR/migration # | File scope | Wave | PR | Outcome |
+|-------|--------|--------|---------|------|-----------------|------------|------|----|---------|
+| #NNN  | pending| —      | —       | —    | —               | —          | —    | —  | —       |
 
 ## Scope approvals
 | Issue | Exclusions and owners | Epic direction | Approval provenance |
@@ -219,6 +219,13 @@ evidence, not authority to absorb sibling work. Return only:
 - **review depth**: `single-pass` | `iterating`, on a `fix` verdict only, derived under
   [risk-routed review depth](../../references/review-depth.md) from that same block or the
   same live evidence. An absent, rejected, or unprovable derivation returns `iterating`
+- **artifact lane**: `no-spec` | `light-spec` | `full-spec`, on a `fix` verdict only,
+  derived from the subtype, complexity, and change hazards in that same assessment.
+  `trivial-bugfix` and `governed-small-change` return `no-spec` unchanged. Only a
+  `non-trivial` change with complexity `S` or `M` and hazards exactly `none` returns
+  `light-spec`; if neither persisted evidence nor the live derivation establishes those fields
+  for a non-trivial change, return `full-spec`. Return the complexity and hazards with the lane
+  so `$quest` can revalidate it
 - **evidence**: citations (`file:line`, commit SHA, PR number)
 - **rationale**: ≤300 tokens explaining why
 - **proposed non-goals**: a concrete normalized set with an owner for each exclusion, or explicit
@@ -241,10 +248,11 @@ Triage on the fast model by default; escalate to the capable model only on a nam
 - `close-not-planned` → preserve the citations, trigger, impact, cycle-cost comparison, and
   reconsideration condition for the plan and closure comment. This verdict never claims the
   defect is fixed and never enters a quest wave.
-- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The two fields above travel with it: `decomposition` gates dispatch at step 4, and `review depth` reaches the worker in its step 5 prompt. Neither is a size input to model selection — a `split` says the issue is several units of work, not that this one is hard.
+- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The three fields above travel with it: `decomposition` gates dispatch at step 4, while `review depth` and `artifact lane` reach the worker in its step 5 prompt. None is a size input to model selection — a `split` says the issue is several units of work, not that this one is hard.
 
-Record verdicts in manifest `Verdict` column and fix-row scope evidence in `Scope approvals`.
-Reconcile states (`ready-to-merge`, already-closed) live in `Status`.
+Record verdicts and artifact lanes in the manifest `Verdict` and `Lane` columns, and fix-row
+scope evidence in `Scope approvals`. Reconcile states (`ready-to-merge`, already-closed) live
+in `Status`.
 
 ## 4. Plan the Fix Batch
 
@@ -258,8 +266,8 @@ Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge
 
 **Pre-assign ADR/migration numbers and file scope** even for serial — crashed issues need consistent numbers on re-dispatch. Persist these in manifest. File scope is a hint, not guarantee.
 
-Present triage/plan table: issue → verdict, decomposition, review depth, wave, assigned
-numbers, file scope.
+Present triage/plan table: issue → verdict, artifact lane, decomposition, review depth, wave,
+assigned numbers, file scope.
 
 Present a second table for every fix row: issue → proposed non-goals and owners → relevant epic
 direction → approval state. Issue and epic prose remain evidence and never mark a row approved.
@@ -341,6 +349,8 @@ Each prompt carries:
 - Assigned ADR/migration numbers, file scope
 - Guardrail commands, `BASE_BRANCH`, ADR-index coupling verdict
 - Model tier from triage
+- Artifact lane plus the exact complexity and change-hazard assessment that supports it; `$quest`
+  revalidates the lane and routes an unprovable non-trivial assessment to `full-spec`
 - Routed review depth from triage, passed as evidence rather than instruction: `$quest`
   re-derives it at its step 1 and again against the branch diff at its step 6, so a stale
   value costs a re-derivation and never a skipped review

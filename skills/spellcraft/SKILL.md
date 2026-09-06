@@ -1,18 +1,18 @@
 ---
 name: spellcraft
-description: "Design a non-trivial code change before implementation by writing a spec or ADR, producing an implementation plan, and adversarially reviewing the whole design set in one loop. Use for issues or changes involving public contracts, schemas, auth, concurrency, migrations, persistence, dependencies, AI surfaces, security boundaries, or external services."
+description: "Design a non-trivial code change before implementation by selecting a bounded light spec or full spec and plan, recording warranted decisions, and adversarially reviewing the whole design set in one loop. Use for issues or changes involving public contracts, schemas, auth, concurrency, migrations, persistence, dependencies, AI surfaces, security boundaries, or external services."
 ---
 # Design First
 
 Tighten the design before writing code. Defects are cheapest to fix in the
-spec, then the plan, then the source. This covers the full design phase:
-spec + ADR, implementation plan, and one adversarial review over the whole
-design set.
+spec, then the plan when one is required, then the source. This covers both
+design lanes: a bounded light spec, or a full spec plus implementation plan,
+with any warranted ADR and one adversarial review over the whole design set.
 
 Skip this entire command only for a trivial bugfix (all acceptance criteria
 clear; no API, schema, auth, permission, concurrency, migration, dependency,
 persistence, or external-service behavior changes; touches one or two files;
-no new public contract).
+no new public contract), or a caller-revalidated `governed-small-change`.
 
 If the user supplies an issue number, read it with `gh issue view <issue-number>
 --json title,body,labels,parent` for requirements and acceptance criteria. When it has a native
@@ -30,6 +30,15 @@ and identify the repo's check suite.
 **Caller contract.** If invoked inside `$quest`, completing this step
 means proceed to the next step — do not end your turn. Stop only on a genuine
 blocker you have named.
+
+The artifact lane is routing evidence beside the charter, never a ninth authority field.
+Use the caller's validated lane when supplied; on a standalone invocation, derive classification,
+complexity, and hazards from the live request and repository first.
+Accept `light-spec` only for a non-trivial change whose validated complexity is `S` or `M`
+and whose change hazards are exactly `none`; otherwise use `full-spec`. An absent or
+unprovable assessment after the caller's live derivation uses the full lane. Public API or
+contract changes, migrations, auth/permission behavior, concurrency, irreversibility, and
+external services are hazards and therefore never enter the light lane.
 
 ## External scope authority
 
@@ -89,7 +98,7 @@ cheapest to correct before the first question rather than after the design.
 Then check size before detail. A request spanning several independent
 subsystems gets decomposed, not refined: name the independent pieces, say how
 they relate and what order they should be built in, then take the first one
-through this phase alone. Each sub-project earns its own spec, plan, and
+through this phase alone. Each sub-project earns its own lane-selected artifact set and
 implementation cycle. Spending the whole dialogue on the details of a project
 that needed splitting is the expensive mistake at this stage.
 
@@ -125,7 +134,16 @@ small change is the design's *length* — a few sentences is a complete design
 when the change is genuinely small. Skipping it is not.
 
 Write or update the design doc under `docs/workflow/specs/`, named
-`YYYY-MM-DD-<topic>-design.md`. For decisions with viable alternatives — layer
+`YYYY-MM-DD-<topic>-design.md`. In the light lane it contains exactly four second-level
+sections: `Problem`, `Scope`, `Success`, and `Validation`. It is one independently
+implementable unit, not a task breakdown. Its Validation section inventories every material
+changed contract using the same `focused-test` and `task-test-not-applicable` fields the full
+plan requires below, including the concrete non-applicability reason rather than a prose test.
+One page means no more than 500 words and 60 physical lines, including headings and blank lines;
+check both counts before review. If the design cannot stay complete and within both caps, or needs
+more than one implementation unit, reselect `full-spec` instead of compressing away correctness.
+
+For decisions with viable alternatives — layer
 boundaries, interface or ownership splits, concurrency invariants, failure
 contracts, migration sequencing, rollback strategy — write or update an ADR
 under `docs/adr/` with:
@@ -192,14 +210,16 @@ what you find inline:
   vague to fail against.
 - **Internal contradiction** — sections that disagree, or an architecture that
   does not match the features described against it.
-- **Scope** — is this one implementation plan's worth of work, or does it still
-  need decomposing?
+- **Scope** — is this one light-spec unit or one implementation plan's worth of work, or does
+  it still need decomposing?
 - **Two-way ambiguity** — any requirement a competent reader could take two
   ways. Settle it and say which reading the spec means.
+- **Light-spec completeness** — when routed light, verify the exact four-section shape, map every
+  success criterion to a supported Validation entry, and recheck the 500-word and 60-line caps.
 
 This pass is cheap and catches the defects an adversarial review would otherwise
-spend an iteration discovering. It does not replace step 3 — and with the plan now derived
-from a spec no adversarial pass has seen, it is the cheapest place a spec defect stops.
+spend an iteration discovering. It does not replace step 3 — and in the full lane, with the plan
+derived from a spec no adversarial pass has seen, it is the cheapest place a spec defect stops.
 
 An ADR-producing change should touch **only its own ADR file**. A hand-maintained
 index table serializes parallel ADR PRs on one merge conflict — N such PRs cost
@@ -359,6 +379,9 @@ design phase, and the carry is what keeps the branch review's count continuous w
 
 ## 2. Inscribe — the implementation plan
 
+Skip this step for `light-spec`. Its bounded spec already carries the complete validation
+inventory for one Cast unit; do not create a plan, placeholder task, or task-brief input.
+
 Write the plan under `docs/workflow/plans/`, named
 `YYYY-MM-DD-<feature-name>.md`, derived from the spec. Do not choose an
 execution mode here: `$forge` picks that from what the plan looks like.
@@ -497,11 +520,10 @@ Run relevant guardrails and commit the plan.
 
 ## 3. Adversarial-review the design
 
-One review, over the whole design set, run once the set is complete. The ADRs, the spec, and
-the plan are one change: they get one charter, one iteration budget, and one report — not
-three targets reviewed in sequence, each drawing a full budget nobody was totalling. That
-shape is what produced 13 review rounds and a 1,469-line design before a line of
-implementation existed.
+One review, over the whole design set, run once the set is complete. The ADRs, the spec, and the
+full lane's plan are one change: they get one charter, one iteration budget, and one report — not
+separate targets each drawing a full budget nobody was totalling. That shape is what produced 13
+review rounds and a 1,469-line design before a line of implementation existed.
 
 ### Assemble the set
 
@@ -518,8 +540,9 @@ of:
 The target-repository `':(exclude)docs/adr/README.md'` pathspec drops the index — an
 index-row edit is not a decision to challenge. Most designs record no ADR, so an ADR-free
 set is the common case and reviews exactly the same way; there is no ADR-specific skip left
-to get wrong. A set missing **the spec or the plan** is a resume that lost its own artifacts:
-stop as blocked rather than reviewing whatever remains. Never invoke `$trial-loop` with a
+to get wrong. Every set requires the spec. A `full-spec` set also requires the plan; a
+`light-spec` set must not contain one. A mismatch is a resume or routing defect: stop rather
+than reviewing whatever remains. Never invoke `$trial-loop` with a
 path that does not resolve — it appends a `CHARTER` block on every invocation, and under a
 charter an unresolvable target is a hard error naming the token, with `--out` suppressing
 both the artifact and the compact object, so the loop returns no verdict and stops as
@@ -528,19 +551,26 @@ blocked.
 ### Measure the proportionality inputs
 
 Measure them here, in the orchestrator, so the reviewer judges numbers instead of producing
-them — a reviewer asked to both measure and judge will do neither reproducibly:
+them — a reviewer asked to both measure and judge will do neither reproducibly.
+
+For `full-spec`, retain the existing inputs:
 
 - `wc -l` over every path in the set, summed — the **design size**.
 - the plan header's `Expected implementation size` range — the **implementation estimate**.
 - the design size over the range's high end, to one decimal place — the **ratio**.
 
-**Echo an audit line before proceeding**, so a mis-evaluated predicate or an unmeasured
-ratio leaves an inspectable trace rather than silently reopening the shield (the repo's only
-verification is reading the transcript):
+For `light-spec`, measure the specification alone with `wc -w` and `wc -l`. Both its
+500-word and 60-line caps must hold. Do not invent an implementation estimate or ratio merely
+to replace the absent plan; the hard cap is this lane's proportionality control. An ADR remains
+subject to the existing per-artifact right-sizing review.
 
-    design review: set = <paths>; design <n> lines vs implementation estimate <low>–<high>; ratio <n.n>x; depth = iterating | single-pass
+**Echo the lane's audit line before proceeding**, so a mis-evaluated predicate or unmeasured
+control leaves an inspectable trace:
 
-A plan carrying no `Expected implementation size` line is a step 2 defect: derive the range
+    design review: lane = full-spec; set = <paths>; design <n> lines vs implementation estimate <low>–<high>; ratio <n.n>x; depth = iterating | single-pass
+    design review: lane = light-spec; set = <paths>; spec <words>/500 words and <lines>/60 lines; depth = iterating | single-pass
+
+A full plan carrying no `Expected implementation size` line is a step 2 defect: derive the range
 from the plan's own file map and task list, write it into the plan, and say in the audit
 line that you did.
 
@@ -549,10 +579,11 @@ line that you did.
 Run `$trial-loop` in file-list mode:
 
 - challenge_args: `<every path in the design set, space-separated>`
-- focus: `This is one design reviewed as one artifact set — ADR(s), specification, and
-  implementation plan. Read them together and challenge them together: a defect that
-  crosses files is one finding, not one per file, and a spec defect the plan inherited is
-  reported once against both.
+- focus: `This is one design reviewed as one artifact set in the <light-spec | full-spec>
+  lane — ADR(s), specification, and the full lane's implementation plan. Read the present
+  artifacts together and challenge them together: a defect that
+  crosses files is one finding, not one per file, and a spec defect inherited by a present plan
+  is reported once against both.
 
   Decisions (each ADR in the set): the soundness of the decision under its stated context;
   the completeness and honesty of the "Considered & rejected" list — alternatives dismissed
@@ -575,7 +606,7 @@ Run `$trial-loop` in file-list mode:
   the eval plan: failure modes without cases, unmeasurable pass traits, and uncalibrated
   LLM-judge evidence.
 
-  Plan: phase ordering, missing prerequisites, steps that cannot run in the claimed order,
+  Full-spec plan, when present: phase ordering, missing prerequisites, steps that cannot run in the claimed order,
   rollback and cleanup paths, verification gaps, ungrounded references — a type, function,
   or signature borrowed from the codebase or a dependency without confirmation it exists
   with the assumed signature — and tasks that are not self-contained enough for an
@@ -583,13 +614,22 @@ Run `$trial-loop` in file-list mode:
   back against the spec in this same set: a spec requirement with no task, and a task
   serving no requirement, are both findings.
 
-  Proportionality, over the whole set: the orchestrator measured <design size> lines of
-  design against an expected implementation of <low>–<high> changed lines, a ratio of
-  <n.n>x. Above 3x is a blocking finding; 2x to 3x is a note. The remedy is cutting the
+  Light-spec execution, when selected: the spec must remain one independently implementable
+  Cast unit, and its Validation inventory must cover every material contract with supported
+  focused or non-applicable evidence. A task breakdown, missing inventory entry, or correctness
+  detail compressed away to meet the cap is a finding.
+
+  Proportionality: append only the selected lane's measured clause. For full-spec, the
+  orchestrator measured <design size> lines against an expected implementation of
+  <low>–<high> changed lines, a ratio of <n.n>x. Above 3x is a blocking finding; 2x to 3x is a
+  note. The remedy is cutting the
   design — never adding text to defend its length, and never widening the estimate to move
   the ratio. Judge the estimate too: a range the plan's own file map and task list do not
   support is a finding in its own right, and the honest range is the one the file map
-  yields. Size is in scope per artifact as well as in aggregate — a record arguing for its
+  yields. For light-spec, the orchestrator measured <words> words and <lines> lines: exceeding
+  either hard cap is blocking and returns the change to lane selection; do not ask for an
+  invented estimate. Omit the other lane's clause rather than leaving unused placeholders.
+  Size is in scope per artifact as well as in aggregate — a record arguing for its
   decision at greater length than the decision governs is a finding, and its remedy is also
   cutting.`
 
@@ -609,10 +649,11 @@ Editing an ADR in the set to address a finding is legitimate — it is pre-merge
 branch, and the immutability rule applies only once the ADR is merged.
 
 Carry every deferral — each entry with its owning record path or tracker issue — into the
-**plan**, whichever way the run ended, `approve` included. The loop discloses its deferrals
-on every exit, and the plan is what `$forge` reads, so that is where a later implementer
-meets them. Not the ADR: it merges append-only, and an entry there cannot be struck when its
-tracker closes.
+full lane's **plan**, or the light spec's **Scope**, whichever way the run ended, `approve`
+included. The loop discloses its deferrals on every exit, and the artifact `$forge` reads is
+where a later implementer meets them. Not the ADR: it merges append-only, and an entry there
+cannot be struck when its tracker closes. A light spec that cannot carry the deferral and remain
+complete within its caps returns to lane selection.
 
 ## 4. Scope audit
 
@@ -631,10 +672,10 @@ Re-auditing after an edit the audit itself asked for is the second pass this rem
 
 ## Context checkpoint
 
-The spec, ADR, and plan you just wrote are the **durable artifacts** of this
+The spec, any ADR, and the full lane's plan are the **durable artifacts** of this
 phase — they, not the brainstorm transcript or the review payloads, are what a
 downstream build (or a post-compaction resume) reads. Before handing off, ensure
 the checkable facts a resume needs — the branch name, `BASE_BRANCH`, and the
 guardrail commands — are recorded somewhere durable, and, as a reminder, that the
-spec/ADR/plan hold every design decision. Do **not** run `context compaction` proactively;
+lane's artifact set holds every design decision. Do **not** run `context compaction` proactively;
 just keep the artifacts complete.
