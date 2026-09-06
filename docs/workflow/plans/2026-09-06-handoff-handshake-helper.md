@@ -1,7 +1,7 @@
 # Hand-off handshake helper — implementation plan
 
 Derived from [the design](../specs/2026-09-06-handoff-handshake-helper-design.md) and
-[ADR 0056](../../adr/0056-compose-the-handoff-handshake.md).
+[ADR 0057](../../adr/0057-compose-the-handoff-handshake.md).
 
 **Goal.** Replace `$return-to-town`'s hand-composed merge hand-off annotation with one executable
 that composes the block, computes the head SHA itself, asserts every condition the merge gate checks
@@ -67,7 +67,7 @@ below.
 | `tests/fixtures/return-to-town/publish-handoff-test.sh` | new | the helper's behaviour, including one regression case per logged defect |
 | `skills/return-to-town/SKILL.md` | modified | invoking the helper instead of describing the composition |
 | `.claude-plugin/plugin.json` | modified | the version bump |
-| `docs/adr/0056-compose-the-handoff-handshake.md` | new | the decision recorded alongside this plan |
+| `docs/adr/0057-compose-the-handoff-handshake.md` | new | the decision recorded alongside this plan |
 
 `skills/return-to-town/` has no `scripts/` directory today; Task 1 creates it. No new skill is
 added, so `check-skill-shape.sh` rules 6 and 7 (cheatsheet and README coverage) are unaffected, and
@@ -726,7 +726,7 @@ Revert the single file; Task 1's helper becomes unused but harmless.
 
 ## Task 3 — the decision record and the version bump
 
-Creates `docs/adr/0056-compose-the-handoff-handshake.md` and modifies `.claude-plugin/plugin.json`.
+Creates `docs/adr/0057-compose-the-handoff-handshake.md` and modifies `.claude-plugin/plugin.json`.
 
 ### Interfaces
 
@@ -743,7 +743,7 @@ Consumes: nothing. Provides: nothing.
 
 ### Steps
 
-**3.1** Write `docs/adr/0056-compose-the-handoff-handshake.md` with the five required
+**3.1** Write `docs/adr/0057-compose-the-handoff-handshake.md` with the five required
 sections — `## Status`, `## Context`, `## Decision`, `## Consequences`, `## Considered & rejected` —
 a `## Status` body of `Accepted (2026-09-06)`, and an H1 carrying the record's number. Every
 `Considered & rejected` bullet names its alternative and opens its ground with `verified:` or

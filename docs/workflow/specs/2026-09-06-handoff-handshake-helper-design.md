@@ -1,6 +1,6 @@
 # Hand-off handshake helper — design
 
-Decision record: [ADR 0056](../../adr/0056-compose-the-handoff-handshake.md).
+Decision record: [ADR 0057](../../adr/0057-compose-the-handoff-handshake.md).
 
 ## Goal
 

@@ -1,4 +1,4 @@
-# 0056 — Compose the hand-off handshake, and only the hand-off
+# 0057 — Compose the hand-off handshake, and only the hand-off
 
 ## Status
 
@@ -17,6 +17,12 @@ or CI problem — a backticked handshake, a missing sentinel twice, and a worker
 `blocked` or `needs-human`, **without** that line. Quest-log's latest-complete-wins rule means a
 naive reader would let a park note posted after a hand-off supersede it. Any helper that composes
 this block type has to be shaped so it cannot collide with the park path.
+
+Two accepted records bear on this and neither decides it. **ADR 0042** puts the complete merge gate
+in `references/merge-gate.md` and makes that the single normative location, so this record cites the
+reference rather than any skill's account of it — and the read-side selection rule quoted below is
+0042's text, not a restatement of it. **ADR 0048** established the validation-only preflight
+separation for `publish-forge-review`; this record follows it rather than re-deciding it.
 
 ## Decision
 
@@ -63,6 +69,16 @@ emit the same handful of bytes correctly on every occasion.
 - Exit 1 does not mean nothing was published. Three conditions are checked after the comment is
   created, and a comment the helper composed is gate-valid whether or not the readback succeeded.
   The message names which condition failed, and the remedy is the same either way: re-run.
+- **The helper becomes a second encoding of the gate's byte-level contract, and ADR 0042's drift
+  concern now reaches it.** 0042 centralized the gate in one reference precisely because copies
+  cannot be held in agreement — anatomy rule 4 forbids a gate that compares prose, so nothing
+  automated can detect the divergence. This helper hardcodes the two markers and the handshake
+  shape, so a change to `references/merge-gate.md` part 4 silently desynchronizes it. That is a real
+  new drift surface and it is accepted rather than solved: the alternative is parsing the normative
+  prose at runtime, which is the prose-assertion anatomy rule 4 exists to forbid. What bounds it is
+  that the helper is the *writer* and the reference governs the *reader*, so a divergence fails
+  closed — the gate stops selecting the block, which is the loud failure this record is about, not a
+  silent admission.
 - Park notes keep the sentinel-omission exposure the hand-off just lost. That is a real residual,
   not an oversight, and it is left as accepted exposure rather than absorbed here: a park note
   losing its sentinel makes a parked issue read as unparked, which a reader recovers from by
