@@ -664,8 +664,9 @@ complexity, hazard, or decomposition change can alter its lane; the overflow alo
 The design phase ends with exactly one `$oathbind` pass over the reviewed set. This skill
 does not invoke it: `$quest` step 4 owns the report path, the `.agent/` ignore check, and
 the dispatch, and it runs immediately after this review. A direct invocation of this skill
-runs no audit; an operator who wants one invokes `$oathbind` themselves, with the same
-frozen charter and the paths this review just hardened.
+runs no audit; an operator who wants one invokes `$oathbind` themselves, with the same frozen
+charter, the artifact lane as routing evidence outside that charter, and the paths this review
+just hardened.
 
 One pass is the whole of it, and that is a property of what the audit can produce rather
 than a budget imposed on it. `$oathbind` is read-only and audits authority, so every remedy

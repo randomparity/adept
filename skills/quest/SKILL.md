@@ -308,6 +308,12 @@ Pick a fresh report path there and dispatch a fresh reviewer task running
 brief. Inherited history is non-authoritative and cannot supply scope; the
 workflow makes no context-isolation guarantee.
 
+Pass the artifact lane as routing evidence outside the frozen charter:
+
+artifact lane: light-spec | full-spec
+
+Then pass the frozen charter and audit inputs:
+
 interaction: <unchanged root value>
 scope identity: <external scope identity, never reviewed target>
 outcome: <frozen external outcome>
