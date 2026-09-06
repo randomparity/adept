@@ -36,7 +36,7 @@ command, so it sets `$?` to 0 before the assignment reads it. Measured on the ba
 failing run therefore printed `publish-forge-review: successful publication left its body behind`
 beside its real error. `local exit_status=$?` on one line would fix it, but it is a pre-existing
 false message with a different root cause, this design does not need it, and the scope audit held
-it out of the approved surface. It is reported as a follow-up instead.
+it out of the approved surface. It is tracked as issue #313 instead.
 
 ### Consumers
 

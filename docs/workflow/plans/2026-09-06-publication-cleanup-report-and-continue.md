@@ -380,9 +380,9 @@ tracker issue before the branch ships.
   different root cause from #306's disposer failure, closing it means revisiting the
   publication-recovery predicates ADR 0048 deliberately drew, and this change neither introduces
   it nor changes its failure mode — it only adds a second ledger append after the verified line.
-  Owner: tracker issue (this repository keeps no `docs/debt/`); see the completion report for the
-  filed number.
+  Owner: [#312](https://github.com/randomparity/adept/issues/312) (this repository keeps no
+  `docs/debt/`).
 - **`finish_body_lifecycle`'s `local exit_status` / `exit_status=$?` split makes every failing run
   print `successful publication left its body behind`.** Raised by the scope audit, which held it
   out of the approved surface as adjacent work. Cut from this change rather than fixed. Owner:
-  tracker issue; see the completion report for the filed number.
+  [#313](https://github.com/randomparity/adept/issues/313).

@@ -54,7 +54,7 @@ still fails in `preflight()`, before any GitHub request.
   `skills/quest/SKILL.md`'s recovery predicates still refuse recovery once that line exists, so
   that path remains stranded. It is a different fault — the ledger is the record this design
   relies on, so a helper that cannot write it has nothing truthful to continue with — and closing
-  it is out of scope here.
+  it is out of scope here. Tracked as issue #312.
 - The ledger distinguishes "helper never ran" from "helper ran, cleanup incomplete"; silence
   could not.
 - Private scratch content can survive a run without a human being forced to notice. The stderr
