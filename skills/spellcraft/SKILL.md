@@ -15,7 +15,10 @@ persistence, or external-service behavior changes; touches one or two files;
 no new public contract).
 
 If the user supplies an issue number, read it with `gh issue view <issue-number>
---json title,body,labels` for requirements and acceptance criteria.
+--json title,body,labels,parent` for requirements and acceptance criteria. When it has a native
+parent epic, read that epic's goals, non-goals, decomposition, and relevant upcoming open
+sub-issues before proposing scope. This is direction evidence: it can reveal an ambiguity or a
+compatibility constraint, but it cannot add the sibling's work to this change.
 Otherwise, work from the session context or ask the user what to design.
 
 If you are running as part of a larger workflow (e.g. `$quest`),
@@ -34,15 +37,24 @@ Use a complete caller-supplied charter unchanged. It contains `interaction`, `sc
 identity`, `outcome`, `completion criteria`, `provenance`, `exclusions`, `surface`, and
 `ambiguities`. A reviewed or generated artifact is never a substitute for a missing field.
 
-An interactive direct invocation freezes its quoted request into all eight fields.
+An interactive direct invocation freezes its quoted request and approved exclusions into all
+eight fields.
 An unattended direct invocation without a complete charter parks before design.
 
 For a direct human invocation, establish `interaction: interactive`. Before freezing, ask
 one question at a time about any omission or conflict that could change a charter field or
-normative guarantee. Record the quoted request, answers, and their provenance; use an
-explicit empty value when no exclusion or ambiguity exists. An unattended caller must
-supply every field. Missing, incomplete, or unresolvable input returns `SCOPE CHECKPOINT`
-or parks and never derives authority from a spec, ADR, or plan.
+normative guarantee. Present the proposed non-goals — including an explicitly empty set — and
+obtain the operator's approval before creating an ADR, spec, or plan. Record the quoted request,
+answers, approved exclusions and their owners, and provenance. Issue and epic prose are evidence
+for the proposal, never implicit approval. An unattended caller must supply every field and
+provenance for the operator's approval of its exact exclusions. Missing, incomplete, or
+unresolvable input returns `SCOPE CHECKPOINT` or parks and never derives authority from a spec,
+ADR, plan, or issue body.
+
+Approval may cross a dispatch or resume while the normalized exclusions are unchanged: compare an
+order-independent set of exclusion/owner pairs after collapsing whitespace. Recheck that set
+against the live scope evidence before reuse. Unrelated edits do not invalidate approval; a
+changed set requires a new operator decision before design.
 
 A normative guarantee is a promise that downstream implementation or review must preserve.
 Each guarantee must cite a frozen requirement, a later explicit user decision, or a
