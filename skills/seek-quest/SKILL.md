@@ -47,7 +47,7 @@ Input: an optional caller-supplied risk allowlist and/or effort allowlist
 6. **Eligibility filter — occupancy and blocked-dependency.** Apply these
    signals to what remains from Step 5:
    - Fetch quest claims once:
-     `"$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/tracker.sh" claim-list --target <owner/name>`.
+     `"<plugin root>/skills/quest-log/assets/tracker.sh" claim-list --target <owner/name>`.
      Drop any candidate whose issue number appears, reported as `claim
      quest-claim/<N>` — no liveness judgment: a stale claim is repaired by
      `$resurrection`, and a dropped candidate is only a recommendation away.

@@ -108,9 +108,11 @@ operator confirmation.
    closed-sweep recurrence decision; do not infer post-closure persistence from an occurrence
    that predates and was covered by that sweep.
 
-   Then invoke the bundled `$CLAUDE_PLUGIN_ROOT/skills/bounty/scripts/create-verified-issue.sh`
-   with `--repo <owner/name>`, `--title <t>`, `--body-file <tmp>`, and one `--label <label>`
-   per intended label.
+   Then invoke the bundled `"<plugin root>/skills/bounty/scripts/create-verified-issue.sh"` —
+   `<plugin root>` is the installed plugin's own root, the directory two levels above this
+   skill's own directory, which the harness names when it loads the skill, and never the
+   target repository — with `--repo <owner/name>`, `--title <t>`, `--body-file <tmp>`, and one
+   `--label <label>` per intended label.
    Retain the populated temporary body file through read-back verification; never replace
    it with standard input or inline `--body`, and never `eval` argument tokens. The script
    creates exactly one issue, reads it back with explicit JSON fields, and checks the
@@ -140,7 +142,7 @@ operator confirmation.
    data, or private environment detail.
    Draft each sub-issue through steps 2–6, and file each
    as a **native sub-issue** by passing `--parent <N>` to
-   `$CLAUDE_PLUGIN_ROOT/skills/bounty/scripts/create-verified-issue.sh` (the direct native path
+   `"<plugin root>/skills/bounty/scripts/create-verified-issue.sh"` (the direct native path
    requires `gh` ≥ 2.94.0; on older `gh`, or to link a *pre-existing* issue instead, use
    `gh api repos/<owner>/<name>/issues/<N>/sub_issues` or the `sub_issue_write` MCP tool).
    Add a `Part of #N` courtesy line to each sub-issue body. The script also verifies the

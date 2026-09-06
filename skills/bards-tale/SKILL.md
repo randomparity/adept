@@ -13,10 +13,11 @@ process-learning counterpart to `$grimoire`, which records *solutions* only.
 **Read-only against GitHub and git.** The skill performs no `gh` call and no
 arithmetic of its own beyond §4's bounded follow-through search. Every collection
 read and every collection computation happens inside
-`$CLAUDE_PLUGIN_ROOT/skills/bards-tale/scripts/collect-telemetry` — the harness
-exports `$CLAUDE_PLUGIN_ROOT` to the plugin's install root, and the collector
-ships beside this skill, not in the target repository — which takes the selector
-and emits exactly one JSON telemetry document on stdout conforming to ADR 0030
+`<plugin root>/skills/bards-tale/scripts/collect-telemetry` — `<plugin root>` is
+the installed plugin's own root, the directory two levels above this skill's own
+directory, which the harness names when it loads the skill; the collector ships
+there, not in the target repository — which takes the selector and emits exactly
+one JSON telemetry document on stdout conforming to ADR 0030
 (`docs/adr/0030-retrospective-telemetry-envelope-and-collector-contract.md`).
 The only durable side effects are writing that document beside the report (the
 sidecar) and writing the one report file; transient `mktemp` scratch files are
@@ -38,7 +39,7 @@ exists on stdout and nowhere else:
 
 ```bash
 DOC=$(mktemp)
-"$CLAUDE_PLUGIN_ROOT/skills/bards-tale/scripts/collect-telemetry" "<selector>" > "$DOC"
+"<plugin root>/skills/bards-tale/scripts/collect-telemetry" "<selector>" > "$DOC"
 ```
 
 **Prior sidecar.** Before invoking, check `docs/retro/` for the most recent
@@ -347,7 +348,7 @@ and data-gaps sections; a degenerate report is clearly labeled, not silently emp
 ## Read-only contract (hard constraints)
 
 - **Zero mutating `gh` calls.** Every `gh` invocation — the collection reads live
-  inside `$CLAUDE_PLUGIN_ROOT/skills/bards-tale/scripts/collect-telemetry`, and
+  inside `<plugin root>/skills/bards-tale/scripts/collect-telemetry`, and
   the sole other sanctioned call is §4's bounded follow-through search — must be
   one of: `gh repo view`, `gh search …`, `gh issue view|list`, `gh pr view|list`,
   or `gh api` **path-scoped to the timeline read endpoint**

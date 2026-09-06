@@ -112,7 +112,7 @@ constrains the grammar), and resolve the producer login
 `gh` error). Then acquire the claim:
 
 ```sh
-"$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/tracker.sh" claim-acquire --target <owner/name> \
+"<plugin root>/skills/quest-log/assets/tracker.sh" claim-acquire --target <owner/name> \
   <issue-number> --token <scope-token> --producer <login>
 ```
 
@@ -340,9 +340,10 @@ to detect arbitrary out-of-band edits.
 ## 5. Build With Contract Evidence
 
 Before calling `$forge`, resolve its workspace with
-`$CLAUDE_PLUGIN_ROOT/skills/forge/scripts/sdd-workspace` — the harness exports
-`$CLAUDE_PLUGIN_ROOT` to the plugin's install root, and the script ships beside
-`$forge`, not in the target repository — and set
+`"<plugin root>/skills/forge/scripts/sdd-workspace"` — `<plugin root>` is the
+installed plugin's own root, the directory two levels above this skill's own
+directory, which the harness names when it loads the skill; the script ships
+beside `$forge` there, not in the target repository — and set
 `FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
 the frozen `WORK:SCOPE` annotation token that this quest already validated, then
 set `FORGE_HANDOFF=<workspace>/quest-forge-handoff-<issue>-<scope-token>.md`.
@@ -741,7 +742,7 @@ Before any PR-body write, invoke the helper in validation-only mode with the exa
 arguments:
 
 ```sh
-"$CLAUDE_PLUGIN_ROOT/skills/quest/scripts/publish-forge-review" --preflight \
+"<plugin root>/skills/quest/scripts/publish-forge-review" --preflight \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```
@@ -779,7 +780,7 @@ before posting. Transfer the summary file's lifecycle to the publication helper
 and invoke it exactly once:
 
 ```sh
-"$CLAUDE_PLUGIN_ROOT/skills/quest/scripts/publish-forge-review" \
+"<plugin root>/skills/quest/scripts/publish-forge-review" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```

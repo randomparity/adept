@@ -26,11 +26,13 @@ supply-chain rules that are no longer inline in `AGENTS.md`.
 
 ## 2. Record architecture context
 
-Run `$CLAUDE_PLUGIN_ROOT/skills/attunement/scripts/detect-host-architecture` — the harness
-exports `$CLAUDE_PLUGIN_ROOT` to this installed package's root, and the script ships there,
-not in the target repository. Capture its stdout and exit status even when it returns 2 or
-3; do not merge stderr into the payload and do not evaluate the payload as shell code.
-Accept only these status/payload pairs, carried by stdout's first line:
+Run `"<plugin root>/skills/attunement/scripts/detect-host-architecture"`. `<plugin root>` is
+the installed plugin's own root — the directory two levels above this skill's own directory,
+which the harness names when it loads the skill. Substitute it before running the command; it
+is never the target repository, which has a `scripts/` of its own. Capture the script's stdout
+and exit status even when it returns 2 or 3; do not merge stderr into the payload and do not
+evaluate the payload as shell code. Accept only these status/payload pairs, carried by
+stdout's first line:
 
 - exit 0 with `ok<TAB><normalized>`;
 - exit 2 with `unsupported<TAB><raw-or-empty>`; or
@@ -41,7 +43,10 @@ fields, records, or terminal control sequences. Never evaluate that representati
 shell code. The detector assumes the resolved `uname` is the operating system tool and its
 output is text; shell variables cannot retain binary NUL bytes. Anything else is a
 malformed detector result and stops preflight with the observed status
-and a request to repair the installed preflight package. Render `HOST_ARCHITECTURE` as the
+and a request to repair the installed preflight package — except for a status of 127
+naming a missing file, which is the package being looked for in the wrong place rather
+than a package to repair: re-resolve `<plugin root>` and run it again before reporting.
+Render `HOST_ARCHITECTURE` as the
 normalized value, `unsupported (<raw-or-empty>)`, or `detection failed (<reason>)`.
 
 The status line is not the whole payload. After it, on every exit path, the same
@@ -84,8 +89,8 @@ an overridden declaration. Contradictory effective declarations remain unresolve
 
 Pass the detector status and value, the target state (`conflict`, `none`, or `declared`),
 and each preserved declaration as a separate argument to
-`$CLAUDE_PLUGIN_ROOT/skills/attunement/scripts/resolve-architecture-context`, resolved the
-same way. Use its `HOST_ARCHITECTURE` and `TARGET_ARCHITECTURES` records and its final
+`"<plugin root>/skills/attunement/scripts/resolve-architecture-context"`, resolved the same
+way. Use its `HOST_ARCHITECTURE` and `TARGET_ARCHITECTURES` records and its final
 `ARCHITECTURE_RELATIONSHIP` record as one context result. The resolver implements this
 first-match table:
 

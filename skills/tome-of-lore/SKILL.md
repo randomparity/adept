@@ -148,8 +148,8 @@ adopted the gate runs its own copy and needs nothing from this skill:
 
 ```sh
 # from the skill, in a repo that has not adopted the gate
-RECORD_PROFILES="adr debt" "$CLAUDE_PLUGIN_ROOT/skills/tome-of-lore/assets/migrate-records.sh"
-RECORD_PROFILES="adr debt" "$CLAUDE_PLUGIN_ROOT/skills/tome-of-lore/assets/migrate-records.sh" --write
+RECORD_PROFILES="adr debt" "<plugin root>/skills/tome-of-lore/assets/migrate-records.sh"
+RECORD_PROFILES="adr debt" "<plugin root>/skills/tome-of-lore/assets/migrate-records.sh" --write
 
 # from an adopted copy
 RECORD_PROFILES="adr debt" ./.github/scripts/migrate-records.sh --write
@@ -191,8 +191,9 @@ unattended (`$trial-loop` inside `$quest` or `$campaign`) wants it, because ther
 agent that wrote a record is the agent that would benefit from erasing it, and no human
 sees the intermediate state.
 
-Copy six files out of `$CLAUDE_PLUGIN_ROOT/skills/tome-of-lore/assets/`. The harness exports
-`$CLAUDE_PLUGIN_ROOT` to the plugin's install root, so that names the directory from any
+Copy six files out of `<plugin root>/skills/tome-of-lore/assets/`. `<plugin root>` is the
+installed plugin's own root — the directory two levels above this skill's own directory,
+which the harness names when it loads the skill — so that names the directory from any
 install location; never assume a client-specific config root, and never read the copies from
 the adopting repository's own tree. The destinations below *are* repository-relative:
 
