@@ -115,11 +115,12 @@ Manifest schema:
 - BASE_BRANCH: <filled by step 2>
 - Guardrail commands: <filled by step 2>
 - ADR-index coupling: <filled by step 2>
+- Mandatory per-PR edit rules: <filled by step 2, or none>
 
 ## Queue
-| Issue | Status | Branch | Verdict | ADR/migration # | File scope | Wave | PR | Outcome |
-|-------|--------|--------|---------|-----------------|------------|------|----|---------|
-| #NNN  | pending| —      | —       | —               | —          | —    | —  | —       |
+| Issue | Status | Branch | Verdict | ADR/migration # | Mandatory per-PR edits | File scope | Wave | PR | Outcome |
+|-------|--------|--------|---------|-----------------|------------------------|------------|------|----|---------|
+| #NNN  | pending| —      | —       | —               | —                      | —          | —    | —  | —       |
 
 ## Outcomes log
 <appended per close/merge/block; every entry dated — merge entries' dates drive step 7's
@@ -169,7 +170,7 @@ and blocker; it never repeats creation.
 
 ## 2. Environment Discovery
 
-Run `$attunement` **once** for the batch to get `BASE_BRANCH`, guardrail commands, gh auth, and ADR-index coupling (`coupled` | `not coupled` | `no index`). Record these in the manifest. On resume, read from manifest and skip re-running (re-confirm auth and clean tree only). Stop on blockers before touching issues.
+Run `$attunement` **once** for the batch to get `BASE_BRANCH`, guardrail commands, gh auth, ADR-index coupling (`coupled` | `not coupled` | `no index`), and any mandatory shared per-PR edit rules found among the known landmines. Record these in the manifest. On resume, read from manifest and skip re-running (re-confirm auth and clean tree only). Stop on blockers before touching issues.
 
 ## 3. Triage
 
@@ -233,10 +234,10 @@ Count issues needing fixes. **Every fix runs in a worker** — never inline.
 
 Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge order), `w1`, `w2`... for parallel.
 
-**Pre-assign ADR/migration numbers and file scope** even for serial — crashed issues need consistent numbers on re-dispatch. Persist these in manifest. File scope is a hint, not guarantee.
+**Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial — crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from attunement's known-landmine record. Reserve each row's exact value in planned merge order under the repository's ordering rule and persist it as `path=value`; use `—` when there is no mandatory edit. A reservation remains consumed if its row becomes blocked or is skipped, and is never assigned to another row. File scope is a hint, not guarantee.
 
 Present triage/plan table: issue → verdict, decomposition, review depth, wave, assigned
-numbers, file scope.
+numbers, mandatory per-PR edits, file scope.
 
 **A `split` row is held from dispatch.** This is the checkpoint the decompose verdict was
 always missing a consumer for: you own the queue, so you are the one actor that can turn one
@@ -300,7 +301,8 @@ Each prompt carries:
 - The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
-- Assigned ADR/migration numbers, file scope
+- Assigned ADR/migration numbers, exact mandatory per-PR edits, file scope; the
+  worker applies each assigned value and never derives, increments, or reassigns it
 - Guardrail commands, `BASE_BRANCH`, ADR-index coupling verdict
 - Model tier from triage
 - Routed review depth from triage, passed as evidence rather than instruction: `$quest`
@@ -397,6 +399,10 @@ list is written for a run cleaning up after itself, so replace its worktree-remo
 branch-deletion steps with the gated list at the end of this step — the worktree here is not
 yours. Everything else in that skill still applies. Its tracking writes and cleared-dependency
 reconcile remain load-bearing, as does its switch to `BASE_BRANCH` and fast-forward pull.
+Merge eligible rows with ordered mandatory edits in their assigned value order. A blocked
+row drops out of that order, but its reservation stays consumed. If a moved base makes an
+assignment invalid, the orchestrator alone reserves the next unused valid value and persists
+it before refresh; a worker may apply only that exact reassignment from a fresh prompt.
 Merge one PR, then re-run the gate for each remaining in-flight PR. If the base moved, refresh
 the branch as part 3 directs. If the repository forbids the required merge commit and rebasing
 a pushed branch is denied, stop with a named blocker.
