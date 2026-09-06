@@ -1,6 +1,6 @@
 ---
 name: spellcraft
-description: "Design a non-trivial code change before implementation by selecting a bounded light spec or full spec and plan, recording warranted decisions, and adversarially reviewing the whole design set in one loop. Use for issues or changes involving public contracts, schemas, auth, concurrency, migrations, persistence, dependencies, AI surfaces, security boundaries, or external services."
+description: "Design a non-trivial code change before implementation by selecting a bounded light spec or full spec and plan, recording warranted decisions, and adversarially reviewing the whole design set in one bounded phase. Use for issues or changes involving public contracts, schemas, auth, concurrency, migrations, persistence, dependencies, AI surfaces, security boundaries, or external services."
 ---
 # Design First
 
@@ -338,12 +338,12 @@ point of writing it down first.
 
 ## Design-review scope input
 
-`$trial-loop` is a separate skill, so the charter does cross a boundary here.
+The reviewer is a separate worker, so the charter does cross a boundary here.
 Pass all eight fields frozen in *External scope authority* — `interaction`,
 `scope identity`, `outcome`, `completion criteria`, `provenance`, `exclusions`,
-`surface`, `ambiguities` — unchanged, to the design review's single `$trial-loop`
-call and to the scope audit that follows it. `scope identity` stays the external
-one and never becomes the reviewed target.
+`surface`, `ambiguities` — unchanged, to every independent design-review pass
+and to the scope audit that follows it. `scope identity` stays the external one
+and never becomes the reviewed target.
 
 The target remains evidence for review, never a source of authority. If a design-changing
 ambiguity appears, end the current review cycle and use `SCOPE CHECKPOINT`; do not let the
@@ -351,35 +351,26 @@ reviewer resolve it by extending the target.
 
 ## Design-review depth
 
-The single design review in step 3 runs at the depth routed under
-[risk-routed review depth](../../references/review-depth.md), from the caller's assessment
-where `$quest` passed one and from your own reading of the same four fields on a direct
-invocation. Judge the reference's fourth condition on the change's **intent**, using the
-security triggers in *Security-relevant changes require a threat model* above: no diff exists
-at design time, and a design that will touch a trust boundary is security-relevant before a
-line of it is written.
+The combined design-artifact set uses the bounded design-review protocol in
+[risk-routed review depth](../../references/review-depth.md), regardless of the
+caller's assessment. Select the first `gauntlet`-compatible lens for the design's
+shape under [review lenses](../../references/review-lenses.md). One valid
+independent pass is required. A defensible in-surface blocking finding buys one
+further valid independent pass over unchanged artifact bytes under a different
+lens, then the author resolves the collected findings. There is no third valid
+pass and no confirming prose review after an edit.
 
-`iterating` runs `$trial-loop` exactly as step 3 states. `single-pass` dispatches one
-reviewer pass instead, with that step's `challenge_args` and focus unchanged, and gives each
-finding its single disposition; a blocking finding escalates to `$trial-loop` at its ordinary
-budget under the reference's escalation rule. Select the first `gauntlet`-compatible lens for the
-design's shape under [review lenses](../../references/review-lenses.md), and name it with the
-routed depth. If an unchanged single-pass target escalates, use the different lens that reference
-requires for the new loop. The design set is **one** target, so this is one routing decision, not
-one per artifact.
+This exception belongs only to the design-artifact set. The assessment still
+selects the artifact lane and still routes `$quest`'s branch review. Every
+`$trial-loop` retains its two-pass default and three-pass ceiling.
 
-This is where the cost the routing exists to bound actually lands, and it is where a wrong
-route is cheapest to correct, because the escalation happens before any code exists.
-
-**Count the rounds.** Start from the caller's cumulative figure — `0/0` where there is
-none — pass it into the review as `prior_rounds`, and count a `single-pass` dispatch as one
-round the same way, since it cost a reviewer pass whether or not a loop wrapped it. When the
-phase ends, report the design-phase total in the form `$trial-loop` reports it, and hand it
-to the caller: `$quest` continues the count into the branch review, and a direct invocation
-is reporting to the operator who is paying for it. The figure used to be a sum across three
-separate loops that no single report stated — 11 rounds under two charters before any
-implementation existed, with every individual report accurate. One loop is now the whole
-design phase, and the carry is what keeps the branch review's count continuous with it.
+**Count the rounds and attempts separately.** Start from the caller's cumulative
+figure — `0/0` where there is none — and add one review round for each valid
+independent pass under this phase's one frozen charter. Report every dispatch
+attempt separately, including the one fault-recovery retry permitted for malformed
+output; a malformed attempt is not a valid pass and creates no additional retry
+budget. Hand the resulting round figure to the caller: `$quest` continues it into
+branch review, and a direct invocation reports it to the operator paying for it.
 
 ## 2. Inscribe — the implementation plan
 
@@ -524,10 +515,12 @@ Run relevant guardrails and commit the plan.
 
 ## 3. Adversarial-review the design
 
-One review, over the whole design set, run once the set is complete. The ADRs, the spec, and the
-full lane's plan are one change: they get one charter, one iteration budget, and one report — not
-separate targets each drawing a full budget nobody was totalling. That shape is what produced 13
-review rounds and a 1,469-line design before a line of implementation existed.
+One bounded review phase starts once the whole design set is complete. The ADRs,
+the spec, and the full lane's plan are one change: they get one frozen charter,
+one required independent pass, and at most one further independent pass — not
+separate targets each drawing a loop budget nobody was totalling. That shape is
+what produced 13 review rounds and a 1,469-line design before a line of
+implementation existed.
 
 ### Assemble the set
 
@@ -546,11 +539,9 @@ index-row edit is not a decision to challenge. Most designs record no ADR, so an
 set is the common case and reviews exactly the same way; there is no ADR-specific skip left
 to get wrong. Every set requires the spec. A `full-spec` set also requires the plan; a
 `light-spec` set must not contain one. A mismatch is a resume or routing defect: stop rather
-than reviewing whatever remains. Never invoke `$trial-loop` with a
-path that does not resolve — it appends a `CHARTER` block on every invocation, and under a
-charter an unresolvable target is a hard error naming the token, with `--out` suppressing
-both the artifact and the compact object, so the loop returns no verdict and stops as
-blocked.
+than reviewing whatever remains. Never dispatch a reviewer with a path that does not resolve.
+Under a charter an unresolvable target is a hard error naming the token, with `--out`
+suppressing both the artifact and compact object, so the phase stops as blocked.
 
 ### Measure the proportionality inputs
 
@@ -571,8 +562,8 @@ subject to the existing per-artifact right-sizing review.
 **Echo the lane's audit line before proceeding**, so a mis-evaluated predicate or unmeasured
 control leaves an inspectable trace:
 
-    design review: lane = full-spec; set = <paths>; design <n> lines vs implementation estimate <low>–<high>; ratio <n.n>x; depth = iterating | single-pass; lens = <name>
-    design review: lane = light-spec; set = <paths>; spec <words>/500 words and <lines>/60 lines; depth = iterating | single-pass; lens = <name>
+    design review: lane = full-spec; set = <paths>; design <n> lines vs implementation estimate <low>–<high>; ratio <n.n>x; protocol = bounded-independent; lens = <name>
+    design review: lane = light-spec; set = <paths>; spec <words>/500 words and <lines>/60 lines; protocol = bounded-independent; lens = <name>
 
 A full plan carrying no `Expected implementation size` line is a step 2 defect: derive the range
 from the plan's own file map and task list, write it into the plan, and say in the audit
@@ -580,7 +571,9 @@ line that you did.
 
 ### Run the review
 
-Run `$trial-loop` in file-list mode:
+Dispatch `$gauntlet` in a fresh worker using the bounded design-artifact recipe
+in [risk-routed review depth](../../references/review-depth.md). Use its
+single-pass JSON artifact, freshness, validation, and malformed-retry contract:
 
 - challenge_args: `<every path in the design set, space-separated>`
 - focus: `<selected review-lens focus> followed by this target-specific context:
@@ -638,28 +631,50 @@ Run `$trial-loop` in file-list mode:
   decision at greater length than the decision governs is a finding, and its remedy is also
   cutting.`
 
-### Exits
+### Route the passes
 
-If the loop reports blocked — including cap exhaustion at its iteration budget — stop as
-blocked per `$trial-loop`'s stop contract. The design does not go on to the scope audit.
+Before the first dispatch, record an ordered `git hash-object -- <design-set
+paths>` mapping. For every dispatch, record the phase's total attempts, valid
+passes, lens, and whether a malformed result consumed that pass's sole retry. A
+retry keeps the same target bytes and lens. If the retry is also malformed, stop
+as blocked; do not mint another attempt.
 
-A run the loop reports as **finished** is not that case, whatever its last verdict. The
-loop finishes on `approve`, and also on `needs-attention` where the only blocking findings
-left were ones it had already dispositioned as owned deferrals or rejected with evidence.
-The phase continues on either. Route on finished-versus-blocked, which the loop states
-outright; a last verdict of `needs-attention` never by itself means the design is
-unhardened.
+After the first valid artifact, apply [heed-counsel](../../references/heed-counsel.md)
+to determine which findings are defensible, without editing the design or
+recording final dispositions. If any defensible blocking finding has `surface:
+adjacent`, return `SCOPE CHECKPOINT` when interactive or park when unattended.
+Do not fix it, defer it, widen scope, or spend the optional second pass.
 
-Editing an ADR in the set to address a finding is legitimate — it is pre-merge on the design
-branch, and the immutability rule applies only once the ADR is merged.
+If no defensible in-surface blocking finding remains, close review after this
+one valid pass. If one does remain, assert the complete ordered hash mapping is
+unchanged, select the next compatible lens, and dispatch one fresh worker. Its
+brief carries the same charter and target context but none of the first pass's
+findings, verdict, or proposed remedies. Apply the same artifact validation and
+one-retry rule. A defensible adjacent blocker from this pass checkpoints or
+parks in the same way. There is no third valid pass.
+
+After the final valid pass, apply `heed-counsel` and the existing disposition
+vocabulary to every finding from the phase, then make accepted edits once. A
+repeated concern still gets one disposition per finding, but the later finding
+may cite the earlier disposition instead of duplicating its remedy. Every
+defensible in-surface blocking finding must be fixed or otherwise resolved
+before the scope audit; a `blocked` disposition stops here. Adjacent notes become
+public-safe follow-up candidates, and their scratch findings paths remain only
+in the local review report.
+
+Do not dispatch a confirming prose review after editing. Run the relevant
+guardrails and commit the resulting design artifacts, then continue to the scope
+audit. Editing an ADR in the set is legitimate because it is still pre-merge on
+the design branch; append-only immutability begins after merge.
 
 Carry every deferral — each entry with its owning record path or tracker issue — into the
-full lane's **plan**, or the light spec's **Scope**, whichever way the run ended, `approve`
-included. The loop discloses its deferrals on every exit, and the artifact `$forge` reads is
-where a later implementer meets them. Not the ADR: it merges append-only, and an entry there
-cannot be struck when its tracker closes. A light spec that cannot carry the deferral and remain
-complete within its caps returns to the scope and assessment checkpoint. Only a demonstrated
-complexity, hazard, or decomposition change can alter its lane; the overflow alone cannot.
+full lane's **plan**, or the light spec's **Scope**, whichever way the phase ended. The
+artifact `$forge` reads is where a later implementer meets it. Not the ADR: it merges
+append-only, and an entry there cannot be struck when its tracker closes. Carry the
+public-safe follow-up-candidates table in the phase report for the caller. A light spec that
+cannot carry a deferral and remain complete within its caps returns to the scope and
+assessment checkpoint. Only a demonstrated complexity, hazard, or decomposition change can
+alter its lane; the overflow alone cannot.
 
 ## 4. Scope audit
 

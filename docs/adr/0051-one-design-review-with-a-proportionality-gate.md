@@ -4,6 +4,13 @@
 
 Accepted (2026-09-01)
 
+> **Status note (2026-09-06; issue #323):** Rule 1's one design review is one
+> phase under one frozen charter: one valid independent pass, plus one further
+> different-lens pass over unchanged artifacts only when a defensible
+> in-surface blocker remains. After the final pass the author resolves every
+> finding, then proceeds to rule 5's scope audit without a confirming prose
+> review. No third valid pass is available.
+
 Refines [0050](0050-risk-routes-review-depth.md), whose rule 1 bound the depth routing to
 "`$spellcraft`'s ADR, spec, and plan reviews — routed per target". There is now one design
 target, so there is one route. Everything else in 0050 stands, and the two-pass budget

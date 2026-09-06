@@ -14,6 +14,13 @@ stays 2, for the reason it states: a pass that applied fixes always needs a conf
 pass. A single pass is a different shape of review — it never applies a fix and then
 exits, because the escalation rule below takes that case away from it.
 
+`$spellcraft`'s combined design-artifact set is the one call-site exception. It
+uses the single-pass dispatch and validation mechanics below, but not this
+routing rule or its escalation into `$trial-loop`. Its bounded protocol is one
+valid independent pass and at most one further valid pass over unchanged design
+artifacts. That is not a third general depth, and it changes no branch-review or
+loop budget.
+
 ## Deriving the depth
 
 Read the four assessment fields — blast radius, change hazards, complexity, decompose
@@ -83,7 +90,8 @@ finding cannot be `inferred`; and each count must equal its severity-derived or
 array-derived value. Rerun malformed output once, then stop as blocked. Never
 repair or infer a missing field.
 
-Every finding takes exactly one disposition from step 6's vocabulary —
+Outside the bounded design-artifact review below, every finding immediately
+takes exactly one disposition from step 6's vocabulary —
 `accepted-fixed`, `follow-up-candidate`, `deferred-tracked`,
 `rejected-with-evidence`, `blocked` — under [heed-counsel](heed-counsel.md), and
 a `deferred-tracked` disposition owes the same `docs/debt/` record on the same
@@ -94,7 +102,45 @@ findings path in the local report only. The pass's follow-up candidates,
 deferrals, suppressions, and `rejected-with-evidence` findings are disclosed
 exactly as a loop run discloses them.
 
-## Escalation — the single pass is refutable
+### Bounded design-artifact review
+
+For `$spellcraft`'s combined design set, dispatch the first pass with the first
+compatible lens selected under [review lenses](review-lenses.md). Validate its
+artifact with the single-pass checks above. Apply the evidence checks from
+[heed-counsel](heed-counsel.md) without editing or finally dispositioning the
+findings yet; this establishes which blocking findings are defensible without
+letting the second reviewer observe a response to the first.
+
+A defensible adjacent blocking finding refutes the frozen correctness surface.
+Return to `SCOPE CHECKPOINT` when interactive or park when unattended. Do not
+edit, defer, expand scope, or spend the optional second pass. Adjacent notes
+remain follow-up candidates under the existing disposition rule.
+
+When a defensible in-surface blocking finding remains, dispatch one fresh
+reviewer with no first-pass findings or verdict in its brief. Assert that every
+design artifact is byte-identical to the first pass's target, retain the same
+reviewer and frozen charter, and select the next compatible lens under
+[review lenses](review-lenses.md). A changed target blocks this route rather
+than turning the second pass into confirmation. There is no third valid pass.
+
+After the last valid pass, apply the existing disposition rules to all findings
+from the phase and make the accepted edits once. A repeated concern still gets
+one disposition per finding; its later occurrence may cite the earlier
+disposition rather than duplicate the remedy. Every defensible in-surface
+blocking finding must be fixed or otherwise resolved before the scope audit. A
+`blocked` disposition stops before that audit. Do not dispatch a confirming
+prose review after the edits.
+
+Each pass retains the existing one malformed-output retry: the original attempt
+plus one fault-recovery attempt with the same target and lens. A malformed
+attempt is not a valid independent pass and creates no additional retry budget.
+Report dispatch attempts separately from valid passes, and count only valid
+passes in the cumulative review-round figure.
+
+## Escalation — an ordinary single pass is refutable
+
+This section applies to every routed single pass except the bounded
+design-artifact review above.
 
 Inspect every blocking finding before escalation. If any is adjacent, it refutes
 the frozen correctness surface: return to `SCOPE CHECKPOINT` when interactive or

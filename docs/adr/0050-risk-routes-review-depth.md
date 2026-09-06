@@ -10,6 +10,12 @@ Accepted (2026-08-31)
 > `WORK:DIVINATION` block is replaced by that derivation where possible. Everything
 > else in this record stands as written.
 
+> **Amended by #323 (2026-09-06):** Rules 1 and 3 no longer route the combined
+> design-artifact set. That target uses its bounded independent-review protocol
+> regardless of assessment. Assessment routing still governs branch review,
+> and `$trial-loop` keeps its ordinary budget everywhere it is used. Everything
+> else in this record stands as written.
+
 Builds on [0049](0049-review-verdicts-gate-on-blocking-severity.md), which set the
 blocking line and the two-pass budget. That record governs what a pass costs and when
 a loop stops; this one governs whether a loop runs at all. Nothing in 0049 changes.

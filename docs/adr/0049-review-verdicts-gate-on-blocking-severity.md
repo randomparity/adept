@@ -21,6 +21,13 @@ zero defensible findings is replaced.
 > and routes to a scope checkpoint or unattended park; an adjacent note becomes
 > a follow-up candidate. An inferred trigger cannot support a blocking grade.
 
+> **Status note (2026-09-06; issue #323):** The combined design-artifact set
+> uses one valid independent review pass and, only when a defensible in-surface
+> blocker remains, one further pass over unchanged artifacts under a different
+> lens. The author then resolves findings without a confirming prose pass. This
+> is a design-target exception only: severity remains the blocking axis and
+> every `$trial-loop` keeps the two-pass default and three-pass ceiling.
+
 ## Context
 
 ADR 0011 ruled that "`approve` means the review found no defensible finding. Any
