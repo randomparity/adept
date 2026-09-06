@@ -66,6 +66,8 @@ still fails in `preflight()`, before any GitHub request.
   `review-publication-disposed:` sees an incomplete cleanup as no cleanup.
 - The exit guard that fails a zero-status run with a surviving body no longer applies to a body
   the undisposed record names; it still guards every unrecorded leak.
+- The helper now appends the ledger up to twice after the verified line rather than once, so the
+  strand named above has marginally more opportunity to occur. The failure mode is unchanged.
 
 ## Considered & rejected
 

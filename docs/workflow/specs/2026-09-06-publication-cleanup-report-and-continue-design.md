@@ -24,20 +24,19 @@ carry:
 ### The exit trap
 
 `finish_body_lifecycle` fails a zero-status run whose generated body survives, to catch a silent
-leak. Two changes:
+leak. One change, and it is in `dispose()` rather than in the trap: a body named in the
+`review-publication-undisposed:` record is not silent, so `dispose()` clears the tracked body path
+once that record is read back. Without this the trap's `return 1` would turn the reported run back
+into exit 1 — measured on bash 3.2.57, a trap returning 1 sets the exit status of an
+otherwise-successful script to 1. The trap itself is untouched.
 
-- A body named in the `review-publication-undisposed:` record is not silent, so `dispose()`
-  clears the tracked body path once that record is read back. Without this the trap's `return 1`
-  would turn the reported run back into exit 1 — measured on bash 3.2.57: a trap returning 1 sets
-  the exit status of an otherwise-successful script to 1.
-- The trap opens with `local exit_status` and `exit_status=$?` on separate lines. The bare
-  `local` is itself a successful command, so it sets `$?` to 0 before the assignment reads it:
-  the trap believes every run succeeded. Measured on the base commit, a failing run printed
-  `publish-forge-review: successful publication left its body behind` beside its real error.
-  `local exit_status=$?` on one line fixes it, because the expansion runs before `local` does.
-  This second change is an **independent** repair of a pre-existing false message, not something
-  this design requires; it is carried here only because it lands on the same trap the first change
-  edits, and the scope boundary is worth seeing rather than inferring.
+An adjacent defect in that trap is **deliberately not fixed here**: it opens with `local
+exit_status` and `exit_status=$?` on separate lines, and the bare `local` is itself a successful
+command, so it sets `$?` to 0 before the assignment reads it. Measured on the base commit, a
+failing run therefore printed `publish-forge-review: successful publication left its body behind`
+beside its real error. `local exit_status=$?` on one line would fix it, but it is a pre-existing
+false message with a different root cause, this design does not need it, and the scope audit held
+it out of the approved surface. It is reported as a follow-up instead.
 
 ### Consumers
 
@@ -80,8 +79,9 @@ lands.
 
 ## Testing
 
-Three contracts in `tests/fixtures/quest/publish-forge-review-test.sh`; the plan carries the case
-text.
+Two contracts in `tests/fixtures/quest/publish-forge-review-test.sh`; the plan carries the case
+text. One rewrites `PFR-6`'s third block and one is a new case; every other case, `PFR-4`
+included, is untouched.
 
 - **Partial failure** (`PFR-6`'s third block, which today pins the old nonzero contract for
   `FAIL_TRASH_ON=summary.md` and is therefore changed deliberately, not deleted or weakened):
@@ -91,13 +91,9 @@ text.
 - **Total failure** (a new case): the run completes, no disposed record, one undisposed record
   owning all three paths in owned order, every path on disk, and no false `successful publication
   left its body behind`.
-- **Exit-guard status** (`PFR-4`): a pre-publication failure that retains the body does not print
-  that message. The guard's positive direction — a zero-status run with an unrecorded surviving
-  body — is unreachable without new fault-injection machinery, so it is verified by controlled
-  fault during implementation rather than by a permanent fixture mode.
 
-The assertions carrying the new contract are verified to bite by the three inversions the plan's
-Task 1 step 9 prescribes — each applied once, red observed, reverted.
+The assertions carrying the new contract are verified to bite by the two inversions the plan's
+Task 1 step 7 prescribes — each applied once, red observed, reverted.
 
 ## Guardrails
 

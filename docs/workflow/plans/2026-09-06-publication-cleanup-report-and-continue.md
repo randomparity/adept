@@ -16,8 +16,8 @@ fake `gh`/`trash`/`gio` binaries on `PATH`.
 Design: [spec](../specs/2026-09-06-publication-cleanup-report-and-continue-design.md),
 [ADR 0056](../../adr/0056-publication-cleanup-reports-and-continues.md).
 
-Expected implementation size: 155–225 changed lines (M) — from the file map below: ~50 in the
-helper, ~63 in the behaviour suite, ~55 in `skills/quest/SKILL.md` (five multi-sentence runs
+Expected implementation size: 150–215 changed lines (M) — from the file map below: ~48 in the
+helper, ~59 in the behaviour suite, ~55 in `skills/quest/SKILL.md` (five multi-sentence runs
 replaced plus step 8's closing sentence), ~8 in `skills/forge/SKILL.md`, 1 in the manifest.
 
 ## Global Constraints
@@ -43,7 +43,7 @@ replaced plus step 8's closing sentence), ~8 in `skills/forge/SKILL.md`, 1 in th
 
 | File | Created/changed | Answerable for |
 |---|---|---|
-| `skills/quest/scripts/publish-forge-review` | changed | best-effort disposal, the two ledger records, the exit-trap status |
+| `skills/quest/scripts/publish-forge-review` | changed | best-effort disposal and the two ledger records |
 | `tests/fixtures/quest/publish-forge-review-test.sh` | changed | pinning the new failure contract and the unchanged happy path |
 | `skills/quest/SKILL.md` | changed | the `$quest` steps 5 and 8 record checks, step 8's closing forge-scratch sentence, and the recovery predicates |
 | `skills/forge/SKILL.md` | changed | the retention-suppression clause that reads the record |
@@ -84,11 +84,6 @@ failure after that line leaves true and fatal, unchanged by this task.
   three on stderr. Case: new `case_total_disposal_failure_completes_publication` (`PFR-20`).
   Expected red: `PFR-20 … total disposal failure did not complete the publication`, because the
   unchanged helper exits 1. Green: `just test publish-forge-review`.
-- **The exit guard reports the status the run actually had.** Mode: `focused-test`. Contract: a
-  pre-publication failure that retains the body does not print `successful publication left its
-  body behind`. Case: `case_comment_failures_never_retry` (`PFR-4`), first block. Expected red:
-  `PFR-4 … failure path claimed a successful publication`, because the unchanged trap reads `$?`
-  as 0. Green: `just test publish-forge-review`.
 
 ### Steps
 
@@ -167,30 +162,10 @@ failure after that line leaves true and fatal, unchanged by this task.
    }
    ```
 
-4. In `case_comment_failures_never_retry`, in the first block, replace
+4. Confirm the expected red: `just test publish-forge-review` from the worktree root. Expect a
+   nonzero exit and the two `FAIL` lines named in the Verification inventory above.
 
-   ```sh
-   		! assert_retained "$name"; then
-   		fail "$name" 'pre-write comment failure did not retain evidence without writing'
-   ```
-
-   with
-
-   ```sh
-   		! assert_retained "$name" ||
-   		grep -q 'successful publication left its body behind' "$REPO/error"; then
-   		fail "$name" 'failure path claimed a successful publication'
-   ```
-
-5. Confirm the expected red: `just test publish-forge-review` from the worktree root. Expect a
-   nonzero exit and the three `FAIL` lines named in the Verification inventory above.
-
-6. In `skills/quest/scripts/publish-forge-review`, replace the first two lines of
-   `finish_body_lifecycle`'s body, `local exit_status` and `exit_status=$?`, with the single line
-   `local exit_status=$?`. The bare `local` is itself a successful command and sets `$?` to 0
-   before the separate assignment reads it; the combined form expands `$?` before `local` runs.
-
-7. In the same file, replace the whole `dispose()` function, from `dispose() {` through its
+5. In `skills/quest/scripts/publish-forge-review`, replace the whole `dispose()` function, from `dispose() {` through its
    closing `}`, with:
 
    ```sh
@@ -231,20 +206,19 @@ failure after that line leaves true and fatal, unchanged by this task.
    }
    ```
 
-8. Confirm the expected green: `just test publish-forge-review`. Expect exit 0 and
+6. Confirm the expected green: `just test publish-forge-review`. Expect exit 0 and
    `20 passed, 0 failed`.
 
-9. Verify the new assertions bite, reverting after each. (a) Change
+7. Verify the new assertions bite, reverting after each. (a) Change
    `[ "${#remaining[@]}" -gt 0 ] || return 0` to `return 0`; `just test publish-forge-review` must
-   fail `PFR-6` and `PFR-20`. (b) Restore `finish_body_lifecycle`'s two-line form; the run must
-   fail `PFR-4`. (c) Change the disposed append to
+   fail `PFR-6` and `PFR-20`. (b) Change the disposed append to
    `append_ledger "review-publication-disposed: ${disposed[*]} ${remaining[*]}"` guarded by a
    non-empty `remaining`; the run must fail `PFR-6` with `disposed record named a path that was
    retained`.
 
-10. Run `just commit-check`. Expect exit 0.
+8. Run `just commit-check`. Expect exit 0.
 
-11. Commit: `fix(quest): report and continue when publication cleanup fails`.
+9. Commit: `fix(quest): report and continue when publication cleanup fails`.
 
 ### Acceptance criteria
 
@@ -398,3 +372,17 @@ design and Task 1 commits, so the pull request is not opened until Task 2 step 8
 0022's gate compares the tree to `BASE_SHA`, not commit by commit. No `$trial-loop` deferral
 exists yet; any this branch's review disposes of is recorded here with its owning record path or
 tracker issue before the branch ships.
+
+### Deferrals carried from review
+
+- **A ledger append or readback failure after `review-publication-verified:` still parks
+  permanently.** Raised by the scope audit over this design set. Valid and independent: it has a
+  different root cause from #306's disposer failure, closing it means revisiting the
+  publication-recovery predicates ADR 0048 deliberately drew, and this change neither introduces
+  it nor changes its failure mode — it only adds a second ledger append after the verified line.
+  Owner: tracker issue (this repository keeps no `docs/debt/`); see the completion report for the
+  filed number.
+- **`finish_body_lifecycle`'s `local exit_status` / `exit_status=$?` split makes every failing run
+  print `successful publication left its body behind`.** Raised by the scope audit, which held it
+  out of the approved surface as adjacent work. Cut from this change rather than fixed. Owner:
+  tracker issue; see the completion report for the filed number.
