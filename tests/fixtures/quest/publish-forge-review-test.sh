@@ -164,7 +164,7 @@ if ! grep -q '^review-publication-verified:' "$FAKE_LEDGER"; then
 	printf 'trash-before-verified\n' >>"$FAKE_STATE/events"
 fi
 printf 'trash %s\n' "$name" >>"$FAKE_STATE/events"
-if [ "${FAIL_TRASH_ON:-}" = "$name" ]; then
+if [ "${FAIL_TRASH_ON:-}" = "$name" ] || [ "${FAIL_TRASH_ON:-}" = all ]; then
 	exit 1
 fi
 mv "$path" "$FAKE_STATE/trash/$name"
@@ -444,7 +444,7 @@ case_readback_rejects_unverified_comments() {
 }
 
 case_ledger_and_disposal_failures_retain_paths() {
-	local name='PFR-6 invalid ledger and disposal failures retain exact evidence'
+	local name='PFR-6 invalid ledger and disposal failures retain exact evidence' disposed_line
 	new_case
 	rm "$LEDGER"
 	mkdir "$LEDGER"
@@ -466,11 +466,53 @@ case_ledger_and_disposal_failures_retain_paths() {
 	fi
 	new_case
 	run_helper required "$REVIEW" env GH_MODE=success FAIL_TRASH_ON=summary.md
-	if [ "$STATUS" -eq 0 ] || [ -e "$REVIEW" ] || [ ! -f "$SUMMARY" ] ||
-		! body_file >/dev/null || ! grep -q 'review-publication-verified' "$LEDGER" ||
-		grep -q 'review-publication-disposed' "$LEDGER" ||
-		! grep -qF "$SUMMARY" "$REPO/error" || ! grep -qF "$(body_file)" "$REPO/error"; then
-		fail "$name" 'partial disposal did not retain and report the remaining paths'
+	disposed_line=$(grep '^review-publication-disposed: ' "$LEDGER") || disposed_line=''
+	if [ "$STATUS" -ne 0 ] ||
+		[ "$OUTPUT" != 'https://github.com/acme/widgets/pull/42#issuecomment-73' ] ||
+		[ -e "$REVIEW" ] || [ ! -f "$SUMMARY" ] || body_file >/dev/null ||
+		! grep -q '^review-publication-verified:' "$LEDGER" ||
+		! grep -qxF "review-publication-undisposed: $SUMMARY" "$LEDGER" ||
+		! grep -qF "$SUMMARY" "$REPO/error"; then
+		fail "$name" 'partial disposal did not report a completed publication'
+		return
+	fi
+	case $disposed_line in
+	*"$SUMMARY"*)
+		fail "$name" 'disposed record named a path that was retained'
+		return
+		;;
+	"review-publication-disposed: $REVIEW "*.publish-forge-review.*) ;;
+	*)
+		fail "$name" 'partial disposal did not record the paths it disposed'
+		return
+		;;
+	esac
+	ok "$name"
+}
+
+case_total_disposal_failure_completes_publication() {
+	local name='PFR-20 total disposal failure completes the publication' body undisposed
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=success FAIL_TRASH_ON=all
+	body=$(body_file) || body=''
+	undisposed=$(grep -c '^review-publication-undisposed: ' "$LEDGER") || undisposed=0
+	if [ "$STATUS" -ne 0 ] ||
+		[ "$OUTPUT" != 'https://github.com/acme/widgets/pull/42#issuecomment-73' ] ||
+		[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] || [ -z "$body" ] ||
+		! grep -q '^review-publication-verified:' "$LEDGER" ||
+		grep -q '^review-publication-disposed:' "$LEDGER" ||
+		[ "$undisposed" != 1 ]; then
+		fail "$name" 'total disposal failure did not complete the publication'
+		return
+	fi
+	if ! grep -qxF "review-publication-undisposed: $REVIEW $SUMMARY $body" "$LEDGER"; then
+		fail "$name" 'undisposed record did not own every path in order'
+		return
+	fi
+	if ! grep -qF "$REVIEW" "$REPO/error" || ! grep -qF "$SUMMARY" "$REPO/error" ||
+		! grep -qF "$body" "$REPO/error" ||
+		grep -q 'successful publication left its body behind' "$REPO/error"; then
+		fail "$name" 'warning did not name every retained path without a false leak report'
 		return
 	fi
 	ok "$name"
@@ -911,6 +953,7 @@ case_publication_modes
 case_comment_failures_never_retry
 case_readback_rejects_unverified_comments
 case_ledger_and_disposal_failures_retain_paths
+case_total_disposal_failure_completes_publication
 case_markers_stay_payload_and_summary_markers_fail
 case_review_without_final_newline_keeps_outer_sentinel_parseable
 case_platform_disposers_are_deterministic
