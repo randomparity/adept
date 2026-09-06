@@ -85,8 +85,8 @@ four fields from the live issue and repository as before. In either case, re-che
 assessment against the issue body. Never use divination content to fill any of the frozen charter's
 eight authority fields; only the external sources and decisions listed below can do that.
 
-The assessment stays advisory for scope and becomes load-bearing for review depth and artifact
-lane. Route this run's review depth under
+The assessment stays advisory for scope and becomes load-bearing for review depth, artifact
+lane, and the fixed design denominator. Route this run's review depth under
 [risk-routed review depth](../../references/review-depth.md). Derive `single-pass` or
 `iterating` from the four fields now, record it with the tracking metadata below, and carry it to
 step 6. A successful live derivation is a present assessment; failure to derive a complete
@@ -97,8 +97,17 @@ Derive and record the artifact lane beside the classification: `trivial-bugfix` 
 revalidated `governed-small-change` use `no-spec`; a `non-trivial` change uses
 `light-spec` only when complexity is `S` or `M` and change hazards are exactly `none`;
 everything else uses `full-spec`. Because public API or contract work is a change hazard, it
-never enters the light lane. If neither validated persisted evidence nor the live derivation can
-establish complexity and hazards, route `full-spec`.
+never enters the light lane. A run entering `light-spec` or `full-spec` requires a validated
+complexity before design: map `S` to 100, `M` to 250, and `L` to 1000 changed lines. This is the
+fixed design denominator, derived from the assessment rather than added to it. If neither
+validated persisted evidence nor the live derivation can establish `S`, `M`, or `L`, return to
+`SCOPE CHECKPOINT` before writing a design artifact; never guess a band or use `full-spec` to
+hide the missing denominator.
+
+Treat a caller-supplied or persisted denominator as comparison evidence only. Recompute the
+mapping from the validated complexity and require the number, band, and public-safe provenance
+to agree before reuse. A mismatch returns to `SCOPE CHECKPOINT`; the plan cannot reconcile it.
+For `no-spec`, record the denominator as `not-applicable` because no design ratio is measured.
 
 **A lone quest never splits its own issue.** You claim one issue number and create one branch for
 it, so a `split` decompose verdict is not yours to act on. It is the caller's: `$campaign` gates
@@ -192,9 +201,17 @@ complete approval packet parks there. This gate also applies to a trivial bugfix
 change that will skip step 3; it freezes scope without creating a design artifact.
 
 Also retain the tracking metadata (blast radius, change hazards, complexity,
-decompose verdict, routed review depth, classification, artifact lane -- plus the decision
-evidence and acceptance criteria for a `governed-small-change`) and read
-everything back before proceeding.
+decompose verdict, routed review depth, classification, artifact lane, and `design denominator:
+<100 | 250 | 1000> changed lines (<S | M | L>) — <public-safe assessment provenance>` -- or
+`not-applicable (no-spec)` -- plus the decision evidence and acceptance criteria for a
+`governed-small-change`) and read everything back before proceeding. The denominator is tracking
+metadata beside the eight-field charter, not a ninth authority field or a new
+`WORK:DIVINATION` field.
+
+If live scope evidence materially changes after this freeze and changes the validated complexity,
+return to `SCOPE CHECKPOINT` and start a new design cycle with a new scope record. Never resize
+the current cycle's denominator retroactively. A plan estimate or a long design is not scope
+evidence and cannot trigger re-sizing.
 
 Keep every public annotation to the minimum its fields need: public-safe source
 labels for provenance, never secrets, auth headers, host paths, hostnames, IPs,
@@ -270,9 +287,12 @@ still happen.
 
 ## 3. Design
 
-Pass the artifact lane to `$spellcraft` as routing evidence outside the charter:
+Pass the artifact lane and fixed denominator to `$spellcraft` as routing evidence outside the
+charter:
 
 artifact lane: light-spec | full-spec
+design denominator: 100 | 250 | 1000 changed lines (S | M | L)
+denominator provenance: <exact public-safe source recorded in WORK:SCOPE>
 
 Then pass the frozen charter exactly as follows:
 

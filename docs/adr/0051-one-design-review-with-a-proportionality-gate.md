@@ -11,6 +11,14 @@ Accepted (2026-09-01)
 > finding, then proceeds to rule 5's scope audit without a confirming prose
 > review. No third valid pass is available.
 
+> **Status note (2026-09-06; issue #324):** Rule 3's denominator is now fixed
+> before design by mapping the validated assessment complexity: `S = 100`,
+> `M = 250`, and `L = 1000` changed lines. The complete design set, including
+> ADRs in either artifact lane, is divided by that number; the plan's estimate
+> remains informational. The unrounded ratio is a note from 2x through 3x
+> inclusive and blocking above 3x. Light specs also retain their independent
+> 500-word and 60-line caps. This adds no absolute ceiling.
+
 Refines [0050](0050-risk-routes-review-depth.md), whose rule 1 bound the depth routing to
 "`$spellcraft`'s ADR, spec, and plan reviews — routed per target". There is now one design
 target, so there is one route. Everything else in 0050 stands, and the two-pass budget
