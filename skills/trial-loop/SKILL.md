@@ -65,7 +65,10 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   argument prefix; neither the selector nor the charter block participates in its target-and-flag
   hash.
 - `focus`: optional focus text appended after the target arguments. This is
-  also part of the supplied challenge arguments — challenge extracts it.
+  also part of the supplied challenge arguments — challenge extracts it. When a caller uses a
+  named [review lens](../../references/review-lenses.md), resolve the preset and compose any
+  target-specific context before iteration 1. Keep that lens and composed focus unchanged for
+  every iteration, including the confirming pass; a loop does not select a new angle per pass.
 - `iteration_budget`: optional caller-supplied cycle cap. **Omission means 2 — one
   fixing pass and one confirming pass — and the ordinary ceiling is 3.** The floor is
   2 because a pass that applied fixes always needs a confirming pass.
@@ -84,8 +87,9 @@ honors the caller's path, the loop reads a file that is never written and dead-e
   loop at all. That routing chooses whether the loop runs; it never chooses this budget.
   A run this skill receives is `iterating` by definition and starts at 2 — including a
   run a caller escalated to after a single pass returned a blocking finding. That pass
-  belongs to the caller and is **not** iteration 1 here: it reviewed a different state of
-  the target, and the charter and the disclosure obligations both begin with this run.
+  belongs to the caller and is **not** iteration 1 here: it was an independent review of
+  the unchanged target, so the caller selects a different lens before this run. The charter
+  and disclosure obligations both begin with this run, whose lens then stays fixed.
 
   This inverts the earlier rule, which defaulted to 5 and let a caller only lower it.
   The reason is measured rather than stylistic: review quality saturates after roughly
@@ -725,7 +729,7 @@ trust boundaries and applies its own finding bar; selecting it changes coordinat
 Report the **run**, not the last cycle: the number of cycles, each cycle's iteration
 count, and for every charter change what changed and who authorized it — otherwise two
 rescopes read as three short clean cycles rather than the full budget per cycle they
-were. Name the selected reviewer.
+were. Name the selected reviewer and named lens, when one was supplied.
 
 Report the change's cumulative total on its own line, in the form the next loop takes
 back as its `prior_rounds`:

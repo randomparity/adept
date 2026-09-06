@@ -89,9 +89,10 @@ support, because no pass would ever review the fix.
 
 Escalate instead. Record the escalation and the finding that caused it, then run
 `$trial-loop` against the same target at its ordinary budget, starting at iteration 1.
-The single pass is **not** one of that run's iterations: it reviewed a different state
-of the target, and the loop's charter and its disclosure obligations both belong to the
-run that owns them.
+The single pass is **not** one of that run's iterations: it is an independent review run,
+and the loop's charter and disclosure obligations belong to the run that owns them. No pass
+changed the target before this escalation, so select a different focus lens under
+[review lenses](review-lenses.md). The loop then keeps that lens for every iteration.
 
 This is not a risk signal buying passes, which ADR 0049 forbids. A blocking finding is
 a defect a reviewer found and defended, not a forecast of what might go wrong, and the

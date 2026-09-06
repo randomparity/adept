@@ -508,23 +508,25 @@ other condition that has since stopped holding. Name the routed depth in the tra
 what moved it if it changed.
 
 Set the issue to `status:in-review` (single-active swap), then review the branch at that depth
-with this focus:
+with the first `gauntlet`-compatible lens selected for the target shape under
+[review lenses](../../references/review-lenses.md). Append the scope-audit comparison below to
+the preset as target-specific context. Name the selected lens beside the routed depth in the
+transcript. This broad branch review retains the existing `gauntlet` route; the Security pass
+below retains the `detect-evil` route and its `security` lens.
 
-> Focus on auth, permissions, data loss or corruption, rollback, idempotency, races, empty or
-> malformed inputs, degraded dependencies, compatibility, migrations, observability, and whether
-> the chosen approach is simpler or safer than viable alternatives.
-
-On `iterating`, run `$trial-loop --base <BASE_BRANCH> <that focus>`. On `single-pass`, dispatch
-the one reviewer pass the reference specifies, with the same `--base` and the same focus, and
-give each finding its single disposition. Address every defensible finding and commit after each
-accepted fix, on either route.
+On `iterating`, run `$trial-loop --reviewer gauntlet --base <BASE_BRANCH> <composed focus>`. On
+`single-pass`, dispatch the one `gauntlet` pass the reference specifies, with the same `--base`
+and composed focus, and give each finding its single disposition. Address every defensible
+finding and commit after each accepted fix, on either route.
 
 **A blocking finding on a single pass escalates rather than being fixed in place.** Record the
 escalation and the finding that caused it, then run the `$trial-loop` invocation above against
 the same branch at its ordinary budget, starting at iteration 1 — the single pass is not one of
-that run's iterations. From that point this step reads exactly as it does for a run routed
-`iterating` at step 1. A `single-pass` review that returns `approve` carrying only notes is a
-completed review, and step 8's summary records it as `exit: none` with `iterations: 1`.
+that run's iterations. No pass changed the target, so replace the first lens with the different
+independent-review lens selected by the reference before starting the loop. From that point this
+step reads exactly as it does for a run routed `iterating` at step 1. A `single-pass` review that
+returns `approve` carrying only notes is a completed review, and step 8's summary records it as
+`exit: none` with `iterations: 1`.
 
 **Carry the issue's cumulative review-round figure through every run here.** Seed it with
 the design phase's total where `$spellcraft` reported one, `0/0` otherwise, pass it to each
@@ -623,10 +625,11 @@ than the open queue). Non-blocking: `needs-attention` is work to do, never a
 reason to park.
 
 Dispatch it the way `$trial-loop` dispatches its reviewer -- a subagent running
-`$detect-evil --json --out <path> --base <BASE_BRANCH>`, artifact on a
-scratchpad path outside the repo tree. Invoked bare it returns full markdown
-inline: a findings payload in your context at step 6 of 9, the cost this
-dispatch exists to avoid. Two properties make it safe:
+`$detect-evil --json --out <path> --base <BASE_BRANCH> <security lens focus>` under
+[review lenses](../../references/review-lenses.md), artifact on a scratchpad path outside the
+repo tree. Keep the existing `detect-evil` route: a focus string named `security` is not a reason
+to invoke `gauntlet`. Invoked bare it returns full markdown inline: a findings payload in your
+context at step 6 of 9, the cost this dispatch exists to avoid. Two properties make it safe:
 
 - **A path unique to this run** -- embed the issue number and branch name.
   `$campaign` runs up to five `$quest` subagents in parallel, and a fixed
