@@ -828,8 +828,10 @@ preserved `delivered-head-sha:`, preserved `review-payload:`, and
 that URL into step 9. `$return-to-town` needs no forge-scratch cleanup after a
 `review-publication-disposed:` record that owns every path; after a
 `review-publication-undisposed:` record the paths it names are still in the
-private workspace, so report the incomplete cleanup in the private completion
-report without naming the paths publicly. They survive only as long as the run's
+private workspace. Report the incomplete cleanup in the private completion
+report by naming the condition and the ledger record that holds the paths, never
+the paths themselves -- a completion report is read by a caller that writes
+public annotations. They survive only as long as the run's
 checkout does -- a worktree teardown removes them along with the ledger -- and
 removing them sooner is the operator's. Say why in that report: a retained
 `REVIEW_SUMMARY` occupies the fixed path a later step 8 refuses to overwrite, so

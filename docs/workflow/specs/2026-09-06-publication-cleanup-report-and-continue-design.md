@@ -77,6 +77,14 @@ to the change:
   compensating disclosure. Neither reaches a public annotation, which is deliberate: the paths
   are absolute host paths and the step-9 hand-off is a public comment.
 
+- **The private ledger as republication authority.** Both closing records are read by `$quest`
+  and `$forge` as proof a publication already happened, so the ledger now gates republication as
+  well as recording it. Its controls are unchanged and stated here because the change raises what
+  they carry: `dispose()` is the only writer of either record, it writes only after the verified
+  line, and `append_ledger`'s whole-line tail readback is what stops a truncated or malformed
+  record from being accepted. The ledger is a mode-0600 regular file the helper validates before
+  writing.
+
 Out of scope: concurrent publishers (ADR 0048 already records that the GitHub issue-comment API
 offers no atomic create-if-absent), and the disposer's own guarantees about where a trashed file
 lands.
