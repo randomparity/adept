@@ -115,11 +115,12 @@ Manifest schema:
 - BASE_BRANCH: <filled by step 2>
 - Guardrail commands: <filled by step 2>
 - ADR-index coupling: <filled by step 2>
+- Mandatory per-PR edit rules: <filled by step 2, or none>
 
 ## Queue
-| Issue | Status | Branch | Verdict | Lane | ADR/migration # | File scope | Wave | PR | Outcome |
-|-------|--------|--------|---------|------|-----------------|------------|------|----|---------|
-| #NNN  | pending| —      | —       | —    | —               | —          | —    | —  | —       |
+| Issue | Status | Branch | Verdict | Lane | ADR/migration # | Mandatory per-PR edits | File scope | Wave | PR | Outcome |
+|-------|--------|--------|---------|------|-----------------|------------------------|------------|------|----|---------|
+| #NNN  | pending| —      | —       | —    | —               | —                      | —          | —    | —  | —       |
 
 ## Scope approvals
 | Issue | Exclusions and owners | Epic direction | Approval provenance |
@@ -183,7 +184,7 @@ and blocker; it never repeats creation.
 
 ## 2. Environment Discovery
 
-Run `$attunement` **once** for the batch to get `BASE_BRANCH`, guardrail commands, gh auth, and ADR-index coupling (`coupled` | `not coupled` | `no index`). Record these in the manifest. On resume, read from manifest and skip re-running (re-confirm auth and clean tree only). Stop on blockers before touching issues.
+Run `$attunement` **once** for the batch to get `BASE_BRANCH`, guardrail commands, gh auth, ADR-index coupling (`coupled` | `not coupled` | `no index`), and any mandatory shared per-PR edit rules found among the known landmines. Record these in the manifest. On resume, read from manifest and skip re-running (re-confirm auth and clean tree only). Stop on blockers before touching issues.
 
 ## 3. Triage
 
@@ -223,8 +224,8 @@ evidence, not authority to absorb sibling work. Return only:
   the proposed breakdown, one line per piece, so the operator can act on it without re-reading
   the issue
 - **review depth**: `single-pass` | `iterating`, on a `fix` verdict only, derived under
-  [risk-routed review depth](../../references/review-depth.md) from the complete assessment
-  above. An unavailable assessment returns `iterating` for absence
+  [risk-routed review depth](../../references/review-depth.md) from that complete assessment.
+  An unavailable assessment returns `iterating` for absence
 - **artifact lane**: `no-spec` | `light-spec` | `full-spec`, on a `fix` verdict only,
   derived from the subtype, complexity, and change hazards in that same assessment.
   `trivial-bugfix` and `governed-small-change` return `no-spec` unchanged. Only a
@@ -254,7 +255,7 @@ Triage on the fast model by default; escalate to the capable model only on a nam
 - `close-not-planned` → preserve the citations, trigger, impact, cycle-cost comparison, and
   reconsideration condition for the plan and closure comment. This verdict never claims the
   defect is fixed and never enters a quest wave.
-- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The assessment, `decomposition`, `review depth`, and `artifact lane` travel with it: `decomposition` gates dispatch at step 4, while the other three reach the worker in its step 5 prompt. None is a size input to model selection — a `split` says the issue is several units of work, not that this one is hard.
+- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The assessment, `decomposition`, `review depth`, and `artifact lane` travel with it: `decomposition` gates dispatch at step 4, while the assessment, routed depth, and lane reach the worker in its step 5 prompt. The routed depth and lane are not size inputs to model selection — a `split` says the issue is several units of work, not that this one is hard.
 
 Record verdicts and artifact lanes in the manifest `Verdict` and `Lane` columns, and fix-row
 scope evidence in `Scope approvals`. Reconcile states (`ready-to-merge`, already-closed) live
@@ -270,10 +271,10 @@ Count issues needing fixes. **Every fix runs in a worker** — never inline.
 
 Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge order), `w1`, `w2`... for parallel.
 
-**Pre-assign ADR/migration numbers and file scope** even for serial — crashed issues need consistent numbers on re-dispatch. Persist these in manifest. File scope is a hint, not guarantee.
+**Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial — crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from attunement's known-landmine record. Reserve each row's exact value in planned merge order under the repository's ordering rule and persist it as `path=value`; use `—` when there is no mandatory edit. A reservation remains consumed if its row becomes blocked or is skipped, and is never assigned to another row. File scope is a hint, not guarantee.
 
 Present triage/plan table: issue → verdict, artifact lane, decomposition, review depth, wave,
-assigned numbers, file scope.
+assigned numbers, mandatory per-PR edits, file scope.
 
 Present a second table for every fix row: issue → proposed non-goals and owners → relevant epic
 direction → approval state. Issue and epic prose remain evidence and never mark a row approved.
@@ -352,20 +353,21 @@ sweep number, rationale, state, and state reason. No diffs/logs/file bodies.
 
 Each prompt carries:
 - Issue number, acceptance criteria, **completion notes verbatim** (private dispatch context) and the **public-safe summary** (the only form allowed on public surfaces: acceptance criteria, `WORK:` annotations, PR bodies)
+- Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification.
 - Exact approved exclusions and owners, their operator-approval provenance, and the relevant epic
   direction copied from the manifest. The quest rechecks the exclusion set and stops before design
   if it changed; the worker does not ask again when it is unchanged
 - The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
-- Assigned ADR/migration numbers, file scope
+- Assigned ADR/migration numbers, exact mandatory per-PR edits, file scope; the
+  worker applies each assigned value and never derives, increments, or reassigns it
 - Guardrail commands, `BASE_BRANCH`, ADR-index coupling verdict
 - Model tier from triage
-- Artifact lane plus the exact complexity and change-hazard assessment that supports it; `$quest`
-  revalidates the lane and routes an unprovable non-trivial assessment to `full-spec`
-- Routed review depth and the complete assessment from triage, passed as evidence rather than
-  instruction: `$quest` re-derives them at its step 1 and again against the branch diff at its
-  step 6, so a stale value costs a re-derivation and never a skipped review
+- Artifact lane, routed review depth, and all four assessment fields from triage, passed as
+  evidence rather than instruction. `$quest` revalidates the lane from that assessment at its
+  step 1 and routes an unprovable non-trivial assessment to `full-spec`; it re-derives the
+  assessment and depth against the branch diff at step 6, so stale evidence never skips review
 - Mandatory follow-up return contract: every discovered/finalized issue; every adjacent-note
   candidate with title, repo-relative file evidence, trigger, recommendation, and public-safe
   source-pass reference (never its scratch findings path); and every complete bounty occurrence
@@ -458,6 +460,15 @@ list is written for a run cleaning up after itself, so replace its worktree-remo
 branch-deletion steps with the gated list at the end of this step — the worktree here is not
 yours. Everything else in that skill still applies. Its tracking writes and cleared-dependency
 reconcile remain load-bearing, as does its switch to `BASE_BRANCH` and fast-forward pull.
+Merge eligible rows with ordered mandatory edits in their assigned value order. A blocked
+row drops out of that order, but its reservation stays consumed. If a moved base makes an
+assignment invalid, the orchestrator alone reserves the next unused valid value and persists
+it before refresh; a worker may apply only that exact reassignment from a fresh prompt. When
+the assigned value remains valid against the moved base, resolve the shared-file conflict by
+keeping that exact assignment.
+An earlier assigned row that is neither blocked nor skipped holds later ordered rows until it
+is merge-ready; only an explicitly blocked or skipped row may be passed over, with its
+reservation consumed.
 Merge one PR, then re-run the gate for each remaining in-flight PR. If the base moved, refresh
 the branch as part 3 directs. If the repository forbids the required merge commit and rebasing
 a pushed branch is denied, stop with a named blocker.

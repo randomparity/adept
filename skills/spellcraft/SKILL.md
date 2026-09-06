@@ -579,8 +579,9 @@ single-pass JSON artifact, freshness, validation, and malformed-retry contract:
 - focus: `<selected review-lens focus> followed by this target-specific context:
   This is one design reviewed as one artifact set in the <light-spec | full-spec>
   lane — ADR(s), specification, and the full lane's implementation plan. Read the present
-  artifacts together and challenge them together: a defect that crosses files is one finding,
-  not one per file, and a spec defect inherited by a present plan is reported once against both.
+  artifacts together and challenge them together: a defect that
+  crosses files is one finding, not one per file, and a spec defect inherited by a present plan
+  is reported once against both.
 
   Decisions (each ADR in the set): the soundness of the decision under its stated context;
   the completeness and honesty of the "Considered & rejected" list — alternatives dismissed
@@ -689,8 +690,9 @@ local report only; the payload carried into a quest handoff remains public-safe.
 The design phase ends with exactly one `$oathbind` pass over the reviewed set. This skill
 does not invoke it: `$quest` step 4 owns the report path, the `.agent/` ignore check, and
 the dispatch, and it runs immediately after this review. A direct invocation of this skill
-runs no audit; an operator who wants one invokes `$oathbind` themselves, with the same
-frozen charter and the paths this review just hardened.
+runs no audit; an operator who wants one invokes `$oathbind` themselves, with the same frozen
+charter, the artifact lane as routing evidence outside that charter, and the paths this review
+just hardened.
 
 One pass is the whole of it, and that is a property of what the audit can produce rather
 than a budget imposed on it. `$oathbind` is read-only and audits authority, so every remedy
