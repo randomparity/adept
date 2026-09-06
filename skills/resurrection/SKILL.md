@@ -13,7 +13,10 @@ actively working the same repo. Read → plan → one confirmation → apply.
 1. **Resolve repo.** `gh repo view --json nameWithOwner --jq .nameWithOwner` → `owner/name`.
 2. **Sweep in-flight issues.** Fetch quest claims once
    (`"<plugin root>/skills/quest-log/assets/tracker.sh" claim-list --target <owner/name>`)
-   for the checks below. Do **not** filter with `gh issue list --label status:...` —
+   for the checks below. `<plugin root>` is the installed plugin's own root, the directory
+   two levels above this skill's own directory, which the harness names when it loads the
+   skill; it is never the target repository. Do **not** filter with
+   `gh issue list --label status:...` —
    `gh` mis-encodes the colon and multiple `--label` flags AND (see the skill's colon-label
    gotcha), so either returns nothing. List by state once and filter **client-side**:
    `gh issue list --repo <owner/name> --state open --json number,labels,title --limit 500`,

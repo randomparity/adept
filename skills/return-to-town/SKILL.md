@@ -176,7 +176,10 @@ closed state, then perform the shared dependent reconciliation below.
 #### Release cleared dependents
 
 After verifying the merged issue is closed, run the `quest-log` skill's canonical
-recipe in Bash: `bash "<plugin root>/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name>`. This is the primary
+recipe in Bash: `bash "<plugin root>/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name>`.
+`<plugin root>` is the installed plugin's own root, the directory two levels above this
+skill's own directory, which the harness names when it loads the skill; it is never the
+target repository. This is the primary
 owner of the cleared-dependency `status:blocked → status:ready` edge. Report every readied
 dependent and every retained dependent with its actionable reason. Do not limit the scan to
 the merged issue's prose or comments: the recipe exhaustively evaluates canonical whole-line

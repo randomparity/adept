@@ -48,6 +48,9 @@ Input: an optional caller-supplied risk allowlist and/or effort allowlist
    signals to what remains from Step 5:
    - Fetch quest claims once:
      `"<plugin root>/skills/quest-log/assets/tracker.sh" claim-list --target <owner/name>`.
+     `<plugin root>` is the installed plugin's own root, the directory two levels above
+     this skill's own directory, which the harness names when it loads the skill; it is
+     never the target repository.
      Drop any candidate whose issue number appears, reported as `claim
      quest-claim/<N>` — no liveness judgment: a stale claim is repaired by
      `$resurrection`, and a dropped candidate is only a recommendation away.

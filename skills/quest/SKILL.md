@@ -109,7 +109,9 @@ response.
 short form `q<issue-number>-<8 lowercase hex>` (the quest-log claim protocol
 constrains the grammar), and resolve the producer login
 (`gh api user --jq .login`; a failure is an auth failure — stop with the
-`gh` error). Then acquire the claim:
+`gh` error). Then acquire the claim — `<plugin root>` is the installed plugin's own
+root, the directory two levels above this skill's own directory, which the harness
+names when it loads the skill, and never the target repository:
 
 ```sh
 "<plugin root>/skills/quest-log/assets/tracker.sh" claim-acquire --target <owner/name> \
