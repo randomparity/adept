@@ -19,6 +19,14 @@ worker one direct, non-destructive probe, then wait through the next normal coll
 more than roughly ten further minutes — for the reply. A reply of any content proves the worker
 alive. No reply proves nothing, and it ends the probe budget: the wait becomes a hold.
 
+**A report proves the worker was alive when it wrote the report, and nothing more.** Its content is
+evidence about the moment of composition, not about the present the dispatcher reads it in — a
+park report from a resumed worker can be stale rather than current, describing state the worker has
+since moved past. On conflict, the verified branch head, tracker label state, and the harness's own
+agent run-state outrank the report's content; a plausible, detailed, or even byte-identical report
+is not grounds to override them. This governs a reply to the probe above and every other worker
+report a dispatcher reads.
+
 **A second probe to the same worker is the failure this budget exists to prevent.** It buys the
 same non-answer at the price of a full dispatcher turn, because a worker inside a long tool call
 answers at its next turn boundary and not on demand — so the probe is least informative for
