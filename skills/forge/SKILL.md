@@ -473,12 +473,14 @@ asked report it as a blocker and return. Never default to `main`.
    A retained line exposes the exact review and ledger paths to the caller and
    completes forge.
 
-   A `review-publication-disposed` line suppresses retention only when it is
-   paired with this range's retained record: that record names the current
-   forge-ledger identity and exact review path, and the later disposal record
-   names that same review path. Do not match a generic marker, prefix,
-   substring, or an older range's disposal record. Do not infer completion from
-   a missing review file or from the historical review line alone.
+   A `review-publication-disposed` or `review-publication-undisposed` line
+   suppresses retention only when it is paired with this range's retained
+   record: that record names the current forge-ledger identity and exact review
+   path, and the later closing record names that same review path. Either record
+   proves the publication happened; the undisposed one additionally means the
+   file is still on disk. Do not match a generic marker, prefix, substring, or an
+   older range's closing record. Do not infer completion from a missing review
+   file or from the historical review line alone.
 2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
    and print a non-zero commit count and a non-zero byte count. Report and stop
    rather than dispatching: this file is the reviewer's whole input.
