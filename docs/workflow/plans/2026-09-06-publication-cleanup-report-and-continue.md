@@ -34,8 +34,9 @@ replaced plus step 8's closing sentence), ~8 in `skills/forge/SKILL.md`, 1 in th
   file; plans and specs name the checkout root as `$WORK`.
 - Nothing automated asserts on prose (anatomy rule 4). The behaviour suite asserts on exit
   status, ledger lines, file existence, and stderr text the helper itself emits.
-- Every change bumps `version` in `.claude-plugin/plugin.json`. This is a bug fix: `4.1.1` →
-  `4.1.2`.
+- Every change bumps `version` in `.claude-plugin/plugin.json`. This is a bug fix, and a sibling
+  pull request took `4.1.2` while this branch was in review, so the bump is `4.1.2` → `4.1.3`
+  against the refreshed base.
 - Guardrails, run bare: `just verify` (full), `just test <pattern>` (selected suites),
   `just commit-check`, `just shape-check`, `just version-check`.
 
@@ -258,7 +259,7 @@ mode, then the summary, then the generated body, then the payload last.
 - **The manifest declares a well-formed, higher version.** Mode: `focused-test`. Contract:
   `check-plugin-version.sh` requires `version` to exist and to be `MAJOR.MINOR.PATCH` with no
   prerelease or build suffix. Case: the repository-wide gate run, `just version-check`. Expected
-  red: setting the value to `4.1.2-rc1` fails the format rule and names it. Green:
+  red: setting the value to `4.1.3-rc1` fails the format rule and names it. Green:
   `just version-check`.
 - **The prose describing the record set.** Mode: `task-test-not-applicable`. Changed surface:
   the normative sentences in `skills/quest/SKILL.md` steps 5 and 8, step 8's closing
@@ -343,10 +344,11 @@ mode, then the summary, then the generated body, then the payload last.
    relative link in `skills/quest/SKILL.md` at a path that does not exist, re-run, observe rule 5
    name it, and revert.
 
-8. In `.claude-plugin/plugin.json`, change `"version": "4.1.1"` to `"version": "4.1.2"`.
+8. In `.claude-plugin/plugin.json`, change `"version"` to the next patch above the base ref's —
+   `"4.1.3"` after the branch refresh that took `origin/main` up to `4.1.2`.
 
 9. Run `just version-check`. Expect exit 0. To confirm the gate bites, temporarily set the value
-   to `4.1.2-rc1`, re-run, observe the format failure, and revert.
+   to `4.1.3-rc1`, re-run, observe the format failure, and revert.
 
 10. Run `just verify`. Expect exit 0. It is the full guardrail suite and takes several minutes;
    run it as a background task rather than re-invoking it after an apparent timeout.
@@ -361,7 +363,7 @@ mode, then the summary, then the generated body, then the payload last.
   unconditionally, and no step adds a handoff field or names a retained path in a `WORK:*`
   annotation.
 - `skills/forge/SKILL.md` accepts either record as proof of a completed publication.
-- `.claude-plugin/plugin.json` declares `4.1.2`.
+- `.claude-plugin/plugin.json` declares `4.1.3`.
 - `just verify` exits 0.
 
 ## Amendments applied during the branch review

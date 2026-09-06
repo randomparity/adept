@@ -115,5 +115,5 @@ halves of the partition basis.
 
 ## Guardrails
 
-`just verify` on the branch, and `.claude-plugin/plugin.json` bumped `4.1.1` → `4.1.2` (bug fix;
+`just verify` on the branch, and `.claude-plugin/plugin.json` bumped `4.1.2` → `4.1.3` (bug fix;
 the bump is required by ADR 0022).
