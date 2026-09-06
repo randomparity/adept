@@ -442,9 +442,10 @@ never decide membership by splitting a record on whitespace: reconstruct the
 exact record text for the partition under test from the known owned paths and
 compare whole lines. The generated body is the one
 owned path whose name this workflow does not already hold: isolate it as the
-record text left after removing the known owned paths and their separators, and
-require it to be `<ledger-directory>/.publish-forge-review.` plus six
-characters. When the preserved
+residue of whichever closing record the partition under test assigns it to,
+after removing the known owned paths and their separators, and require it to be
+`<ledger-directory>/.publish-forge-review.` plus six characters. The other
+record's residue must be empty. When the preserved
 `review-payload:` is a path rather than `none`, that exact payload must be the final owned path in
 either mode; when it is `none`, no payload path may appear. Only then skip
 directly to step 9. Do not rerun `$deliver`, recreate the summary, invoke the
@@ -805,9 +806,10 @@ membership by splitting a record on whitespace: reconstruct the exact record
 text for the partition under test from the known owned paths and compare whole
 lines. The generated body is the one
 owned path whose name this workflow does not already hold: isolate it as the
-record text left after removing the known owned paths and their separators, and
-require it to be `<ledger-directory>/.publish-forge-review.` plus six
-characters. An `undisposed` record is a completed publication whose cleanup did not
+residue of whichever closing record the partition under test assigns it to,
+after removing the known owned paths and their separators, and require it to be
+`<ledger-directory>/.publish-forge-review.` plus six characters. The other
+record's residue must be empty. An `undisposed` record is a completed publication whose cleanup did not
 finish. Continue rather than parking: the ledger, not the exit status, says
 whether publication happened, and the helper's stderr and that record already
 name the retained paths. Add no field to the handoff for them -- the
@@ -829,7 +831,9 @@ that URL into step 9. `$return-to-town` needs no forge-scratch cleanup after a
 private workspace, so report the incomplete cleanup in the private completion
 report without naming the paths publicly. They survive only as long as the run's
 checkout does -- a worktree teardown removes them along with the ledger -- and
-removing them sooner is the operator's.
+removing them sooner is the operator's. Say why in that report: a retained
+`REVIEW_SUMMARY` occupies the fixed path a later step 8 refuses to overwrite, so
+leaving it parks the next quest in this checkout at that already-exists guard.
 
 ### Human-authorized publication recovery
 

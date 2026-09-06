@@ -61,7 +61,9 @@ still fails in `preflight()`, before any GitHub request.
   warning and the ledger record are the compensating disclosure — both private, so no retained
   path reaches a public annotation. The content stays in the mode-0700, git-ignored workspace
   where the old failure path already left it, and it survives only as long as that checkout does —
-  a worktree teardown takes it along with the ledger. Removing it sooner is the operator's.
+  a worktree teardown takes it along with the ledger. Removing it sooner is the operator's, and
+  there is a reason to: a retained review summary occupies the fixed path a later step 8 refuses
+  to overwrite, so leaving it parks the next quest in that checkout.
 - Ledger readers must match both record kinds. One matching only
   `review-publication-disposed:` sees an incomplete cleanup as no cleanup.
 - The exit guard that fails a zero-status run with a surviving body no longer applies to a body
