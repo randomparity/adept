@@ -187,18 +187,19 @@ concurrently, honor what the orchestrator handed you:
   your own ADR file and report `index row pending`; the orchestrator owns the row.
   Rows appended by parallel agents conflict even when their numbers are disjoint,
   because git conflicts on adjacent insertions.
-  **Unless CI gates the index** — the gate outranks the run type because the row is a
-  merge precondition and this rule is a convention. Take the coupling verdict
+  **Unless a check gates the index** — the gate outranks the run type because the row is
+  a merge precondition and this rule is a convention. Take the coupling verdict
   from your dispatch prompt if the orchestrator supplied one, and otherwise run step 5's
-  coupling check yourself; only a check CI hard-gates individually counts, not one
+  coupling check yourself; only a check that individually blocks the commit or the merge
+  counts — whether CI hard-gates it or a local hook such as pre-commit does — not one
   reachable solely through an umbrella recipe. Where such a check enforces "one index row per ADR
   file", withholding the row puts your own stop condition out of reach: the
   check stays red until the row exists, and the orchestrator appends rows only
   after the wave's last PR merges — the merge that check is blocking. Add your own
   single row in your own PR then, matching the length and tone of the rows around
-  it, and give its `Status` cell the same value as your record's own `## Status` —
-  such a guard usually compares the two. Touch no other row and do not reflow the
-  table; the orchestrator's serial-merge branch refresh (`$campaign` step 6)
-  reconciles the adjacent-insertion conflicts between siblings.
+  it; where the table carries a `Status` column, give its cell the same value as your
+  record's own `## Status` — such a guard often compares the two. Touch no other row
+  and do not reflow the table; the orchestrator's serial-merge branch refresh
+  (`$campaign` step 6) reconciles the adjacent-insertion conflicts between siblings.
 - Expect generated-doc and snapshot files to be cross-agent conflict zones; keep
   your edits to them minimal and additive.
