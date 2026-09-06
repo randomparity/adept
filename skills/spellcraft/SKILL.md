@@ -192,9 +192,10 @@ only on a **solo** run; on a **dispatched** run (an orchestrator handed you an A
 number, `$attunement` step 7) write only the ADR file and report `index row pending`
 in your completion report, leaving the row to the orchestrator.
 
-**CI gating the index outranks that split**: the row is a merge
+**A check gating the index outranks that split**: the row is a merge
 precondition there, and run type is only a convention. `$attunement` step 5 reports the
-coupling verdict — and separates checks CI hard-gates **individually** from ones
+coupling verdict — and separates a check that individually blocks the commit or the
+merge, whether CI hard-gates it or a local hook such as pre-commit does, from one
 reachable only through an umbrella recipe, since only the former can block a PR. Under
 `$campaign` the verdict reaches you in your dispatch prompt rather than being yours to
 rediscover. Where such a check enforces one index row per ADR file, the
@@ -202,10 +203,10 @@ withheld row keeps the PR red and the orchestrator's post-wave append never runs
 because the gate blocks the merge that would trigger it. Add your own single row
 there, dispatched or solo, and say so in your completion report instead of reporting
 `index row pending`. Match neighbouring rows in length and tone and touch no other
-row — and give the row's `Status` cell the same value as the record's own `## Status`
-section, since a guard that couples the two usually compares them. That agreement is
-also why a supersession has to update the row in the same PR wherever changing a
-record's status changes that keyword.
+row — where the table carries a `Status` column, give it the same value as the record's
+own `## Status` section, since a guard that couples the two often compares them. That
+agreement is also why, where the index has a `Status` column, a supersession has to
+update the row in the same PR wherever changing a record's status changes that keyword.
 
 If the ADR supersedes an existing one, add a one-line banner to the superseded
 record's `## Status` section — `> **Superseded by [NNNN](NNNN-slug.md)**
