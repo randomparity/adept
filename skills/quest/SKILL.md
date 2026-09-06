@@ -421,18 +421,26 @@ Artifact checks are phase-qualified. In `build-complete`, `required` needs its
 exact retained review to be regular, private mode-0600, non-empty, and readable;
 `not-required` needs its exact verified reason. `publication-in-progress` parks
 without a source-artifact assumption unless it takes step 8's recovery route, which revalidates
-every retained input. In `publication-verified`, the review,
-summary, and body are expected to be disposed: require the exact all-and-only
-disposal record, not a readable source artifact.
+every retained input. In `publication-verified`, require the
+helper's exact closing records and never a readable source artifact: a
+`review-publication-disposed:` line, a `review-publication-undisposed:` line, or
+both. A path named by the undisposed record may still be on disk, and an
+operator who removed it does not change the check -- the records are the
+evidence, so a cleaned workspace never parks a resume.
 
 On a verified-publication resume, require `review-comment-url` to parse as
 `https://github.com/<repo>/pull/<pr>#issuecomment-<id>`, with the record's
 current `repo`, current `pr:`, and numeric `<id>`. Require it to equal the URL
 in the exact `review-publication-verified: <URL>` ledger line after this
-handoff's `forge-result-record`, then re-read its exact disposal record. In
-`required` mode, it must own only the exact retained review, `REVIEW_SUMMARY`,
-and one helper-created body in the ledger directory. In `not-required` mode,
-it must own only the exact `REVIEW_SUMMARY` and that one body. When the preserved
+handoff's `forge-result-record`, then re-read its exact closing records. Their
+union must own all and only the helper's former paths, each record listing its
+own subset in owned order and no path appearing in both. In `required` mode
+those paths are the exact retained review, `REVIEW_SUMMARY`, and one
+helper-created body in the ledger directory. In `not-required` mode they are the
+exact `REVIEW_SUMMARY` and that one body. An owned path may contain spaces, so
+never decide membership by splitting a record on whitespace: reconstruct the
+exact record text for the partition under test from the known owned paths and
+compare whole lines. When the preserved
 `review-payload:` is a path rather than `none`, that exact payload must be the final owned path in
 either mode; when it is `none`, no payload path may appear. Only then skip
 directly to step 9. Do not rerun `$deliver`, recreate the summary, invoke the
@@ -780,12 +788,23 @@ with the helper's retained evidence and failure output; leave the handoff in
 `publication-in-progress`. On success, capture its sole verified comment URL,
 require it to parse for this exact `REPO` and `PR`, and require the exact
 `review-publication-verified: <URL>` line to occur after this handoff's
-`forge-result-record`. Then require the subsequent disposal record to own all
-and only its former paths: in `required` mode the exact review,
-`REVIEW_SUMMARY`, and one helper-created `.publish-forge-review.*` body beside
-the ledger; in `not-required` mode the exact `REVIEW_SUMMARY` and that one
-body; and, when this run carried a payload, the exact `REVIEW_PAYLOAD` in both
-modes, named last in the record. The body entry must be in the ledger directory
+`forge-result-record`. Then require the helper's subsequent closing
+records -- a `review-publication-disposed:` line, a
+`review-publication-undisposed:` line, or both -- to own between them all and
+only its former paths, each listing its own subset in owned order and no path
+appearing in both: in `required` mode the exact review, `REVIEW_SUMMARY`, and
+one helper-created `.publish-forge-review.*` body beside the ledger; in
+`not-required` mode the exact `REVIEW_SUMMARY` and that one body; and, when this
+run carried a payload, the exact `REVIEW_PAYLOAD` in both modes, named last
+among the owned paths. An owned path may contain spaces, so never decide
+membership by splitting a record on whitespace: reconstruct the exact record
+text for the partition under test from the known owned paths and compare whole
+lines. An `undisposed` record is a completed publication whose cleanup did not
+finish. Continue rather than parking: the ledger, not the exit status, says
+whether publication happened, and the helper's stderr and that record already
+name the retained paths. Add no field to the handoff for them -- the
+`publication-verified` format admits none -- and never name them in a `WORK:*`
+annotation, which is public. The body entry must be in the ledger directory
 and be the helper's
 single generated body identity, not an inferred or older path. Only then
 re-resolve the PR and require its repository, number, head branch, base branch,
@@ -796,7 +815,13 @@ Only an unchanged PR permits the private mode-0600 handoff to be atomically
 rewritten and byte-verified as `publication-verified` with the PR number, the
 preserved `delivered-head-sha:`, preserved `review-payload:`, and
 `review-comment-url: <verified URL>`. Carry
-that URL into step 9; `$return-to-town` needs no forge-scratch cleanup.
+that URL into step 9. `$return-to-town` needs no forge-scratch cleanup after a
+`review-publication-disposed:` record that owns every path; after a
+`review-publication-undisposed:` record the paths it names are still in the
+private workspace, so report the incomplete cleanup in the private completion
+report without naming the paths publicly. They survive only as long as the run's
+checkout does -- a worktree teardown removes them along with the ledger -- and
+removing them sooner is the operator's.
 
 ### Human-authorized publication recovery
 
@@ -820,7 +845,8 @@ Revalidate the handoff and forge-result record under step 5, then require all of
   filesystem absence never supplies this value, and an existing reconciliation record must match
   exactly or recovery parks;
 - after the handoff's exact `forge-result-record`, the ledger contains no
-  `review-publication-verified:` line, no `review-publication-disposed:` line, and no
+  `review-publication-verified:` line, no `review-publication-disposed:` line, no
+  `review-publication-undisposed:` line, and no
   `review-publication-recovery-authorized:` line;
 - the PR contains no complete comment whose first whole line is `<!-- WORK:REVIEW -->`, whose body
   contains this exact summary, and whose last whole line is `<!-- REVIEW:COMPLETE -->`; treat an
