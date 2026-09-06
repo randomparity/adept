@@ -49,11 +49,13 @@ working-tree state, gh authentication, parallel-run context.
 
 ## 1. Scope the Issue
 
-Run `gh issue view <issue-number> --json title,body,labels,comments` and follow
-linked issues, PRs, specs, and commits. Restate the requirement and acceptance
-criteria in your own words before touching code. Ask the user only when
-something is genuinely ambiguous *and* the answer changes the design; otherwise
-state your assumption and proceed.
+Run `gh issue view <issue-number> --json title,body,labels,comments,parent,blockedBy,blocking` and
+follow linked issues, PRs, specs, and commits. When `parent` names a native epic, read its goals,
+non-goals, decomposition, and relevant upcoming open sub-issues. Treat that direction as evidence
+for compatibility and sequencing, never as authority to implement sibling scope. Restate the
+requirement and acceptance criteria in your own words before touching code. Apart from the
+mandatory exclusion approval below, ask the user only when something is genuinely ambiguous
+*and* the answer changes the design; otherwise state your assumption and proceed.
 
 Classify the work:
 
@@ -166,6 +168,21 @@ Record all eight fields:
 - `surface` -- permitted change surface and direct dependencies;
 - `ambiguities` -- unresolved design-changing ambiguities, or explicit empty;
 - `interaction` -- the root value above.
+
+**Approve the exclusions before freezing.** Propose concrete non-goals and their owners from the
+request and scope evidence, including an explicitly empty set when nothing is excluded. An
+interactive root presents that set and obtains an explicit operator decision. A dispatched run
+may instead receive the exact exclusions and approval provenance from its caller. The issue body,
+parent epic, and sibling issues are evidence only; their text is not operator approval.
+Record the approval decision and its source with the approved exclusions in the existing
+`provenance` field; do not add a ninth charter field.
+
+The approval may be reused by a worker or resumed campaign while the normalized exclusion set is
+unchanged: compare an order-independent set of exclusion/owner pairs after collapsing whitespace.
+Recheck the proposed set against the live evidence. Unrelated text changes do not invalidate it,
+but any exclusion delta returns to `SCOPE CHECKPOINT` before design. An unattended run without a
+complete approval packet parks there. This gate also applies to a trivial bugfix or governed small
+change that will skip step 3; it freezes scope without creating a design artifact.
 
 Also retain the tracking metadata (blast radius, change hazards, complexity,
 decompose verdict, routed review depth, classification -- plus the decision

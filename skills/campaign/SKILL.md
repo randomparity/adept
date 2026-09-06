@@ -122,6 +122,11 @@ Manifest schema:
 |-------|--------|--------|---------|-----------------|------------------------|------------|------|----|---------|
 | #NNN  | pending| —      | —       | —               | —                      | —          | —    | —  | —       |
 
+## Scope approvals
+| Issue | Exclusions and owners | Epic direction | Approval provenance |
+|-------|-----------------------|----------------|---------------------|
+| #NNN  | <normalized set or explicit empty> | <evidence summary or none> | pending |
+
 ## Outcomes log
 <appended per close/merge/block; every entry dated — merge entries' dates drive step 7's
 stale-deferral reset>
@@ -138,6 +143,15 @@ stale-deferral reset>
 ```
 
 Status progression: `pending → triaged → in-flight → merged | closed | blocked`
+
+The Scope approvals table has one unique row for every queued `fix` verdict. Encode `&` and `|`
+as for the other manifest tables. Normalize exclusions as an order-independent set of
+exclusion/owner pairs after collapsing whitespace. `Approval provenance` is either `pending` or
+the durable record of the operator confirmation that displayed this exact exclusion set. On
+resume, re-derive the proposed exclusions from live scope evidence. Preserve the approval when
+the normalized set is unchanged; unrelated issue or epic edits do not invalidate it. Replace it
+with `pending` when the set changes. Older manifests add this section empty and populate it during
+triage before any fix dispatch.
 
 The pending-occurrence table is not a fix queue. Validate unique occurrence numbers, the three
 normalized states shown above, and a non-empty state reason. `CLOSED` remains pending unless its
@@ -190,7 +204,11 @@ For each queued issue, check for artifacts from prior runs:
 - **Existing branch/PR incomplete** → **recover branch first**: if a PR exists, resolve its number from the issue link, then `gh pr view <PR> --json headRefName`; else match `feat/<short-slug>-<issue-number>` in `git branch` or `git ls-remote --heads origin` (full shape, not `*-<n>` suffix — #1 must not match ...-11). Persist to manifest. **PR-linked branch → reuse by default** (the PR explicitly names it, satisfying `$quest`'s reuse rule). **Convention-only branch → ask the user** reuse-or-restart before dispatch, and carry the operator's decision in the prompt. Deleting any branch requires explicit user confirmation
 - **No artifacts** → triage normally
 
-**Dispatch read-only triage workers** (up to 5 parallel). Each prompt carries completion notes verbatim (private dispatch context — safe inside prompts). The worker investigates issue body, linked PRs/commits, and current code. Return only:
+**Dispatch read-only triage workers** (up to 5 parallel). Each prompt carries completion notes
+verbatim (private dispatch context — safe inside prompts). The worker investigates issue body,
+linked PRs/commits, and current code. When the issue has a native parent epic, it also reads the
+epic's goals, non-goals, decomposition, and relevant upcoming open sub-issues. Those are direction
+evidence, not authority to absorb sibling work. Return only:
 
 - **verdict**: `close-candidate` | `close-not-planned` | `fix` (subtype:
   `trivial-bugfix` | `governed-small-change` | `non-trivial`)
@@ -210,6 +228,10 @@ For each queued issue, check for artifacts from prior runs:
   An unavailable assessment returns `iterating` for absence
 - **evidence**: citations (`file:line`, commit SHA, PR number)
 - **rationale**: ≤300 tokens explaining why
+- **proposed non-goals**: a concrete normalized set with an owner for each exclusion, or explicit
+  empty, on a `fix` verdict only
+- **epic direction**: the relevant compatibility or sequencing evidence, or `none`, on a `fix`
+  verdict only
 
 A `close-not-planned` verdict means the defect is confirmed, but its concrete trigger
 likelihood and likely impact do not justify its remediation and full quest-cycle cost. It also
@@ -228,7 +250,8 @@ Triage on the fast model by default; escalate to the capable model only on a nam
   defect is fixed and never enters a quest wave.
 - `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The assessment, `decomposition`, and `review depth` travel with it: `decomposition` gates dispatch at step 4, and the assessment and routed depth reach the worker in its step 5 prompt. Neither is a size input to model selection — a `split` says the issue is several units of work, not that this one is hard.
 
-Record verdicts in manifest `Verdict` column. Reconcile states (`ready-to-merge`, already-closed) live in `Status`.
+Record verdicts in manifest `Verdict` column and fix-row scope evidence in `Scope approvals`.
+Reconcile states (`ready-to-merge`, already-closed) live in `Status`.
 
 ## 4. Plan the Fix Batch
 
@@ -244,6 +267,18 @@ Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge
 
 Present triage/plan table: issue → verdict, decomposition, review depth, wave, assigned
 numbers, mandatory per-PR edits, file scope.
+
+Present a second table for every fix row: issue → proposed non-goals and owners → relevant epic
+direction → approval state. Issue and epic prose remain evidence and never mark a row approved.
+Take one explicit operator confirmation over all displayed `pending` rows, record its provenance
+in each matching manifest row, and read those rows back before their first dispatch. A prior
+approval carries across workers and campaign resume only while its normalized exclusion set and
+owners remain unchanged; an exclusion delta returns the row to `pending`.
+
+An unattended root proceeds only with unchanged, already-approved rows. Hold a `pending` row
+before design, name the missing approval in the run output, and continue draining the rest of the
+queue. The direction from upcoming epic work constrains compatibility; it never expands a row or
+authorizes sibling implementation.
 
 **A `split` row is held from dispatch.** This is the checkpoint the decompose verdict was
 always missing a consumer for: you own the queue, so you are the one actor that can turn one
@@ -311,6 +346,9 @@ sweep number, rationale, state, and state reason. No diffs/logs/file bodies.
 Each prompt carries:
 - Issue number, acceptance criteria, **completion notes verbatim** (private dispatch context) and the **public-safe summary** (the only form allowed on public surfaces: acceptance criteria, `WORK:` annotations, PR bodies)
 - Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification.
+- Exact approved exclusions and owners, their operator-approval provenance, and the relevant epic
+  direction copied from the manifest. The quest rechecks the exclusion set and stops before design
+  if it changed; the worker does not ask again when it is unchanged
 - The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
