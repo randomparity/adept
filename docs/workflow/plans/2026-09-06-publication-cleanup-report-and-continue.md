@@ -209,7 +209,10 @@ failure after that line leaves true and fatal, unchanged by this task.
    dispose() {
    	local candidate disposed=() remaining=()
    	for candidate in "$@"; do
-   		if run_disposer "$candidate"; then
+   		# Partition on what is left on disk, not on the disposer's status: a
+   		# disposer that errors after removing the path leaves nothing to retain,
+   		# and the previous implementation reported remaining paths the same way.
+   		if run_disposer "$candidate" || [ ! -e "$candidate" ]; then
    			disposed[${#disposed[@]}]=$candidate
    		else
    			remaining[${#remaining[@]}]=$candidate
@@ -271,12 +274,13 @@ mode, then the summary, then the generated body, then the payload last.
 
 ### Verification
 
-- **The `skills/` tree stays structurally valid and its cross-references resolve.** Mode:
-  `focused-test`. Contract: `check-skill-shape.sh` rule 5 checks that every relative reference
-  link in a `SKILL.md` resolves; these edits add no link, so the gate must stay green over the
-  edited tree. Case: the repository-wide gate run, `just shape-check`. Expected red: pointing one
-  edited relative link at a path that does not exist makes rule 5 fail and name that link —
-  produced deliberately in step 7 and reverted. Green: `just shape-check`.
+- **The `skills/` tree stays structurally valid.** Mode: `focused-test`, as a regression check
+  rather than a test of this task's own edits: `check-skill-shape.sh` rule 5 resolves the
+  reference links in `skills/*/SKILL.md`, and these edits add and move none, so the requirement is
+  that the repository-wide gate still passes over the edited tree. Case: `just shape-check`.
+  Expected red: pointing any one of that file's existing relative links at a path that does not
+  exist makes rule 5 fail and name it — produced deliberately in step 7 and reverted. Green:
+  `just shape-check`.
 - **The manifest declares a well-formed, higher version.** Mode: `focused-test`. Contract:
   `check-plugin-version.sh` requires `version` to exist and to be `MAJOR.MINOR.PATCH` with no
   prerelease or build suffix. Case: the repository-wide gate run, `just version-check`. Expected
@@ -296,10 +300,11 @@ mode, then the summary, then the generated body, then the payload last.
    review, summary, and body are expected to be disposed: require the exact all-and-only
    disposal record, not a readable source artifact.` with:
 
-   > In `publication-verified`, require the helper's exact closing records rather than a readable
+   > In `publication-verified`, require the helper's exact closing records and never a readable
    > source artifact: a `review-publication-disposed:` line, a `review-publication-undisposed:`
-   > line, or both. A path named by the undisposed record is expected to survive; every other
-   > owned path is expected to be disposed.
+   > line, or both. A path named by the undisposed record may still be on disk, and an operator
+   > who removed it does not change the check — the records are the evidence, so a cleaned
+   > workspace never parks a resume.
 
 2. In the same file, in the paragraph beginning `On a verified-publication resume`, replace the
    run of sentences from `Require it to equal the URL` through `it must own only the exact
@@ -339,8 +344,9 @@ mode, then the summary, then the generated body, then the payload last.
    > Carry that URL into step 9. `$return-to-town` needs no forge-scratch cleanup after a
    > `review-publication-disposed:` record that owns every path; after a
    > `review-publication-undisposed:` record the paths it names are still in the private
-   > workspace, and removing them is the operator's, so report the incomplete cleanup in the
-   > private completion report without naming the paths publicly.
+   > workspace, so report the incomplete cleanup in the private completion report without naming
+   > the paths publicly. They survive only as long as the run's checkout does — a worktree
+   > teardown removes them along with the ledger — and removing them sooner is the operator's.
 
 5. In the same file, in the *Human-authorized publication recovery* predicate list, extend the
    bullet that begins `after the handoff's exact `forge-result-record`, the ledger contains no`
@@ -387,6 +393,8 @@ mode, then the summary, then the generated body, then the payload last.
 ## Rollback and deferrals
 
 Both commits are confined to the branch and revert together — Task 2's documents describe Task
-1's records, so neither is independently revertible. No `$trial-loop` deferral exists yet; any
-this branch's review disposes of is recorded here with its owning record path or tracker issue
-before the branch ships.
+1's records, so neither is independently revertible. The version bump lands in Task 2, after the
+design and Task 1 commits, so the pull request is not opened until Task 2 step 8 has landed; ADR
+0022's gate compares the tree to `BASE_SHA`, not commit by commit. No `$trial-loop` deferral
+exists yet; any this branch's review disposes of is recorded here with its owning record path or
+tracker issue before the branch ships.

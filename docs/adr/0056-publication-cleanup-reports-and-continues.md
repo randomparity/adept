@@ -60,7 +60,8 @@ still fails in `preflight()`, before any GitHub request.
 - Private scratch content can survive a run without a human being forced to notice. The stderr
   warning and the ledger record are the compensating disclosure — both private, so no retained
   path reaches a public annotation. The content stays in the mode-0700, git-ignored workspace
-  where the old failure path already left it, and removing it is the operator's.
+  where the old failure path already left it, and it survives only as long as that checkout does —
+  a worktree teardown takes it along with the ledger. Removing it sooner is the operator's.
 - Ledger readers must match both record kinds. One matching only
   `review-publication-disposed:` sees an incomplete cleanup as no cleanup.
 - The exit guard that fails a zero-status run with a surviving body no longer applies to a body
@@ -68,10 +69,12 @@ still fails in `preflight()`, before any GitHub request.
 
 ## Considered & rejected
 
-- **Exit 2 for "published, cleanup incomplete", as ADR 0045 does for gates.** judgment: a gate's
-  caller reads an exit taxonomy, while this helper's caller has one rule — nonzero parks without
-  retrying. A status only an updated caller interprets correctly reintroduces the park for
-  anything not yet updated, and the ledger already carries the distinction durably.
+- **Exit 2 for "published, cleanup incomplete", as ADR 0045 does for gates.** verified:
+  `skills/quest/SKILL.md` step 8 reads "On nonzero, do not retry, do not post another
+  `WORK:REVIEW`, and park the quest with the helper's retained evidence and failure output" — one
+  rule over the whole nonzero range, not an exit taxonomy. Judgment: a status only an updated
+  caller interprets correctly reintroduces the park for anything not yet updated, and the ledger
+  already carries the distinction durably.
 - **A fallback disposer chain — on Linux, `gio trash` then trash-cli's `trash-put`.** judgment: a
   second disposer is a new host prerequisite, and this change does not take one on. The issue
   offers a chain as a consideration rather than a requirement, and the condition a chain would
@@ -85,6 +88,6 @@ still fails in `preflight()`, before any GitHub request.
   current park unrecoverable.
 - **Dispose before appending the verified line.** judgment: it would claim disposal not yet
   performed, and a crash between the two would leave a verified publication with no record.
-- **Stop at the first disposer failure, as today.** judgment: a filesystem that refuses one path
-  usually refuses all of them, so stopping early buys nothing while one odd path strands every
-  path after it.
+- **Stop at the first disposer failure, as today.** judgment: attempting every path costs one
+  extra disposer call per remaining path and nothing else, while stopping early strands every path
+  after the first odd one for no gain.

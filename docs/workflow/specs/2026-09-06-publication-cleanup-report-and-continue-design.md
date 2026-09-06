@@ -7,20 +7,19 @@ behaviour, the boundaries it touches, and how it is tested.
 
 ## Behaviour
 
-The ADR holds the decision. What it does not carry, and this section does, is the record shape:
+The ADR's Decision states the record contract and is not restated here. Three details it does not
+carry:
 
-- `review-publication-disposed: <paths>` — emitted when at least one path was disposed.
-- `review-publication-undisposed: <paths>` — emitted when at least one path remains, preceded by
-  an identical stderr warning.
-
-Each names exactly its own paths, joined by single spaces, in the helper's **owned order**: the
-required review (in `required` mode), the summary, the generated body, then the payload last. No
-path appears in both, and their union is all and only the owned paths. An all-succeed run's ledger
-is byte-identical to today's, so `PFR-1`, `PFR-15` and `PFR-16` pin the unchanged happy path.
-
-An owned path may contain spaces, so a consumer never decides membership by splitting a record on
-whitespace. It knows the owned paths and their order, so it reconstructs the exact record text for
-the partition under test and compares whole lines.
+- **The partition is by what is left on disk**, not by the disposer's exit status. A disposer that
+  errors after removing a path leaves nothing to retain, and it lands in the disposed record —
+  which is how the previous implementation computed its remaining set too.
+- **Owned order** is the required review (in `required` mode), the summary, the generated body,
+  then the payload last. Each record lists its own subset in that order, joined by single spaces.
+  An all-succeed run's ledger is byte-identical to today's, so `PFR-1`, `PFR-15` and `PFR-16` pin
+  the unchanged happy path.
+- **Membership is decided by whole-line comparison.** An owned path may contain spaces, so a
+  consumer never splits a record on whitespace; it knows the owned paths and their order, so it
+  reconstructs the exact record text for the partition under test and compares whole lines.
 
 ### The exit trap
 
@@ -36,6 +35,9 @@ leak. Two changes:
   the trap believes every run succeeded. Measured on the base commit, a failing run printed
   `publish-forge-review: successful publication left its body behind` beside its real error.
   `local exit_status=$?` on one line fixes it, because the expansion runs before `local` does.
+  This second change is an **independent** repair of a pre-existing false message, not something
+  this design requires; it is carried here only because it lands on the same trap the first change
+  edits, and the scope boundary is worth seeing rather than inferring.
 
 ### Consumers
 
@@ -94,8 +96,8 @@ text.
   body — is unreachable without new fault-injection machinery, so it is verified by controlled
   fault during implementation rather than by a permanent fixture mode.
 
-Each new assertion is verified to bite by inverting the helper's behaviour once, observing red,
-and reverting.
+The assertions carrying the new contract are verified to bite by the three inversions the plan's
+Task 1 step 9 prescribes — each applied once, red observed, reverted.
 
 ## Guardrails
 
