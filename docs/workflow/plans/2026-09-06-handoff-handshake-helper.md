@@ -52,7 +52,9 @@ below.
 - Exit taxonomy: **0** success, **1** a condition failed, **2** the script could not run. A fault
   must never read as a clean hand-off.
 - `.claude-plugin/plugin.json` carries the plugin `version` and **every change bumps it**. This
-  change adds a capability, so `MINOR`: `4.1.1` → `4.2.0`.
+  change adds a capability, so `MINOR`. The base moved while this branch was parked: `main` is now at
+  `4.1.2`, and `4.2.0` and `4.1.3` are held by concurrent siblings, so this branch takes **`4.3.0`**
+  by orchestrator assignment. Re-check it against the base at resume — it may have moved again.
 - The repository is public. No absolute user paths, hostnames, addresses, or credentials in any
   committed file.
 - Skill-script behaviour suites live under `tests/fixtures/<skill>/`, **outside** the shipped tree.
@@ -754,7 +756,8 @@ the adr profile warns `W-INDEX-TABLE` if one appears.
 
 **3.3** Link the record from the spec and from this plan's header.
 
-**3.4** Bump `.claude-plugin/plugin.json` `version` from `4.1.1` to `4.2.0`. `MINOR`, because this
+**3.4** Bump `.claude-plugin/plugin.json` `version` to `4.3.0` (from whatever the refreshed base
+carries; it was `4.1.2` at the time of writing). `MINOR`, because this
 change adds a capability — a new helper — and removes or renames nothing.
 
 **3.5** Run `just records` and `./scripts/check-plugin-version.sh` bare. Expect exit 0 from each.
@@ -765,12 +768,12 @@ change adds a capability — a new helper — and removes or renames nothing.
 
 - The record carries all five sections and every rejected alternative carries an evidence tag.
 - No row was added to `docs/adr/README.md`.
-- `.claude-plugin/plugin.json` declares `4.2.0`.
+- `.claude-plugin/plugin.json` declares `4.3.0`, and it is strictly greater than the base's.
 - `just records` and `./scripts/check-plugin-version.sh` both exit 0.
 
 ### Rollback
 
-Remove the record and restore `4.1.1`.
+Remove the record and restore the base's version.
 
 ## Task 4 — full guardrails
 

@@ -123,6 +123,16 @@ own patterns.
 That gate has a **three-way** status — 0 clean, 1 a finding, 2 it could not run — and the helper
 routes all three. Collapsing 2 into 1 would report a scanner that never ran as one that found a
 credential: a permanent refusal wearing a transient message, which no amount of re-running clears.
+
+This is not a principle invented here. `CLAUDE.md` states it directly — capture a scan's exit status
+explicitly rather than trailing `|| true`, because a tool exits 1 for "no matches" and greater than 1
+for a real failure, and collapsing those makes a scan that could not run read as one that found
+nothing. The repository hard-gates it for its own scripts (`just scan-fault-check`,
+`scripts/check-scan-fault-discards.sh`), and a chain of accepted records develops it:
+`docs/adr/0005-scan-faults-are-reported-not-collapsed.md` first decided it and is now superseded
+through `0024` to **`docs/adr/0025-a-skip-reports-the-condition-not-the-cause.md`**, which is the
+live record. The first draft of this helper breached the rule; the routing above is the
+correction.
 Status 2 is a fault (exit 2) naming that the scan did not run, and the gate's own stderr is passed
 through rather than discarded, because on that branch it is the only text that says why. The helper
 also requires `rg` in its own preflight, since that gate exits 2 without it — refusing at the
