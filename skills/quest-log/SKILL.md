@@ -302,7 +302,7 @@ Markdown except the body.
 | Type | Posted on | When | Content |
 |---|---|---|---|
 | `WORK:DIVINATION` | issue | after pre-work assessment | authenticated advisory blast radius, change hazards, complexity, and decompose verdict |
-| `WORK:SCOPE` | issue | after scoping, before building | blast radius, change hazards, complexity (S/M/L), decompose verdict |
+| `WORK:SCOPE` | issue | after scoping, before building | eight-field charter plus blast radius, change hazards, complexity (S/M/L), decompose verdict, classification, artifact lane, review depth, and fixed design denominator with provenance |
 | `WORK:REVIEW` | PR | after PR creation | compact summary plus labelled forge-review payload |
 | `WORK:TRAJECTORY` | issue | at the terminal hand-off, and before parking an issue at `blocked`/`needs-human` (exit-edges rule above) | outcome or parked phase, branch/PR #, guardrail status, what a human must decide or supply, surprises worth remembering |
 | `GROOM:STALE` | issue | when `$warding` first marks an issue `stale`, one grace period before it closes it | how long the issue has been quiet, the date the sweep will close it, and how to keep it open |

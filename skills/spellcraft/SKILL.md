@@ -31,14 +31,28 @@ and identify the repo's check suite.
 means proceed to the next step — do not end your turn. Stop only on a genuine
 blocker you have named.
 
-The artifact lane is routing evidence beside the charter, never a ninth authority field.
-Use the caller's validated lane when supplied; on a standalone invocation, derive classification,
-complexity, and hazards from the live request and repository first.
+The artifact lane and design denominator are routing evidence beside the charter, never ninth or
+tenth authority fields. Use the caller's validated lane and denominator when supplied; on a
+standalone invocation, derive classification, complexity, and hazards from the live request and
+repository first.
 Accept `light-spec` only for a non-trivial change whose validated complexity is `S` or `M`
 and whose change hazards are exactly `none`; otherwise use `full-spec`. An absent or
-unprovable assessment after the caller's live derivation uses the full lane. Public API or
+unprovable hazard assessment after the caller's live derivation uses the full lane. Public API or
 contract changes, migrations, auth/permission behavior, concurrency, irreversibility, and
 external services are hazards and therefore never enter the light lane.
+
+Before writing an ADR, specification, or plan, require a validated complexity and map it exactly:
+`S = 100`, `M = 250`, or `L = 1000` changed lines. This fixed number is the design denominator.
+It is derived from the assessment, not stored in `WORK:DIVINATION`, and neither the design nor a
+plan estimate may revise it. A caller-supplied number must match the mapping and carry the
+public-safe assessment provenance frozen in `WORK:SCOPE`. Validate that provenance by confirming
+it still identifies the same valid assessment evidence, not by requiring unchanged citation text
+or line numbers. A mismatch or unknown complexity returns to `SCOPE CHECKPOINT` before design.
+
+On a standalone invocation, freeze the mapped number, complexity, and public-safe evidence in the
+same local scope record as the charter and read them back before step 1. A material scope change
+starts a new explicitly re-scoped design cycle with a new denominator. Never retroactively resize
+the current gate, and never treat a plan estimate or an oversized design as scope evidence.
 
 ## External scope authority
 
@@ -437,13 +451,13 @@ The header also carries one line, exactly:
 
 The range is a by-product of the file map and the task list you have just written, not new
 analysis: count what each task creates and changes and add it up. Exclude the design
-artifacts themselves — this measures the implementation the plan produces. The band is the
-`$divination` complexity verdict where the caller supplied one, and your own reading of the
-same three fields where it did not; a band that disagrees with your own range means one of
-them is wrong, and saying which is part of writing the line. This is the denominator step 3
-measures the design against, so an inflated range is a defeated control rather than a
-generous one. That ratio is the range's only authority: it is an estimate, not a budget or
-ceiling on the implementation.
+artifacts themselves — this measures the implementation the plan produces. The parenthetical
+band is the complexity frozen before design, carried forward unchanged; only the numeric range is
+the plan's own estimate. The line is informational: step 3 never uses its range as the
+denominator. If the range appears inconsistent with the frozen complexity, explain the evidence
+rather than selecting a second band to make them agree. A demonstrated material scope change
+returns to explicit re-scoping and a new design cycle; a plan overestimate alone has no authority
+to widen the frozen baseline. The estimate is not an implementation budget or ceiling.
 
 Give each task:
 
@@ -548,26 +562,31 @@ suppressing both the artifact and compact object, so the phase stops as blocked.
 Measure them here, in the orchestrator, so the reviewer judges numbers instead of producing
 them — a reviewer asked to both measure and judge will do neither reproducibly.
 
-For `full-spec`, retain the existing inputs:
+- `wc -l` over every path in the complete set, including every ADR, summed — the
+  **design size** in both lanes.
+- the fixed design denominator and its assessment provenance from the frozen scope record.
+  Recheck `S = 100`, `M = 250`, or `L = 1000`; a missing or mismatched value returns to
+  `SCOPE CHECKPOINT` rather than falling back to the plan.
+- the design size divided by that denominator — the **ratio** in both lanes. Classify the
+  exact, unrounded fraction by integer comparison: below `2 × denominator` produces no
+  proportionality finding; from `2 × denominator` through `3 × denominator`, inclusive,
+  is a note; above `3 × denominator` is blocking. Round only the displayed ratio.
 
-- `wc -l` over every path in the set, summed — the **design size**.
-- the plan header's `Expected implementation size` range — the **implementation estimate**.
-- the design size over the range's high end, to one decimal place — the **ratio**.
-
-For `light-spec`, measure the specification alone with `wc -w` and `wc -l`. Both its
-500-word and 60-line caps must hold. Do not invent an implementation estimate or ratio merely
-to replace the absent plan; the hard cap is this lane's proportionality control. An ADR remains
-subject to the existing per-artifact right-sizing review.
+For `full-spec`, also read the plan header's `Expected implementation size` range for the
+audit line. It remains useful to readers and may be challenged when its file-map basis is
+unsupported, but it never participates in the ratio. For `light-spec`, separately measure the
+specification alone with `wc -w` and `wc -l`; its 500-word and 60-line caps remain independent
+controls. The complete-set ratio still includes any ADR beside that spec.
 
 **Echo the lane's audit line before proceeding**, so a mis-evaluated predicate or unmeasured
 control leaves an inspectable trace:
 
-    design review: lane = full-spec; set = <paths>; design <n> lines vs implementation estimate <low>–<high>; ratio <n.n>x; protocol = bounded-independent; lens = <name>
-    design review: lane = light-spec; set = <paths>; spec <words>/500 words and <lines>/60 lines; protocol = bounded-independent; lens = <name>
+    design review: lane = full-spec; set = <paths>; design <n> lines / fixed <S|M|L> denominator <100|250|1000> from <scope provenance> = <n.n>x displayed, <exact threshold class>; plan estimate = <low>–<high>; protocol = bounded-independent; lens = <name>
+    design review: lane = light-spec; set = <paths>; design <n> lines / fixed <S|M|L> denominator <100|250|1000> from <scope provenance> = <n.n>x displayed, <exact threshold class>; spec = <words>/500 words and <lines>/60 lines; protocol = bounded-independent; lens = <name>
 
-A full plan carrying no `Expected implementation size` line is a step 2 defect: derive the range
-from the plan's own file map and task list, write it into the plan, and say in the audit
-line that you did.
+A full plan carrying no `Expected implementation size` line is a step 2 defect: derive the
+informational range from the plan's own file map and task list, write it into the plan, and say
+in the audit line that you did. Never use that repair to alter the fixed denominator.
 
 ### Run the review
 
@@ -617,20 +636,25 @@ single-pass JSON artifact, freshness, validation, and malformed-retry contract:
   focused or non-applicable evidence. A task breakdown, missing inventory entry, or correctness
   detail compressed away to meet the cap is a finding.
 
-  Proportionality: append only the selected lane's measured clause. For full-spec, the
-  orchestrator measured <design size> lines against an expected implementation of
-  <low>–<high> changed lines, a ratio of <n.n>x. Above 3x is a blocking finding; 2x to 3x is a
-  note. The remedy is cutting the
-  design — never adding text to defend its length, and never widening the estimate to move
-  the ratio. Judge the estimate too: a range the plan's own file map and task list do not
-  support is a finding in its own right, and the honest range is the one the file map
-  yields. For light-spec, the orchestrator measured <words> words and <lines> lines: exceeding
-  either hard cap is blocking and returns to the scope and assessment checkpoint; the breach
-  alone does not authorize `full-spec`. Do not ask for an invented estimate. Omit the other
-  lane's clause rather than leaving unused placeholders.
-  Size is in scope per artifact as well as in aggregate — a record arguing for its
-  decision at greater length than the decision governs is a finding, and its remedy is also
-  cutting.`
+  Proportionality: for either lane, the orchestrator measured <design size> lines across the
+  complete design set, including ADRs, against the frozen <S | M | L> denominator of
+  <100 | 250 | 1000> changed lines from <scope provenance>. The exact fraction is <n>/<d>;
+  its displayed ratio is <n.n>x and its unrounded threshold class is <below-note | note |
+  blocking>. From 2x through 3x inclusive is a note; above 3x is blocking. The remedy is
+  cutting the design — never adding text to defend its length, widening the plan estimate,
+  or retroactively re-sizing the denominator. A real scope change returns to explicit
+  re-scoping before a new design cycle. There is no new absolute full-spec design ceiling or
+  implementation ceiling; the light-spec caps below remain independently binding.
+
+  Full-spec estimate, when present: the plan separately estimates <low>–<high> changed lines.
+  Judge its file-map basis as plan quality; an unsupported estimate is a finding in its own
+  right, but even an honest estimate never replaces the fixed denominator. Light-spec cap,
+  when selected: the spec has <words> words and <lines> lines. Exceeding either the 500-word
+  or 60-line cap is independently blocking and returns to the scope and assessment checkpoint;
+  the breach alone does not authorize `full-spec`. Omit the other lane's clause rather than
+  leaving unused placeholders. Size is in scope per artifact as well as in aggregate — a
+  record arguing for its decision at greater length than the decision governs is a finding,
+  and its remedy is also cutting.`
 
 ### Route the passes
 

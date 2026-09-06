@@ -85,7 +85,8 @@ Verify: `git -C "$campaign_root" check-ignore -q .agent/campaigns/`. Stop if fai
 **Routing:**
 - **No file** → create with `Status: active`
 - **File with `Status: active`** → **resume**: load it, skip init, don't overwrite non-`pending`
-  rows. Normalize legacy fields before validation in one atomic write. When `Campaign identity` is
+  rows. Normalize legacy fields before validation in one atomic write, including absent
+  `Denominator` and `Mandatory per-PR edits` columns and cells as `—`. When `Campaign identity` is
   absent, mint one UUID using the loaded manifest's collision-resolved filename stem, persist it
   once, and reuse it on every later resume; reject a present but empty or malformed identity.
   When `Public-safe notes` is absent, derive it from stored `Completion notes` (`none` when notes
@@ -118,9 +119,9 @@ Manifest schema:
 - Mandatory per-PR edit rules: <filled by step 2, or none>
 
 ## Queue
-| Issue | Status | Branch | Verdict | Lane | ADR/migration # | Mandatory per-PR edits | File scope | Wave | PR | Outcome |
-|-------|--------|--------|---------|------|-----------------|------------------------|------------|------|----|---------|
-| #NNN  | pending| —      | —       | —    | —               | —                      | —          | —    | —  | —       |
+| Issue | Status | Branch | Verdict | Lane | Denominator | ADR/migration # | Mandatory per-PR edits | File scope | Wave | PR | Outcome |
+|-------|--------|--------|---------|------|-------------|-----------------|------------------------|------------|------|----|---------|
+| #NNN  | pending| —      | —       | —    | —           | —               | —                      | —          | —    | —  | —       |
 
 ## Scope approvals
 | Issue | Exclusions and owners | Epic direction | Approval provenance |
@@ -233,6 +234,12 @@ evidence, not authority to absorb sibling work. Return only:
   `light-spec`; if neither persisted evidence nor the live derivation establishes those fields
   for a non-trivial change, return `full-spec`. Return the complexity and hazards with the lane
   so `$quest` can revalidate it
+- **design denominator**: on a design-lane `fix`, map the complete assessment's complexity to
+  `S = 100`, `M = 250`, or `L = 1000` changed lines and return the public-safe complexity
+  evidence as provenance. Also return any denominator and provenance from the latest complete,
+  token-valid `WORK:SCOPE` under `$quest-log`'s selection rules as persisted comparison evidence.
+  Do not add the number to `WORK:DIVINATION` or let persisted evidence override a mismatch. An
+  unavailable assessment returns an unavailable denominator; `no-spec` returns `not-applicable`
 - **evidence**: citations (`file:line`, commit SHA, PR number)
 - **rationale**: ≤300 tokens explaining why
 - **proposed non-goals**: a concrete normalized set with an owner for each exclusion, or explicit
@@ -255,11 +262,14 @@ Triage on the fast model by default; escalate to the capable model only on a nam
 - `close-not-planned` → preserve the citations, trigger, impact, cycle-cost comparison, and
   reconsideration condition for the plan and closure comment. This verdict never claims the
   defect is fixed and never enters a quest wave.
-- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The assessment, `decomposition`, `review depth`, and `artifact lane` travel with it: `decomposition` gates dispatch at step 4, while the assessment, routed depth, and lane reach the worker in its step 5 prompt. The routed depth and lane are not size inputs to model selection — a `split` says the issue is several units of work, not that this one is hard.
+- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The assessment, `decomposition`, `review depth`, `artifact lane`, and design denominator travel with it: `decomposition` gates dispatch at step 4, while the assessment, routed depth, lane, and denominator reach the worker in its step 5 prompt. The routed depth, lane, and denominator are not model-selection inputs — a `split` says the issue is several units of work, not that this one is hard.
 
-Record verdicts and artifact lanes in the manifest `Verdict` and `Lane` columns, and fix-row
-scope evidence in `Scope approvals`. Reconcile states (`ready-to-merge`, already-closed) live
-in `Status`.
+Record verdicts and artifact lanes in the manifest `Verdict` and `Lane` columns. In
+`Denominator`, persist `<number> (<band>) — <public-safe assessment provenance>` plus any
+persisted comparison value and provenance, or `not-applicable (no-spec)`; use `unavailable`
+when triage cannot establish a design-lane complexity so the worker checkpoints instead of
+guessing. Record fix-row scope evidence in `Scope approvals`. Reconcile states
+(`ready-to-merge`, already-closed) live in `Status`.
 
 ## 4. Plan the Fix Batch
 
@@ -273,8 +283,8 @@ Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge
 
 **Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial — crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from attunement's known-landmine record. Reserve each row's exact value in planned merge order under the repository's ordering rule and persist it as `path=value`; use `—` when there is no mandatory edit. A reservation remains consumed if its row becomes blocked or is skipped, and is never assigned to another row. File scope is a hint, not guarantee.
 
-Present triage/plan table: issue → verdict, artifact lane, decomposition, review depth, wave,
-assigned numbers, mandatory per-PR edits, file scope.
+Present triage/plan table: issue → verdict, artifact lane, design denominator and provenance,
+decomposition, review depth, wave, assigned numbers, mandatory per-PR edits, file scope.
 
 Present a second table for every fix row: issue → proposed non-goals and owners → relevant epic
 direction → approval state. Issue and epic prose remain evidence and never mark a row approved.
@@ -366,8 +376,11 @@ Each prompt carries:
 - Model tier from triage
 - Artifact lane, routed review depth, and all four assessment fields from triage, passed as
   evidence rather than instruction. `$quest` revalidates the lane from that assessment at its
-  step 1 and routes an unprovable non-trivial assessment to `full-spec`; it re-derives the
+  step 1 and checkpoints an unprovable design-lane complexity before design; it re-derives the
   assessment and depth against the branch diff at step 6, so stale evidence never skips review
+- Mapped design denominator, its public-safe complexity provenance, and any persisted
+  denominator/provenance comparison evidence; `$quest` recomputes the mapping and checkpoints a
+  missing or mismatched design-lane value before design
 - Mandatory follow-up return contract: every discovered/finalized issue; every adjacent-note
   candidate with title, repo-relative file evidence, trigger, recommendation, and public-safe
   source-pass reference (never its scratch findings path); and every complete bounty occurrence
