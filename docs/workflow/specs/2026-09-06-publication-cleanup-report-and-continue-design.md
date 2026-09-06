@@ -10,8 +10,9 @@ behaviour, the boundaries it touches, and how it is tested.
 The ADR's Decision states the record contract and is not restated here. Three details it does not
 carry:
 
-- **The partition is by what is left on disk**, not by the disposer's exit status. A disposer that
-  errors after removing a path leaves nothing to retain, and it lands in the disposed record —
+- **The partition is by what is left on disk**, never by the disposer's exit status. One that
+  errors after removing a path leaves nothing to retain; one that reports success without removing
+  it leaves something that does. The disposer's status is discarded, and only `[ -e ]` decides —
   which is how the previous implementation computed its remaining set too.
 - **Owned order** is the required review (in `required` mode), the summary, the generated body,
   then the payload last. Each record lists its own subset in that order, joined by single spaces.
@@ -19,7 +20,10 @@ carry:
   the unchanged happy path.
 - **Membership is decided by whole-line comparison.** An owned path may contain spaces, so a
   consumer never splits a record on whitespace; it knows the owned paths and their order, so it
-  reconstructs the exact record text for the partition under test and compares whole lines.
+  reconstructs the exact record text for the partition under test and compares whole lines. The
+  generated body is the one owned path whose name the consumer does not already hold: it is the
+  record text left once the known paths and their separators are removed, and it must be the
+  ledger directory plus `/.publish-forge-review.` and six characters.
 
 ### The exit trap
 
@@ -79,8 +83,8 @@ lands.
 
 ## Testing
 
-Two contracts in `tests/fixtures/quest/publish-forge-review-test.sh`; the plan carries the case
-text. One rewrites `PFR-6`'s third block and one is a new case; every other case, `PFR-4`
+Three contracts in `tests/fixtures/quest/publish-forge-review-test.sh`; the plan carries the case
+text. One rewrites `PFR-6`'s third block and two are new cases; every other case, `PFR-4`
 included, is untouched.
 
 - **Partial failure** (`PFR-6`'s third block, which today pins the old nonzero contract for
@@ -91,9 +95,15 @@ included, is untouched.
 - **Total failure** (a new case): the run completes, no disposed record, one undisposed record
   owning all three paths in owned order, every path on disk, and no false `successful publication
   left its body behind`.
+- **Partition basis** (a new case): a disposer that removes a path and then fails puts it in the
+  disposed record; one that reports success without removing the generated body puts that body in
+  the undisposed record and still reports no silent leak. Without this the filesystem check is
+  unpinned — the branch review reproduced a short-circuiting partition that passed every other
+  case.
 
-The assertions carrying the new contract are verified to bite by the two inversions the plan's
-Task 1 step 7 prescribes — each applied once, red observed, reverted.
+Every assertion carrying the new contract is verified to bite by inverting the helper once and
+observing red: the retained-path guard, the disposed record naming a retained path, and both
+halves of the partition basis.
 
 ## Guardrails
 

@@ -284,13 +284,15 @@ run_disposer() { # candidate
 dispose() {
 	local candidate disposed=() remaining=()
 	for candidate in "$@"; do
-		# Partition on what is left on disk, not on the disposer's status: a disposer
-		# that errors after removing the path leaves nothing to retain, and the previous
+		# Partition on what is left on disk, never on the disposer's status: one that
+		# errors after removing the path leaves nothing to retain, and one that reports
+		# success without removing it leaves something that does. The previous
 		# implementation reported its remaining paths the same way.
-		if run_disposer "$candidate" || [ ! -e "$candidate" ]; then
-			disposed[${#disposed[@]}]=$candidate
-		else
+		run_disposer "$candidate" || : # scan-fault: deliberate — the filesystem check below is the verdict
+		if [ -e "$candidate" ]; then
 			remaining[${#remaining[@]}]=$candidate
+		else
+			disposed[${#disposed[@]}]=$candidate
 		fi
 	done
 	if [ "${#disposed[@]}" -gt 0 ]; then

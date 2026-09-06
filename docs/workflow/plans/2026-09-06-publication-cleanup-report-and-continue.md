@@ -364,6 +364,16 @@ mode, then the summary, then the generated body, then the payload last.
 - `.claude-plugin/plugin.json` declares `4.1.2`.
 - `just verify` exits 0.
 
+## Amendments applied during the branch review
+
+The branch review found the partition as first written short-circuited: `run_disposer "$c" ||
+[ ! -e "$c" ]` never evaluates the filesystem check when the disposer exits 0, so a disposer that
+reports success without removing a path recorded it as disposed. The shipped `dispose()` discards
+the disposer's status (`run_disposer "$c" || :`) and classifies on `[ -e "$c" ]` alone, and a new
+`PFR-21` pins both halves. `skills/quest/SKILL.md` steps 5 and 8 also gained a clause naming how a
+consumer identifies the generated body, without which the whole-line reconstruction has no
+terminating step.
+
 ## Rollback and deferrals
 
 Both commits are confined to the branch and revert together — Task 2's documents describe Task

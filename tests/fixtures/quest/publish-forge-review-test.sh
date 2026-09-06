@@ -167,7 +167,18 @@ printf 'trash %s\n' "$name" >>"$FAKE_STATE/events"
 if [ "${FAIL_TRASH_ON:-}" = "$name" ] || [ "${FAIL_TRASH_ON:-}" = all ]; then
 	exit 1
 fi
+noop=${TRASH_NOOP_ON:-}
+if [ "$noop" = body ]; then
+	noop=''
+	case $name in .publish-forge-review.*) noop=$name ;; esac
+fi
+if [ -n "$noop" ] && [ "$noop" = "$name" ]; then
+	exit 0
+fi
 mv "$path" "$FAKE_STATE/trash/$name"
+if [ "${REMOVE_THEN_FAIL_ON:-}" = "$name" ]; then
+	exit 1
+fi
 EOF
 	cat >"$bin/trash" <<'EOF'
 #!/usr/bin/env bash
@@ -513,6 +524,36 @@ case_total_disposal_failure_completes_publication() {
 		! grep -qF "$body" "$REPO/error" ||
 		grep -q 'successful publication left its body behind' "$REPO/error"; then
 		fail "$name" 'warning did not name every retained path without a false leak report'
+		return
+	fi
+	ok "$name"
+}
+
+case_partition_follows_the_filesystem() {
+	local name='PFR-21 partition follows the filesystem not the disposer status' body disposed_line
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=success REMOVE_THEN_FAIL_ON=summary.md
+	disposed_line=$(grep '^review-publication-disposed: ' "$LEDGER") || disposed_line=''
+	if [ "$STATUS" -ne 0 ] || [ -e "$SUMMARY" ] || [ -e "$REVIEW" ] || body_file >/dev/null ||
+		grep -q '^review-publication-undisposed:' "$LEDGER"; then
+		fail "$name" 'a removed path that failed its disposer was not recorded as disposed'
+		return
+	fi
+	case $disposed_line in
+	*"$SUMMARY"*) ;;
+	*)
+		fail "$name" 'disposed record omitted a path the disposer removed'
+		return
+		;;
+	esac
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=success TRASH_NOOP_ON=body
+	body=$(body_file) || body=''
+	if [ "$STATUS" -ne 0 ] || [ -z "$body" ] || [ -e "$REVIEW" ] || [ -e "$SUMMARY" ] ||
+		! grep -qxF "review-publication-disposed: $REVIEW $SUMMARY" "$LEDGER" ||
+		! grep -qxF "review-publication-undisposed: $body" "$LEDGER" ||
+		grep -q 'successful publication left its body behind' "$REPO/error"; then
+		fail "$name" 'a surviving path whose disposer reported success was not retained'
 		return
 	fi
 	ok "$name"
@@ -954,6 +995,7 @@ case_comment_failures_never_retry
 case_readback_rejects_unverified_comments
 case_ledger_and_disposal_failures_retain_paths
 case_total_disposal_failure_completes_publication
+case_partition_follows_the_filesystem
 case_markers_stay_payload_and_summary_markers_fail
 case_review_without_final_newline_keeps_outer_sentinel_parseable
 case_platform_disposers_are_deterministic

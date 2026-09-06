@@ -440,7 +440,11 @@ helper-created body in the ledger directory. In `not-required` mode they are the
 exact `REVIEW_SUMMARY` and that one body. An owned path may contain spaces, so
 never decide membership by splitting a record on whitespace: reconstruct the
 exact record text for the partition under test from the known owned paths and
-compare whole lines. When the preserved
+compare whole lines. The generated body is the one
+owned path whose name this workflow does not already hold: isolate it as the
+record text left after removing the known owned paths and their separators, and
+require it to be `<ledger-directory>/.publish-forge-review.` plus six
+characters. When the preserved
 `review-payload:` is a path rather than `none`, that exact payload must be the final owned path in
 either mode; when it is `none`, no payload path may appear. Only then skip
 directly to step 9. Do not rerun `$deliver`, recreate the summary, invoke the
@@ -799,7 +803,11 @@ run carried a payload, the exact `REVIEW_PAYLOAD` in both modes, named last
 among the owned paths. An owned path may contain spaces, so never decide
 membership by splitting a record on whitespace: reconstruct the exact record
 text for the partition under test from the known owned paths and compare whole
-lines. An `undisposed` record is a completed publication whose cleanup did not
+lines. The generated body is the one
+owned path whose name this workflow does not already hold: isolate it as the
+record text left after removing the known owned paths and their separators, and
+require it to be `<ledger-directory>/.publish-forge-review.` plus six
+characters. An `undisposed` record is a completed publication whose cleanup did not
 finish. Continue rather than parking: the ledger, not the exit status, says
 whether publication happened, and the helper's stderr and that record already
 name the retained paths. Add no field to the handoff for them -- the

@@ -40,7 +40,7 @@ whitespace; it knows the owned paths and their order, so it reconstructs the exa
 the partition under test and compares whole lines.
 
 The single platform disposer stays. verified: at base commit
-`c939eea39cd279725f0e5156d7ddfea01e17df49` on macOS 15.6 (Darwin 25.6.0), running the helper with
+`c939eea39cd279725f0e5156d7ddfea01e17df49` on macOS 26.6 (Darwin 25.6.0), running the helper with
 `trash` removed from `PATH` and a `gh` stub that reports every invocation printed
 `publish-forge-review: recoverable-delete command is unavailable`, exited 1, left the ledger and
 all three inputs untouched, and never reached the stub — a missing recoverable-delete command
