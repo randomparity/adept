@@ -45,8 +45,9 @@ Before writing an ADR, specification, or plan, require a validated complexity an
 `S = 100`, `M = 250`, or `L = 1000` changed lines. This fixed number is the design denominator.
 It is derived from the assessment, not stored in `WORK:DIVINATION`, and neither the design nor a
 plan estimate may revise it. A caller-supplied number must match the mapping and carry the
-public-safe assessment provenance frozen in `WORK:SCOPE`; mismatch or unknown complexity returns
-to `SCOPE CHECKPOINT` before design.
+public-safe assessment provenance frozen in `WORK:SCOPE`. Validate that provenance by confirming
+it still identifies the same valid assessment evidence, not by requiring unchanged citation text
+or line numbers. A mismatch or unknown complexity returns to `SCOPE CHECKPOINT` before design.
 
 On a standalone invocation, freeze the mapped number, complexity, and public-safe evidence in the
 same local scope record as the charter and read them back before step 1. A material scope change
@@ -451,12 +452,12 @@ The header also carries one line, exactly:
 The range is a by-product of the file map and the task list you have just written, not new
 analysis: count what each task creates and changes and add it up. Exclude the design
 artifacts themselves — this measures the implementation the plan produces. The parenthetical
-band describes that estimate in the existing complexity vocabulary. The line is informational:
-step 3 never uses its range or band as the denominator. If it disagrees with the complexity
-frozen before design, explain the evidence rather than changing either value to make the ratio
-pass. A demonstrated material scope change returns to explicit re-scoping and a new design cycle;
-a plan overestimate alone has no authority to widen the frozen baseline. The estimate is not an
-implementation budget or ceiling.
+band is the complexity frozen before design, carried forward unchanged; only the numeric range is
+the plan's own estimate. The line is informational: step 3 never uses its range as the
+denominator. If the range appears inconsistent with the frozen complexity, explain the evidence
+rather than selecting a second band to make them agree. A demonstrated material scope change
+returns to explicit re-scoping and a new design cycle; a plan overestimate alone has no authority
+to widen the frozen baseline. The estimate is not an implementation budget or ceiling.
 
 Give each task:
 
@@ -641,7 +642,8 @@ single-pass JSON artifact, freshness, validation, and malformed-retry contract:
   blocking>. From 2x through 3x inclusive is a note; above 3x is blocking. The remedy is
   cutting the design — never adding text to defend its length, widening the plan estimate,
   or retroactively re-sizing the denominator. A real scope change returns to explicit
-  re-scoping before a new design cycle. There is no absolute design or implementation ceiling.
+  re-scoping before a new design cycle. There is no new absolute full-spec design ceiling or
+  implementation ceiling; the light-spec caps below remain independently binding.
 
   Full-spec estimate, when present: the plan separately estimates <low>–<high> changed lines.
   Judge its file-map basis as plan quality; an unsupported estimate is a finding in its own

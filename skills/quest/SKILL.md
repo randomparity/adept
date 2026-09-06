@@ -106,8 +106,10 @@ hide the missing denominator.
 
 Treat a caller-supplied or persisted denominator as comparison evidence only. Recompute the
 mapping from the validated complexity and require the number, band, and public-safe provenance
-to agree before reuse. A mismatch returns to `SCOPE CHECKPOINT`; the plan cannot reconcile it.
-For `no-spec`, record the denominator as `not-applicable` because no design ratio is measured.
+to identify the same valid assessment evidence before reuse; unrelated citation wording or line
+number changes do not invalidate that provenance. A mismatch returns to `SCOPE CHECKPOINT`; the
+plan cannot reconcile it. For `no-spec`, record the denominator as `not-applicable` because no
+design ratio is measured.
 
 **A lone quest never splits its own issue.** You claim one issue number and create one branch for
 it, so a `split` decompose verdict is not yours to act on. It is the caller's: `$campaign` gates
