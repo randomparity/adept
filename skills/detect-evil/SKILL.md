@@ -204,9 +204,14 @@ Every finding names a boundary from step 1 or a category from step 3, and answer
 
 4. What concrete change closes it?
 
+5. Does the concern belong to this change's correctness closure (`surface: in`)
+   or is it an independent concern beside that closure (`surface: adjacent`)?
+6. Is its reachability `constructed`, `reproduced`, or `inferred`, using
+   `$gauntlet`'s exact field meanings?
+
 The one exception is the **refuted-claim finding** from *Reproduce the claims the target
 rests on*: it need not name a boundary or a category — where the claim stands in for
-neither, it says so and stands on the claim itself — and its four questions are answered by
+neither, it says so and stands on the claim itself — and its first four questions are answered by
 the claim, what you observed, the command you ran, and the environment you ran it in,
 which that bullet already requires in `body`. Every other finding names a boundary or a
 category as above.
@@ -245,11 +250,18 @@ Three differences in how the fields are filled:
   `$gauntlet`: a decision an accepted ADR settled is not re-argued here either.
   A security finding that cites a fact outside that record is new risk, not re-litigation —
   report it. An accepted ADR never settles a vulnerability in the code implementing it.
+- **Every finding carries `surface` and `trigger`**, using `$gauntlet`'s exact
+  enums and meanings. The boundary inventory supplies the concrete actor, input,
+  and route for `trigger: constructed`; an observed refuted claim or caller
+  measurement established by its contract may be `reproduced`; a plausible
+  route that neither was constructed nor reproduced is `inferred`.
 
 `verdict` is `approve` when no **blocking** (`critical` or `high`) finding exists, and
 `needs-attention` otherwise — the same severity gate and the same `blocking_count` in the
 compact object as `$gauntlet`, whose *Severity vocabulary* governs both. The `reasoning`
-field is required here too, and emitted first.
+field is required here too, and emitted first. `critical` and `high` require
+`trigger: constructed` or `reproduced`; `trigger: inferred` is capped at
+`medium`. `surface` never changes the grade or `blocking_count`.
 
 **The gate does not soften the scan.** An exploitable exposure, a violated authority
 boundary, or a missing check at a trust boundary the diff introduces is `critical` or
@@ -271,6 +283,9 @@ below, not a use of this gate.
   unseen caller, say so in the body and lower the confidence honestly.
 - Do not move a finding across the blocking line to reach a verdict. The severity states the
   exposure you found, never what you want the caller to do next.
+- Do not omit or invent `surface` or `trigger`. A crossing required for this
+  change's correctness is `in` even when the charter excluded it; an inferred
+  route cannot be graded `critical` or `high`.
 - This is a diff-scoped pass, not a codebase audit. Pre-existing weaknesses the change
   neither introduces nor touches are out of scope — note them once in `next_steps` if they
   bear on the change, and do not let them hold the verdict.

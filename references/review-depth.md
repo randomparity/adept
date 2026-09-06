@@ -74,18 +74,35 @@ Then apply `$trial-loop` step 2's checks, which a single pass does not get for f
 - open the artifact when `findings_count > 0` **or** `suppressed_count > 0`, and
   surface each suppression (concern plus ADR) in the transcript.
 
+Validate the full artifact before routing it, exactly as `$trial-loop` step 2
+does. Every finding has exactly one recognized `surface` (`in | adjacent`) and
+`trigger` (`constructed | reproduced | inferred`); a `critical` or `high`
+finding cannot be `inferred`; and each count must equal its severity-derived or
+array-derived value. Rerun malformed output once, then stop as blocked. Never
+repair or infer a missing field.
+
 Every finding takes exactly one disposition from step 6's vocabulary —
-`accepted-fixed`, `deferred-tracked`, `rejected-with-evidence`, `blocked` — under
-[heed-counsel](heed-counsel.md), and a `deferred-tracked` disposition owes the same
-`docs/debt/` record on the same terms. The pass's deferrals, suppressions, and
-`rejected-with-evidence` findings are disclosed exactly as a loop run discloses them.
+`accepted-fixed`, `follow-up-candidate`, `deferred-tracked`,
+`rejected-with-evidence`, `blocked` — under [heed-counsel](heed-counsel.md), and
+a `deferred-tracked` disposition owes the same `docs/debt/` record on the same
+terms. An adjacent note takes `follow-up-candidate`: copy its title,
+repo-relative file evidence, trigger, recommendation, and public-safe
+source-pass reference into the follow-up-candidates table, but keep its scratch
+findings path in the local report only. The pass's follow-up candidates,
+deferrals, suppressions, and `rejected-with-evidence` findings are disclosed
+exactly as a loop run discloses them.
 
 ## Escalation — the single pass is refutable
 
-A `single-pass` review returning `blocking_count > 0` **refutes the routing**: a change
-that drew a blocking finding was not the low-risk change the assessment described. Do
-not fix the finding and continue — that is the one outcome a single pass cannot
-support, because no pass would ever review the fix.
+Inspect every blocking finding before escalation. If any is adjacent, it refutes
+the frozen correctness surface: return to `SCOPE CHECKPOINT` when interactive or
+park when unattended. Do not fix, defer, subtract, escalate into the loop, or
+spend another review pass.
+
+When every blocking finding is in-surface, the result **refutes the routing**: a
+change that drew a blocking finding was not the low-risk change the assessment
+described. Do not fix the finding and continue — that is the one outcome a
+single pass cannot support, because no pass would ever review the fix.
 
 Escalate instead. Record the escalation and the finding that caused it, then run
 `$trial-loop` against the same target at its ordinary budget, starting at iteration 1.
@@ -101,5 +118,5 @@ read forward: the loop's answer to risk is a blocking finding it will not approv
 and here that finding is what pays for the extra passes.
 
 Notes never escalate. A `single-pass` review returning `approve` with `medium` or `low`
-findings is a completed review — each note takes its one disposition and the run
-advances.
+findings is a completed review — each note takes its one disposition, every adjacent note
+is recorded as a follow-up candidate, and the run advances.
