@@ -269,21 +269,42 @@ append_ledger() {
 	fi
 }
 
+run_disposer() { # candidate
+	case $disposer in
+	trash) trash "$1" ;;
+	gio) gio trash "$1" ;;
+	esac
+}
+
+# Disposal runs only after the verified ledger line, so the run's product is already
+# durable and a disposer that refuses a path -- gio trash declines system-internal
+# mounts -- is reported rather than fatal. The ledger, not the exit status, says whether
+# publication happened. Every path is attempted: a filesystem that refuses one usually
+# refuses all of them, and one odd path must not strand the rest.
 dispose() {
-	local candidate remaining_candidate remaining=() disposed_line
+	local candidate disposed=() remaining=()
 	for candidate in "$@"; do
-		case $disposer in
-		trash) trash "$candidate" ;;
-		gio) gio trash "$candidate" ;;
-		esac || {
-			for remaining_candidate in "$@"; do
-				[ -e "$remaining_candidate" ] && remaining[${#remaining[@]}]=$remaining_candidate
-			done
-			fail "recoverable disposal failed; remaining paths: ${remaining[*]}"
-		}
+		# Partition on what is left on disk, never on the disposer's status: one that
+		# errors after removing the path leaves nothing to retain, and one that reports
+		# success without removing it leaves something that does. The previous
+		# implementation reported its remaining paths the same way.
+		run_disposer "$candidate" || : # scan-fault: deliberate — the filesystem check below is the verdict
+		if [ -e "$candidate" ]; then
+			remaining[${#remaining[@]}]=$candidate
+		else
+			disposed[${#disposed[@]}]=$candidate
+		fi
 	done
-	disposed_line="review-publication-disposed: $*"
-	append_ledger "$disposed_line"
+	if [ "${#disposed[@]}" -gt 0 ]; then
+		append_ledger "review-publication-disposed: ${disposed[*]}"
+	fi
+	[ "${#remaining[@]}" -gt 0 ] || return 0
+	printf 'publish-forge-review: recoverable disposal failed; remaining paths: %s\n' \
+		"${remaining[*]}" >&2
+	append_ledger "review-publication-undisposed: ${remaining[*]}"
+	# The record names every retained path, the generated body included, so the exit
+	# guard's unrecorded-leak check no longer applies to it.
+	body=''
 }
 
 validate_arguments "$@"
