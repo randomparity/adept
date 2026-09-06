@@ -49,6 +49,8 @@ This is `$deliver`'s hand-back condition, not authorization to merge. An
 issue-backed merge must separately pass ADR 0035's commit-bound four-part gate,
 including its author handshake.
 
+Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification.
+
 Poll in a loop — **do not stream**. `gh pr checks <PR> --watch` pipes every
 incremental status frame into context for the entire CI run; the intermediate
 frames carry no decision value, only the terminal states do.
@@ -59,10 +61,9 @@ frames carry no decision value, only the terminal states do.
    `gh pr checks` exits non-zero (code 8) **while checks are still pending** and on
    failure — decide pass/pending/fail from the parsed `state` fields, not the
    process exit code (hence `|| true`, so a pending run isn't misread as a command
-   failure). Alternatively run the plain `--watch` (its live table, no `--json`) as
-   a background task and read only its final output. No streaming output enters
-   context. Skipped integration jobs that require unavailable hardware or external
-   services may be expected; wait on required checks.
+   failure). No streaming output enters context. Skipped integration jobs that
+   require unavailable hardware or external services may be expected; wait on
+   required checks.
 2. If a required check fails, establish its cause before fixing it. Direct correction is allowed
    only when the current failure artifact or an already-recorded investigation identifies a
    specific cause and the correction follows from that evidence. Familiarity, a plausible fix, or

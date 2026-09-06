@@ -13,10 +13,10 @@ stale evidence from another failure is not enough; without current causal eviden
 `$detect-curse` before proposing a correction. If the same artifact recurs after the same
 evidence-backed correction with no new evidence, stop instead of repeating the diagnose-fix cycle.
 Don't advance past a red guardrail, an undispositioned `$gauntlet` finding, a dirty-tree surprise,
-or an ambiguous user-facing design decision. A finding a `$trial-loop` run disposed of — as
-`deferred-tracked` with an owner, or `rejected-with-evidence` — is dispositioned; the loop
-finishes while such findings stand, and treating them as advancement blockers is the
-reading the loop's residual blocking figure exists to remove.
+or an ambiguous user-facing design decision. A finding a `$trial-loop` run disposed of — as a
+`follow-up-candidate`, `deferred-tracked` with an owner, or `rejected-with-evidence` — is
+dispositioned; the loop finishes while such findings stand, and treating them as advancement
+blockers is the reading the loop's residual blocking figure exists to remove.
 
 > **One continuous task.** Preflight through hand-off -- or through cleanup on
 > the authorized merge path -- is a single turn, and the checkpoints inside
@@ -89,8 +89,9 @@ The assessment stays advisory for scope and becomes load-bearing for exactly one
 this run's review depth under
 [risk-routed review depth](../../references/review-depth.md). Derive `single-pass` or
 `iterating` from the four fields now, record it with the tracking metadata below, and carry it to
-step 6. An absent or rejected assessment routes `iterating`, so the failure path is the expensive
-one and never the cheap one.
+step 6. A successful live derivation is a present assessment; failure to derive a complete
+assessment routes `iterating` for absence, so the failure path is the expensive one and never
+the cheap one.
 
 **A lone quest never splits its own issue.** You claim one issue number and create one branch for
 it, so a `split` decompose verdict is not yours to act on. It is the caller's: `$campaign` gates
@@ -497,23 +498,25 @@ other condition that has since stopped holding. Name the routed depth in the tra
 what moved it if it changed.
 
 Set the issue to `status:in-review` (single-active swap), then review the branch at that depth
-with this focus:
+with the first `gauntlet`-compatible lens selected for the target shape under
+[review lenses](../../references/review-lenses.md). Append the scope-audit comparison below to
+the preset as target-specific context. Name the selected lens beside the routed depth in the
+transcript. This broad branch review retains the existing `gauntlet` route; the Security pass
+below retains the `detect-evil` route and its `security` lens.
 
-> Focus on auth, permissions, data loss or corruption, rollback, idempotency, races, empty or
-> malformed inputs, degraded dependencies, compatibility, migrations, observability, and whether
-> the chosen approach is simpler or safer than viable alternatives.
-
-On `iterating`, run `$trial-loop --base <BASE_BRANCH> <that focus>`. On `single-pass`, dispatch
-the one reviewer pass the reference specifies, with the same `--base` and the same focus, and
-give each finding its single disposition. Address every defensible finding and commit after each
-accepted fix, on either route.
+On `iterating`, run `$trial-loop --reviewer gauntlet --base <BASE_BRANCH> <composed focus>`. On
+`single-pass`, dispatch the one `gauntlet` pass the reference specifies, with the same `--base`
+and composed focus, and give each finding its single disposition. Address every defensible
+finding and commit after each accepted fix, on either route.
 
 **A blocking finding on a single pass escalates rather than being fixed in place.** Record the
 escalation and the finding that caused it, then run the `$trial-loop` invocation above against
 the same branch at its ordinary budget, starting at iteration 1 — the single pass is not one of
-that run's iterations. From that point this step reads exactly as it does for a run routed
-`iterating` at step 1. A `single-pass` review that returns `approve` carrying only notes is a
-completed review, and step 8's summary records it as `exit: none` with `iterations: 1`.
+that run's iterations. No pass changed the target, so replace the first lens with the different
+independent-review lens selected by the reference before starting the loop. From that point this
+step reads exactly as it does for a run routed `iterating` at step 1. A `single-pass` review that
+returns `approve` carrying only notes is a completed review, and step 8's summary records it as
+`exit: none` with `iterations: 1`.
 
 **Carry the issue's cumulative review-round figure through every run here.** Seed it with
 the design phase's total where `$spellcraft` reported one, `0/0` otherwise, pass it to each
@@ -532,8 +535,9 @@ this workflow. Reading the second as blocked reports a finished branch as stuck.
 Carry every deferral from any `$trial-loop` run on this branch — each entry with
 its owning record path or tracker issue — into the `WORK:REVIEW` comment and the
 PR body, however the run ended, `approve` included. Carry the run's
-`rejected-with-evidence` findings and its outstanding notes the same way. The loop
-discloses all three however it ended, and a second run after a security round trip
+follow-up-candidates table, `rejected-with-evidence` findings, and its outstanding notes
+the same way. The loop discloses each list however it ended, and a second run after a
+security round trip
 does not erase the first run's records. Those lists are the part a reader cannot
 reconstruct, and they are the only thing holding the orchestrator's own disposition
 judgment to account.
@@ -604,18 +608,20 @@ oathbind report path: <exact readable report path>
 candidate approved surface: <read and pass the report's exact candidate approved surface>
 
 **Security pass.** When the branch diff is security-relevant, also run
-`$detect-evil` and disposition its findings on the same terms -- fixed, or owned
-by a tracked deferral (a deferral record where the repo keeps them, otherwise a
-tracker issue filed through `$bounty`, whose recurrence gate bounds instance
-growth and routes an unreachable-in-practice finding to record-and-close rather
-than the open queue). Non-blocking: `needs-attention` is work to do, never a
-reason to park.
+`$detect-evil` and disposition its in-surface findings on the same terms -- fixed,
+or owned by a tracked deferral (a deferral record where the repo keeps them,
+otherwise a tracker issue filed through `$bounty`, whose recurrence gate bounds
+instance growth and routes an unreachable-in-practice finding to
+record-and-close rather than the open queue). Adjacent findings take the routes
+defined below. Non-blocking: `needs-attention` is work to do, never a reason to
+park.
 
 Dispatch it the way `$trial-loop` dispatches its reviewer -- a subagent running
-`$detect-evil --json --out <path> --base <BASE_BRANCH>`, artifact on a
-scratchpad path outside the repo tree. Invoked bare it returns full markdown
-inline: a findings payload in your context at step 6 of 9, the cost this
-dispatch exists to avoid. Two properties make it safe:
+`$detect-evil --json --out <path> --base <BASE_BRANCH> <security lens focus>` under
+[review lenses](../../references/review-lenses.md), artifact on a scratchpad path outside the
+repo tree. Keep the existing `detect-evil` route: a focus string named `security` is not a reason
+to invoke `gauntlet`. Invoked bare it returns full markdown inline: a findings payload in your
+context at step 6 of 9, the cost this dispatch exists to avoid. Two properties make it safe:
 
 - **A path unique to this run** -- embed the issue number and branch name.
   `$campaign` runs up to five `$quest` subagents in parallel, and a fixed
@@ -631,6 +637,18 @@ dispatch exists to avoid. Two properties make it safe:
   security finding -- the one case the verdict cannot show. Record any
   suppression in `WORK:REVIEW` and the PR body whatever the verdict; the
   summary's fields are single-line and none of them holds a suppression.
+
+Validate each security finding's `surface` and `trigger` and the artifact's
+severity-derived counts on the same terms as `$trial-loop`; do not infer a
+missing field. Rerun malformed output once, then park without dispositioning it.
+The finding's `surface` is the reviewer's correctness-closure
+judgment, not the oathbind candidate-approved surface. A defensible adjacent
+`critical` or `high` finding refutes the frozen scope and returns to SCOPE
+CHECKPOINT when interactive or parks when unattended. An adjacent `medium` or
+`low` finding is added to the same follow-up-candidates table carried from the
+main review and does not block or trigger another pass. That public table carries
+repo-relative file evidence and a public-safe source-pass reference; keep the
+scratch findings path in the local run report only.
 
 Judge security-relevance by reading the changed files, not the issue's
 description of itself. The diff qualifies when it:
@@ -738,14 +756,14 @@ run that reaches this field with nothing to write.
 
 ADR 0053 is the authority for this field's values, amending ADR 0021, which
 remains the authority for the field set. A run's payload — the lists step 6 carries:
-deferrals with their owning paths or tracker issues, rejected findings, outstanding
-notes, and a budget stop's remaining-findings summary — stays out of
+deferrals with their owning paths or tracker issues, follow-up candidates, rejected findings,
+outstanding notes, and a budget stop's remaining-findings summary — stays out of
 the summary and out of every field: ADR 0028 sends it through the helper's payload
 slot into `WORK:REVIEW` and through this step's named write moment into the PR body,
 which is where `$trial-loop`'s own report obligation sends it.
 
-If step 6 carried any of the lists it specifies — a deferral list, rejected findings,
-outstanding notes, or a budget stop's remaining-findings summary — compose
+If step 6 carried any of the lists it specifies — a deferral list, follow-up-candidates table,
+rejected findings, outstanding notes, or a budget stop's remaining-findings summary — compose
 the run's payload file once, immediately after the summary: write only the lists step 6
 specifies into a `mktemp` file beside the ledger — no headings; each destination adds
 its own — atomically rename it only after the write, reject carriage return, NUL, and
@@ -907,6 +925,9 @@ the user the PR is ready to merge, and stops there -- short of its "After a
 merge" list. A `$campaign`-dispatched run always takes that path, so hand-off
 is a terminal stop, not a step to clean up after. On that path, leave the
 branch and the worktree in place for whoever merges; the reclaim is theirs.
+Include every public-safe follow-up-candidate row from step 6 in the completion
+report so a campaign caller can route it without rereading a private findings
+artifact. Do not return its scratch path.
 
 When this path is authorized to merge, apply
 [the commit-bound merge gate](../../references/merge-gate.md). The reference is the complete
