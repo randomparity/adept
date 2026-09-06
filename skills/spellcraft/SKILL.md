@@ -534,7 +534,7 @@ line that you did.
 Run `$trial-loop` in file-list mode:
 
 - challenge_args: `<every path in the design set, space-separated>`
-- focus: `<selected review-lens focus, followed by this target-specific context:
+- focus: `<selected review-lens focus> followed by this target-specific context:
   This is one design reviewed as one artifact set — ADR(s), specification, and
   implementation plan. Read them together and challenge them together: a defect that
   crosses files is one finding, not one per file, and a spec defect the plan inherited is
