@@ -412,6 +412,9 @@ assignment invalid, the orchestrator alone reserves the next unused valid value 
 it before refresh; a worker may apply only that exact reassignment from a fresh prompt. When
 the assigned value remains valid against the moved base, resolve the shared-file conflict by
 keeping that exact assignment.
+An earlier assigned row that is neither blocked nor skipped holds later ordered rows until it
+is merge-ready; only an explicitly blocked or skipped row may be passed over, with its
+reservation consumed.
 Merge one PR, then re-run the gate for each remaining in-flight PR. If the base moved, refresh
 the branch as part 3 directs. If the repository forbids the required merge commit and rebasing
 a pushed branch is denied, stop with a named blocker.
