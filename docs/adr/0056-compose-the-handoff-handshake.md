@@ -32,8 +32,17 @@ block simpliciter, and its `jq` applies all three tests before `last`. A park no
 revoke a valid hand-off today, and the helper does not change that.
 
 The helper computes the SHA from `git ls-remote origin` and requires GitHub's `headRefOid` to
-agree, refusing when they differ. It asserts its five conditions against the comment body GitHub
-stored, re-read through the API, not against the body it composed.
+agree, refusing when they differ. It asserts the gate's four whole-line conditions twice: once
+against the body it composed, before anything is posted, and again against the body GitHub stored,
+re-read through the API. The first makes `--preflight` mean something and stops a composition
+defect from being published at all; only the second says what the gate will read.
+
+**This ships an executable, so CLAUDE.md anatomy rule 2 has to be satisfied explicitly.** The bar
+is that a script does "something a model cannot do reliably inline". The ground here is the rule's
+second limb — performed inconsistently — and the evidence is the four holds issue #308 logs, from
+three different agents, on work that was finished and green every time. It is not the first limb:
+the block is short and composing it costs almost no context. What a model cannot do reliably is
+emit the same handful of bytes correctly on every occasion.
 
 ## Consequences
 
@@ -62,13 +71,28 @@ stored, re-read through the API, not against the body it composed.
 - `$return-to-town` gains a dependency on a checkout whose `origin` is the repository being handed
   off. It already required one to read the SHA; the helper makes the requirement explicit and names
   it in its own failure message.
+- **A pull request opened from a fork cannot be handed off by this helper**, and that is a narrowing
+  rather than a bug it hides. No single checkout has the upstream as `origin` and the fork's head
+  under `refs/heads/`, so the SHA read cannot be satisfied at all. The helper reads
+  `isCrossRepository` and refuses by name, before the remote read — because after it a fork is
+  indistinguishable from a moved branch, and "re-run once the branch settles" would be a permanent
+  refusal wearing a transient message. This repository's own work is branch-based, so nothing here
+  is affected; a repository taking fork pull requests would need a different SHA source.
 
 ## Considered & rejected
 
-- **A general `post-annotation` helper covering every `WORK:*` type.** judgment: of the five
-  annotation types, only the hand-off has a mechanical contract a helper can assert; the rest would
-  get markers-and-sentinel only, which is two `printf` calls at each call site. Three of the five
-  are written by skills this change does not own.
+- **An exact invocation written into `skills/return-to-town/SKILL.md`, shipping no executable.**
+  judgment: this is the rung anatomy rule 2 exists to force, and it fails on its own terms. A
+  fenced command block is still text the model must transcribe, and mis-transcription is the shared
+  root of all four logged defects — so the inline route reintroduces the failure one step earlier.
+  The 40-character SHA read, the two-source corroboration, and the readback assertions do not fit
+  an inline block honestly either.
+- **A general `post-annotation` helper covering every `WORK:*` type.** judgment: the remaining
+  types would gain markers-and-sentinel only, which is two `printf` calls at each call site, and
+  three of the four other annotation types in quest-log's table are written by skills this change
+  does not own. What this bullet must not claim is that the hand-off is the only type with a
+  mechanical contract a helper can assert — `WORK:REVIEW` has one and `publish-forge-review`
+  already asserts it.
 - **A `--kind hand-off|park` mode flag on one helper.** judgment: the flag is itself the confusion
   surface. A park note that acquired a handshake would authorize a merge of work that is parked —
   strictly worse than the defect being fixed — and the flag is the only way that becomes reachable.
@@ -85,9 +109,12 @@ stored, re-read through the API, not against the body it composed.
 - **Trust `headRefOid` and skip `git ls-remote`.** verified: `skills/return-to-town/SKILL.md`
   already requires the SHA to come from `git ls-remote origin "refs/heads/<branch>" | cut -f1` and
   says "never `headRefOid`, never an abbreviation".
-- **Assert the conditions against the composed body instead of the stored one.** judgment: the
-  composed body is the one input already known to be correct; what the gate reads is GitHub's copy,
-  and only that copy can show a transport or storage difference.
+- **Assert the conditions against the composed body *instead of* the stored one.** judgment: only
+  GitHub's copy can show a transport or storage difference, so the stored-side assertion is the one
+  that cannot be dropped. But "instead of" was the wrong framing and is rejected in both directions:
+  the composed body is not an input already known to be correct — the premise of this whole record
+  is that a composer's output must be verified rather than trusted, and that applies first to this
+  script's own. Both run, and the compose-side pass is three `grep` calls against a local file.
 - **Do nothing.** verified: four holds across four hand-offs in one campaign run, from three
   different worker agents, every one an annotation defect on work that was finished and green
   (issue #308's table).

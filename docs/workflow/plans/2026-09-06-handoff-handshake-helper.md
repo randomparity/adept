@@ -4,22 +4,23 @@ Derived from [the design](../specs/2026-09-06-handoff-handshake-helper-design.md
 [ADR 0056](../../adr/0056-compose-the-handoff-handshake.md).
 
 **Goal.** Replace `$return-to-town`'s hand-composed merge hand-off annotation with one executable
-that composes the block, computes the head SHA itself, posts the comment, and asserts every
-condition the merge gate checks against the copy GitHub stored.
+that composes the block, computes the head SHA itself, asserts every condition the merge gate checks
+against what it composed, posts the comment, and asserts them again against the copy GitHub stored.
 
 **Architecture.** One new executable, `skills/return-to-town/scripts/publish-handoff`. It takes the
 repository, issue, pull request, and a narrative file, and owns everything the gate reads: both
 annotation markers and the `MERGE-READY` line. It resolves the head branch from the pull request,
 reads the SHA from `git ls-remote origin`, requires GitHub's `headRefOid` to agree, composes the
-body, runs the repository's existing public-safety gate over it, posts with `gh issue comment`,
-re-reads the stored comment, and asserts five conditions against those bytes. A behaviour suite
+body, runs the repository's existing public-safety gate over it, asserts the gate's four whole-line
+conditions on what it composed, posts with `gh issue comment`, re-reads the stored comment, and
+asserts those four again plus byte equality. A behaviour suite
 under `tests/fixtures/return-to-town/` fakes `gh` and uses a real git repository with a real bare
 remote. `skills/return-to-town/SKILL.md` replaces its composition prose with the invocation.
 
 **Tech stack.** Bash and Markdown. No dependencies, no build step. Gates are `just verify`.
 
-**Expected implementation size: 950–1050 changed lines (L) — summed from the file map below: 354
-(`publish-handoff`) + 638 (its suite), the two code files, plus roughly 25 lines of contract text in
+**Expected implementation size: 1080–1180 changed lines (L) — summed from the file map below: 397
+(`publish-handoff`) + 688 (its suite), the two code files, plus roughly 25 lines of contract text in
 `skills/return-to-town/SKILL.md` and the one-line version bump.**
 
 The band disagrees with the `M` this run recorded in its `WORK:SCOPE` tracking metadata, and the
@@ -27,15 +28,15 @@ band is the one that is wrong there rather than here: `M` was read off the issue
 map existed, and the range above is what the file map and task list actually yield. The suite is
 the larger half, and that is proportionate rather than inflated — its sibling
 `tests/fixtures/quest/publish-forge-review-test.sh` runs 928 lines for a helper of 310, and this
-one covers 28 cases including one regression per defect logged in the issue.
+one covers 30 cases including one regression per defect logged in the issue.
 
 **How the two code files are specified here differs, deliberately.** The helper appears in full, at
 step 1.2, because its exact bytes are the contract — the markers, the handshake, and the assertion
 order are the deliverable. The suite is specified by an enumerated case list, at step 1.5: one line
 per case naming the case and the single assertion it makes. That is a complete specification of what
-the suite must do without transcribing 638 lines whose shape is mechanical once the case list and
+the suite must do without transcribing 688 lines whose shape is mechanical once the case list and
 the fixture sketch are fixed, and it is what makes the pinned pass count derivable rather than
-asserted. An implementer who writes exactly the 28 enumerated cases reaches the acceptance criterion
+asserted. An implementer who writes exactly the 30 enumerated cases reaches the acceptance criterion
 below.
 
 ## Global constraints
@@ -110,16 +111,16 @@ Consumed from the existing codebase, each confirmed to exist with the signature 
 
 ### Verification
 
-- **Contract: the composed and posted block satisfies the merge gate's three anchored conditions.**
+- **Contract: the composed and posted block satisfies the merge gate's anchored conditions.**
   Mode: focused-test. Test file `tests/fixtures/return-to-town/publish-handoff-test.sh`, case
   `case_publishes_the_required_shape`. Expected red with `"$handshake"` removed from
-  `compose_body`'s final `printf`: 3 cases FAIL, this one first, with
+  `compose_body`'s final `printf`: 10 cases FAIL, led by the preflight case, with
   `expected exit 0, got 1` and stderr
-  `publish-handoff: the stored hand-off comment is missing the handshake on its own line:
-  MERGE-READY: #42 @ <sha>` — the helper's own readback assertion catches the omission before the
-  case inspects the posted body, which is the assertion doing its job. Green command:
+  `publish-handoff: the composed hand-off body is missing the handshake on its own line:
+  MERGE-READY: #42 @ <sha>` — the compose-side assertion catches the omission before anything is
+  posted, which is that assertion doing its job. Green command:
   `./tests/fixtures/return-to-town/publish-handoff-test.sh`, expected final line
-  `publish-handoff-test: 28 passed, 0 failed`, exit 0.
+  `publish-handoff-test: 30 passed, 0 failed`, exit 0.
 - **Contract: a narrative carrying a handshake — backticked or bare — is rejected before posting.**
   Mode: focused-test. Same file, case `case_notes_carry_handshake`. Expected red with the
   substring check removed: `FAIL regression: a backticked handshake in the notes is rejected:
@@ -139,6 +140,13 @@ Consumed from the existing codebase, each confirmed to exist with the signature 
   file, case `case_multiple_refs`, which pushes a second `feat/` branch and drives the fake to
   report `feat/*` as the head branch — `git ls-remote` globs its patterns, so two refs come back.
   Expected red without the `line_count` check: `expected exit 1, got 0`. Green command as above.
+- **Contract: a public-safety scan that could not run is a fault, never a finding.** Mode:
+  focused-test. Same file, case `case_public_safety_fault`. Expected red with the `case
+  $safety_status` block replaced by `|| fail ...`: `expected exit 2, got 1`. Green command as above.
+- **Contract: a fork pull request is refused by name, before the remote read.** Mode: focused-test.
+  Same file, case `case_fork_pr`. Expected red without the `isCrossRepository` check: `expected exit
+  1, got 0` — or, where origin lacks the branch, a pass for the wrong reason with stderr saying the
+  branch moved, which is why the check precedes the remote read. Green command as above.
 - **Contract: shell style and lint.** Mode: focused-test. Command
   `shellcheck -x skills/return-to-town/scripts/publish-handoff tests/fixtures/return-to-town/publish-handoff-test.sh`
   and `shfmt -d` over the same two paths, both exit 0 with no output. Expected red on a
@@ -242,7 +250,10 @@ trap cleanup EXIT
 
 require_commands() {
 	local required
-	for required in gh jq git grep iconv od awk wc tail cat mktemp rm; do
+	# rg is here because check-public-safety.sh needs it and exits 2 without it.
+	# Refusing at this preflight names the missing binary; letting it through
+	# reaches that gate's fault status instead, which says nothing useful.
+	for required in gh jq git grep rg iconv od awk wc tail cat mktemp rm; do
 		command -v "$required" >/dev/null 2>&1 ||
 			fault "required command is unavailable: $required"
 	done
@@ -371,9 +382,9 @@ validate_notes() {
 # second independent observation, and a disagreement means the branch moved
 # between the two reads -- exactly the moment a handshake must not be posted.
 resolve_head() {
-	local pr_json number state head_branch head_ref_oid ls_output line_count
-	pr_json=$(gh pr view "$pr" --repo "$repo" \
-		--json number,state,headRefName,headRefOid) ||
+	local pr_json number state head_branch head_ref_oid cross ls_output line_count
+	pr_json=$(gh pr view "$pr" --repo "github.com/$repo" \
+		--json number,state,headRefName,headRefOid,isCrossRepository) ||
 		fault "the pull request could not be read: $repo#$pr"
 	number=$(jq -r '.number' <<<"$pr_json") ||
 		fault 'the pull request response could not be parsed'
@@ -383,6 +394,8 @@ resolve_head() {
 		fault 'the pull request response could not be parsed'
 	head_ref_oid=$(jq -r '.headRefOid' <<<"$pr_json") ||
 		fault 'the pull request response could not be parsed'
+	cross=$(jq -r '.isCrossRepository' <<<"$pr_json") ||
+		fault 'the pull request response could not be parsed'
 	[ "$number" = "$pr" ] ||
 		fail "the pull request reported number $number, not $pr"
 	[ "$state" = OPEN ] ||
@@ -390,6 +403,12 @@ resolve_head() {
 	case $head_branch in
 	'' | null) fail 'the pull request reported no head branch' ;;
 	esac
+	# Checked before the remote read, because after it a fork is indistinguishable
+	# from a moved branch: origin either lacks the branch or carries an unrelated
+	# one of the same name, and "the branch moved -- re-run once it settles" is a
+	# permanent refusal wearing a transient message.
+	[ "$cross" = false ] ||
+		fail "the pull request head branch $head_branch lives in a fork; this script reads the head SHA from the origin of the local checkout, which never carries a fork's branch under refs/heads/, so cross-fork hand-off is not supported"
 	ls_output=$(git ls-remote origin "refs/heads/$head_branch") ||
 		fault "git ls-remote could not read refs/heads/$head_branch from origin; run this from the checkout whose origin is $repo"
 	[ -n "$ls_output" ] ||
@@ -433,13 +452,34 @@ compose_body() {
 	count=$(byte_count_of 'the composed hand-off body' "$body")
 	[ "$count" -le "$MAX_BODY_BYTES" ] ||
 		fail "the composed hand-off body is $count bytes, over the $MAX_BODY_BYTES-byte limit"
-	"$ROOT/scripts/check-public-safety.sh" "$body" >/dev/null 2>&1 ||
-		fail 'the composed hand-off body did not pass public-safety validation'
+	# Three-way, never two. The gate exits 0 clean, 1 on a finding, and 2 when it
+	# could not run -- and `|| fail` would report a scanner that never ran as one
+	# that found a credential, which is a permanent refusal wearing a transient
+	# message. Its stderr is passed through rather than discarded, because on the
+	# fault branch it is the only text that says why.
+	safety_status=0
+	"$ROOT/scripts/check-public-safety.sh" "$body" >/dev/null || safety_status=$?
+	case $safety_status in
+	0) ;;
+	1) fail 'the composed hand-off body did not pass public-safety validation' ;;
+	*) fault "the public-safety scan could not run (exit $safety_status); the body was not published" ;;
+	esac
+	# The gate's own conditions, checked on what this script composed, before
+	# anything is posted. The premise of this whole script is that a composer's
+	# output is verified rather than trusted, and that applies to its own output
+	# first: without this, a composition defect is published and only then
+	# detected, leaving exactly the unselectable block the change exists to
+	# prevent. It also makes --preflight mean what R8 says it means.
+	assert_gate_conditions "$body" 'the composed hand-off body'
 }
 
 post_comment() {
 	local output post_status=0 candidate
-	output=$(gh issue comment "$issue" --repo "$repo" --body-file "$body") || post_status=$?
+	# Host-qualified, as publish-forge-review does. A bare owner/name resolves
+	# against gh's configured default host, while the readback below pins
+	# github.com -- so on a workstation defaulting to an Enterprise instance the
+	# comment would be created on one host and looked for on another.
+	output=$(gh issue comment "$issue" --repo "github.com/$repo" --body-file "$body") || post_status=$?
 	[ "$post_status" -eq 0 ] ||
 		fail "the hand-off comment was not created on $repo#$issue"
 	candidate=$(printf '%s\n' "$output" |
@@ -468,27 +508,38 @@ read_stored_body() { # url
 		fail "the stored hand-off comment could not be parsed: $endpoint"
 }
 
-# Every assertion runs against GitHub's stored copy. The three whole-line checks
-# name the gate's three conditions individually so a failure says which one; the
-# last is the catch-all no individual assertion can stand in for.
+# The merge gate's four whole-line conditions, checked against whichever copy is
+# named. compose_body runs this on what this script wrote; assert_stored_body
+# runs it again on what GitHub stored, because only the second says what the
+# gate will read.
 #
 # The carriage-return check runs first deliberately. A CR at the end of every
 # line defeats all three whole-line patterns at once, and reporting the first of
 # them -- "missing the opening marker", of a body whose opening marker is right
 # there -- is the same misdiagnosis one actor away that this script exists to
 # remove. A CR explains the other three, so it is the finding worth reporting.
-assert_stored_body() {
-	if contains_byte 0d "$stored"; then
-		fail 'the stored hand-off comment contains a carriage return, which defeats the merge gate anchored match'
+assert_gate_conditions() { # path label
+	local path=$1 label=$2
+	if contains_byte 0d "$path"; then
+		fail "$label contains a carriage return, which defeats the merge gate anchored match"
 	fi
-	grep_whole_line "$MARKER" "$stored" 'the stored hand-off comment' ||
-		fail "the stored hand-off comment is missing the opening marker on its own line: $MARKER"
-	grep_whole_line "$SENTINEL" "$stored" 'the stored hand-off comment' ||
-		fail "the stored hand-off comment is missing the closing sentinel on its own line: $SENTINEL"
-	grep_whole_line "$handshake" "$stored" 'the stored hand-off comment' ||
-		fail "the stored hand-off comment is missing the handshake on its own line: $handshake"
+	grep_whole_line "$MARKER" "$path" "$label" ||
+		fail "$label is missing the opening marker on its own line: $MARKER"
+	grep_whole_line "$SENTINEL" "$path" "$label" ||
+		fail "$label is missing the closing sentinel on its own line: $SENTINEL"
+	grep_whole_line "$handshake" "$path" "$label" ||
+		fail "$label is missing the handshake on its own line: $handshake"
+}
+
+assert_stored_body() {
+	assert_gate_conditions "$stored" 'the stored hand-off comment'
+	# Reaching here means all four gate conditions hold on GitHub's copy, so a
+	# gate-valid block IS on the issue. A difference now is a storage or
+	# transport normalization, not a broken hand-off -- and re-running would
+	# reproduce it forever while appending another complete block, so the
+	# message says to verify rather than retry.
 	jq -e --rawfile expected "$body" '.body == $expected' <<<"$response" >/dev/null ||
-		fail 'the stored hand-off comment differs from the body this script composed'
+		fail 'the stored hand-off comment differs byte-for-byte from the body this script composed, though every gate condition holds on it; a usable block is on the issue -- inspect it and proceed rather than re-running'
 }
 
 validate_arguments "$@"
@@ -536,33 +587,38 @@ The 28 cases, one line each — case name, then the single thing it asserts:
 9. `case_notes_unsafe` — notes carrying a denied path exit 1 naming public-safety, having posted
    nothing. Build the denied string as a split literal, as `scripts/check-public-safety-test.sh`
    does, or this suite trips the gate it is checking the helper calls.
-10. `case_pr_not_open` — a `CLOSED` pull request exits 1 naming the state.
-11. `case_pr_number_mismatch` — a pull request reporting `99` exits 1 naming it.
-12. `case_branch_absent` — a head branch deleted from origin exits 1.
-13. `case_multiple_refs` — a second `feat/` branch plus `FAKE_BRANCH=feat/*` exits 1 naming
+10. `case_fork_pr` — `FAKE_CROSS=true` exits 1 naming the fork, having posted nothing. Checked
+    before the remote read, or a fork is indistinguishable from a moved branch.
+11. `case_public_safety_fault` — an `rg` stub exiting 2 makes the public-safety gate fault; the
+    helper exits **2** naming that the scan could not run, having posted nothing. Collapsing that
+    into exit 1 would report a scanner that never ran as one that found a credential.
+12. `case_pr_not_open` — a `CLOSED` pull request exits 1 naming the state.
+13. `case_pr_number_mismatch` — a pull request reporting `99` exits 1 naming it.
+14. `case_branch_absent` — a head branch deleted from origin exits 1.
+15. `case_multiple_refs` — a second `feat/` branch plus `FAKE_BRANCH=feat/*` exits 1 naming
     "expected exactly one"; `git ls-remote` globs its patterns, which is what makes this reachable.
-14. `case_head_disagrees` — a `headRefOid` of all zeroes exits 1 naming both SHAs.
-15. `case_preflight` — `--preflight` exits 0 printing `preflight-ok`, having posted nothing.
-16. `case_publishes_the_required_shape` — exit 0; stdout is the comment URL; the posted body opens
+16. `case_head_disagrees` — a `headRefOid` of all zeroes exits 1 naming both SHAs.
+17. `case_preflight` — `--preflight` exits 0 printing `preflight-ok`, having posted nothing.
+18. `case_publishes_the_required_shape` — exit 0; stdout is the comment URL; the posted body opens
     with the marker, ends with the sentinel, carries the handshake as a whole line for the real
     SHA, retains the narrative, carries no CR, and went to the right issue.
-17. `case_notes_without_trailing_newline` — notes with no final newline still yield a whole-line
+19. `case_notes_without_trailing_newline` — notes with no final newline still yield a whole-line
     handshake.
-18. `case_stored_missing_sentinel` — a stored copy with the sentinel stripped exits 1 naming it.
-19. `case_stored_missing_marker` — a stored copy with the marker stripped exits 1 naming it.
-20. `case_stored_missing_handshake` — a stored copy with the handshake stripped exits 1 quoting the
+20. `case_stored_missing_sentinel` — a stored copy with the sentinel stripped exits 1 naming it.
+21. `case_stored_missing_marker` — a stored copy with the marker stripped exits 1 naming it.
+22. `case_stored_missing_handshake` — a stored copy with the handshake stripped exits 1 quoting the
     expected line.
-21. `case_stored_carries_cr` — a stored copy with CR on every line exits 1 naming the carriage
+23. `case_stored_carries_cr` — a stored copy with CR on every line exits 1 naming the carriage
     return, **not** the marker it also defeats.
-22. `case_stored_differs` — a stored copy replaced wholesale exits 1.
-23. `case_comment_creation_fails` — a failing `gh issue comment` exits 1 naming creation.
-24. `case_readback_fails` — a failing `gh api` exits 1 naming the readback.
-25. `case_bad_comment_url` — a foreign URL, a non-numeric id, no URL, and two URLs each exit 1.
-26. `case_pr_view_fails` — a failing `gh pr view` exits **2**, not 1.
-27. `case_missing_command` — a PATH holding only a `bash` symlink exits 2 naming the command.
+24. `case_stored_differs` — a stored copy replaced wholesale exits 1.
+25. `case_comment_creation_fails` — a failing `gh issue comment` exits 1 naming creation.
+26. `case_readback_fails` — a failing `gh api` exits 1 naming the readback.
+27. `case_bad_comment_url` — a foreign URL, a non-numeric id, no URL, and two URLs each exit 1.
+28. `case_pr_view_fails` — a failing `gh pr view` exits **2**, not 1.
+29. `case_missing_command` — a PATH holding only a `bash` symlink exits 2 naming the command.
     `#!/usr/bin/env bash` resolves the interpreter through PATH, so an empty PATH fails at exec
     with 127 and never reaches the check.
-28. `case_rerun_is_safe` — after a readback failure, a second run posts a fresh complete block
+30. `case_rerun_is_safe` — after a readback failure, a second run posts a fresh complete block
     carrying both markers and the handshake, and exits 0.
 
 **1.6** Verify the tests bite. For each of these, introduce the fault, run
@@ -570,21 +626,25 @@ The 28 cases, one line each — case name, then the single thing it asserts:
 
 | Fault | Expected red |
 |---|---|
-| drop `"$SENTINEL"` from `compose_body`'s final `printf` | 4 cases FAIL |
-| replace the notes `grep -qF 'MERGE-READY:'` with `scan_status=1` | `FAIL regression: a backticked handshake in the notes is rejected` |
-| move the CR check after the whole-line checks in `assert_stored_body` | `FAIL a stored copy carrying a carriage return fails, naming it` |
-| drop `"$handshake"` from `compose_body`'s final `printf` | 3 cases FAIL, led by `FAIL the posted body carries both markers and a bare handshake line`, stderr naming the missing handshake |
+| drop `"$SENTINEL"` from `compose_body`'s final `printf` | 10 cases FAIL |
+| drop `"$handshake"` from `compose_body`'s final `printf` | 10 cases FAIL, led by `FAIL preflight validates and composes without posting`, stderr naming the missing handshake on the **composed** body |
+| replace the notes `grep -qF 'MERGE-READY:'` with `scan_status=1` | `FAIL regression: a backticked handshake in the notes is rejected: expected exit 1, got 0` |
+| move the CR check after the whole-line checks in `assert_gate_conditions` | `FAIL a stored copy carrying a carriage return fails, naming it`, with stderr naming the opening marker instead |
+| collapse the `case $safety_status` block back to `\|\| fail ...` | `FAIL a public-safety scan that could not run is a fault, not a finding: expected exit 2, got 1` |
+| delete the `[ "$cross" = false ]` check | `FAIL a pull request whose head is in a fork is rejected, naming the fork: expected exit 1, got 0` |
 
-The fourth row exists because the first three bite three narrow guards and leave the task's primary
-contract — that the composed and posted block satisfies all three gate conditions — with no bite
-evidence at all. That case is the whole point of the change, so it is the one that least deserves an
-exemption from the repository's own "verify tests bite" standard.
+The second row exists because the others bite narrow guards and would leave the task's primary
+contract — that the composed and posted block satisfies every gate condition — with no bite evidence
+at all. That case is the whole point of the change, so it is the one that least deserves an exemption
+from the repository's own "verify tests bite" standard. The first two both report 10 failures because
+the compose-side assertion added in R5 catches either omission at `--preflight`, before any case
+reaches its own body inspection.
 
 **1.7** Run `shellcheck -x` and `shfmt -d` over both new files. Expect no output and exit 0 from
 each.
 
 **1.8** Run `./tests/fixtures/return-to-town/publish-handoff-test.sh` bare. Expect the final line
-`publish-handoff-test: 28 passed, 0 failed` and exit 0.
+`publish-handoff-test: 30 passed, 0 failed` and exit 0.
 
 **1.9** Commit: `feat(return-to-town): compose and verify the hand-off handshake`.
 
@@ -593,8 +653,9 @@ each.
 - `publish-handoff` exists, is executable, and passes `shellcheck -x` and `shfmt -d`.
 - The suite exists under `tests/fixtures/return-to-town/`, is discovered by
   `just test publish-handoff`, and passes.
-- Each of the three faults in step 1.6 was observed red and reverted.
-- Every row of the design's failure table has a case.
+- Each of the six faults in step 1.6 was observed red and reverted.
+- Every row of the design's failure table has a case, except the non-SHA-from-`ls-remote` guard the
+  design exempts by name and for the reason it gives.
 
 ### Rollback
 
@@ -629,9 +690,17 @@ handshake* — the one beginning `**That comment carries the handshake.**` and r
 `skills/return-to-town/scripts/publish-handoff` as what composes and posts the block; states that
 the caller writes the narrative only and must not write either marker or the handshake; states that
 the helper reads the SHA from `git ls-remote`, requires GitHub's `headRefOid` to agree, and asserts
-the stored copy; states the exit taxonomy; and states that a nonzero exit holds both paths, is
-re-run rather than diagnosed by hand, and does not by itself mean nothing was posted — three of the
-conditions are checked after the comment is created. Keep the surrounding paragraphs.
+both the composed and the stored copy; states the exit taxonomy; and states that a nonzero exit
+holds both paths, is re-run rather than diagnosed by hand, and does not by itself mean nothing was
+posted — some conditions are checked after the comment is created.
+
+**Also update the paragraph immediately above it**, which currently reads "post a `WORK:TRAJECTORY`
+comment on the issue with `outcome: ...`, guardrail status, and any surprises". Its content list is
+exactly what the caller must now put in the notes file, so keep the list and change the verb: the
+caller *writes that narrative to a notes file*, and the helper posts it. Left as it is, that
+sentence still instructs the reader to post the comment — which is to write the opening marker —
+directly above a block telling them to invoke a helper that writes it for them, and Task 2's first
+acceptance criterion would be false. Keep the other surrounding paragraphs.
 
 **2.2** Add the invocation, in a fenced `sh` block, immediately after that paragraph:
 

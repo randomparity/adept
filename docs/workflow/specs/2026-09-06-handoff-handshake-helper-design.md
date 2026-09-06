@@ -5,8 +5,9 @@ Decision record: [ADR 0056](../../adr/0056-compose-the-handoff-handshake.md).
 ## Goal
 
 `$return-to-town` composes the merge hand-off annotation by hand, in prose. Replace that
-composition with one executable that composes the block, computes the head SHA itself, posts the
-comment, and asserts every condition the merge gate checks against the copy GitHub stored.
+composition with one executable that composes the block, computes the head SHA itself, asserts every
+condition the merge gate checks against what it composed, posts the comment, and asserts them again
+against the copy GitHub stored.
 
 Scope is the merge hand-off block alone. The park protocol writes the same block type and is not
 changed here; see the decision record.
@@ -75,20 +76,32 @@ second, independent observation and requires it to equal the `ls-remote` value. 
 the branch moved between the two reads, which is exactly the moment a handshake must not be posted;
 the helper refuses and names the two SHAs. The value posted is always the `ls-remote` one.
 
-**R5 — the assertions run against the stored copy.** After posting, the helper re-reads the comment
-through `/repos/<repo>/issues/comments/<id>` and asserts, against those bytes:
+**R5 — the gate's conditions are asserted twice, on both copies.** Four conditions make up the
+gate's contract:
 
-1. the opening marker as a whole line,
-2. the closing sentinel as a whole line,
-3. the handshake as a whole line for this PR and this SHA,
-4. no carriage-return byte anywhere in the body,
+1. no carriage-return byte anywhere in the body,
+2. the opening marker as a whole line,
+3. the closing sentinel as a whole line,
+4. the handshake as a whole line for this PR and this SHA.
+
+The CR check runs first of the four, because a CR on every line defeats the other three at once and
+reporting "missing the opening marker" of a body whose opening marker is right there is the same
+misdiagnosis the helper exists to remove.
+
+They are checked **on the composed body, before anything is posted** — which is what makes
+`--preflight` mean what R8 says, and what stops a composition defect from being published and only
+then detected. They are checked **again on the stored copy**, after posting, plus a fifth:
+
 5. byte-for-byte equality with the body the helper composed.
 
-Assertions 1–4 exist for their diagnostics; 5 is the catch-all. Checking the composed body instead
-would prove nothing about what the gate will read.
+Neither pass substitutes for the other. Only the stored copy can show a transport or storage
+difference, so the second pass cannot be dropped; and only the first pass can prevent an
+unselectable block from reaching the issue at all, so neither can it. Asserting solely on the
+composed body would be trusting this helper's own output — the exact trust the change exists to
+withdraw from its caller.
 
 **R6 — every failure names its condition.** A nonzero exit is accompanied by a message naming the
-condition that failed, not a generic one. "Which of the three conditions failed" is what the
+condition that failed, not a generic one. "Which of the gate's conditions failed" is what the
 orchestrator currently has to diagnose by re-reading the stored body.
 
 **R7 — the block is issue-side.** `skills/quest-log/SKILL.md:307` puts `WORK:TRAJECTORY` on the
@@ -96,14 +109,24 @@ issue. The helper posts with `gh issue comment`, and reads back through the shar
 `/repos/.../issues/comments/<id>` endpoint.
 
 **R8 — a preflight mode.** `--preflight` runs every argument, narrative, SHA-resolution, and
-composition check, makes no comment, and prints `preflight-ok`. It exists so a caller can learn
-that its narrative is unpublishable while that is still a local failure, the same separation
-ADR 0048 drew for `publish-forge-review`.
+composition check — including R5's four gate conditions on the composed body — makes no comment,
+and prints `preflight-ok`. It exists so a caller can learn that its hand-off is unpublishable while
+that is still a local failure, the same separation ADR 0048 drew for `publish-forge-review`.
+`preflight-ok` therefore means the block the helper will compose is gate-valid, not merely that the
+narrative was acceptable.
 
 **R9 — the body passes the repository's public-safety gate.** The composed body is posted to a
 public issue. `scripts/check-public-safety.sh` already scans for absolute user paths, private
 addresses, and credential shapes; the helper runs it on the composed body rather than growing its
 own patterns.
+
+That gate has a **three-way** status — 0 clean, 1 a finding, 2 it could not run — and the helper
+routes all three. Collapsing 2 into 1 would report a scanner that never ran as one that found a
+credential: a permanent refusal wearing a transient message, which no amount of re-running clears.
+Status 2 is a fault (exit 2) naming that the scan did not run, and the gate's own stderr is passed
+through rather than discarded, because on that branch it is the only text that says why. The helper
+also requires `rg` in its own preflight, since that gate exits 2 without it — refusing at the
+preflight names the missing binary, which the gate's fault status cannot.
 
 **R10 — retry is safe by construction.** The helper only ever appends a fresh complete block.
 Latest-complete-wins (`skills/quest-log/SKILL.md:296-298`) makes a second successful run supersede
@@ -143,14 +166,22 @@ the three whole-line assertions. A comment the helper composed is gate-valid whe
 readback succeeded, so an exit 1 from that side leaves a usable hand-off on the issue. The message
 names which condition failed, and the remedy is the same on either side of the post: re-run.
 
-**Assertion 5's evidence class.** No GitHub documentation guarantees that an issue comment's body
-round-trips byte for byte, and it is not checkable without posting to a live issue. The evidence is
-the shipped precedent — `skills/quest/scripts/publish-forge-review` runs the identical
-`jq -e --rawfile expected` equality against a newline-terminated body in production — plus the
-observation that bodies submitted through the web UI come back CRLF-normalized while API-posted LF
-bodies do not, which is why assertion 4 exists as a separate diagnostic. If the assumption ever
-fails, it fails loudly and specifically at assertion 5 rather than silently, which is the correct
-direction for an unverifiable premise.
+**Assertion 5's evidence class, and what to do when it fails.** No GitHub documentation guarantees
+that an issue comment's body round-trips byte for byte, and it is not checkable without posting to a
+live issue. The evidence is a shipped precedent that is *adjacent* rather than identical:
+`skills/quest/scripts/publish-forge-review` runs the same `jq -e --rawfile expected` equality
+against a newline-terminated body in production — but it writes with `gh pr comment`, and this
+helper writes with `gh issue comment`. Only the readback endpoint is shared. The write path is
+assumed to behave the same and is not evidenced. Alongside that: bodies submitted through the web UI
+come back CRLF-normalized while API-posted LF bodies do not, which is why condition 1 exists as a
+separate diagnostic.
+
+The disposition matters more than the premise. If assertion 5 ever fails while conditions 1–4 pass
+on the stored copy, a **gate-valid block is on the issue** — it is selectable and the hand-off has
+in fact succeeded. Re-running would reproduce the identical failure forever while appending another
+complete block, so re-running is the wrong remedy here and the only place in this design where it
+is. The helper's message says so: inspect the stored comment and proceed. This is the one exit where
+R10 does not apply.
 
 ## Interface
 
@@ -166,6 +197,10 @@ publish-handoff [--preflight] REPO ISSUE PR NOTES
 
 On success the sole stdout line is the verified comment URL. The exit taxonomy is the one the
 repository's other executables use: 0 success, 1 a condition failed, 2 the helper could not run.
+`REPO` is always host-qualified to `github.com` internally, at the write as well as the readback —
+`publish-forge-review`'s convention. A bare `owner/name` at the write would resolve against `gh`'s
+configured default host, so on a workstation defaulting to an Enterprise instance the comment would
+be created on one host and looked for on another.
 Exit 1 before the comment is posted means nothing was published; exit 1 after it means a complete
 block may be on the issue and merely unverified here. The distinction is carried by the message,
 which names the condition, and the remedy is the same either way — re-run, per R10.
@@ -181,9 +216,12 @@ which names the condition, and the remedy is the same either way — re-run, per
 | notes mentioning `MERGE-READY:` anywhere | that the helper owns that line |
 | notes over the size cap | the cap |
 | pull request not `OPEN`, or its number disagrees | the observed state |
+| pull request head branch in a fork | the fork, and that cross-fork hand-off is unsupported |
 | `git ls-remote` returning no line, several lines, or a non-SHA | what it returned |
 | `ls-remote` SHA ≠ `headRefOid` | both SHAs, and that the branch moved |
 | composed body failing public-safety | that it did not pass |
+| public-safety gate unable to run (exit 2) | that the scan did not run, with the gate's own stderr |
+| composed body missing a marker, the sentinel, or the handshake | which one, before anything is posted |
 | `gh issue comment` failing | that the comment was not created |
 | comment URL not parseable for this repo and issue | the URL |
 | readback request failing | that the stored copy could not be read |
@@ -268,3 +306,8 @@ reverted.
 - A general `WORK:*` annotation helper. See the decision record.
 - Changing the park protocol, whose block is written by `$quest`'s *On a Blocker* section.
 - Changing `references/merge-gate.md`. The reader side already discriminates correctly.
+- Cross-fork hand-off. A pull request opened from a fork has its head branch in the fork, and no
+  single checkout has the upstream as `origin` and that branch under `refs/heads/`, so R3's SHA read
+  cannot be satisfied. The helper detects and refuses it by name rather than leaving it to surface as
+  a moved branch. This repository's own work is branch-based; a repository taking fork pull requests
+  would need a different SHA source, which is a different design.
