@@ -89,8 +89,9 @@ The assessment stays advisory for scope and becomes load-bearing for review dept
 lane. Route this run's review depth under
 [risk-routed review depth](../../references/review-depth.md). Derive `single-pass` or
 `iterating` from the four fields now, record it with the tracking metadata below, and carry it to
-step 6. An absent or rejected assessment routes `iterating`, so the failure path is the expensive
-one and never the cheap one.
+step 6. A successful live derivation is a present assessment; failure to derive a complete
+assessment routes `iterating` for absence, so the failure path is the expensive one and never
+the cheap one.
 
 Derive and record the artifact lane beside the classification: `trivial-bugfix` and a
 revalidated `governed-small-change` use `no-spec`; a `non-trivial` change uses

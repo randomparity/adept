@@ -211,14 +211,20 @@ evidence, not authority to absorb sibling work. Return only:
 
 - **verdict**: `close-candidate` | `close-not-planned` | `fix` (subtype:
   `trivial-bugfix` | `governed-small-change` | `non-trivial`)
-- **decomposition**: `one-pr` | `split`, on a `fix` verdict only. Read the issue's latest
-  complete `WORK:DIVINATION` block for its decompose verdict; where there is none, or its
-  validation fails, derive the field from the same live evidence the rest of the triage
-  reads. A `split` also returns the proposed breakdown, one line per piece, so the operator
-  can act on it without re-reading the issue
+- **assessment**: on a `fix` verdict, return blast radius, change hazards, complexity, and
+  decompose verdict as one complete assessment. Read those fields from the issue's latest
+  complete adopted `WORK:DIVINATION` block; where there is none, or its validation fails,
+  derive all four from the same live evidence the rest of the triage reads. A successful live
+  derivation is a present assessment. If no complete assessment can be derived, return
+  `assessment: unavailable` rather than a partial tuple.
+- **decomposition**: `one-pr` | `split` | `unavailable`, on a `fix` verdict only. Read the
+  assessment above for its decompose verdict. An unavailable assessment returns
+  `decomposition: unavailable`; never fabricate `one-pr` or `split`. A `split` also returns
+  the proposed breakdown, one line per piece, so the operator can act on it without re-reading
+  the issue
 - **review depth**: `single-pass` | `iterating`, on a `fix` verdict only, derived under
-  [risk-routed review depth](../../references/review-depth.md) from that same block or the
-  same live evidence. An absent, rejected, or unprovable derivation returns `iterating`
+  [risk-routed review depth](../../references/review-depth.md) from the complete assessment
+  above. An unavailable assessment returns `iterating` for absence
 - **artifact lane**: `no-spec` | `light-spec` | `full-spec`, on a `fix` verdict only,
   derived from the subtype, complexity, and change hazards in that same assessment.
   `trivial-bugfix` and `governed-small-change` return `no-spec` unchanged. Only a
@@ -248,7 +254,7 @@ Triage on the fast model by default; escalate to the capable model only on a nam
 - `close-not-planned` → preserve the citations, trigger, impact, cycle-cost comparison, and
   reconsideration condition for the plan and closure comment. This verdict never claims the
   defect is fixed and never enters a quest wave.
-- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The three fields above travel with it: `decomposition` gates dispatch at step 4, while `review depth` and `artifact lane` reach the worker in its step 5 prompt. None is a size input to model selection — a `split` says the issue is several units of work, not that this one is hard.
+- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The assessment, `decomposition`, `review depth`, and `artifact lane` travel with it: `decomposition` gates dispatch at step 4, while the other three reach the worker in its step 5 prompt. None is a size input to model selection — a `split` says the issue is several units of work, not that this one is hard.
 
 Record verdicts and artifact lanes in the manifest `Verdict` and `Lane` columns, and fix-row
 scope evidence in `Scope approvals`. Reconcile states (`ready-to-merge`, already-closed) live
@@ -357,9 +363,9 @@ Each prompt carries:
 - Model tier from triage
 - Artifact lane plus the exact complexity and change-hazard assessment that supports it; `$quest`
   revalidates the lane and routes an unprovable non-trivial assessment to `full-spec`
-- Routed review depth from triage, passed as evidence rather than instruction: `$quest`
-  re-derives it at its step 1 and again against the branch diff at its step 6, so a stale
-  value costs a re-derivation and never a skipped review
+- Routed review depth and the complete assessment from triage, passed as evidence rather than
+  instruction: `$quest` re-derives them at its step 1 and again against the branch diff at its
+  step 6, so a stale value costs a re-derivation and never a skipped review
 - Mandatory follow-up return contract: every discovered/finalized issue; every adjacent-note
   candidate with title, repo-relative file evidence, trigger, recommendation, and public-safe
   source-pass reference (never its scratch findings path); and every complete bounty occurrence
