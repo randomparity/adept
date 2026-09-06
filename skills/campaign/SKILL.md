@@ -297,6 +297,7 @@ its author is finished.
 
 Each prompt carries:
 - Issue number, acceptance criteria, **completion notes verbatim** (private dispatch context) and the **public-safe summary** (the only form allowed on public surfaces: acceptance criteria, `WORK:` annotations, PR bodies)
+- Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification.
 - The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
