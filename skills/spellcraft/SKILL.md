@@ -664,8 +664,10 @@ in the local review report.
 
 Do not dispatch a confirming prose review after editing. Run the relevant
 guardrails and commit the resulting design artifacts, then continue to the scope
-audit. Editing an ADR in the set is legitimate because it is still pre-merge on
-the design branch; append-only immutability begins after merge.
+audit. A newly created, unmerged ADR in the set may be edited with the rest of
+the design. An already-merged ADR retains its append-only contract: preserve its
+decision and body, and make only the Status amendment the current change
+authorizes.
 
 Carry every deferral — each entry with its owning record path or tracker issue — into the
 full lane's **plan**, or the light spec's **Scope**, whichever way the phase ended. The
@@ -675,6 +677,12 @@ public-safe follow-up-candidates table in the phase report for the caller. A lig
 cannot carry a deferral and remain complete within its caps returns to the scope and
 assessment checkpoint. Only a demonstrated complexity, hazard, or decomposition change can
 alter its lane; the overflow alone cannot.
+
+On every phase exit, including a scope checkpoint, unattended park, or malformed-output
+stop, report every suppression with its governing ADR, every public-safe follow-up candidate,
+every deferral with its owner, every `rejected-with-evidence` finding with its source pass,
+and every outstanding note accumulated before the exit. Keep scratch findings paths in the
+local report only; the payload carried into a quest handoff remains public-safe.
 
 ## 4. Scope audit
 
