@@ -1,6 +1,6 @@
 ---
 name: forge
-description: "Implement an approved plan with contract-based task verification, direct or worker-driven execution, focused tests where applicable, and the repository guardrail suite. Use when asked to build with TDD, execute an implementation plan, or continue the build phase of an issue workflow."
+description: "Implement an approved plan or light spec with contract-based task verification, direct or worker-driven execution, focused tests where applicable, and the repository guardrail suite. Use when asked to build with TDD, execute an implementation design, or continue the build phase of an issue workflow."
 ---
 # Build With Contract Evidence
 
@@ -13,9 +13,10 @@ meaningfully. Set up the workspace with **pocket dimension**, then pick an execu
 - **A plan exists and its tasks are mostly independent** → **party**: a fresh
   implementer worker per task, each closed on its own verified contract evidence and
   guardrails, and one whole-branch review at the end.
-- **No plan, because this is a trivial bugfix or a caller-verified
-  `governed-small-change` — or a plan whose tasks are too tightly coupled to
-  hand out** → **cast**: implement directly in this session.
+- **A caller-validated `light-spec` exists; no plan exists because this is a trivial bugfix
+  or caller-verified `governed-small-change`; or a plan's tasks are too tightly coupled to
+  hand out** → **cast**: implement directly in this session. A light spec is exactly one Cast
+  unit and never goes through `task-brief`.
 
 **This skill is not the end of the pipeline.** `$trial-loop`,
 `$dispel`, `$deliver` and `$return-to-town` follow and own integration,
@@ -37,12 +38,20 @@ reference, decision kind, accepted status, governed behavior, and acceptance cri
 supplied or auto-discovered plan and construct the Cast inventory. A focused entry starts with its
 failing test; a non-applicable entry starts with implementation and retains its exact reason.
 
-Otherwise, if no plan path is supplied, look for one under `docs/workflow/plans/`.
-No plan is valid only for a trivial bugfix. Any other non-trivial change without a plan
-stops and returns to `$spellcraft`.
+When the caller supplies `light-spec`, require the spec path, complexity `S` or `M`, and
+change hazards exactly `none`; reject a plan path. Require exactly the second-level sections
+Problem, Scope, Success, and Validation, and reject a missing or additional section, more than
+500 words or 60 physical lines, a second implementation unit, or an incomplete inventory at the
+design checkpoint. A public API or contract change is a hazard and cannot use this path.
 
-For every planned task, validate its `Verification` inventory before implementation. It must name
-every material changed contract and give each exactly one supported mode:
+Otherwise, if no plan path is supplied, look for one under `docs/workflow/plans/`.
+No plan is valid only for a trivial bugfix or a caller-validated `light-spec`. Any other
+non-trivial change without a plan stops and returns to `$spellcraft`.
+
+For every planned task, validate its `Verification` inventory before implementation. For a
+light spec, validate the same inventory in its `Validation` section once for the single Cast
+unit. Either inventory must name every material changed contract and give each exactly one
+supported mode:
 
 - `focused-test` names the test file or case, expected red failure, and exact green command.
 - `task-test-not-applicable` names the changed surface and explains why no task-specific
@@ -55,7 +64,11 @@ record shapes, validation rules, generated artifacts, and other machine-checkabl
 executable consumer validates it. Never search for or snapshot prose wording to manufacture
 evidence.
 
-Build-time scope expansion stops implementation, re-freezes scope, and runs full design without automatically reselecting the abbreviated path.
+Build-time scope expansion from a trivial bugfix or governed small change preserves the existing
+rule: stop implementation, re-freeze scope, and run full design without automatically reselecting
+the no-spec path. From `light-spec`, stop and return to the caller to re-freeze scope and re-derive
+complexity, hazards, decomposition, and the artifact lane. A demonstrated complexity or hazard
+change can make the lane full; artifact length alone cannot.
 
 Return a discovered new decision, ambiguity, or scope expansion to the caller's
 `SCOPE CHECKPOINT`; do not infer the decision or continue building. The caller records
@@ -194,29 +207,31 @@ built.
 
 ## Cast — direct execution
 
-Chosen when there is no plan because the change is a trivial bugfix or a
-caller-verified `governed-small-change`, or when a plan exists but its tasks are
-too tightly coupled to hand out separately.
+Chosen for one caller-validated light spec, when there is no plan because the change is a trivial
+bugfix or caller-verified `governed-small-change`, or when a plan exists but its tasks are too
+tightly coupled to hand out separately.
 
-Read the plan and review it critically **before** starting — questions and
+Read the plan or light spec and review it critically **before** starting — questions and
 concerns raised now cost one answer; discovered mid-task they cost one per task.
-Raise them rather than noting them. If the plan changes in response, review the
-amended plan rather than executing against your reading of the old one.
+Raise them rather than noting them. If the artifact changes in response, review the
+amended artifact rather than executing against your reading of the old one.
 
-Create a todo per plan task. Conversation memory does not survive compaction,
-and the todo list is what survives it.
+For a light spec, create one todo for the whole artifact and implement Scope and Success against
+its Validation inventory; do not synthesize plan tasks or invoke `task-brief`. Otherwise, create
+a todo per plan task. Conversation memory does not survive compaction, and the todo list is what
+survives it.
 
-Then, per task: mark it in progress, follow its steps exactly, run the
-verifications the plan specifies — not a substitute for them — and mark it
-complete only once those pass. The plan phase spent its effort making the steps
-bite-sized; improvising past them discards that work, and a task marked complete
-before its verification ran is the false green everything else here exists to
-prevent.
+Then, per todo: mark it in progress, follow the plan steps or the light spec's Scope and Success
+exactly, run the artifact's verifications — not substitutes for them — and mark it complete only
+once those pass. The design phase spent its effort defining the unit; improvising past it discards
+that work, and a todo marked complete before its verification ran is the false green everything
+else here exists to prevent.
 
-In Cast, construct the same inventory directly when no planned task exists. Run each focused entry
-red then green; implement a non-applicable entry without a fabricated task test. Before closure,
-inventory the actual diff and reconcile every material contract one-to-one with the inventory. A
-missing or reclassified contract returns to the plan checkpoint and records no evidence.
+In Cast, use the light spec's inventory when supplied; construct the same inventory directly only
+when no design artifact exists. Run each focused entry red then green; implement a non-applicable
+entry without a fabricated task test. Before closure, inventory the actual diff and reconcile every
+material contract one-to-one with the inventory. A missing or reclassified contract returns to the
+design checkpoint and records no evidence.
 
 Stop on a genuine blocker — a missing dependency, a test that will not pass, an
 instruction you do not understand, a verification that fails repeatedly — and
@@ -826,7 +841,8 @@ guardrail blocks the commit, where a flaked task test does not.
 ## Context checkpoint
 
 The **durable artifacts** of this phase are the committed implementation, selected verification
-evidence, and completed plan tasks — not raw red/green output or implementer transcripts.
+evidence, and completed Cast unit or plan tasks — not raw red/green output or implementer
+transcripts.
 Before handing off to review, confirm the branch name and the exact guardrail
 commands are recorded somewhere durable (the plan, the campaign manifest, or a
 note), so a post-compaction resume can recover them. Do **not** run `context compaction`

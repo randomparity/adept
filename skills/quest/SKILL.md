@@ -31,7 +31,7 @@ blockers is the reading the loop's residual blocking figure exists to remove.
 
 > **Keep the durable facts durable.** Raw phase context -- brainstorm
 > transcripts, `$gauntlet` payloads, task-verification output -- is droppable once the spec,
-> plan, and findings files hold the decisions. The resume facts are not: at
+> optional plan, and findings files hold the decisions. The resume facts are not: at
 > each phase seam (design -> build -> review -> ship), write the branch name,
 > `BASE_BRANCH`, guardrail commands, current step, open findings, and every
 > deferral a `$trial-loop` run disposed of, somewhere durable (the plan, the
@@ -73,7 +73,7 @@ Classify the work:
   evidence.
 - **Non-trivial** -- anything else.
 
-Only the first two may skip step 3, and a governed small change only after you
+Only the first two use the no-spec lane, and a governed small change only after you
 record the decision's reference, kind, authoritative accepted status, and the
 behavior it governs. Missing, superseded, conflicting, or no-longer-governing
 evidence sends you to SCOPE CHECKPOINT and full design.
@@ -85,13 +85,20 @@ four fields from the live issue and repository as before. In either case, re-che
 assessment against the issue body. Never use divination content to fill any of the frozen charter's
 eight authority fields; only the external sources and decisions listed below can do that.
 
-The assessment stays advisory for scope and becomes load-bearing for exactly one thing: it routes
-this run's review depth under
+The assessment stays advisory for scope and becomes load-bearing for review depth and artifact
+lane. Route this run's review depth under
 [risk-routed review depth](../../references/review-depth.md). Derive `single-pass` or
 `iterating` from the four fields now, record it with the tracking metadata below, and carry it to
 step 6. A successful live derivation is a present assessment; failure to derive a complete
 assessment routes `iterating` for absence, so the failure path is the expensive one and never
 the cheap one.
+
+Derive and record the artifact lane beside the classification: `trivial-bugfix` and a
+revalidated `governed-small-change` use `no-spec`; a `non-trivial` change uses
+`light-spec` only when complexity is `S` or `M` and change hazards are exactly `none`;
+everything else uses `full-spec`. Because public API or contract work is a change hazard, it
+never enters the light lane. If neither validated persisted evidence nor the live derivation can
+establish complexity and hazards, route `full-spec`.
 
 **A lone quest never splits its own issue.** You claim one issue number and create one branch for
 it, so a `split` decompose verdict is not yours to act on. It is the caller's: `$campaign` gates
@@ -185,7 +192,7 @@ complete approval packet parks there. This gate also applies to a trivial bugfix
 change that will skip step 3; it freezes scope without creating a design artifact.
 
 Also retain the tracking metadata (blast radius, change hazards, complexity,
-decompose verdict, routed review depth, classification -- plus the decision
+decompose verdict, routed review depth, classification, artifact lane -- plus the decision
 evidence and acceptance criteria for a `governed-small-change`) and read
 everything back before proceeding.
 
@@ -263,7 +270,11 @@ still happen.
 
 ## 3. Design
 
-Pass the frozen charter to `$spellcraft` exactly as follows:
+Pass the artifact lane to `$spellcraft` as routing evidence outside the charter:
+
+artifact lane: light-spec | full-spec
+
+Then pass the frozen charter exactly as follows:
 
 interaction: <unchanged root value>
 scope identity: <external scope identity, never reviewed target>
@@ -274,18 +285,17 @@ exclusions: <frozen external exclusions>
 surface: <frozen permitted surface>
 ambiguities: <frozen ambiguity list>
 
-Run `$spellcraft <issue-number>`: write the spec and ADR, write the
-implementation plan, then adversarially review the whole design set — ADRs,
-spec, and plan — in one loop under one charter. Skip only for
-a trivial bugfix or a revalidated governed small change. The spec, the ADR
-(under `docs/adr/`, not with the plan), and the plan are the durable design
-record; brainstorm transcripts and spec-review payloads are droppable once they
-exist.
+Run `$spellcraft <issue-number>`. The `light-spec` lane writes and reviews one bounded
+spec, plus an ADR only when a decision has viable alternatives, and writes no plan. The
+`full-spec` lane writes the spec and any ADR, writes the implementation plan, then reviews the
+whole design set. A `no-spec` classification skips this step. The spec, any ADR (under
+`docs/adr/`), and the full lane's plan are the durable design record; brainstorm transcripts
+and review payloads are droppable once they exist.
 
 ## 4. Scope Audit
 
-Only the full design path runs this. A trivial bugfix and a verified governed
-small change skip it and go straight to contract-based verification.
+Both `light-spec` and `full-spec` run this. A trivial bugfix and a verified governed
+small change use `no-spec`, skip it, and go straight to contract-based verification.
 
 The report is per-worktree state, so keep it out of Git first. Query whether
 `.agent/.gitignore` is tracked, distinguishing tracked, untracked, and
@@ -299,6 +309,12 @@ Pick a fresh report path there and dispatch a fresh reviewer task running
 brief. Inherited history is non-authoritative and cannot supply scope; the
 workflow makes no context-isolation guarantee.
 
+Pass the artifact lane as routing evidence outside the frozen charter:
+
+artifact lane: light-spec | full-spec
+
+Then pass the frozen charter and audit inputs:
+
 interaction: <unchanged root value>
 scope identity: <external scope identity, never reviewed target>
 outcome: <frozen external outcome>
@@ -307,7 +323,7 @@ provenance: <external source for every outcome, criterion, and user decision>
 exclusions: <frozen external exclusions>
 surface: <frozen permitted surface>
 ambiguities: <frozen ambiguity list>
-reviewed artifacts: <explicit paths to every reviewed ADR, specification, and plan>
+reviewed artifacts: <explicit paths to every reviewed ADR and specification, plus the plan for full-spec>
 base branch: <base branch for the design-artifact diff>
 linked ownership: <issue, dependency, debt, and tracker evidence relevant to findings>
 report path: <fresh path under the worktree's ignored .agent/oathbind directory>
@@ -338,10 +354,10 @@ satisfies its remedy. **The design-edit round trip is gone: an accepted remedy
 does not send the design back through its review and a second audit.** Every
 remedy the audit can legitimately yield is a cut, a split, or a checkpoint, and
 a cut cannot invalidate an audit that already approved the larger surface. So
-apply an accepted cut to the design artifacts, re-run over the cut only the two
-self-review passes `$spellcraft` already defines -- the spec's fresh-eyes
-checklist and the plan-against-spec walk, which are what catch a reference the
-cut stranded -- and continue on the same report. Park a `blocked` finding per
+apply an accepted cut to the design artifacts, re-run over the cut only `$spellcraft`'s
+lane-specific self-review -- the light spec's charter, inventory, and cap checks, or the full
+spec's fresh-eyes checklist and plan-against-spec walk -- and continue on the same report. Park a
+`blocked` finding per
 *On a Blocker*, and return a verified material expansion -- or any remedy that
 would widen the surface -- to SCOPE CHECKPOINT rather than editing toward it. A
 classification alone never changes scope. Do not rerun unchanged inputs to seek
@@ -375,8 +391,9 @@ follows its verified-resume route directly to step 9,
 parks, and `build-complete` resumes from the parsed handoff without calling `$forge` again. A parsed `required-failed` parks under
 its mode rule below. Never replace an existing same-issue, same-scope handoff.
 
-Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the plan and run
-the guardrail suite, passing the plan path if one exists. For a
+Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the selected artifact lane and
+run the guardrail suite. For `light-spec`, pass the lane, validated complexity and hazards, and
+the spec path, with no plan path. For `full-spec`, pass the plan path. For a
 `governed-small-change`, pass the classification and revalidated decision
 evidence (reference, kind, accepted status, governed behavior, acceptance
 criteria) -- and no plan path. Require forge's ledger result to equal the

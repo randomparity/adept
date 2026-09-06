@@ -118,9 +118,9 @@ Manifest schema:
 - Mandatory per-PR edit rules: <filled by step 2, or none>
 
 ## Queue
-| Issue | Status | Branch | Verdict | ADR/migration # | Mandatory per-PR edits | File scope | Wave | PR | Outcome |
-|-------|--------|--------|---------|-----------------|------------------------|------------|------|----|---------|
-| #NNN  | pending| —      | —       | —               | —                      | —          | —    | —  | —       |
+| Issue | Status | Branch | Verdict | Lane | ADR/migration # | Mandatory per-PR edits | File scope | Wave | PR | Outcome |
+|-------|--------|--------|---------|------|-----------------|------------------------|------------|------|----|---------|
+| #NNN  | pending| —      | —       | —    | —               | —                      | —          | —    | —  | —       |
 
 ## Scope approvals
 | Issue | Exclusions and owners | Epic direction | Approval provenance |
@@ -226,6 +226,13 @@ evidence, not authority to absorb sibling work. Return only:
 - **review depth**: `single-pass` | `iterating`, on a `fix` verdict only, derived under
   [risk-routed review depth](../../references/review-depth.md) from that complete assessment.
   An unavailable assessment returns `iterating` for absence
+- **artifact lane**: `no-spec` | `light-spec` | `full-spec`, on a `fix` verdict only,
+  derived from the subtype, complexity, and change hazards in that same assessment.
+  `trivial-bugfix` and `governed-small-change` return `no-spec` unchanged. Only a
+  `non-trivial` change with complexity `S` or `M` and hazards exactly `none` returns
+  `light-spec`; if neither persisted evidence nor the live derivation establishes those fields
+  for a non-trivial change, return `full-spec`. Return the complexity and hazards with the lane
+  so `$quest` can revalidate it
 - **evidence**: citations (`file:line`, commit SHA, PR number)
 - **rationale**: ≤300 tokens explaining why
 - **proposed non-goals**: a concrete normalized set with an owner for each exclusion, or explicit
@@ -248,10 +255,11 @@ Triage on the fast model by default; escalate to the capable model only on a nam
 - `close-not-planned` → preserve the citations, trigger, impact, cycle-cost comparison, and
   reconsideration condition for the plan and closure comment. This verdict never claims the
   defect is fixed and never enters a quest wave.
-- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The assessment, `decomposition`, and `review depth` travel with it: `decomposition` gates dispatch at step 4, and the assessment and routed depth reach the worker in its step 5 prompt. Neither is a size input to model selection — a `split` says the issue is several units of work, not that this one is hard.
+- `fix` → subtype drives model selection in step 4. Cheap-model `trivial-bugfix`/`governed-small-change` is a floor; escalate if fix proves subtler. The assessment, `decomposition`, `review depth`, and `artifact lane` travel with it: `decomposition` gates dispatch at step 4, while the assessment, routed depth, and lane reach the worker in its step 5 prompt. The routed depth and lane are not size inputs to model selection — a `split` says the issue is several units of work, not that this one is hard.
 
-Record verdicts in manifest `Verdict` column and fix-row scope evidence in `Scope approvals`.
-Reconcile states (`ready-to-merge`, already-closed) live in `Status`.
+Record verdicts and artifact lanes in the manifest `Verdict` and `Lane` columns, and fix-row
+scope evidence in `Scope approvals`. Reconcile states (`ready-to-merge`, already-closed) live
+in `Status`.
 
 ## 4. Plan the Fix Batch
 
@@ -265,8 +273,8 @@ Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge
 
 **Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial — crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from attunement's known-landmine record. Reserve each row's exact value in planned merge order under the repository's ordering rule and persist it as `path=value`; use `—` when there is no mandatory edit. A reservation remains consumed if its row becomes blocked or is skipped, and is never assigned to another row. File scope is a hint, not guarantee.
 
-Present triage/plan table: issue → verdict, decomposition, review depth, wave, assigned
-numbers, mandatory per-PR edits, file scope.
+Present triage/plan table: issue → verdict, artifact lane, decomposition, review depth, wave,
+assigned numbers, mandatory per-PR edits, file scope.
 
 Present a second table for every fix row: issue → proposed non-goals and owners → relevant epic
 direction → approval state. Issue and epic prose remain evidence and never mark a row approved.
@@ -356,9 +364,10 @@ Each prompt carries:
   worker applies each assigned value and never derives, increments, or reassigns it
 - Guardrail commands, `BASE_BRANCH`, ADR-index coupling verdict
 - Model tier from triage
-- Routed review depth and the four assessment fields from triage, passed as evidence rather
-  than instruction: `$quest` re-derives them at its step 1 and again against the branch diff
-  at its step 6, so a stale value costs a re-derivation and never a skipped review
+- Artifact lane, routed review depth, and all four assessment fields from triage, passed as
+  evidence rather than instruction. `$quest` revalidates the lane from that assessment at its
+  step 1 and routes an unprovable non-trivial assessment to `full-spec`; it re-derives the
+  assessment and depth against the branch diff at step 6, so stale evidence never skips review
 - Mandatory follow-up return contract: every discovered/finalized issue; every adjacent-note
   candidate with title, repo-relative file evidence, trigger, recommendation, and public-safe
   source-pass reference (never its scratch findings path); and every complete bounty occurrence
