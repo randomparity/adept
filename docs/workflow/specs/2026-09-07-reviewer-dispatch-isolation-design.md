@@ -40,15 +40,18 @@ property says what the empty window buys and what restoring the inheritance cost
 as something the prompt establishes.
 
 **R4.** Every site that restates the dispatch inline carries a clause naming the fresh-context
-type and the `fork` prohibition, and cites `$trial-loop` step 1 for the reason. Those eight sites
-are `references/review-depth.md` (single-pass dispatch), `skills/quest/SKILL.md` (the `$oathbind`
-scope audit and the `$detect-evil` security pass), `skills/saga/SKILL.md` (draft review),
-`skills/spellcraft/SKILL.md` (**both** design-set review dispatches — the first pass at its `Run
-the review` heading and the second at `Route the passes`, which restates lens selection, brief
-contents, and the retry rule without citing step 1), `skills/campaign/SKILL.md` (read-only triage
-workers), and `skills/forge/SKILL.md` (whole-branch review). A site that only chains to step 1
-without restating the dispatch inherits the fix and is not edited. A clause may add a
-site-specific consequence beside the citation; it may not substitute one for it.
+type and the `fork` prohibition, and cites `$trial-loop` step 1 for the reason. **A site restates
+inline when it gives any of brief contents, lens selection, or the retry rule without citing the
+canonical recipe**; a site that cites it and adds nothing of its own inherits the fix unedited.
+That test, not section proximity, decides membership. The nine sites it selects are
+`references/review-depth.md` (**both** — the single-pass dispatch and the bounded review's
+second-pass dispatch), `skills/quest/SKILL.md` (the `$oathbind` scope audit and the
+`$detect-evil` security pass), `skills/saga/SKILL.md` (draft review),
+`skills/spellcraft/SKILL.md` (**both** design-set review dispatches, the second being the
+structural mirror of `review-depth.md`'s), `skills/campaign/SKILL.md` (read-only triage workers),
+and `skills/forge/SKILL.md` (whole-branch review). The one exempt site is the bounded review's
+first-pass dispatch, which cites the single-pass checks above it and restates nothing. A clause
+may add a site-specific consequence beside the citation; it may not substitute one for it.
 
 **R5.** `skills/quest/SKILL.md`'s scope-audit paragraph currently ends "the workflow makes no
 context-isolation guarantee". Under R1 it does make one at the dispatch type. That sentence is
@@ -63,12 +66,12 @@ and breaks no invocation, so the bump is `PATCH`.
 
 Prose only. Seven files change plus the manifest; no executable, no gate, no new reference file.
 
-`$trial-loop` step 1 is the contract's single canonical home. The eight other dispatch sites all
-restate the dispatch inline and each gain one clause, across six further files. Sites that only
-chain — the two inner dispatches of `references/review-depth.md`'s bounded design-artifact
-review, which sit under the section whose opening sentence this change edits — inherit the fix
-unedited. That split is deliberate: the observed failure was a reader treating a by-reference
-sentence as self-sufficient, so the clause belongs where the dispatch call is composed.
+`$trial-loop` step 1 is the contract's single canonical home. The nine other dispatch sites all
+restate the dispatch inline and each gain one clause, across six further files. The single site
+that only chains — the bounded design-artifact review's first-pass dispatch, which defers to the
+single-pass checks above it — inherits the fix unedited. That split is deliberate: the observed
+failure was a reader treating a by-reference sentence as self-sufficient, so the clause belongs
+where the dispatch call is composed.
 
 `skills/forge/SKILL.md:607` ("Subagents inherit nothing") is the same voidable assertion at a
 mutating-worker site, inside the approved exclusion. It is carried as a follow-up candidate.

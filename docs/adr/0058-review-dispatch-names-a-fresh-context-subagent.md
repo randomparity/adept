@@ -26,7 +26,7 @@ commit, push, PR creation, and the `MERGE-READY` handshake — and one dispatche
 sub-agent that did the same. Four out of four with a nested instance is deterministic inherited
 behaviour, not a race.
 
-Eight further dispatch sites restate that recipe inline — `references/review-depth.md`,
+Nine further dispatch sites restate that recipe inline — both of `references/review-depth.md`'s,
 `$quest`'s `$oathbind` and `$detect-evil` dispatches, `$saga`'s draft review, both of
 `$spellcraft`'s design-set review dispatches, `$campaign`'s triage workers, and `$forge`'s
 whole-branch review — so the omission is one underspecified contract reused, not a single-site
@@ -44,7 +44,9 @@ liveness probe `references/dispatch-liveness.md` permits is not a dispatch and i
 
 **2. `$trial-loop` step 1 is the contract's one canonical home.** Every site that restates the
 dispatch inline adds a clause naming the fresh-context type and the `fork` prohibition, and cites
-step 1 for the reason. Sites that only chain to step 1 without restating it inherit the fix.
+step 1 for the reason. Membership is decided by a test, not by proximity: a site restates inline
+when it gives any of brief contents, lens selection, or the retry rule without citing the
+canonical recipe. A site that cites and adds nothing of its own inherits the fix.
 
 **3. The two dependent properties are written as consequences of the dispatch type, not as
 assertions.** Each says what the empty window buys and what restoring the inheritance costs, so a
@@ -62,12 +64,11 @@ Unlike the fork prohibition, this rule is carried inline only here and in
 The prohibition is enforceable by reading a dispatch call rather than by reasoning about a
 prompt. `subagent_type: "fork"` is a value a reviewer, a human, or a later audit can see.
 
-Eight further dispatch sites now carry a one-clause constraint they did not carry before. That
+Nine further dispatch sites now carry a one-clause constraint they did not carry before. That
 is deliberate duplication: the observed failure was a reader treating a by-reference sentence as
-self-sufficient, so the clause has to be where the dispatch is composed. A site that only chains
-to step 1 without restating the dispatch — `references/review-depth.md`'s two inner
-design-artifact dispatches, which sit under the section whose opening sentence this change
-edits — inherits the fix and is left alone.
+self-sufficient, so the clause has to be where the dispatch is composed. Exactly one site is
+exempt under decision 2's test — the bounded design-artifact review's first-pass dispatch, which
+cites the single-pass checks above it and restates none of them.
 
 A harness without a fresh-context subagent type can no longer run any review this repository
 ships: `$trial-loop`, both `$quest` review dispatches, `$saga`, `$spellcraft`, `$campaign`'s
@@ -78,9 +79,12 @@ to be in that state today; this record does not assert one is.
 
 The contract binds review and read-only-worker dispatch only. `$forge`'s Party implementers, its
 post-review fix worker, and `$campaign`'s `$quest` workers are mutating by design, and
-`skills/forge/SKILL.md`'s "Subagents inherit nothing" remains an assertion of the kind decision 3
-replaces — a recorded follow-up, not a gap this decision closes. Nothing automated checks the new
-prose: anatomy rule 4 forbids it, and the structural gates are unchanged.
+`skills/forge/SKILL.md`'s "Subagents inherit nothing" (`:607`, with `:252-254` as a second
+instance) remains an assertion of the kind decision 3 replaces. Those two sentences ship
+contradicted by their own file's new `:467` clause for as long as the exclusion stands: that is
+an accepted residual with no durable owner — no issue, no `docs/debt/` record — carried to the
+operator as a follow-up candidate, not a gap this decision closes. Nothing automated checks the
+new prose: anatomy rule 4 forbids it, and the structural gates are unchanged.
 
 ## Considered & rejected
 
@@ -97,7 +101,7 @@ prose: anatomy rule 4 forbids it, and the structural gates are unchanged.
   dispatch prompt stated read-only explicitly and lost four times out of four. A property with no
   checkable value attached is the state this record leaves.
 - **Centralize the contract in a new `references/` file linked from every dispatch site.**
-  judgment: four of the eight already cite `$trial-loop` step 1 by name, and the failure being
+  judgment: four of the nine already cite `$trial-loop` step 1 by name, and the failure being
   fixed is a reader who does not follow the citation. A new hop for a contract that already has a
   canonical home adds surface without adding reach.
 - **Strengthen the prompt instead — a harder, more explicit read-only directive.** verified:
