@@ -190,8 +190,10 @@ inside one file.
 
 - **Contract: the `$trial-loop` invocation tokens the clauses add to `skills/quest/SKILL.md` and
   `skills/spellcraft/SKILL.md`.** Mode: `focused-test`. Same rule 4 contract as Task 1. Expected
-  red: temporarily change the step 2 replacement's `` `$trial-loop` `` to
-  `` `$nonexistent-skill` `` and run `just shape-check` — non-zero, naming it. Revert. Expected
+  red: temporarily change the step 3 replacement's `` `$trial-loop` `` to
+  `` `$nonexistent-skill` `` in `skills/quest/SKILL.md` and run `just shape-check` — non-zero,
+  naming it. Rule 4 scans `skills/*/SKILL.md` only, so the fault must go in a skill rather than
+  in `references/review-depth.md`. Revert. Expected
   green: `just shape-check` exits 0 printing `check-skill-shape: 29 skills, all rules pass`.
 - **Contract: the nine inline dispatch clauses as normative sentences.** Mode:
   `task-test-not-applicable`. Beyond those invocation tokens, the changed surface is prose

@@ -67,7 +67,8 @@ not a question about what the run may change.
 
 ## Running a single pass
 
-Dispatch the reviewer in a subagent exactly as `$trial-loop` step 1 does — the
+Dispatch the reviewer in a fresh-context subagent exactly as `$trial-loop` step 1 does —
+never a fork, and stop as blocked where the harness offers no fresh-context type; the
 installed reviewer read in full, `--json --out <findings-path>`, the complete
 `CHARTER` block last, and a `Write` tool in the worker's allowlist or `--out` silently
 no-ops. Put `<findings-path>` on a scratchpad path outside the repo tree, unique to
@@ -116,8 +117,9 @@ Return to `SCOPE CHECKPOINT` when interactive or park when unattended. Do not
 edit, defer, expand scope, or spend the optional second pass. Adjacent notes
 remain follow-up candidates under the existing disposition rule.
 
-When a defensible in-surface blocking finding remains, dispatch one fresh
-reviewer with no first-pass findings or verdict in its brief. Assert that every
+When a defensible in-surface blocking finding remains, dispatch one fresh-context
+subagent — never a fork, per `$trial-loop` step 1 — with no first-pass findings or
+verdict in its brief. Assert that every
 design artifact is byte-identical to the first pass's target, retain the same
 reviewer and frozen charter, and select the next compatible lens under
 [review lenses](review-lenses.md). A changed target blocks this route rather

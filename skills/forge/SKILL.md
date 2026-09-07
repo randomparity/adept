@@ -465,7 +465,9 @@ After the last task, run the guardrail suite under *Guardrails* over the
 assembled branch and fix anything red before going further. With no per-task
 reviewer, this is the first executable check that has seen every task's work
 together. Then dispatch the whole-branch review with
-[code-reviewer.md](code-reviewer.md), on the most capable model. It is the
+[code-reviewer.md](code-reviewer.md), on the most capable model, in a fresh-context
+subagent — never a fork, per `$trial-loop` step 1, which here would carry this run's own
+build instructions into the one worker whose job is to disbelieve them. It is the
 branch's only adversarial pass.
 
 Its base is the branch's fork point — `git merge-base HEAD <BASE_BRANCH>`,

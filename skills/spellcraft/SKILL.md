@@ -590,7 +590,8 @@ in the audit line that you did. Never use that repair to alter the fixed denomin
 
 ### Run the review
 
-Dispatch `$gauntlet` in a fresh worker using the bounded design-artifact recipe
+Dispatch `$gauntlet` in a fresh-context subagent — never a fork, per `$trial-loop`
+step 1 — using the bounded design-artifact recipe
 in [risk-routed review depth](../../references/review-depth.md). Use its
 single-pass JSON artifact, freshness, validation, and malformed-retry contract:
 
@@ -672,7 +673,8 @@ Do not fix it, defer it, widen scope, or spend the optional second pass.
 
 If no defensible in-surface blocking finding remains, close review after this
 one valid pass. If one does remain, assert the complete ordered hash mapping is
-unchanged, select the next compatible lens, and dispatch one fresh worker. Its
+unchanged, select the next compatible lens, and dispatch one fresh-context subagent —
+never a fork, per `$trial-loop` step 1. Its
 brief carries the same charter and target context but none of the first pass's
 findings, verdict, or proposed remedies. Apply the same artifact validation and
 one-retry rule. A defensible adjacent blocker from this pass checkpoints or
