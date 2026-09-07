@@ -267,9 +267,27 @@ malformed compact object follows step 2 instead, because a report that arrived i
 worker. Do not use step 2's malformed-return retry to replace a worker whose end was not observed.
 
 1. **Petition the council** — read the installed selected reviewer in full, then run it in a
-   **subagent** with
+   **fresh-context subagent** with
    `--json --out <findings-path> <challenge-args>`, then the exact
    `CHARTER` block above as the labeled trailing block.
+
+   **Fresh-context is the type, not a preference.** Dispatch a subagent type whose window
+   starts empty — inheriting none of this session's conversation and none of its active skill
+   instructions. **Never a fork** (`subagent_type: "fork"`): it inherits the caller's context,
+   and with it the caller's *active, write-capable workflow instructions*. A fork dispatched
+   from inside `$quest` reads `$quest`'s own text telling it to apply fixes, commit, push and
+   hand off, and follows it — observed four times out of four on randomparity/adept#334, under
+   a dispatch prompt that said "no correctness review, no git/PR/merge actions" in those
+   words. The prompt is not the layer where this holds. Never reuse a prior pass's reviewer as
+   this pass's either, on its own ground: that worker carries its own findings and verdict,
+   which the naivety rule below forbids. The one direct liveness probe
+   [dispatch liveness](../../references/dispatch-liveness.md) permits is not a dispatch and is
+   unaffected.
+
+   Where the harness offers no fresh-context type, **stop as blocked** and report that it
+   cannot carry a review dispatch; a fork under a stronger prompt is not the fallback.
+   Absence means the harness's own dispatch surface names no type documented as starting with
+   an empty window — not that you did not recognise a name on a roster it does have.
 
    Restating the focus inside the block is deliberate — it keeps the charter
    self-contained for the reviewer, and both supported reviewers read the duplicate as one
@@ -402,14 +420,26 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    a concern and its owner, which is what the exclusions already say — and it is bounded,
    because a record carries no verdicts, no finding history, and no intended fixes.
 
-   The reviewer worker is read-only with respect to the target and git state
-   but **its tool allowlist must include `Write`** — `--out` writes the findings
-   file (the selected reviewer's sole write exception); without `Write`, `--out` silently
-   no-ops and the loop dead-ends. The worker's context (not this one) holds the
-   full findings; it returns only `{verdict, findings_count, blocking_count, suppressed_count,
-   path, run_id}` — `run_id` included, because steps 4 and 5 assert it against the
-   artifact and a four-field contract degrades that check to a no-op. That isolation
-   keeps the loop from stacking a full payload per pass in the caller's window.
+   **Two properties this loop depends on hold because step 1 dispatched a
+   fresh-context subagent, and only because of that.** Each is written below as what
+   the empty window buys and what restoring the inheritance costs. A reader who
+   satisfies them by telling the worker to be read-only has satisfied neither.
+
+   *Read-only with respect to the target and git state.* A window that starts empty
+   carries no instruction to commit, push, or ship, so the only workflow the worker
+   can act on is the one its own prompt gives it. Restore the inheritance and the
+   prompt loses to it. The single write it does make is the findings file, so **its
+   tool allowlist must include `Write`** — `--out` writes that file (the selected
+   reviewer's sole write exception); without `Write`, `--out` silently no-ops and the
+   loop dead-ends.
+
+   *Payload isolation.* The worker's context (not this one) holds the full findings;
+   it returns only `{verdict, findings_count, blocking_count, suppressed_count, path,
+   run_id}` — `run_id` included, because steps 4 and 5 assert it against the artifact
+   and a four-field contract degrades that check to a no-op. What that buys is a
+   caller window carrying verdicts instead of payloads, one pass after another. A
+   worker that inherited the caller's window has already spent the saving, whatever
+   it returns.
 
    **One exception, and it is the whole point of the error path.** Both supported reviewers use
    `$gauntlet`'s target-resolution taxonomy; when the selected reviewer
