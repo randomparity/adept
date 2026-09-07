@@ -24,8 +24,7 @@ that said, in those words, "no correctness review, no git/PR/merge actions". All
 every prohibition and independently carried the rest of the quest pipeline to completion —
 commit, push, PR creation, and the `MERGE-READY` handshake — and one dispatched a further
 sub-agent that did the same. Four out of four with a nested instance is deterministic inherited
-behaviour, not a race. Nothing bad shipped, but only because the originating agent distrusted the
-forks' mutually inconsistent self-reports and re-verified git and GitHub state itself.
+behaviour, not a race.
 
 Seven further dispatch sites restate or inherit that recipe — `references/review-depth.md`,
 `$quest`'s `$oathbind` and `$detect-evil` dispatches, `$saga`'s draft review, `$spellcraft`'s
@@ -66,13 +65,12 @@ A harness without a fresh-context subagent type can no longer run these reviews 
 the intended trade — an unreviewable run is visible, and a fork-reviewed run was not.
 
 The contract binds review and read-only-worker dispatch only. `$forge`'s Party implementers, its
-post-review fix worker, and `$campaign`'s `$quest` workers are mutating by design; their
-dependence on fresh context is real but differently shaped, and `skills/forge/SKILL.md`'s
-"Subagents inherit nothing" remains an assertion of the kind decision 3 replaces. That is a
-recorded follow-up, not a gap this decision closes.
+post-review fix worker, and `$campaign`'s `$quest` workers are mutating by design, and
+`skills/forge/SKILL.md`'s "Subagents inherit nothing" remains an assertion of the kind decision 3
+replaces. That is a recorded follow-up, not a gap this decision closes.
 
-Nothing automated checks the new prose. Anatomy rule 4 forbids it, and the structural gates
-(`just shape-check`, `just verify`) are unchanged.
+Nothing automated checks the new prose. Anatomy rule 4 forbids it, and the structural gates are
+unchanged.
 
 ## Considered & rejected
 

@@ -21,10 +21,9 @@ is `just verify`.
 40 changed lines in `skills/trial-loop/SKILL.md` across the two contract edits, about 4–5 each at
 the six inheriting sites, and one line in `.claude-plugin/plugin.json`.**
 
-The estimate sits well under the fixed `M` denominator because the complexity band was frozen
-from the change's cross-cutting contract hazard — one dispatch contract restated at nine sites in
-seven files — not from a line count. The two are measuring different things and are not
-reconciled by moving either.
+The estimate sits well under the fixed `M` denominator because the band was frozen from the
+change's cross-cutting contract hazard — one dispatch contract restated across seven files — not
+from a line count. The two measure different things and are not reconciled by moving either.
 
 ## Global constraints
 
@@ -40,12 +39,11 @@ Transcribed from the design and the repository's `CLAUDE.md`:
   renames nothing, and breaks no invocation. Base version is `4.6.2`, so the tree declares
   `4.6.3`.
 - Conventional commits, imperative mood, subject ≤ 72 characters, one logical change per commit.
-- Never commit to `main`. Work happens on `feat/specify-reviewer-subagent-type-334` in its
+  Never commit to `main`; work happens on `feat/specify-reviewer-subagent-type-334` in its
   sibling worktree.
-- Run gates bare — no pipes that swallow an exit code, no `|| true`.
-- `git push` runs the managed pre-push hook, which re-runs all of `just verify` in an isolated
-  worktree. It regularly exceeds a two-minute default tool timeout; that is slowness, not a hang.
-  Raise the timeout rather than re-invoking.
+- Run gates bare — no pipes that swallow an exit code, no `|| true`. `git push` re-runs all of
+  `just verify` under the managed pre-push hook and regularly exceeds a two-minute tool timeout;
+  that is slowness, not a hang.
 - The approved exclusions are frozen: no mutating-worker dispatch site is edited
   (`$forge` Party implementers, `$forge`'s post-review fix worker, `$campaign`'s `$quest`
   workers), no script or harness file changes, and `$summon-swarm` is untouched.
@@ -62,8 +60,6 @@ Transcribed from the design and the repository's `CLAUDE.md`:
 | `skills/campaign/SKILL.md` | modify | the read-only triage-worker dispatch |
 | `skills/forge/SKILL.md` | modify | the whole-branch review dispatch |
 | `.claude-plugin/plugin.json` | modify | the mandatory per-PR version bump |
-| `docs/adr/0058-review-dispatch-names-a-fresh-context-subagent.md` | created in design | the decision |
-| `docs/workflow/specs/2026-09-07-reviewer-dispatch-isolation-design.md` | created in design | the requirements |
 
 ## Task 1 — the canonical contract in `$trial-loop`
 
@@ -72,21 +68,20 @@ subagent**, with `subagent_type: "fork"` named as the forbidden value and `$tria
 named as the place the reason lives. Task 2 consumes exactly those three tokens and introduces no
 synonym for them.
 
-**Where it fits.** `skills/trial-loop/SKILL.md` is the recipe six of the nine dispatch sites
-already cite. Fixing it is what the by-reference sites inherit; Task 2 covers the sites that
-restate the dispatch inline and would otherwise read as self-sufficient.
+**Where it fits.** `skills/trial-loop/SKILL.md` is the recipe four of the seven other dispatch
+sites already cite by name. Fixing it is what the chaining sites inherit; Task 2 covers the sites
+that restate the dispatch inline and would otherwise read as self-sufficient.
 
 **Files.** Modifies `skills/trial-loop/SKILL.md`. Creates and tests nothing.
 
 ### Verification
 
 - **Contract: the step 1 dispatch-type constraint and the two rewritten dependent properties.**
-  Mode: `task-test-not-applicable`. The changed surface is normative instruction prose. No
-  executable in this repository consumes a `SKILL.md` body — the structural gates read frontmatter
-  `name:`, directory agreement, and relative-link resolution only
-  (`scripts/check-skill-shape.sh`). This task adds no link, no frontmatter field, and no
-  structural element, so no task-specific executable or structural observation could fail
-  meaningfully. A test asserting a sentence is present is the class anatomy rule 4 forbids.
+  Mode: `task-test-not-applicable`. No executable in this repository consumes a `SKILL.md` body —
+  `scripts/check-skill-shape.sh` reads frontmatter `name:`, directory agreement, and
+  relative-link resolution only. This task adds no link, no frontmatter field, and no structural
+  element, so no task-specific executable or structural observation could fail meaningfully. A
+  test asserting a sentence is present is the class anatomy rule 4 forbids.
 
 ### Steps
 
@@ -168,8 +163,7 @@ requirement and the exact six-field compact object survive verbatim.
 finished change; nothing later depends on it.
 
 **Where it fits.** Each of these files composes a dispatch call inline, in wording a reader can
-act on without following the chain to `$trial-loop` step 1. That is the observed failure mode, so
-each gains the clause where the call is composed.
+act on without following the chain to `$trial-loop` step 1 — the observed failure mode.
 
 **Files.** Modifies `references/review-depth.md`, `skills/quest/SKILL.md`,
 `skills/saga/SKILL.md`, `skills/spellcraft/SKILL.md`, `skills/campaign/SKILL.md`,
@@ -177,10 +171,9 @@ each gains the clause where the call is composed.
 
 ### Verification
 
-- **Contract: the six inline dispatch clauses.** Mode: `task-test-not-applicable`. Same surface
-  and same reason as Task 1: normative instruction prose that no executable in this repository
-  consumes, adding no link, frontmatter field, or structural element that `just shape-check`
-  could observe. Anatomy rule 4 forbids the only test that would bite.
+- **Contract: the seven inline dispatch clauses.** Mode: `task-test-not-applicable`. Same surface
+  and same reason as Task 1: normative instruction prose no executable consumes, adding no link,
+  frontmatter field, or structural element `just shape-check` could observe.
 - **Contract: the manifest version bump.** Mode: `focused-test`. The observable contract is rule
   3 of `scripts/check-plugin-version.sh` — the tree's version is strictly greater than the base
   ref's whenever the tree differs from `BASE_SHA` at all. Expected red, run before step 7 with

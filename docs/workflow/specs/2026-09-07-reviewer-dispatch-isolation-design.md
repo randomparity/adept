@@ -56,13 +56,12 @@ Prose only. Seven files change plus the manifest; no executable, no gate, no new
 `$trial-loop` step 1 is the contract's single canonical home. The seven other dispatch sites all
 restate the dispatch inline and each gain one clause, across six further files. Sites that only
 chain — the two inner dispatches of `references/review-depth.md`'s bounded design-artifact
-review, which defer to its own `Running a single pass` section — inherit the fix unedited. That
-split is deliberate: the observed failure was a reader treating a by-reference sentence as
-self-sufficient, so the clause belongs where the dispatch call is composed, and nowhere else.
+review — inherit the fix unedited. That split is deliberate: the observed failure was a reader
+treating a by-reference sentence as self-sufficient, so the clause belongs where the dispatch
+call is composed.
 
 `skills/forge/SKILL.md:607` ("Subagents inherit nothing") is the same voidable assertion at a
-mutating-worker site. It is inside the approved exclusion and is carried as a follow-up
-candidate, not fixed here.
+mutating-worker site, inside the approved exclusion. It is carried as a follow-up candidate.
 
 ## Validation
 
