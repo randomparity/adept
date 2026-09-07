@@ -26,11 +26,11 @@ commit, push, PR creation, and the `MERGE-READY` handshake — and one dispatche
 sub-agent that did the same. Four out of four with a nested instance is deterministic inherited
 behaviour, not a race.
 
-Nine further dispatch sites restate that recipe inline — both of `references/review-depth.md`'s,
-`$quest`'s `$oathbind` and `$detect-evil` dispatches, `$saga`'s draft review, both of
-`$spellcraft`'s design-set review dispatches, `$campaign`'s triage workers, and `$forge`'s
-whole-branch review — so the omission is one underspecified contract reused, not a single-site
-typo.
+Eleven further dispatch sites restate that recipe inline — all three in
+`references/review-depth.md`, `$quest`'s `$oathbind`, single-pass branch-review and
+`$detect-evil` dispatches, `$saga`'s draft review, both of `$spellcraft`'s design-set review
+dispatches, `$campaign`'s triage workers, and `$forge`'s whole-branch review — so the omission
+is one underspecified contract reused, not a single-site typo.
 
 ## Decision
 
@@ -46,7 +46,8 @@ liveness probe `references/dispatch-liveness.md` permits is not a dispatch and i
 dispatch inline adds a clause naming the fresh-context type and the `fork` prohibition, and cites
 step 1 for the reason. Membership is decided by a test, not by proximity: a site restates inline
 when it gives any of brief contents, lens selection, or the retry rule without citing the
-canonical recipe. A site that cites and adds nothing of its own inherits the fix.
+canonical recipe. Applied across the repository the test currently selects every dispatch-composing
+site and exempts none, so no site relies on an exemption argument.
 
 **3. The two dependent properties are written as consequences of the dispatch type, not as
 assertions.** Each says what the empty window buys and what restoring the inheritance costs, so a
@@ -64,18 +65,26 @@ Unlike the fork prohibition, this rule is carried inline only here and in
 The prohibition is enforceable by reading a dispatch call rather than by reasoning about a
 prompt. `subagent_type: "fork"` is a value a reviewer, a human, or a later audit can see.
 
-Nine further dispatch sites now carry a one-clause constraint they did not carry before. That
+Eleven further dispatch sites now carry a one-clause constraint they did not carry before. That
 is deliberate duplication: the observed failure was a reader treating a by-reference sentence as
-self-sufficient, so the clause has to be where the dispatch is composed. Exactly one site is
-exempt under decision 2's test — the bounded design-artifact review's first-pass dispatch, which
-cites the single-pass checks above it and restates none of them.
+self-sufficient, so the clause has to be where the dispatch is composed. No site is exempt: every
+sentence in `skills/` or `references/` that composes a reviewer or read-only-worker dispatch
+carries it, which is a shorter rule than any exemption would have been.
 
 A harness without a fresh-context subagent type can no longer run any review this repository
-ships: `$trial-loop`, both `$quest` review dispatches, `$saga`, `$spellcraft`, `$campaign`'s
+ships: `$trial-loop`, all three `$quest` review dispatches, `$saga`, `$spellcraft`, `$campaign`'s
 triage, and `$forge`'s whole-branch review all stop as blocked there. That outage is the accepted
 residual — an unreviewable run is visible, and a fork-reviewed run was not — and decision 4's
-test is what keeps it from firing on a harness that does offer such a type. No consumer is known
-to be in that state today; this record does not assert one is.
+test is what keeps it from firing on a harness that does offer such a type.
+
+**Codex is the consumer most likely to hit it.** `.codex-plugin/plugin.json` declares Codex a
+consumer of these skills, and codex-cli 0.153.4 exposes no subagent-type dispatch surface at all:
+its nearest subcommands are `fork` and `resume`, which this record forbids by name, and `exec`,
+whose workers `$summon-swarm` already classifies as not harness subagents. A Codex session
+applying decision 4's test therefore stops as blocked for every review. This change makes that
+gap explicit rather than creating it — the previous text said "run it in a subagent", which a
+Codex reader could not satisfy either — and closing it means giving Codex a fresh-context
+dispatch surface, which is a separate change under its own scope.
 
 The contract binds review and read-only-worker dispatch only. `$forge`'s Party implementers, its
 post-review fix worker, and `$campaign`'s `$quest` workers are mutating by design, and
@@ -101,7 +110,7 @@ new prose: anatomy rule 4 forbids it, and the structural gates are unchanged.
   dispatch prompt stated read-only explicitly and lost four times out of four. A property with no
   checkable value attached is the state this record leaves.
 - **Centralize the contract in a new `references/` file linked from every dispatch site.**
-  judgment: four of the nine already cite `$trial-loop` step 1 by name, and the failure being
+  judgment: four of the eleven already cite `$trial-loop` step 1 by name, and the failure being
   fixed is a reader who does not follow the citation. A new hop for a contract that already has a
   canonical home adds surface without adding reach.
 - **Strengthen the prompt instead — a harder, more explicit read-only directive.** verified:

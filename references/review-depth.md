@@ -105,9 +105,10 @@ exactly as a loop run discloses them.
 
 ### Bounded design-artifact review
 
-For `$spellcraft`'s combined design set, dispatch the first pass with the first
-compatible lens selected under [review lenses](review-lenses.md). Validate its
-artifact with the single-pass checks above. Apply the evidence checks from
+For `$spellcraft`'s combined design set, dispatch the first pass in a fresh-context
+subagent — never a fork, per `$trial-loop` step 1 — with the first compatible lens
+selected under [review lenses](review-lenses.md). Validate its artifact with the
+single-pass checks above. Apply the evidence checks from
 [heed-counsel](heed-counsel.md) without editing or finally dispositioning the
 findings yet; this establishes which blocking findings are defensible without
 letting the second reviewer observe a response to the first.

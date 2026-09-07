@@ -545,8 +545,9 @@ transcript. This broad branch review retains the existing `gauntlet` route; the 
 below retains the `detect-evil` route and its `security` lens.
 
 On `iterating`, run `$trial-loop --reviewer gauntlet --base <BASE_BRANCH> <composed focus>`. On
-`single-pass`, dispatch the one `gauntlet` pass the reference specifies, with the same `--base`
-and composed focus, and give each finding its single disposition. Address every defensible
+`single-pass`, dispatch the one `gauntlet` pass the reference specifies in a fresh-context
+subagent -- never a fork, per `$trial-loop` step 1 -- with the same `--base` and composed focus,
+and give each finding its single disposition. Address every defensible
 finding and commit after each accepted fix, on either route.
 
 **A blocking finding on a single pass escalates rather than being fixed in place.** Record the

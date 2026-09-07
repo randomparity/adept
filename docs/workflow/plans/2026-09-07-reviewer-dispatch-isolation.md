@@ -9,19 +9,19 @@ fresh context so they state that precondition instead of asserting the outcome.
 
 **Architecture.** Prose only. `$trial-loop` step 1 becomes the contract's one canonical home and
 gains the type constraint plus the blocked-harness rule; the passage that today asserts the two
-dependent properties is rewritten as precondition-plus-consequence. Nine further dispatch sites,
-across six files, each gain a one-clause restatement at the point where they compose a dispatch
-call. The one site that only chains to step 1 inherits the fix and is not edited.
+dependent properties is rewritten as precondition-plus-consequence. Eleven further dispatch
+sites, across six files, each gain a one-clause restatement at the point where they compose a
+dispatch call. No site is exempt.
 `.claude-plugin/plugin.json` takes the mandatory version bump.
 
 **Tech stack.** Markdown only. No executable, no dependency, no build step, no new gate. The gate
 is `just verify`.
 
 **Expected implementation size: 80–110 changed lines (M) — summed from the file map below: about
-45 changed lines in `skills/trial-loop/SKILL.md` across the two contract edits, about 4–12 per
-file at the six inheriting files (nine dispatch sites, two each in `references/review-depth.md`,
-`skills/quest/SKILL.md` and `skills/spellcraft/SKILL.md`), and one line in
-`.claude-plugin/plugin.json`.**
+45 changed lines in `skills/trial-loop/SKILL.md` across the two contract edits, about 4–16 per
+file at the six inheriting files (eleven dispatch sites: three each in
+`references/review-depth.md` and `skills/quest/SKILL.md`, two in `skills/spellcraft/SKILL.md`,
+one each in the rest), and one line in `.claude-plugin/plugin.json`.**
 
 The estimate sits well under the fixed `M` denominator because the band was frozen from the
 change's cross-cutting contract hazard — one dispatch contract restated across seven files — not
@@ -54,8 +54,8 @@ Transcribed from the design and the repository's `CLAUDE.md`:
 | Path | Action | Answerable for |
 |---|---|---|
 | `skills/trial-loop/SKILL.md` | modify | the canonical dispatch-type contract and the two rewritten dependent properties |
-| `references/review-depth.md` | modify | both inline dispatches: the single pass and the bounded review's second pass |
-| `skills/quest/SKILL.md` | modify | the `$oathbind` scope-audit dispatch and the `$detect-evil` security-pass dispatch |
+| `references/review-depth.md` | modify | all three inline dispatches: the single pass and both bounded-review passes |
+| `skills/quest/SKILL.md` | modify | the `$oathbind` scope-audit, `single-pass` branch-review, and `$detect-evil` security-pass dispatches |
 | `skills/saga/SKILL.md` | modify | the draft-review dispatch |
 | `skills/spellcraft/SKILL.md` | modify | both design-set review dispatches, first pass and second |
 | `skills/campaign/SKILL.md` | modify | the read-only triage-worker dispatch |
@@ -69,7 +69,7 @@ subagent**, with `subagent_type: "fork"` named as the forbidden value and `$tria
 named as the place the reason lives. Task 2 consumes exactly those three tokens and introduces no
 synonym for them.
 
-**Where it fits.** `skills/trial-loop/SKILL.md` is the recipe four of the nine other dispatch
+**Where it fits.** `skills/trial-loop/SKILL.md` is the recipe four of the eleven other dispatch
 sites already cite by name. Fixing it is what the chaining sites inherit; Task 2 covers the sites
 that restate the dispatch inline and would otherwise read as self-sufficient.
 
@@ -170,17 +170,17 @@ blocked where no fresh-context type exists. The two dependent properties each st
 window as their precondition and name what restoring the inheritance costs. The `Write`-allowlist
 requirement and the exact six-field compact object survive verbatim.
 
-## Task 2 — the eight inheriting dispatch sites and the version bump
+## Task 2 — the eleven inheriting dispatch sites and the version bump
 
 **Interfaces.** Consumes Task 1's three tokens — `fresh-context subagent`, `subagent_type:
 "fork"`, and `$trial-loop` step 1 as the citation — and introduces no synonym. Produces the
 finished change; nothing later depends on it.
 
-**Where it fits.** Each of these nine sites composes a dispatch call inline, in wording a reader
-can act on without following the chain to `$trial-loop` step 1 — the observed failure mode. Three
-files carry two sites each — `references/review-depth.md`, `skills/quest/SKILL.md` and
-`skills/spellcraft/SKILL.md` — so editing only the first in any of them would leave a live synonym
-inside one file.
+**Where it fits.** Each of these eleven sites composes a dispatch call inline, in wording a
+reader can act on without following the chain to `$trial-loop` step 1 — the observed failure mode.
+Three files carry more than one — `references/review-depth.md` and `skills/quest/SKILL.md` three
+each, `skills/spellcraft/SKILL.md` two — so editing only the first in any of them would leave a
+live synonym inside one file.
 
 **Files.** Modifies `references/review-depth.md`, `skills/quest/SKILL.md`,
 `skills/saga/SKILL.md`, `skills/spellcraft/SKILL.md`, `skills/campaign/SKILL.md`,
@@ -190,12 +190,12 @@ inside one file.
 
 - **Contract: the `$trial-loop` invocation tokens the clauses add to `skills/quest/SKILL.md` and
   `skills/spellcraft/SKILL.md`.** Mode: `focused-test`. Same rule 4 contract as Task 1. Expected
-  red: temporarily change the step 3 replacement's `` `$trial-loop` `` to
+  red: temporarily change the step 4 replacement's `` `$trial-loop` `` to
   `` `$nonexistent-skill` `` in `skills/quest/SKILL.md` and run `just shape-check` — non-zero,
   naming it. Rule 4 scans `skills/*/SKILL.md` only, so the fault must go in a skill rather than
   in `references/review-depth.md`. Revert. Expected
   green: `just shape-check` exits 0 printing `check-skill-shape: 29 skills, all rules pass`.
-- **Contract: the nine inline dispatch clauses as normative sentences.** Mode:
+- **Contract: the eleven inline dispatch clauses as normative sentences.** Mode:
   `task-test-not-applicable`. Beyond those invocation tokens, the changed surface is prose
   carrying no parser, schema, record shape, validation rule, or generated artifact; a test that
   bit on it would assert on wording, which anatomy rule 4 forbids.
@@ -232,12 +232,33 @@ inside one file.
    ```
 
    This is the structural mirror of the `skills/spellcraft/SKILL.md` second-pass dispatch
-   in step 7: it gives brief contents, lens selection, and the retry rule without citing
+   in step 9: it gives brief contents, lens selection, and the retry rule without citing
    step 1, so R4's test makes it an inline site. The first-pass dispatch a few lines above
    it cites the single-pass checks and restates nothing, so it stays exempt and is not
    edited.
 
-3. In `skills/quest/SKILL.md`, step 4, replace the sentence
+3. In `references/review-depth.md`, still under `### Bounded design-artifact review`, replace
+
+   ```
+   For `$spellcraft`'s combined design set, dispatch the first pass with the first
+   compatible lens selected under [review lenses](review-lenses.md). Validate its
+   artifact with the single-pass checks above.
+   ```
+
+   with:
+
+   ```
+   For `$spellcraft`'s combined design set, dispatch the first pass in a fresh-context
+   subagent — never a fork, per `$trial-loop` step 1 — with the first compatible lens
+   selected under [review lenses](review-lenses.md). Validate its artifact with the
+   single-pass checks above.
+   ```
+
+   This site gives lens selection, which R4's test names as a trigger, and cites this
+   file's own single-pass checks rather than the canonical recipe. It is therefore an
+   inline site like the other two in this file, and no site is left exempt.
+
+4. In `skills/quest/SKILL.md`, step 4, replace the sentence
 
    ```
    Pick a fresh report path there and dispatch a fresh reviewer task running
@@ -256,7 +277,26 @@ inside one file.
    makes the brief the whole of what the auditor has.
    ```
 
-4. In `skills/quest/SKILL.md`, step 6, replace
+5. In `skills/quest/SKILL.md`, step 6, replace the `single-pass` branch-review dispatch
+
+   ```
+   `single-pass`, dispatch the one `gauntlet` pass the reference specifies, with the same `--base`
+   and composed focus, and give each finding its single disposition.
+   ```
+
+   with:
+
+   ```
+   `single-pass`, dispatch the one `gauntlet` pass the reference specifies in a fresh-context
+   subagent -- never a fork, per `$trial-loop` step 1 -- with the same `--base` and composed focus,
+   and give each finding its single disposition.
+   ```
+
+   This is the broad branch review every routed-`single-pass` quest runs, so it is the
+   highest-traffic dispatch in the repository. The `iterating` branch beside it needs no
+   clause: it delegates to `$trial-loop`, which carries the contract at step 1.
+
+6. In `skills/quest/SKILL.md`, step 6, replace
 
    ```
    Dispatch it the way `$trial-loop` dispatches its reviewer -- a subagent running
@@ -269,7 +309,7 @@ inside one file.
    never a fork, for the reason step 1 of that skill gives -- running
    ```
 
-5. In `skills/saga/SKILL.md`, step 5, replace
+7. In `skills/saga/SKILL.md`, step 5, replace
 
    ```
    Write the draft to a scratchpad temp file. Dispatch `$gauntlet` on it as a read-only
@@ -287,7 +327,7 @@ inside one file.
    prompt.
    ```
 
-6. `skills/spellcraft/SKILL.md` composes a dispatch twice and both are edited. First, under
+8. `skills/spellcraft/SKILL.md` composes a dispatch twice and both are edited. First, under
    `### Run the review`, replace
 
    ```
@@ -301,7 +341,7 @@ inside one file.
    step 1 — using the bounded design-artifact recipe
    ```
 
-7. Second, under `### Route the passes` in the same file, replace
+9. Second, under `### Route the passes` in the same file, replace
 
    ```
    unchanged, select the next compatible lens, and dispatch one fresh worker. Its
@@ -317,7 +357,7 @@ inside one file.
    This second-pass dispatch restates lens selection, brief contents, and the retry rule
    without citing step 1, so it is an inline site in its own right (spec R4).
 
-8. In `skills/campaign/SKILL.md`, step 3, replace
+10. In `skills/campaign/SKILL.md`, step 3, replace
    `**Dispatch read-only triage workers** (up to 5 parallel).` with:
 
    ```
@@ -326,7 +366,7 @@ inside one file.
    and with it the dispatch, merge, and label authority a triage worker must not have.
    ```
 
-9. In `skills/forge/SKILL.md`, replace
+11. In `skills/forge/SKILL.md`, replace
 
    ```
    Then dispatch the whole-branch review with
@@ -344,7 +384,7 @@ inside one file.
    branch's only adversarial pass.
    ```
 
-10. Confirm the expected red for the version contract, before editing the manifest:
+12. Confirm the expected red for the version contract, before editing the manifest:
 
    ```sh
    BASE_SHA=$(git merge-base HEAD origin/main) just version-check
@@ -352,9 +392,9 @@ inside one file.
 
    Expect a non-zero exit naming `4.6.2` as not greater than the base version.
 
-11. In `.claude-plugin/plugin.json`, change `"version": "4.6.2"` to `"version": "4.6.3"`.
+13. In `.claude-plugin/plugin.json`, change `"version": "4.6.2"` to `"version": "4.6.3"`.
 
-12. Confirm the expected green, then run the whole gate suite bare:
+14. Confirm the expected green, then run the whole gate suite bare:
 
     ```sh
     BASE_SHA=$(git merge-base HEAD origin/main) just version-check
@@ -363,7 +403,7 @@ inside one file.
 
     Expect the first to exit 0 and `just verify` to exit 0 with every suite reporting `ok`.
 
-**Acceptance criteria.** Each of the nine dispatch sites, across six files, names the
+**Acceptance criteria.** Each of the eleven dispatch sites, across six files, names the
 fresh-context type, names the `fork` prohibition, and cites `$trial-loop` step 1 for the reason —
 using Task 1's tokens without synonym, and adding any site-specific consequence beside that
 citation rather than instead of it (spec R4). Check it positively, per file:
@@ -374,9 +414,9 @@ rg --no-config -ic 'never a fork' skills/trial-loop/SKILL.md references/review-d
   skills/campaign/SKILL.md skills/forge/SKILL.md
 ```
 
-Expect `1, 2, 2, 1, 2, 1, 1` in that order — ten in total, the canonical clause plus the nine
-inline ones. A negative grep for the old wording is not the check: the pre-change sentences share
-no common phrase, so one would pass vacuously while missing most of the sites.
+Expect `1, 3, 3, 1, 2, 1, 1` in that order — twelve in total, the canonical clause plus the
+eleven inline ones. A negative grep for the old wording is not the check: the pre-change
+sentences share no common phrase, so one would pass vacuously while missing most of the sites.
 
 No mutating-worker dispatch site is edited. `skills/quest/SKILL.md` no longer claims the workflow
 makes no context-isolation guarantee. `.claude-plugin/plugin.json` declares `4.6.3`. `just verify`
