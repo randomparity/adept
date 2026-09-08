@@ -267,7 +267,7 @@ malformed compact object follows step 2 instead, because a report that arrived i
 worker. Do not use step 2's malformed-return retry to replace a worker whose end was not observed.
 
 1. **Petition the council** — read the installed selected reviewer in full, then run it in a
-   **fresh-context subagent** with
+   **fresh-context worker** with
    `--json --out <findings-path> <challenge-args>`, then the exact
    `CHARTER` block above as the labeled trailing block.
 
@@ -289,11 +289,20 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    [dispatch liveness](../../references/dispatch-liveness.md) permits is not a dispatch and is
    unaffected.
 
-   **Any mechanism providing it qualifies.** A named fresh-context subagent type is the usual
-   one; on Claude Code, `general-purpose` is a built-in that satisfies the property. Treat that
-   name as an example, not the contract — a roster is per-installation, and even a built-in can
-   be withdrawn. A fresh non-interactive process of the same agent qualifies too, and more
-   strongly: a separate process cannot inherit a conversation it has no handle to.
+   **Any mechanism providing it qualifies.** Say **worker**, not *subagent*, wherever the
+   mechanism is not the point: `subagent` names one harness's capability, and a contract that
+   demands it is unfollowable on a harness that has no such thing. A named fresh-context
+   subagent type is the usual mechanism; on Claude Code, `general-purpose` is a built-in that
+   satisfies the property. Treat that name as an example, not the contract — a roster is
+   per-installation, and even a built-in can be withdrawn. A **fresh** non-interactive process
+   of the same agent qualifies too.
+
+   **A process only qualifies while it is fresh.** Resuming a stored session is as
+   disqualifying as forking one, and for the identical reason: the session id *is* the handle
+   to the parent conversation, so the process boundary buys nothing. Forbid every spelling —
+   Claude Code's `subagent_type: "fork"`, and on Codex both `fork` and `resume`, at the top
+   level and under `exec` alike. The test is whether the worker starts with the parent
+   conversation, not whether the subcommand is called `fork`.
 
    Only where the harness offers no such mechanism, **stop as blocked** and report that it
    cannot carry a review dispatch; a fork under a stronger prompt is not the fallback. Absence
