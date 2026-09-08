@@ -299,10 +299,32 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
 
    **A process only qualifies while it is fresh.** Resuming a stored session is as
    disqualifying as forking one, and for the identical reason: the session id *is* the handle
-   to the parent conversation, so the process boundary buys nothing. Forbid every spelling —
-   Claude Code's `subagent_type: "fork"`, and on Codex both `fork` and `resume`, at the top
-   level and under `exec` alike. The test is whether the worker starts with the parent
-   conversation, not whether the subcommand is called `fork`.
+   to the parent conversation, so the process boundary buys nothing. **Apply the test, not a
+   list:** a mechanism is out when the worker starts with the parent conversation, whatever
+   the subcommand is called. Both harnesses spell it more than one way — Claude Code has
+   `subagent_type: "fork"` and a documented subagent resume, Codex has `fork` and `resume` at
+   the top level and again under `exec` — so any enumeration here is a sample, and a reader
+   who stops at it will miss the spelling their harness added last.
+
+   **Two things a process route owes that a subagent gets for free.** Neither follows from the
+   absent parent conversation, so requiring the property alone is not enough when the
+   mechanism is a process.
+
+   *Route the return through a file, never the dispatcher's stdout.* A subagent returns only
+   its final message; a process writes its result to stdout, and a foreground invocation hands
+   that straight to the dispatcher — which puts the full findings payload in the caller's
+   context, defeating `--out` and the compact object silently, once per pass. Pass `--out` and
+   the agent's own last-message file flag (`-o`/`--output-last-message` on Codex), and read the
+   compact object from that file rather than from the invocation's output.
+
+   *Run it in the foreground, so its exit is the observed end.*
+   [Dispatch liveness](../../references/dispatch-liveness.md) is written for a harness-managed
+   run: it wants an end-of-run notification, permits one direct probe, and budgets one
+   replacement. A spawned process has none of those — no notification, no inbound channel, no
+   agent run-state — so a backgrounded one leaves the dispatcher with no way to establish an
+   observed end, and nothing derived from a timestamp is allowed to substitute. A blocking
+   invocation removes the question instead of governing it: the process returns, its exit
+   status is the observed end, and there is no wait to recover from.
 
    Only where the harness offers no such mechanism, **stop as blocked** and report that it
    cannot carry a review dispatch; a fork under a stronger prompt is not the fallback. Absence
@@ -441,10 +463,12 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    a concern and its owner, which is what the exclusions already say — and it is bounded,
    because a record carries no verdicts, no finding history, and no intended fixes.
 
-   **Two properties this loop depends on hold because step 1 dispatched a worker with
-   no parent conversation, and only because of that.** Each is written below as what
-   the absent inheritance buys and what restoring it costs. A reader who
-   satisfies them by telling the worker to be read-only has satisfied neither.
+   **Two properties this loop depends on rest on step 1's dispatch, not on the reviewer's
+   prompt.** Each is written below as what the absent inheritance buys and what restoring it
+   costs. A reader who satisfies them by telling the worker to be read-only has satisfied
+   neither. Read-only follows from the absent parent conversation alone; payload isolation
+   also needs step 1's file-mediated return, which is why a process route has to be told to
+   use one.
 
    *Read-only with respect to the target and git state.* A context with no parent
    conversation carries no instruction to commit, push, or ship, so the only workflow the worker

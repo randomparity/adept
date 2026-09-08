@@ -711,7 +711,7 @@ description of itself. The diff qualifies when it:
   security-relevant default.
 
 When none apply, skip the pass. When you genuinely cannot tell, run it -- one
-subagent and a compact object, so the asymmetry favors running. Do not run it
+worker and a compact object, so the asymmetry favors running. Do not run it
 on every diff to be safe: a pass that finds nothing on everything teaches the
 operator to skim.
 

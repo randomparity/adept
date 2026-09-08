@@ -40,9 +40,9 @@ a cycle never reaches confirmation — surface it as an open question and re-cut
 ## 5. Adversarial pass
 
 Write the draft to a scratchpad temp file. Dispatch `$gauntlet` on it as a read-only
-worker in a fresh-context worker — never a fork — per `$trial-loop`'s dispatch
+in a read-only fresh-context worker — never a fork — per `$trial-loop`'s dispatch
 recipe (`--json --out` to a scratchpad path — one pass, not the loop): step 1 of that
-recipe gives the reason read-only holds because of the type and not because of the
+recipe gives the reason read-only holds because of the dispatch and not because of the
 prompt. Focus: missing requirements, wrong seams, hidden coupling between
 sub-issues, scope creep. Apply findings by default; carry the challenge summary to the
 step-6 confirmation. A fundamental objection (wrong problem, wrong seams throughout)

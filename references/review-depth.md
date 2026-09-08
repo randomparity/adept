@@ -67,13 +67,14 @@ not a question about what the run may change.
 
 ## Running a single pass
 
-Dispatch the reviewer in a fresh-context worker exactly as `$trial-loop` step 1 does —
-one starting with no parent conversation, never a fork, and stop as blocked only where the
-harness offers no mechanism providing that, whether a named subagent type or a fresh
-non-interactive process; the
+Dispatch the reviewer exactly as `$trial-loop` step 1 does — the
 installed reviewer read in full, `--json --out <findings-path>`, the complete
 `CHARTER` block last, and a `Write` tool in the worker's allowlist or `--out` silently
-no-ops. Put `<findings-path>` on a scratchpad path outside the repo tree, unique to
+no-ops. The worker must start with no parent conversation: never a fork and never a
+resumed session, and stop as blocked only where the harness offers no mechanism providing
+that, whether a named fresh-context worker type or a fresh non-interactive process — which
+owes the file-mediated return and foreground invocation step 1 requires of it.
+Put `<findings-path>` on a scratchpad path outside the repo tree, unique to
 this run: embed the issue number and branch name, because a fixed filename collides
 silently when an orchestrator runs several reviews in parallel.
 
