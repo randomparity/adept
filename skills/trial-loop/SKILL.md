@@ -271,9 +271,14 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    `--json --out <findings-path> <challenge-args>`, then the exact
    `CHARTER` block above as the labeled trailing block.
 
-   **Fresh-context is the type, not a preference.** Dispatch a subagent type whose window
-   starts empty — inheriting none of this session's conversation and none of its active skill
-   instructions. **Never a fork** (`subagent_type: "fork"`): it inherits the caller's context,
+   **Fresh context is the requirement, not a preference.** Dispatch a worker that starts with
+   **no parent conversation** — inheriting none of this session's conversation and none of its
+   active skill instructions. State it that way, never as an "empty" window: a non-fork
+   subagent's context is documented as starting fresh but *not* empty — it carries its own
+   system prompt, your dispatch prompt, project instructions, and tool definitions — so a
+   requirement worded as "empty" is satisfied by nothing and blocks every review.
+
+   **Never a fork** (`subagent_type: "fork"`): it inherits the caller's context,
    and with it the caller's *active, write-capable workflow instructions*. A fork dispatched
    from inside `$quest` reads `$quest`'s own text telling it to apply fixes, commit, push and
    hand off, and follows it — observed four times out of four on randomparity/adept#334, under
@@ -284,10 +289,17 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    [dispatch liveness](../../references/dispatch-liveness.md) permits is not a dispatch and is
    unaffected.
 
-   Where the harness offers no fresh-context type, **stop as blocked** and report that it
-   cannot carry a review dispatch; a fork under a stronger prompt is not the fallback.
-   Absence means the harness's own dispatch surface names no type documented as starting with
-   an empty window — not that you did not recognise a name on a roster it does have.
+   **Any mechanism providing it qualifies.** A named fresh-context subagent type is the usual
+   one; on Claude Code, `general-purpose` is a built-in that satisfies the property. Treat that
+   name as an example, not the contract — a roster is per-installation, and even a built-in can
+   be withdrawn. A fresh non-interactive process of the same agent qualifies too, and more
+   strongly: a separate process cannot inherit a conversation it has no handle to.
+
+   Only where the harness offers no such mechanism, **stop as blocked** and report that it
+   cannot carry a review dispatch; a fork under a stronger prompt is not the fallback. Absence
+   means its dispatch surface documents nothing that starts a worker with no parent
+   conversation — not that you did not recognise a name on a roster it does have, and not that
+   a qualifying mechanism is spelled as a subcommand rather than a type.
 
    Restating the focus inside the block is deliberate — it keeps the charter
    self-contained for the reviewer, and both supported reviewers read the duplicate as one
@@ -420,13 +432,13 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    a concern and its owner, which is what the exclusions already say — and it is bounded,
    because a record carries no verdicts, no finding history, and no intended fixes.
 
-   **Two properties this loop depends on hold because step 1 dispatched a
-   fresh-context subagent, and only because of that.** Each is written below as what
-   the empty window buys and what restoring the inheritance costs. A reader who
+   **Two properties this loop depends on hold because step 1 dispatched a worker with
+   no parent conversation, and only because of that.** Each is written below as what
+   the absent inheritance buys and what restoring it costs. A reader who
    satisfies them by telling the worker to be read-only has satisfied neither.
 
-   *Read-only with respect to the target and git state.* A window that starts empty
-   carries no instruction to commit, push, or ship, so the only workflow the worker
+   *Read-only with respect to the target and git state.* A context with no parent
+   conversation carries no instruction to commit, push, or ship, so the only workflow the worker
    can act on is the one its own prompt gives it. Restore the inheritance and the
    prompt loses to it. The single write it does make is the findings file, so **its
    tool allowlist must include `Write`** — `--out` writes that file (the selected

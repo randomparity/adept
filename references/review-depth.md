@@ -67,8 +67,10 @@ not a question about what the run may change.
 
 ## Running a single pass
 
-Dispatch the reviewer in a fresh-context subagent exactly as `$trial-loop` step 1 does —
-never a fork, and stop as blocked where the harness offers no fresh-context type; the
+Dispatch the reviewer in a fresh-context worker exactly as `$trial-loop` step 1 does —
+one starting with no parent conversation, never a fork, and stop as blocked only where the
+harness offers no mechanism providing that, whether a named subagent type or a fresh
+non-interactive process; the
 installed reviewer read in full, `--json --out <findings-path>`, the complete
 `CHARTER` block last, and a `Write` tool in the worker's allowlist or `--out` silently
 no-ops. Put `<findings-path>` on a scratchpad path outside the repo tree, unique to
