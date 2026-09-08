@@ -48,11 +48,13 @@ loop from stacking a full payload per pass" is rewritten as precondition-plus-co
 property says what the absent inheritance buys and what restoring it costs. Neither reads
 as something the prompt establishes.
 
-**R4.** Every site that restates the dispatch inline carries a clause naming the fresh-context
-type and the `fork` prohibition, and cites `$trial-loop` step 1 for the reason. **A site restates
-inline when it gives any of brief contents, lens selection, or the retry rule without citing the
-canonical recipe**. That test, not section proximity, decides membership, and applied across
-`skills/` and `references/` it selects every dispatch-composing site and exempts none. The eleven
+**R4.** Every site that restates the dispatch inline carries a clause stating the fresh-context
+requirement and the `fork` prohibition, and cites `$trial-loop` step 1 for the reason. **A site
+restates inline when it gives any of brief contents, lens selection, or the retry rule without
+citing the canonical recipe**. That test, not section proximity, decides membership. It runs over
+reviewer and read-only-worker dispatch only — mutating dispatch, including `$restock` §3b's
+build-and-test workers, is outside the contract's subject rather than exempted from it — and
+within that population it selects every dispatch-composing site and exempts none. The eleven
 sites are `references/review-depth.md` (**all three** — the single-pass dispatch and both bounded
 design-artifact review dispatches), `skills/quest/SKILL.md` (**all three** — the `$oathbind`
 scope audit, the `single-pass` branch review, and the `$detect-evil` security pass),
@@ -75,10 +77,16 @@ and breaks no invocation, so the bump is `PATCH`.
 Prose only. Seven files change plus the manifest; no executable, no gate, no new reference file.
 
 `$trial-loop` step 1 is the contract's single canonical home. The eleven other dispatch sites all
-restate the dispatch inline and each gain one clause, across six further files. No site is exempt:
-the observed failure was a reader treating a by-reference sentence as self-sufficient, so the
-clause belongs wherever a dispatch call is composed, and a rule with no exceptions is shorter to
-apply than one with a defended exemption.
+restate the dispatch inline and each gain one clause, across six further files. No site inside the
+contract's subject is exempt: the observed failure was a reader treating a by-reference sentence
+as self-sufficient, so the clause belongs wherever such a dispatch call is composed, and a rule
+with no exceptions is shorter to apply than one with a defended exemption.
+
+The clauses say **worker**, not *subagent*. ADR 0011 already reserves `worker` for "a dispatched
+agent or process", and `$summon-swarm` instructs readers to reserve `subagent` for a literal
+harness capability, so a clause demanding a subagent is unfollowable where no such capability
+exists. `subagent_type: "fork"` keeps the narrow noun, because there it names the capability
+being forbidden.
 
 `skills/forge/SKILL.md`'s "Subagents inherit nothing" is the same voidable assertion at a
 mutating-worker site, inside the approved exclusion. It is carried as a follow-up candidate.

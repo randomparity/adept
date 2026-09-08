@@ -3,9 +3,11 @@
 Derived from [the design](../specs/2026-09-07-reviewer-dispatch-isolation-design.md) and
 [ADR 0058](../../adr/0058-review-dispatch-names-a-fresh-context-subagent.md).
 
-**Goal.** Name the subagent type at every site that dispatches a reviewer or a read-only worker,
-forbid the context-inheriting fork by name, and rewrite the two isolation claims that depend on
-fresh context so they state that precondition instead of asserting the outcome.
+**Goal.** State the fresh-context requirement at every site that dispatches a reviewer or a
+read-only worker, forbid the context-inheriting fork by name, and rewrite the two isolation
+claims that depend on fresh context so they state that precondition instead of asserting the
+outcome. Task 3 rebinds the requirement to the documented property — a worker with no parent
+conversation — and to any mechanism providing it, superseding this goal's cycle-1 wording.
 
 **Architecture.** Prose only. `$trial-loop` step 1 becomes the contract's one canonical home and
 gains the type constraint plus the blocked-harness rule; the passage that today asserts the two
@@ -38,8 +40,8 @@ Transcribed from the design and the repository's `CLAUDE.md`:
   text; plans and specs name the checkout root as `$WORK`.
 - `.claude-plugin/plugin.json` declares the version and every change bumps it (ADR 0022). This
   change is `PATCH`: it adds a normative constraint to an existing contract, removes no skill,
-  renames nothing, and breaks no invocation. Base version is `4.6.2`, so the tree declares
-  `4.6.3`.
+  renames nothing, and breaks no invocation. Base version is `4.6.2`. Task 2 declared `4.6.3`;
+  Task 3's cycle-2 correction takes a second `PATCH`, so the tree declares `4.6.4`.
 - Conventional commits, imperative mood, subject ≤ 72 characters, one logical change per commit,
   on `feat/specify-reviewer-subagent-type-334` in its sibling worktree — never on `main`.
 - Run gates bare — no pipes that swallow an exit code, no `|| true`. `git push` re-runs all of
@@ -108,8 +110,10 @@ and the exact six-field compact object survive verbatim.
 ## Task 2 — the eleven inheriting dispatch sites and the version bump
 
 **Interfaces.** Consumes Task 1's three tokens — `fresh-context subagent`, `subagent_type:
-"fork"`, and `$trial-loop` step 1 as the citation — and introduces no synonym. Produces the
-finished change; nothing later depends on it.
+"fork"`, and `$trial-loop` step 1 as the citation — and introduces no synonym of its own.
+Task 3 then replaces the first token repo-wide with `fresh-context worker`, so the no-synonym
+invariant holds per cycle rather than across the pair: it is what keeps Task 3's replacement a
+mechanical sweep instead of a reconciliation.
 
 **Where it fits.** Each of these eleven sites composes a dispatch call inline, in wording a
 reader can act on without following the chain to `$trial-loop` step 1 — the observed failure mode.
@@ -178,9 +182,11 @@ by nothing and would block every review on every harness, including the one it w
 This task corrects the property and widens the mechanism, under the re-frozen cycle-2
 `WORK:SCOPE`.
 
-**Files.** Modifies `skills/trial-loop/SKILL.md`, `references/review-depth.md`,
-`.claude-plugin/plugin.json`. The nine inline clauses that do not restate the absence test are
-unchanged, because the tokens they cite are unchanged.
+**Files.** Modifies `skills/trial-loop/SKILL.md`, `references/review-depth.md` and
+`.claude-plugin/plugin.json` for the property and the blocked rule; and, for the vocabulary sweep
+below, `skills/quest/SKILL.md`, `skills/saga/SKILL.md`, `skills/spellcraft/SKILL.md`,
+`skills/campaign/SKILL.md` and `skills/forge/SKILL.md`. Only the mechanism noun changes at those
+five: the tokens they cite are otherwise unchanged.
 
 ### Verification
 
@@ -204,6 +210,16 @@ unchanged, because the tokens they cite are unchanged.
    dispatch surface offers any mechanism documented as starting a worker with no parent
    conversation — a named subagent type, or a fresh non-interactive process — rather than whether
    it names a type.
+2a. In the same step, state that a process qualifies only while **fresh**: a resumed session
+   inherits the parent conversation through its session id, so `resume` is disqualifying on the
+   same ground as `fork`, at the top level and under `exec` alike. Without this the widening
+   opens the hole the record exists to close, under a subcommand that is not called `fork`.
+2b. Sweep the mechanism noun repo-wide: `fresh-context subagent` becomes `fresh-context worker`
+   at all eleven inline clauses and the canonical imperative, per ADR 0011's reservation of
+   `worker` for "a dispatched agent or process". Keep `subagent` only where it names the literal
+   capability — `subagent_type: "fork"`, and the sentence identifying a named subagent type as
+   one qualifying mechanism. Also rewrite `skills/quest/SKILL.md`'s scope-audit sentence
+   grounding the guarantee in "the fresh-context type", which the property now supplies instead.
 3. Apply the same two corrections at the one `references/review-depth.md` site that carries the
    blocked rule, under `## Running a single pass`. The two bounded design-artifact dispatches
    cite `$trial-loop` step 1 for the definition and restate no absence test, so they are

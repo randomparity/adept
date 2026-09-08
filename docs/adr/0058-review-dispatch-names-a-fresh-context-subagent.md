@@ -11,12 +11,16 @@ saying which kind. Two properties stated further down the same skill depend on t
 starting with no parent conversation: that it is read-only with respect to the target and git
 state, and that the findings payload stays in its window rather than the caller's.
 
-"No parent conversation" is the documented property, and the precision matters. Claude Code's
-subagent documentation states that a non-fork subagent's context "starts fresh, with no parent
-conversation, but isn't empty" — it carries its own system prompt, the dispatch prompt, project
-`CLAUDE.md`, and tool definitions. A contract demanding an *empty* window would therefore be
-satisfied by nothing at all, on any harness, and would block every review rather than the
-fork-shaped ones.
+"No parent conversation" is the documented property, and the precision matters. Under *What
+subagents inherit* at `code.claude.com/docs/en/agent-sdk/subagents`, a non-fork subagent's
+context window "starts fresh, with no parent conversation, but isn't empty"; the table there
+lists what it does carry — its own system prompt and the dispatch prompt, project `CLAUDE.md`,
+and tool definitions. A contract demanding an *empty* window would therefore be satisfied by
+nothing at all, on any harness, and would block every review rather than the fork-shaped ones.
+
+Cite that page specifically. `code.claude.com/docs/en/sub-agents` covers the same feature in
+different words and carries neither phrase, so "the subagent documentation" unqualified sends a
+later reader to a page that appears to contradict this record.
 
 A fork inherits the caller's conversation by definition. It therefore defeats the payload
 isolation outright, and — the load-bearing half — it inherits the caller's *active,
@@ -51,17 +55,33 @@ per-installation and even this built-in can be withdrawn — `CLAUDE_AGENT_SDK_D
 removes it, after which a dispatch that omits `subagent_type` fails. A reader who has the property
 and one worked example can resolve their own harness; a reader given only a prohibition cannot.
 
+**The clauses say `worker`, not `subagent`.** [ADR
+0011](0011-canonical-workflow-review-vocabulary.md) already reserves `worker` for "a dispatched
+agent **or process**", and `skills/summon-swarm/SKILL.md` instructs readers to "Reserve
+`subagent` for a literal harness/API capability, never a workflow role". A clause demanding a
+*subagent* therefore reads, correctly, as demanding one harness's capability — which is
+unfollowable where that capability does not exist. `subagent_type: "fork"` keeps the narrow noun
+because there it *is* the literal capability being forbidden.
+
 Reusing a prior pass's reviewer as this pass's is forbidden too, but on its own ground: what that
 worker inherits is its own findings and verdict, which `$trial-loop`'s naivety rule already
 forbids. The one direct liveness probe `references/dispatch-liveness.md` permits is not a dispatch
 and is untouched.
 
 **2. `$trial-loop` step 1 is the contract's one canonical home.** Every site that restates the
-dispatch inline adds a clause naming the fresh-context type and the `fork` prohibition, and cites
-step 1 for the reason. Membership is decided by a test, not by proximity: a site restates inline
-when it gives any of brief contents, lens selection, or the retry rule without citing the
-canonical recipe. Applied across the repository the test currently selects every dispatch-composing
-site and exempts none, so no site relies on an exemption argument.
+dispatch inline adds a clause stating the fresh-context requirement and the `fork` prohibition,
+and cites step 1 for the reason. Membership is decided by a test, not by proximity: a site
+restates inline when it gives any of brief contents, lens selection, or the retry rule without
+citing the canonical recipe. The test runs over **reviewer and read-only-worker** dispatch only —
+that is the contract's subject — and within that population it currently selects every
+dispatch-composing site and exempts none, so no selected site relies on an exemption argument.
+
+One site is worth naming because it passes the inline test and is still out: `$restock` §3b
+composes a worker dispatch inline, giving brief contents in full. Its workers build and test
+inside an assigned worktree, so they are mutating by design and fall outside the contract's
+subject along with the other mutating dispatches below — not by an exemption argument, but
+because the population never included them. Stating that here spares a later auditor re-deriving
+it to tell a considered call from a missed site.
 
 **3. The two dependent properties are written as consequences of the dispatch type, not as
 assertions.** Each says what the absent inheritance buys and what restoring it costs, so a
@@ -69,9 +89,15 @@ reader cannot satisfy the sentence by telling the worker to be read-only.
 
 **4. Any dispatch mechanism satisfying the property qualifies, and only a harness offering none
 stops as blocked.** What the contract requires is the isolation, not a particular way of
-obtaining it. A named fresh-context subagent type qualifies. So does a fresh non-interactive
-process of the same agent — process isolation is a stronger guarantee than a roster label, not a
-weaker one, because nothing has to be trusted to honour it. Absence means the harness's dispatch
+obtaining it. A named fresh-context subagent type qualifies. So does a **fresh** non-interactive
+process of the same agent: started with no session to continue, it has no way to reach a parent
+conversation, so nothing has to be trusted to honour the isolation.
+
+That reasoning holds only while the process is fresh, and the qualifier is load-bearing rather
+than decorative. A process that resumes a stored session inherits that conversation through its
+session id, which is precisely the handle the argument says it lacks — so a resumed process is
+disqualified on the same ground as a fork, and naming only `fork` would leave the wider hole
+open under a different subcommand. Absence means the harness's dispatch
 surface offers no mechanism documented as starting a worker with no parent conversation — not a
 model failing to recognise a name on a roster it does have, and not a mechanism that happens to be
 spelled as a subcommand rather than a type. A fork under a stronger prompt is not the fallback;
@@ -99,16 +125,32 @@ narrow, and on both consumers this repository declares, it does not fire.
 **Claude Code** satisfies it with a built-in: a non-fork subagent's context "starts fresh, with no
 parent conversation", and `general-purpose` is invocable without defining anything.
 
-**Codex satisfies it too, through a purpose-built surface.** codex-cli 0.153.4 — current at the
-time of writing — ships `codex review` and `codex exec review`, which run a code review
-non-interactively and take `--base <branch>`, `--uncommitted`, or `--commit <sha>` plus custom
-review instructions, mapping onto the target and focus arguments `$trial-loop` already sends. Each
-`codex exec` run is a fresh process, so it starts with no parent conversation by construction, and
-non-interactive mode defaults to `--sandbox read-only`. It also supplies a return path the compact
-object needs: `--output-schema <file>` constrains the final response to a JSON Schema and
-`-o/--output-last-message <file>` writes it, with `--ephemeral` skipping session persistence. The
-fork prohibition transfers by name, because Codex has one as well — `codex fork` and
-`codex exec fork` both resume a prior session's context.
+**Codex satisfies it too, through a purpose-built surface — but only one of the two spellings.**
+codex-cli 0.153.4, current at the time of writing, ships both `codex review` and
+`codex exec review`. They are not interchangeable here, and the difference decides which one a
+`$trial-loop` dispatch can use.
+
+`codex exec review` is the one that works. It takes `--base <branch>`, `--uncommitted`, or
+`--commit <sha>` plus custom review instructions, mapping onto the target and focus arguments the
+loop already sends, and it inherits `codex exec`'s flags: `-s/--sandbox` with `read-only` among
+its values, `--output-schema <file>` to constrain the final response to a JSON Schema,
+`-o/--output-last-message <file>` to write it, and `--ephemeral` to skip session persistence.
+Those last two are the compact object's return path.
+
+`codex review` is not. Its complete option set at this version is `-c/--config`,
+`--strict-config`, `--enable`, `--disable`, `--uncommitted`, `--base`, `--commit`, `--title` and
+`-h`: no sandbox flag, no output schema, no last-message file. A dispatch composed against it has
+no way to return the compact object, which is the loop's whole return path.
+
+Each `codex exec` run is a fresh process, so it starts with no parent conversation by
+construction. Pass `--sandbox read-only` explicitly rather than relying on a default: the
+`codex exec --help` output for this version lists the three sandbox values without marking one as
+default, so the default is not established by the evidence this record cites.
+
+Both disqualifying spellings must be forbidden, not just the one named `fork`. Codex ships
+`fork` **and** `resume` at the top level and again under `exec`; `codex exec resume --last`
+continues the most recent session, which is the inheritance this record exists to prevent,
+reached without the word "fork" appearing anywhere.
 
 An earlier draft of this record asserted the opposite: that Codex exposed no qualifying surface
 and would stop as blocked for every review. That was wrong. It was reached by reading `codex
