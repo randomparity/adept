@@ -5,9 +5,11 @@ Decision record:
 
 ## Goal
 
-Make the subagent type explicit at every site that dispatches a reviewer or a read-only worker,
-forbid the context-inheriting fork by name, and rewrite the two isolation claims that depend on
-fresh context so they state that precondition instead of asserting the outcome.
+Make the isolation requirement explicit at every site that dispatches a reviewer or a read-only
+worker, forbid the context-inheriting fork by name, and rewrite the two isolation claims that
+depend on fresh context so they state that precondition instead of asserting the outcome. The
+requirement binds to the documented property — a worker starting with no parent conversation —
+and is satisfied by any dispatch mechanism providing it.
 
 Scope is skill and reference prose. Mutating-worker dispatch — `$forge`'s Party implementers and
 post-review fix worker, `$campaign`'s `$quest` workers — is an approved non-goal, as are any
@@ -16,27 +18,34 @@ script or harness change, any automated gate over the new prose (anatomy rule 4)
 
 ## Requirements
 
-**R1.** `$trial-loop` step 1 dispatches a **fresh-context subagent** — a worker whose window
-inherits none of the caller's conversation or active skill instructions — and states that a fork
+**R1.** `$trial-loop` step 1 dispatches a **fresh-context worker** — one starting with none of the
+caller's conversation and none of its active skill instructions — and states that a fork
 (`subagent_type: "fork"`) is not permitted, because it inherits the caller's active,
-write-capable workflow instructions. Reusing a prior pass's reviewer is forbidden too, on its own
-ground: that worker inherits its own findings and verdict, which the naivety rule at
-`skills/trial-loop/SKILL.md:356-362` already forbids. The single liveness probe
+write-capable workflow instructions. The property is stated as *no parent conversation*, never as
+an empty window: a non-fork subagent's context is documented as starting fresh but not empty, so a
+requirement worded as "empty" is satisfied by nothing and blocks every review. One permitted value
+is named as an example — `general-purpose` on Claude Code — marked as an illustration rather than
+the contract, since a roster is per-installation and even that built-in can be disabled. Reusing a
+prior pass's reviewer is forbidden too, on its own ground: that worker inherits its own findings
+and verdict, which `$trial-loop`'s naivety rule already forbids. The single liveness probe
 `references/dispatch-liveness.md` permits is not a dispatch and is unaffected.
 
-**R2.** Where the harness offers no fresh-context type, the dispatch **stops as blocked**. A fork
-under a stronger prompt is not a fallback: issue #334 records four forks overriding an explicit
-read-only prompt four times out of four. Absence has a stated test — the harness's dispatch
-surface names no type documented as starting with an empty window, as against a model failing to
-recognise a name on a roster it does have. The blocked rule is carried inline at the canonical
-site and in `references/review-depth.md` only, unlike the fork prohibition of R4: it is a
-once-per-harness precondition rather than a per-dispatch choice, and the clause a reader holds
-when it fires has already sent them to step 1.
+**R2.** The requirement is satisfied by **any dispatch mechanism** whose worker starts with no
+parent conversation — a named fresh-context subagent type, or a fresh non-interactive process of
+the same agent — and only a harness offering none **stops as blocked**. A fork under a stronger
+prompt is not a fallback: issue #334 records four forks overriding an explicit read-only prompt
+four times out of four. Absence has a stated test — the harness's dispatch surface offers no
+mechanism documented as starting a worker with no parent conversation, as against a model failing
+to recognise a name on a roster it does have, or a qualifying mechanism spelled as a subcommand
+rather than a type. The blocked rule is carried inline at the canonical site and in
+`references/review-depth.md` only, unlike the fork prohibition of R4: it is a once-per-harness
+precondition rather than a per-dispatch choice, and the clause a reader holds when it fires has
+already sent them to step 1.
 
 **R3.** The passage at `skills/trial-loop/SKILL.md` that today asserts the reviewer worker "is
 read-only with respect to the target and git state" and that its context isolation "keeps the
 loop from stacking a full payload per pass" is rewritten as precondition-plus-consequence. Each
-property says what the empty window buys and what restoring the inheritance costs. Neither reads
+property says what the absent inheritance buys and what restoring it costs. Neither reads
 as something the prompt establishes.
 
 **R4.** Every site that restates the dispatch inline carries a clause naming the fresh-context
@@ -71,7 +80,7 @@ the observed failure was a reader treating a by-reference sentence as self-suffi
 clause belongs wherever a dispatch call is composed, and a rule with no exceptions is shorter to
 apply than one with a defended exemption.
 
-`skills/forge/SKILL.md:607` ("Subagents inherit nothing") is the same voidable assertion at a
+`skills/forge/SKILL.md`'s "Subagents inherit nothing" is the same voidable assertion at a
 mutating-worker site, inside the approved exclusion. It is carried as a follow-up candidate.
 
 ## Validation

@@ -1,4 +1,4 @@
-# 0058 — A review dispatch names a fresh-context subagent type
+# 0058 — A review dispatch requires a worker with no parent conversation
 
 ## Status
 
@@ -8,8 +8,15 @@ Accepted (2026-09-07)
 
 `$trial-loop` step 1 told its caller to run the selected reviewer "in a **subagent**" without
 saying which kind. Two properties stated further down the same skill depend on that worker
-starting with an empty context window: that it is read-only with respect to the target and git
+starting with no parent conversation: that it is read-only with respect to the target and git
 state, and that the findings payload stays in its window rather than the caller's.
+
+"No parent conversation" is the documented property, and the precision matters. Claude Code's
+subagent documentation states that a non-fork subagent's context "starts fresh, with no parent
+conversation, but isn't empty" — it carries its own system prompt, the dispatch prompt, project
+`CLAUDE.md`, and tool definitions. A contract demanding an *empty* window would therefore be
+satisfied by nothing at all, on any harness, and would block every review rather than the
+fork-shaped ones.
 
 A fork inherits the caller's conversation by definition. It therefore defeats the payload
 isolation outright, and — the load-bearing half — it inherits the caller's *active,
@@ -34,13 +41,20 @@ is one underspecified contract reused, not a single-site typo.
 
 ## Decision
 
-**1. A read-only review dispatch names a fresh-context subagent, and names the forbidden type.**
-The contract states the property — a worker whose window starts empty, inheriting none of the
-caller's conversation or active skill instructions — and then names `fork` as the value that
-violates it, so the requirement is checkable rather than only describable. Reusing a prior pass's
-reviewer as this pass's is forbidden too, but on its own ground: what that worker inherits is its
-own findings and verdict, which `$trial-loop`'s naivety rule already forbids. The one direct
-liveness probe `references/dispatch-liveness.md` permits is not a dispatch and is untouched.
+**1. A read-only review dispatch requires a worker with no parent conversation, and names the
+forbidden instance.** The contract states the property — a worker starting with none of the
+caller's conversation and none of its active skill instructions — and then names `fork` as the
+value that violates it, so the requirement is checkable rather than only describable. It also
+names one permitted value by way of example: on Claude Code, `general-purpose` is a built-in that
+satisfies the property. That name is an illustration, never the contract, because a roster is
+per-installation and even this built-in can be withdrawn — `CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1`
+removes it, after which a dispatch that omits `subagent_type` fails. A reader who has the property
+and one worked example can resolve their own harness; a reader given only a prohibition cannot.
+
+Reusing a prior pass's reviewer as this pass's is forbidden too, but on its own ground: what that
+worker inherits is its own findings and verdict, which `$trial-loop`'s naivety rule already
+forbids. The one direct liveness probe `references/dispatch-liveness.md` permits is not a dispatch
+and is untouched.
 
 **2. `$trial-loop` step 1 is the contract's one canonical home.** Every site that restates the
 dispatch inline adds a clause naming the fresh-context type and the `fork` prohibition, and cites
@@ -50,15 +64,20 @@ canonical recipe. Applied across the repository the test currently selects every
 site and exempts none, so no site relies on an exemption argument.
 
 **3. The two dependent properties are written as consequences of the dispatch type, not as
-assertions.** Each says what the empty window buys and what restoring the inheritance costs, so a
+assertions.** Each says what the absent inheritance buys and what restoring it costs, so a
 reader cannot satisfy the sentence by telling the worker to be read-only.
 
-**4. A harness offering no fresh-context type stops as blocked, and the precondition has a
-stated test.** Absence means the harness's own dispatch surface names no type documented as
-starting with an empty window — not a model failing to recognise a name on a roster it does have.
-A fork under a stronger prompt is not the fallback; #334 is the evidence that layer does not hold.
-Unlike the fork prohibition, this rule is carried inline only here and in
-`references/review-depth.md`: it is a once-per-harness precondition, not a per-dispatch choice.
+**4. Any dispatch mechanism satisfying the property qualifies, and only a harness offering none
+stops as blocked.** What the contract requires is the isolation, not a particular way of
+obtaining it. A named fresh-context subagent type qualifies. So does a fresh non-interactive
+process of the same agent — process isolation is a stronger guarantee than a roster label, not a
+weaker one, because nothing has to be trusted to honour it. Absence means the harness's dispatch
+surface offers no mechanism documented as starting a worker with no parent conversation — not a
+model failing to recognise a name on a roster it does have, and not a mechanism that happens to be
+spelled as a subcommand rather than a type. A fork under a stronger prompt is not the fallback;
+#334 is the evidence that layer does not hold. Unlike the fork prohibition, this rule is carried
+inline only here and in `references/review-depth.md`: it is a once-per-harness precondition, not a
+per-dispatch choice.
 
 ## Consequences
 
@@ -71,26 +90,39 @@ self-sufficient, so the clause has to be where the dispatch is composed. No site
 sentence in `skills/` or `references/` that composes a reviewer or read-only-worker dispatch
 carries it, which is a shorter rule than any exemption would have been.
 
-A harness without a fresh-context subagent type can no longer run any review this repository
-ships: `$trial-loop`, all three `$quest` review dispatches, `$saga`, `$spellcraft`, `$campaign`'s
-triage, and `$forge`'s whole-branch review all stop as blocked there. That outage is the accepted
-residual — an unreviewable run is visible, and a fork-reviewed run was not — and decision 4's
-test is what keeps it from firing on a harness that does offer such a type.
+A harness offering no qualifying mechanism can run no review this repository ships: `$trial-loop`,
+all three `$quest` review dispatches, `$saga`, `$spellcraft`, `$campaign`'s triage, and `$forge`'s
+whole-branch review all stop as blocked there. That outage is the accepted residual — an
+unreviewable run is visible, and a fork-reviewed run was not. Decision 4's test is what keeps it
+narrow, and on both consumers this repository declares, it does not fire.
 
-**Codex is the consumer most likely to hit it.** `.codex-plugin/plugin.json` declares Codex a
-consumer of these skills, and codex-cli 0.153.4 exposes no subagent-type dispatch surface at all:
-its nearest subcommands are `fork` and `resume`, which this record forbids by name, and `exec`,
-whose workers `$summon-swarm` already classifies as not harness subagents. A Codex session
-applying decision 4's test therefore stops as blocked for every review. This change makes that
-gap explicit rather than creating it — the previous text said "run it in a subagent", which a
-Codex reader could not satisfy either — and closing it means giving Codex a fresh-context
-dispatch surface, which is a separate change under its own scope.
+**Claude Code** satisfies it with a built-in: a non-fork subagent's context "starts fresh, with no
+parent conversation", and `general-purpose` is invocable without defining anything.
+
+**Codex satisfies it too, through a purpose-built surface.** codex-cli 0.153.4 — current at the
+time of writing — ships `codex review` and `codex exec review`, which run a code review
+non-interactively and take `--base <branch>`, `--uncommitted`, or `--commit <sha>` plus custom
+review instructions, mapping onto the target and focus arguments `$trial-loop` already sends. Each
+`codex exec` run is a fresh process, so it starts with no parent conversation by construction, and
+non-interactive mode defaults to `--sandbox read-only`. It also supplies a return path the compact
+object needs: `--output-schema <file>` constrains the final response to a JSON Schema and
+`-o/--output-last-message <file>` writes it, with `--ephemeral` skipping session persistence. The
+fork prohibition transfers by name, because Codex has one as well — `codex fork` and
+`codex exec fork` both resume a prior session's context.
+
+An earlier draft of this record asserted the opposite: that Codex exposed no qualifying surface
+and would stop as blocked for every review. That was wrong. It was reached by reading `codex
+--help` for subagent-type vocabulary and passing over the `review` subcommand on the same screen,
+which is the same naming-over-property mistake decision 4 now forbids the contract from making.
+The correction is recorded here rather than silently applied, because the false claim is what a
+`MAJOR`-shaped consequence would have been argued from.
 
 The contract binds review and read-only-worker dispatch only. `$forge`'s Party implementers, its
 post-review fix worker, and `$campaign`'s `$quest` workers are mutating by design, and
-`skills/forge/SKILL.md`'s "Subagents inherit nothing" (`:607`, with `:252-254` as a second
-instance) remains an assertion of the kind decision 3 replaces. Those two sentences ship
-contradicted by their own file's new `:467` clause for as long as the exclusion stands: that is
+`skills/forge/SKILL.md`'s "Subagents inherit nothing" — in its *Party* section, with a second
+instance in *What goes in a dispatch* — remains an assertion of the kind decision 3 replaces.
+Those two sentences ship contradicted by that file's own new whole-branch-review clause for as
+long as the exclusion stands: that is
 an accepted residual with no durable owner — no issue, no `docs/debt/` record — carried to the
 operator as a follow-up candidate, not a gap this decision closes. Nothing automated checks the
 new prose: anatomy rule 4 forbids it, and the structural gates are unchanged.
@@ -102,11 +134,20 @@ new prose: anatomy rule 4 forbids it, and the structural gates are unchanged.
   produced this record lists `general-purpose`, `Explore`, `Plan`, `fork` and four
   project-defined types; `.codex-plugin/plugin.json`, this repository's other consumer manifest,
   declares only `name`, `description` and `skills`, so nothing in what ships pins a type name a
-  contract could bind to. A contract naming only a type is unfollowable wherever that name is
-  absent, which is why the property is the contract and the name is the checkable instance of it.
+  contract could bind to. Even the built-in is withdrawable:
+  `CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1` removes it and a dispatch omitting `subagent_type`
+  then fails. A contract naming only a type is unfollowable wherever that name is absent, which is
+  why the property is the contract and the name rides along as decision 1's worked example.
+- **Require a harness-*named subagent type*, so a fresh process does not qualify.** verified: this
+  is what the record's own first draft did, and it produced a false conclusion — that Codex, a
+  declared consumer, could run no review at all — while codex-cli 0.153.4 shipped `codex review`
+  and `codex exec review` the whole time. A test keyed to how a mechanism is spelled rather than to
+  what it guarantees fails exactly where the guarantee is strongest: a separate OS process cannot
+  inherit a conversation it has no handle to.
 - **State only the property and name no forbidden value.** verified: that is what the text
-  already did. `skills/forge/SKILL.md:607` says "Subagents inherit nothing" and
-  `skills/quest/SKILL.md:332` said the workflow "makes no context-isolation guarantee"; #334's
+  already did. `skills/forge/SKILL.md` says "Subagents inherit nothing" and
+  `skills/quest/SKILL.md`'s scope-audit step said the workflow "makes no context-isolation
+  guarantee"; #334's
   dispatch prompt stated read-only explicitly and lost four times out of four. A property with no
   checkable value attached is the state this record leaves.
 - **Centralize the contract in a new `references/` file linked from every dispatch site.**
@@ -119,7 +160,7 @@ new prose: anatomy rule 4 forbids it, and the structural gates are unchanged.
   correctness review, no git/PR/merge actions" — and every prohibition in it was overridden. The
   prompt is not the layer where this holds.
 - **Bound the worker with its tool allowlist instead of its type.** verified:
-  `skills/trial-loop/SKILL.md:406` requires `Write` in the reviewer's allowlist, because `--out`
+  `skills/trial-loop/SKILL.md` requires `Write` in the reviewer's allowlist, because `--out`
   is the loop's whole return path and silently no-ops without it. An allowlist that must grant
   `Write` cannot be what bounds writing.
 - **Do nothing.** verified: #334 records four dispatches, four pipeline completions, one nested

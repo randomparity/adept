@@ -91,84 +91,19 @@ that restate the dispatch inline and would otherwise read as self-sufficient.
   validation rule, or generated artifact, so a test that bit on it would have to assert on
   wording, which anatomy rule 4 forbids.
 
-### Steps
+### Steps — executed
 
-1. In `skills/trial-loop/SKILL.md`, find the step 1 opening, which reads exactly:
+Cycle 1 replaced step 1's opening and the two dependent-property paragraphs in
+`skills/trial-loop/SKILL.md`. The committed file is the record of the exact wording, so the
+verbatim before/after blocks that stood here are not repeated: they duplicated the source and,
+after the cycle-2 re-freeze, contradicted it. Commit `3dc0241`. Task 3 supersedes part of that
+wording.
 
-   ```
-   1. **Petition the council** — read the installed selected reviewer in full, then run it in a
-      **subagent** with
-      `--json --out <findings-path> <challenge-args>`, then the exact
-      `CHARTER` block above as the labeled trailing block.
-   ```
-
-   Replace it with:
-
-   ```
-   1. **Petition the council** — read the installed selected reviewer in full, then run it in a
-      **fresh-context subagent** with
-      `--json --out <findings-path> <challenge-args>`, then the exact
-      `CHARTER` block above as the labeled trailing block.
-
-      **Fresh-context is the type, not a preference.** Dispatch a subagent type whose window
-      starts empty — inheriting none of this session's conversation and none of its active skill
-      instructions. **Never a fork** (`subagent_type: "fork"`): it inherits the caller's context,
-      and with it the caller's *active, write-capable workflow instructions*. A fork dispatched
-      from inside `$quest` reads `$quest`'s own text telling it to apply fixes, commit, push and
-      hand off, and follows it — observed four times out of four on randomparity/adept#334, under
-      a dispatch prompt that said "no correctness review, no git/PR/merge actions" in those
-      words. The prompt is not the layer where this holds. Never reuse a prior pass's reviewer as
-      this pass's either, on its own ground: that worker carries its own findings and verdict,
-      which the naivety rule below forbids. The one direct liveness probe
-      [dispatch liveness](../../references/dispatch-liveness.md) permits is not a dispatch and is
-      unaffected.
-
-      Where the harness offers no fresh-context type, **stop as blocked** and report that it
-      cannot carry a review dispatch; a fork under a stronger prompt is not the fallback.
-      Absence means the harness's own dispatch surface names no type documented as starting with
-      an empty window — not that you did not recognise a name on a roster it does have.
-   ```
-
-2. In the same file, find the passage that begins `The reviewer worker is read-only with respect
-   to the target and git state` and ends `keeps the loop from stacking a full payload per pass in
-   the caller's window.` Replace the whole passage with:
-
-   ```
-      **Two properties this loop depends on hold because step 1 dispatched a
-      fresh-context subagent, and only because of that.** Each is written below as what
-      the empty window buys and what restoring the inheritance costs. A reader who
-      satisfies them by telling the worker to be read-only has satisfied neither.
-
-      *Read-only with respect to the target and git state.* A window that starts empty
-      carries no instruction to commit, push, or ship, so the only workflow the worker
-      can act on is the one its own prompt gives it. Restore the inheritance and the
-      prompt loses to it. The single write it does make is the findings file, so **its
-      tool allowlist must include `Write`** — `--out` writes that file (the selected
-      reviewer's sole write exception); without `Write`, `--out` silently no-ops and the
-      loop dead-ends.
-
-      *Payload isolation.* The worker's context (not this one) holds the full findings;
-      it returns only `{verdict, findings_count, blocking_count, suppressed_count, path,
-      run_id}` — `run_id` included, because steps 4 and 5 assert it against the artifact
-      and a four-field contract degrades that check to a no-op. What that buys is a
-      caller window carrying verdicts instead of payloads, one pass after another. A
-      worker that inherited the caller's window has already spent the saving, whatever
-      it returns.
-   ```
-
-3. Run the fast structural gates bare and read their exit status:
-
-   ```sh
-   just shape-check && just public-safety
-   ```
-
-   Expect both to exit 0 and print no error line.
-
-**Acceptance criteria.** Step 1 of `$trial-loop` names `fresh-context subagent`, names
-`subagent_type: "fork"` as forbidden, forbids resuming an already-dispatched agent, and stops as
-blocked where no fresh-context type exists. The two dependent properties each state the empty
-window as their precondition and name what restoring the inheritance costs. The `Write`-allowlist
-requirement and the exact six-field compact object survive verbatim.
+**Acceptance criteria.** Step 1 of `$trial-loop` states the fresh-context requirement, names
+`subagent_type: "fork"` as the forbidden instance, forbids reusing a prior pass's reviewer, and
+stops as blocked where no qualifying mechanism exists. The two dependent properties each state
+the precondition and name what restoring the inheritance costs. The `Write`-allowlist requirement
+and the exact six-field compact object survive verbatim.
 
 ## Task 2 — the eleven inheriting dispatch sites and the version bump
 
@@ -206,207 +141,18 @@ live synonym inside one file.
   `BASE_SHA=$(git merge-base HEAD origin/main) just version-check` exits non-zero and names the
   version that did not increase. Expected green after step 7: the same command exits 0.
 
-### Steps
+### Steps — executed
 
-1. In `references/review-depth.md`, under `## Running a single pass`, replace
-   `Dispatch the reviewer in a subagent exactly as `$trial-loop` step 1 does — the` with:
+Cycle 1 added the inline clause at each of the eleven sites listed under **Files** above and
+bumped the manifest. The committed files are the record of the exact wording. Commits `464dd41`
+and `5abf658`.
 
-   ```
-   Dispatch the reviewer in a fresh-context subagent exactly as `$trial-loop` step 1 does —
-   never a fork, and stop as blocked where the harness offers no fresh-context type; the
-   ```
+**Acceptance criteria.** Each of the eleven sites carries the clause and cites `$trial-loop`
+step 1. No mutating-worker dispatch site is edited. `skills/quest/SKILL.md` no longer claims the
+workflow makes no context-isolation guarantee. `.claude-plugin/plugin.json` declares a version
+strictly greater than the base ref's. `just verify` exits 0.
 
-2. In `references/review-depth.md`, under `### Bounded design-artifact review`, replace
-
-   ```
-   When a defensible in-surface blocking finding remains, dispatch one fresh
-   reviewer with no first-pass findings or verdict in its brief. Assert that every
-   ```
-
-   with:
-
-   ```
-   When a defensible in-surface blocking finding remains, dispatch one fresh-context
-   subagent — never a fork, per `$trial-loop` step 1 — with no first-pass findings or
-   verdict in its brief. Assert that every
-   ```
-
-   This is the structural mirror of the `skills/spellcraft/SKILL.md` second-pass dispatch
-   in step 9: it gives brief contents, lens selection, and the retry rule without citing
-   step 1, so R4's test makes it an inline site. The first-pass dispatch a few lines above
-   it cites the single-pass checks and restates nothing, so it stays exempt and is not
-   edited.
-
-3. In `references/review-depth.md`, still under `### Bounded design-artifact review`, replace
-
-   ```
-   For `$spellcraft`'s combined design set, dispatch the first pass with the first
-   compatible lens selected under [review lenses](review-lenses.md). Validate its
-   artifact with the single-pass checks above.
-   ```
-
-   with:
-
-   ```
-   For `$spellcraft`'s combined design set, dispatch the first pass in a fresh-context
-   subagent — never a fork, per `$trial-loop` step 1 — with the first compatible lens
-   selected under [review lenses](review-lenses.md). Validate its artifact with the
-   single-pass checks above.
-   ```
-
-   This site gives lens selection, which R4's test names as a trigger, and cites this
-   file's own single-pass checks rather than the canonical recipe. It is therefore an
-   inline site like the other two in this file, and no site is left exempt.
-
-4. In `skills/quest/SKILL.md`, step 4, replace the sentence
-
-   ```
-   Pick a fresh report path there and dispatch a fresh reviewer task running
-   `$oathbind` -- no prior verdicts, proposed fixes, or review history in its
-   brief. Inherited history is non-authoritative and cannot supply scope; the
-   workflow makes no context-isolation guarantee.
-   ```
-
-   with:
-
-   ```
-   Pick a fresh report path there and dispatch a fresh-context subagent running
-   `$oathbind` -- never a fork, per `$trial-loop` step 1 -- with no prior verdicts,
-   proposed fixes, or review history in its brief. Inherited history is
-   non-authoritative and cannot supply scope, and the fresh-context type is what
-   makes the brief the whole of what the auditor has.
-   ```
-
-5. In `skills/quest/SKILL.md`, step 6, replace the `single-pass` branch-review dispatch
-
-   ```
-   `single-pass`, dispatch the one `gauntlet` pass the reference specifies, with the same `--base`
-   and composed focus, and give each finding its single disposition.
-   ```
-
-   with:
-
-   ```
-   `single-pass`, dispatch the one `gauntlet` pass the reference specifies in a fresh-context
-   subagent -- never a fork, per `$trial-loop` step 1 -- with the same `--base` and composed focus,
-   and give each finding its single disposition.
-   ```
-
-   This is the broad branch review every routed-`single-pass` quest runs, so it is the
-   highest-traffic dispatch in the repository. The `iterating` branch beside it needs no
-   clause: it delegates to `$trial-loop`, which carries the contract at step 1.
-
-6. In `skills/quest/SKILL.md`, step 6, replace
-
-   ```
-   Dispatch it the way `$trial-loop` dispatches its reviewer -- a subagent running
-   ```
-
-   with:
-
-   ```
-   Dispatch it the way `$trial-loop` dispatches its reviewer -- a fresh-context subagent,
-   never a fork, for the reason step 1 of that skill gives -- running
-   ```
-
-7. In `skills/saga/SKILL.md`, step 5, replace
-
-   ```
-   Write the draft to a scratchpad temp file. Dispatch `$gauntlet` on it as a read-only
-   subagent per `$trial-loop`'s dispatch recipe (`--json --out` to a scratchpad path —
-   one pass, not the loop).
-   ```
-
-   with:
-
-   ```
-   Write the draft to a scratchpad temp file. Dispatch `$gauntlet` on it as a read-only
-   worker in a fresh-context subagent — never a fork — per `$trial-loop`'s dispatch
-   recipe (`--json --out` to a scratchpad path — one pass, not the loop): step 1 of that
-   recipe gives the reason read-only holds because of the type and not because of the
-   prompt.
-   ```
-
-8. `skills/spellcraft/SKILL.md` composes a dispatch twice and both are edited. First, under
-   `### Run the review`, replace
-
-   ```
-   Dispatch `$gauntlet` in a fresh worker using the bounded design-artifact recipe
-   ```
-
-   with:
-
-   ```
-   Dispatch `$gauntlet` in a fresh-context subagent — never a fork, per `$trial-loop`
-   step 1 — using the bounded design-artifact recipe
-   ```
-
-9. Second, under `### Route the passes` in the same file, replace
-
-   ```
-   unchanged, select the next compatible lens, and dispatch one fresh worker. Its
-   ```
-
-   with:
-
-   ```
-   unchanged, select the next compatible lens, and dispatch one fresh-context subagent —
-   never a fork, per `$trial-loop` step 1. Its
-   ```
-
-   This second-pass dispatch restates lens selection, brief contents, and the retry rule
-   without citing step 1, so it is an inline site in its own right (spec R4).
-
-10. In `skills/campaign/SKILL.md`, step 3, replace
-   `**Dispatch read-only triage workers** (up to 5 parallel).` with:
-
-   ```
-   **Dispatch read-only triage workers** (up to 5 parallel), each a fresh-context subagent
-   and never a fork, per `$trial-loop` step 1: a fork inherits this orchestrator's context,
-   and with it the dispatch, merge, and label authority a triage worker must not have.
-   ```
-
-11. In `skills/forge/SKILL.md`, replace
-
-   ```
-   Then dispatch the whole-branch review with
-   [code-reviewer.md](code-reviewer.md), on the most capable model. It is the
-   branch's only adversarial pass.
-   ```
-
-   with:
-
-   ```
-   Then dispatch the whole-branch review with
-   [code-reviewer.md](code-reviewer.md), on the most capable model, in a fresh-context
-   subagent — never a fork, per `$trial-loop` step 1, which here would carry this run's own
-   build instructions into the one worker whose job is to disbelieve them. It is the
-   branch's only adversarial pass.
-   ```
-
-12. Confirm the expected red for the version contract, before editing the manifest:
-
-   ```sh
-   BASE_SHA=$(git merge-base HEAD origin/main) just version-check
-   ```
-
-   Expect a non-zero exit naming `4.6.2` as not greater than the base version.
-
-13. In `.claude-plugin/plugin.json`, change `"version": "4.6.2"` to `"version": "4.6.3"`.
-
-14. Confirm the expected green, then run the whole gate suite bare:
-
-    ```sh
-    BASE_SHA=$(git merge-base HEAD origin/main) just version-check
-    just verify
-    ```
-
-    Expect the first to exit 0 and `just verify` to exit 0 with every suite reporting `ok`.
-
-**Acceptance criteria.** Each of the eleven dispatch sites, across six files, names the
-fresh-context type, names the `fork` prohibition, and cites `$trial-loop` step 1 for the reason —
-using Task 1's tokens without synonym, and adding any site-specific consequence beside that
-citation rather than instead of it (spec R4). Check it positively, per file:
+The positive per-file count that proves coverage:
 
 ```sh
 rg --no-config -ic 'never a fork' skills/trial-loop/SKILL.md references/review-depth.md \
@@ -418,9 +164,58 @@ Expect `1, 3, 3, 1, 2, 1, 1` in that order — twelve in total, the canonical cl
 eleven inline ones. A negative grep for the old wording is not the check: the pre-change
 sentences share no common phrase, so one would pass vacuously while missing most of the sites.
 
-No mutating-worker dispatch site is edited. `skills/quest/SKILL.md` no longer claims the workflow
-makes no context-isolation guarantee. `.claude-plugin/plugin.json` declares `4.6.3`. `just verify`
-exits 0.
+## Task 3 — cycle-2 correction: bind to the property, not to a named type
+
+**Interfaces.** Redefines the requirement Task 1 established. It becomes a worker with **no
+parent conversation**, satisfied by any dispatch mechanism providing it. `subagent_type: "fork"`
+remains the named forbidden instance and `$trial-loop` step 1 remains the citation target, so
+Task 2's eleven inline clauses keep their wording except where they restate the absence test.
+
+**Where it fits.** Cycle 1 wrote the absence test as *no type documented as starting with an empty
+window*. No dispatch type is documented that way — a non-fork subagent's context is documented as
+starting fresh, with no parent conversation, but not empty — so the test as written is satisfied
+by nothing and would block every review on every harness, including the one it was written for.
+This task corrects the property and widens the mechanism, under the re-frozen cycle-2
+`WORK:SCOPE`.
+
+**Files.** Modifies `skills/trial-loop/SKILL.md`, `references/review-depth.md`,
+`.claude-plugin/plugin.json`. The nine inline clauses that do not restate the absence test are
+unchanged, because the tokens they cite are unchanged.
+
+### Verification
+
+- **Contract: the corrected absence test, the widened mechanism, and the permitted example, as
+  normative sentences.** Mode: `task-test-not-applicable`. The changed surface is prose carrying
+  no parser, schema, record shape, validation rule, or generated artifact, so a test that bit on
+  it would have to assert on wording — the class anatomy rule 4 forbids. The `$invocation` tokens
+  and relative reference links this task leaves in place stay covered by `just shape-check`
+  rules 4 and 5.
+- **Contract: the manifest version bump.** Mode: `focused-test`. Rule 3 of
+  `scripts/check-plugin-version.sh` — strictly greater than the base ref's whenever the tree
+  differs from `BASE_SHA`. Expected red before the bump; expected green after.
+
+### Steps
+
+1. In `skills/trial-loop/SKILL.md` step 1, restate the requirement as a worker starting with **no
+   parent conversation** rather than one whose window *starts empty*, and add one permitted
+   example — `general-purpose` on Claude Code — marked as an illustration, with the caveat that
+   the built-in can be disabled.
+2. In the same step, replace the blocked-harness paragraph so its test asks whether the harness's
+   dispatch surface offers any mechanism documented as starting a worker with no parent
+   conversation — a named subagent type, or a fresh non-interactive process — rather than whether
+   it names a type.
+3. Apply the same two corrections at the one `references/review-depth.md` site that carries the
+   blocked rule, under `## Running a single pass`. The two bounded design-artifact dispatches
+   cite `$trial-loop` step 1 for the definition and restate no absence test, so they are
+   unchanged.
+4. Rewrite the two dependent-property paragraphs so their stated precondition matches.
+5. Bump `.claude-plugin/plugin.json` to the next `PATCH`.
+6. Run `just verify` bare.
+
+**Acceptance criteria.** No *empty window* or *starts empty* phrasing remains as the stated
+property anywhere in `skills/` or `references/`. The canonical site names exactly one permitted
+example and marks it as an illustration rather than the contract. The blocked rule's test names
+both qualifying mechanism kinds. `just verify` exits 0.
 
 ## Deferrals
 
