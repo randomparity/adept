@@ -130,12 +130,22 @@ codex-cli 0.153.4, current at the time of writing, ships both `codex review` and
 `codex exec review`. They are not interchangeable here, and the difference decides which one a
 `$trial-loop` dispatch can use.
 
-`codex exec review` is the one that works. It takes `--base <branch>`, `--uncommitted`, or
-`--commit <sha>` plus custom review instructions, mapping onto the target and focus arguments the
-loop already sends, and it inherits `codex exec`'s flags: `-s/--sandbox` with `read-only` among
-its values, `--output-schema <file>` to constrain the final response to a JSON Schema,
-`-o/--output-last-message <file>` to write it, and `--ephemeral` to skip session persistence.
-Those last two are the compact object's return path.
+`codex exec review` is the one that carries a return path. It takes `--base <branch>`,
+`--uncommitted`, or `--commit <sha>` plus custom review instructions, mapping onto the target and
+focus arguments the loop already sends, and it carries `--output-schema <file>` to constrain the
+final response to a JSON Schema, `-o/--output-last-message <file>` to write it, `--json`, and
+`--ephemeral` to skip session persistence. The two file flags are the compact object's return
+path, and a process route needs them: a process writes its result to stdout, which a foreground
+invocation hands straight to the dispatcher.
+
+It does **not** carry `-s/--sandbox`. That flag is on `codex exec` itself and on neither review
+subcommand — `codex exec review --sandbox read-only` exits with `unexpected argument
+'--sandbox'` at this version. A dispatcher that needs the sandbox stated explicitly uses plain
+`codex exec --sandbox read-only` and puts the review instructions in the prompt, composing the
+diff itself instead of getting `--base`; one that uses `codex exec review` accepts whatever
+sandbox that subcommand applies, which its help output does not state. Neither route changes this
+record's decision — both start a fresh process with no parent conversation — but the record must
+not hand a Codex reader a flag combination that errors.
 
 `codex review` is not. Its complete option set at this version is `-c/--config`,
 `--strict-config`, `--enable`, `--disable`, `--uncommitted`, `--base`, `--commit`, `--title` and
@@ -161,9 +171,9 @@ The correction is recorded here rather than silently applied, because the false 
 
 The contract binds review and read-only-worker dispatch only. `$forge`'s Party implementers, its
 post-review fix worker, and `$campaign`'s `$quest` workers are mutating by design, and
-`skills/forge/SKILL.md`'s "Subagents inherit nothing" — in its *Party* section, with a second
-instance in *What goes in a dispatch* — remains an assertion of the kind decision 3 replaces.
-Those two sentences ship contradicted by that file's own new whole-branch-review clause for as
+`skills/forge/SKILL.md`'s "Subagents inherit nothing" — one occurrence, under *What goes in a
+dispatch* inside the *Party* section — remains an assertion of the kind decision 3 replaces.
+That sentence ships contradicted by its own file's new whole-branch-review clause for as
 long as the exclusion stands: that is
 an accepted residual with no durable owner — no issue, no `docs/debt/` record — carried to the
 operator as a follow-up candidate, not a gap this decision closes. Nothing automated checks the

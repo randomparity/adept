@@ -1,7 +1,7 @@
 # Reviewer dispatch isolation — implementation plan
 
 Derived from [the design](../specs/2026-09-07-reviewer-dispatch-isolation-design.md) and
-[ADR 0058](../../adr/0058-review-dispatch-names-a-fresh-context-subagent.md).
+[ADR 0058](../../adr/0058-review-dispatch-requires-no-parent-conversation.md).
 
 **Goal.** State the fresh-context requirement at every site that dispatches a reviewer or a
 read-only worker, forbid the context-inheriting fork by name, and rewrite the two isolation

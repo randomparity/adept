@@ -1,7 +1,7 @@
 # Reviewer dispatch isolation — design
 
 Decision record:
-[ADR 0058](../../adr/0058-review-dispatch-names-a-fresh-context-subagent.md).
+[ADR 0058](../../adr/0058-review-dispatch-requires-no-parent-conversation.md).
 
 ## Goal
 
