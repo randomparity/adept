@@ -108,7 +108,7 @@ exactly as a loop run discloses them.
 ### Bounded design-artifact review
 
 For `$spellcraft`'s combined design set, dispatch the first pass in a fresh-context
-subagent — never a fork, per `$trial-loop` step 1 — with the first compatible lens
+worker — never a fork, per `$trial-loop` step 1 — with the first compatible lens
 selected under [review lenses](review-lenses.md). Validate its artifact with the
 single-pass checks above. Apply the evidence checks from
 [heed-counsel](heed-counsel.md) without editing or finally dispositioning the
@@ -121,7 +121,7 @@ edit, defer, expand scope, or spend the optional second pass. Adjacent notes
 remain follow-up candidates under the existing disposition rule.
 
 When a defensible in-surface blocking finding remains, dispatch one fresh-context
-subagent — never a fork, per `$trial-loop` step 1 — with no first-pass findings or
+worker — never a fork, per `$trial-loop` step 1 — with no first-pass findings or
 verdict in its brief. Assert that every
 design artifact is byte-identical to the first pass's target, retain the same
 reviewer and frozen charter, and select the next compatible lens under

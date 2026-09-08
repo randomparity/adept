@@ -326,11 +326,11 @@ it holding `*` -- temp file in `.agent/`, exit cleanup, atomic same-directory
 rename. Then verify from the worktree root that `.agent/oathbind/` is
 ignored; stop if the query is unanswerable or the path is exposed.
 
-Pick a fresh report path there and dispatch a fresh-context subagent running
+Pick a fresh report path there and dispatch a fresh-context worker running
 `$oathbind` -- never a fork, per `$trial-loop` step 1 -- with no prior verdicts,
 proposed fixes, or review history in its brief. Inherited history is
-non-authoritative and cannot supply scope, and the fresh-context type is what
-makes the brief the whole of what the auditor has.
+non-authoritative and cannot supply scope, and the absent parent conversation is
+what makes the brief the whole of what the auditor has.
 
 Pass the artifact lane as routing evidence outside the frozen charter:
 
@@ -546,7 +546,7 @@ below retains the `detect-evil` route and its `security` lens.
 
 On `iterating`, run `$trial-loop --reviewer gauntlet --base <BASE_BRANCH> <composed focus>`. On
 `single-pass`, dispatch the one `gauntlet` pass the reference specifies in a fresh-context
-subagent -- never a fork, per `$trial-loop` step 1 -- with the same `--base` and composed focus,
+worker -- never a fork, per `$trial-loop` step 1 -- with the same `--base` and composed focus,
 and give each finding its single disposition. Address every defensible
 finding and commit after each accepted fix, on either route.
 
@@ -657,7 +657,7 @@ record-and-close rather than the open queue). Adjacent findings take the routes
 defined below. Non-blocking: `needs-attention` is work to do, never a reason to
 park.
 
-Dispatch it the way `$trial-loop` dispatches its reviewer -- a fresh-context subagent,
+Dispatch it the way `$trial-loop` dispatches its reviewer -- a fresh-context worker,
 never a fork, for the reason step 1 of that skill gives -- running
 `$detect-evil --json --out <path> --base <BASE_BRANCH> <security lens focus>` under
 [review lenses](../../references/review-lenses.md), artifact on a scratchpad path outside the

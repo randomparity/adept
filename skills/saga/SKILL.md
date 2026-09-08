@@ -40,7 +40,7 @@ a cycle never reaches confirmation — surface it as an open question and re-cut
 ## 5. Adversarial pass
 
 Write the draft to a scratchpad temp file. Dispatch `$gauntlet` on it as a read-only
-worker in a fresh-context subagent — never a fork — per `$trial-loop`'s dispatch
+worker in a fresh-context worker — never a fork — per `$trial-loop`'s dispatch
 recipe (`--json --out` to a scratchpad path — one pass, not the loop): step 1 of that
 recipe gives the reason read-only holds because of the type and not because of the
 prompt. Focus: missing requirements, wrong seams, hidden coupling between
