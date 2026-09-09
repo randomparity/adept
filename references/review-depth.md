@@ -81,7 +81,8 @@ Then apply `$trial-loop` step 2's checks, which a single pass does not get for f
 - treat an `approve` carrying a non-zero `blocking_count`, or a `blocking_count` above
   `findings_count`, as malformed: rerun once, then stop as blocked;
 - open the artifact when `findings_count > 0` **or** `suppressed_count > 0`, and
-  surface each suppression (concern plus ADR) in the transcript.
+  surface each suppression (concern plus the ADR or failure-model entry that settled it)
+  in the transcript.
 
 Validate the full artifact before routing it, exactly as `$trial-loop` step 2
 does. Every finding has exactly one recognized `surface` (`in | adjacent`) and

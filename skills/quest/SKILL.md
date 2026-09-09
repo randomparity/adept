@@ -545,8 +545,10 @@ below retains the `detect-evil` route and its `security` lens.
 
 On `iterating`, run `$trial-loop --reviewer gauntlet --base <BASE_BRANCH> <composed focus>`. On
 `single-pass`, dispatch the one `gauntlet` pass the reference specifies, with the same `--base`
-and composed focus, and give each finding its single disposition. Address every defensible
-finding and commit after each accepted fix, on either route.
+and composed focus, and give each finding its single disposition. On either route the review
+block's `failure model:` line names the reviewed spec's `Failure model` section by
+repo-relative path and heading — the loop's `failure_model` input — or `none` on a `no-spec`
+run. Address every defensible finding and commit after each accepted fix, on either route.
 
 **A blocking finding on a single pass escalates rather than being fixed in place.** Record the
 escalation and the finding that caused it, then run the `$trial-loop` invocation above against
