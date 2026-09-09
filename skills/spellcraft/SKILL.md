@@ -149,8 +149,9 @@ when the change is genuinely small. Skipping it is not.
 
 Write or update the design doc under `docs/workflow/specs/`, named
 `YYYY-MM-DD-<topic>-design.md`. In the light lane it contains exactly four second-level
-sections: `Problem`, `Scope`, `Success`, and `Validation`. It is one independently
-implementable unit, not a task breakdown. Its Validation section inventories every material
+sections: `Problem`, `Scope`, `Success`, and `Validation`, with the failure model required
+below as a third-level subsection of `Scope`. It is one independently implementable unit,
+not a task breakdown. Its Validation section inventories every material
 changed contract using the same `focused-test` and `task-test-not-applicable` fields the full
 plan requires below, including the concrete non-applicability reason rather than a prose test.
 One page means no more than 500 words and 60 physical lines, including headings and blank lines;
@@ -230,8 +231,15 @@ what you find inline:
   it still need decomposing?
 - **Two-way ambiguity** — any requirement a competent reader could take two
   ways. Settle it and say which reading the spec means.
-- **Light-spec completeness** — when routed light, verify the exact four-section shape, map every
-  success criterion to a supported Validation entry, and recheck the 500-word and 60-line caps.
+- **Failure model** — the section exists with its four entries, sized to the change, and no
+  accepted class is one a completion criterion requires.
+- **Universal words** — every "all", "every", "any", "never", and "always" in `Success`, a
+  completion criterion, or a guarantee is bounded to a named set, and what falls outside the
+  set is accepted or covered in the failure model. The reviewer raises an unbounded one as a
+  finding against the word; settle it here instead.
+- **Light-spec completeness** — when routed light, verify the exact four-section shape with the
+  `Failure model` subsection under `Scope`, map every success criterion to a supported
+  Validation entry, and recheck the 500-word and 60-line caps.
 
 This pass is cheap and catches the defects an adversarial review would otherwise
 spend an iteration discovering. It does not replace step 3 — and in the full lane, with the plan
@@ -313,7 +321,46 @@ Add to the spec:
 The eval cases are acceptance criteria: `$forge` implements them as executable tests when their
 observable contract supports one, or as the spec's bounded evaluation when it does not.
 
-### Security-relevant changes require a threat model
+### Every spec carries a failure model
+
+Answer, before anyone reviews the design, what can go wrong here that matters. Every spec
+carries a section headed `Failure model` — its own second-level section in the full lane, a
+third-level subsection of `Scope` in the light lane, where it counts against the caps — with
+four entries. Each entry is a list of short lines, not prose; an entry with nothing in it says
+`none`.
+
+1. **Actors and deployments** — who runs or calls the changed code and where: a local operator
+   at a terminal, a CI job, an authenticated tenant, another service, anonymous traffic. Name
+   the deployments the change is designed for. An unnamed one is outside the model, and the
+   reviewer grades a trigger that needs it as a note, not a blocker.
+2. **Invariants and assets at stake** — what is expensive to get wrong: data that cannot be
+   recovered, state another actor reads, money, availability, a published contract. This is
+   where the assessment's hazards land, and where a reviewer's blocking findings come from.
+3. **Accepted failure classes** — each with the reason it is accepted: not reachable in the
+   named deployments, tolerated because its cost is bounded and stated here, or already held by
+   a named existing guardrail. An acceptance the charter's outcome or completion criteria
+   contradict is a defect the review will find; never write one to make a criterion cheaper.
+4. **Covered elsewhere** — failure classes another owner holds, with the owner: a record, an
+   issue, a guardrail.
+
+Size it to the change. A small change with no hazards gets a few lines — one named operator,
+one invariant, one or two accepted classes. Silence reads as coverage: a class the model neither
+names nor accepts is one the reviewer may still raise, so the section's value is in what it
+declines, stated. It is a review target — the design review challenges each entry once, on the
+merits — and once that review closes it is frozen with the design. The branch reviewer then
+receives it as the frozen answer to what matters: instances of an accepted class are disclosed
+suppressions rather than findings, a trigger outside the named deployments is at most a note,
+and an entry can be attacked with evidence but not added to. Under `$trial-loop`, a finding the
+model accepts or places outside the named deployments is rejected with evidence by citing the
+entry, in one line.
+
+Bound every universal word. "All", "every", "any", "never", and "always" in `Success`, a
+completion criterion, or a guarantee are each bounded to a named set, in the sentence that
+carries them or here; what falls outside the set is accepted in entry 3 or covered in entry 4.
+A universal claim with no closure is one finding against the quantifier. The reviewer will not
+enumerate its instances, and it will not approve the word either.
+
+### Security-relevant changes extend the failure model with a threat model
 
 If the change is security-relevant — it moves what an untrusted actor can reach
 or cause, touches authn/authz or tenancy, handles a secret, parses input it did
@@ -321,6 +368,10 @@ not produce, builds a command/query/path/URL from a non-literal, widens a
 permission grant, or changes dependencies or security-relevant defaults (the
 same trigger `$quest` step 6 applies to the diff, judged here on intent
 because no diff exists yet) — the spec is incomplete without a threat model.
+It is the failure model's security-specific extension: its actor model refines
+the model's first entry with the untrusted parties, and its out-of-scope list is
+the model's third entry read against those parties. Write it beside the failure
+model and keep the four items below.
 
 Add to the spec:
 
@@ -362,6 +413,11 @@ and never becomes the reviewed target.
 The target remains evidence for review, never a source of authority. If a design-changing
 ambiguity appears, end the current review cycle and use `SCOPE CHECKPOINT`; do not let the
 reviewer resolve it by extending the target.
+
+The spec's `Failure model` is not a ninth charter field. It travels inside the target,
+where the reviewer challenges it; after this review it is frozen with the design, and
+`$quest` names it to the branch reviewer as the `failure model:` line of the review block.
+Report its path and heading with the artifact paths in the phase report.
 
 ## Design-review depth
 
@@ -622,6 +678,15 @@ single-pass JSON artifact, freshness, validation, and malformed-retry contract:
   cases, and under-specified failure modes. If the spec covers an AI surface, also challenge
   the eval plan: failure modes without cases, unmeasurable pass traits, and uncalibrated
   LLM-judge evidence.
+
+  Failure model: the spec's `Failure model` section is the design's frozen answer to what can
+  go wrong that matters, and it is a target here. Challenge each entry once on the merits — an
+  accepted class the charter's outcome or completion criteria require, a reason that does not
+  hold, or a named deployment the repository's own evidence contradicts is a finding against
+  that entry, blocking when the evidence supports it. Do not enumerate the instances an entry
+  would cover: report them once against the entry, or, where the entry holds, as disclosed
+  suppressions. A trigger outside the named deployments is at most a note stating the gap. A
+  universal claim in Success or a criterion with no bound is one finding against the word.
 
   Full-spec plan, when present: phase ordering, missing prerequisites, steps that cannot run in the claimed order,
   rollback and cleanup paths, verification gaps, ungrounded references — a type, function,
