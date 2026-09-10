@@ -707,7 +707,13 @@ fi
 if [[ $1 == issue && $2 == view ]]; then
 	case " $* " in
 	*" comments "*) printf '%s\n' '{"comments":[{"body":"first"},{"body":"second"}]}' ;;
-	*" body "*) printf 'existing body\r\nBlocked by #7\r\n' ;;
+	*" body "*)
+		if [[ ${GH_ANNOTATED_BODY:-false} == true ]]; then
+			printf 'existing body\r\nBlocked by #7 — prerequisite lands first\r\n'
+		else
+			printf 'existing body\r\nBlocked by #7\r\n'
+		fi
+		;;
 	*) printf '%s\n' '{"number":101,"title":"T","body":"B","labels":[],"parent":null,"state":"OPEN","url":"u","updatedAt":"2026-01-01T00:00:00Z"}' ;;
 	esac
 	exit 0
@@ -770,6 +776,16 @@ run_op link-blocks -- link-blocks --profile github --target example/repo 7 101
 edits=$(rg -c '^issue edit ' "$sandbox/calls" || true)
 [[ ${edits:-0} == 0 ]] ||
 	fail 'link-blocks rewrote a body that already carried the link (CRLF guard)'
+
+# An annotated dependency record is the same link and must also be idempotent.
+: >"$sandbox/calls"
+GH_ANNOTATED_BODY=true GH_CALL_LOG="$sandbox/calls" PATH="$sandbox/bin:$PATH" \
+	"$tracker" link-blocks --profile github --target example/repo 7 101 \
+	>"$sandbox/out" 2>"$sandbox/err" ||
+	fail 'link-blocks rejected an annotated existing link'
+edits=$(rg -c '^issue edit ' "$sandbox/calls" || true)
+[[ ${edits:-0} == 0 ]] ||
+	fail 'link-blocks duplicated an annotated existing link'
 
 # view now carries a real updated timestamp rather than a permanent null.
 run_op view-updated -- view --profile github --target example/repo 101

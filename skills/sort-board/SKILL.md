@@ -144,8 +144,10 @@ it, so no swap arises there.
    what the issue text actually states.
 
    Evaluate a sweep's blocked candidates under the `quest-log` canonical
-   cleared-dependency contract. Consider only whole-line `Blocked by #N` records in the
-   issue body, never comments, and resolve every distinct referenced issue with
+   cleared-dependency contract. Consider `Blocked by #N` records in the issue body, never
+   comments: a record starts at the beginning of a line and either ends after the decimal
+   issue number or carries non-empty prose after the exact ` — ` delimiter. Resolve every
+   distinct referenced issue with
    `gh issue view <n> --repo <owner/name> --json state`. An open, missing, or unreadable
    blocker, a malformed `Blocked by #` record, or a body with no canonical references
    retains `status:blocked`; report the reason and propose no status swap. Once at least one

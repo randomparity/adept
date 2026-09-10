@@ -76,9 +76,10 @@ Input: an optional caller-supplied risk allowlist and/or effort allowlist
    - For each surviving candidate, scan its `body` line by line for the
      `quest-log` dependency contract's three states:
      - **No line begins `Blocked by #`.** This check passes.
-     - **At least one line is a canonical whole-line `Blocked by #M`
-       record** (case-sensitive, no leading/trailing content, decimal
-       digits after `#`). Resolve every referenced `M` with
+     - **At least one line contains a canonical `Blocked by #M` record.** The record is
+       case-sensitive, starts at the beginning of the line, contains decimal digits after
+       `#`, and either ends after `M` or carries non-empty prose after the exact ` — `
+       delimiter. Resolve every referenced `M` with
        `gh issue view M --repo <owner/name> --json state`. Drop the
        candidate unless every canonical reference resolves closed.
      - **A line begins exactly `Blocked by #` but fails that grammar.**

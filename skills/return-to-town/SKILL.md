@@ -179,8 +179,9 @@ After verifying the merged issue is closed, run the `quest-log` skill's canonica
 recipe in Bash: `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name>`. This is the primary
 owner of the cleared-dependency `status:blocked → status:ready` edge. Report every readied
 dependent and every retained dependent with its actionable reason. Do not limit the scan to
-the merged issue's prose or comments: the recipe exhaustively evaluates canonical whole-line
-`Blocked by #N` records on all open blocked, non-epic issues. A per-dependent failure does
+the merged issue's prose or comments: the recipe exhaustively evaluates canonical
+`Blocked by #N` records, including records with an exact ` — ` explanation suffix, on all
+open blocked, non-epic issues. A per-dependent failure does
 not prevent other dependents from being evaluated.
 
 ## After a merge (yours or the user's)
