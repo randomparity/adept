@@ -10,7 +10,6 @@ MAX_BODY_BYTES=32768
 SCRIPT_DIR=${BASH_SOURCE[0]%/*}
 [ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR=.
 SCRIPT_DIR=$(cd "$SCRIPT_DIR" && pwd)
-ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 body=''
 disposer=''
 repo=''
@@ -46,8 +45,9 @@ fail() {
 
 preflight() {
 	local command
-	for command in gh jq mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm; do
-		command -v "$command" >/dev/null 2>&1 || fail "required command is unavailable"
+	for command in gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm; do
+		command -v "$command" >/dev/null 2>&1 ||
+			fail "required command is unavailable: $command; install it or expose it in PATH"
 	done
 	platform=$(uname -s)
 	case $platform in
@@ -55,8 +55,10 @@ preflight() {
 	Linux) disposer=gio ;;
 	*) fail 'no supported recoverable-delete command on this platform' ;;
 	esac
-	command -v "$disposer" >/dev/null 2>&1 || fail 'recoverable-delete command is unavailable'
-	[ -x "$ROOT/scripts/check-public-safety.sh" ] || fail 'public-safety check is unavailable'
+	command -v "$disposer" >/dev/null 2>&1 ||
+		fail "recoverable-delete command is unavailable: $disposer; install it or expose it in PATH"
+	[ -x "$SCRIPT_DIR/check-public-safety" ] ||
+		fail 'bundled public-safety check is unavailable; repair the installed quest skill'
 }
 
 validate_arguments() {
@@ -225,8 +227,14 @@ compose_body() {
 	fi
 	printf '%s\n' "$OUTER_SENTINEL" >>"$body" || fail 'cannot compose publication body'
 	check_size 'publication body' "$body" "$MAX_BODY_BYTES"
-	"$ROOT/scripts/check-public-safety.sh" "$body" >/dev/null 2>&1 ||
-		fail 'publication body did not pass public-safety validation'
+	local scan_status=0
+	# Scanner diagnostics contain matched private content; expose only the outcome.
+	"$SCRIPT_DIR/check-public-safety" "$body" >/dev/null 2>&1 || scan_status=$?
+	case $scan_status in
+	0) ;;
+	1) fail 'publication body contains unsafe content; redact the retained body and source inputs' ;;
+	*) fail "public-safety scan could not complete (exit $scan_status); check scanner dependencies and input access" ;;
+	esac
 }
 
 post_comment() {

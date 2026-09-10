@@ -70,6 +70,18 @@ if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
 fi
 rm -f "$SCRATCH/repo/linux.txt"
 
+# Windows profile paths can appear in a publication composed on any host.
+for private_path in 'C:\Us''ers\example-user\project' 'd:/us''ers/example-user/project'; do
+	printf '%s\n' "$private_path" >"$SCRATCH/repo/windows.txt"
+	status=0
+	"$CHECKER" "$SCRATCH/repo/windows.txt" >"$SCRATCH/output" 2>&1 || status=$?
+	if [ "$status" -ne 1 ]; then
+		printf 'public-safety-test: Windows profile leak must return 1, got %s\n' "$status" >&2
+		exit 1
+	fi
+done
+rm -f "$SCRATCH/repo/windows.txt"
+
 # /home/runner and /home/linuxbrew are published constants of GitHub's runner
 # images, not anyone's home directory. The ubuntu image documents the shellenv
 # line below as the way to reach Homebrew, so a workflow that carries it must
