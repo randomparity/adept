@@ -810,6 +810,17 @@ specifies into a `mktemp` file beside the ledger — no headings; each destinati
 its own — atomically rename it only after the write, reject carriage return, NUL, and
 outer annotation markers, and keep the temporary and installed payload in mode 0600.
 A run with nothing to carry creates no payload file and skips every payload step below.
+
+The publication helper and its `scripts/check-public-safety` scanner ship together in this
+skill. Resolve both from the installed skill directory; never search the target repository for
+Adept maintenance scripts. The scanner requires `rg` and `jq`; the helper checks these alongside
+its other commands before composing content. Missing commands name an installation/PATH remedy.
+A missing bundled scanner requires repairing the installed skill, not substituting a repository gate.
+The scanner checks generic private paths (including Windows profile paths), private addresses,
+and credential patterns. It is a backstop to the public-safety review, not exhaustive PII detection.
+Unsafe content and scan failures both stop publication and retain evidence, with distinct messages
+that do not echo matched content.
+
 Before any PR-body write, invoke the helper in validation-only mode with the exact publication
 arguments:
 

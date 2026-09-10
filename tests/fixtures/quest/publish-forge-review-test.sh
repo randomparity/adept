@@ -7,7 +7,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$SCRIPT_DIR/../../../scripts/test-fixture-helpers.sh"
 
 clear_git_env
-SCRIPT="$SCRIPT_DIR/../../../skills/quest/scripts/publish-forge-review"
+SKILL_SOURCE="$SCRIPT_DIR/../../../skills/quest"
 ORIGINAL_PATH=$PATH
 SYSTEM_CAT=$(command -v cat)
 SYSTEM_TAIL=$(command -v tail)
@@ -16,6 +16,9 @@ SYSTEM_UNAME=$(command -v uname)
 passed=0
 failed=0
 fixture_init publish-forge-review-test
+# Run every publication case from the installed skill alone.
+cp -R "$SKILL_SOURCE" "$SCRATCH/quest"
+SCRIPT="$SCRATCH/quest/scripts/publish-forge-review"
 
 ok() {
 	passed=$((passed + 1))
@@ -351,6 +354,10 @@ case_public_safety_stops_publication() {
 	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" || ! assert_retained "$name"; then
 		return
 	fi
+	if ! grep -q 'unsafe content' "$REPO/error"; then
+		fail "$name" 'unsafe content was not distinguished from a scanner fault'
+		return
+	fi
 	new_case
 	mkdir -p "$REPO/scan-fault"
 	printf '%s\n' '#!/usr/bin/env bash' 'exit 2' >"$REPO/scan-fault/rg"
@@ -359,6 +366,35 @@ case_public_safety_stops_publication() {
 	if [ "$STATUS" -eq 0 ] || ! assert_no_post "$name" || ! assert_retained "$name"; then
 		return
 	fi
+	if ! grep -q 'scan could not complete (exit 2)' "$REPO/error"; then
+		fail "$name" 'scanner fault was reported as unsafe content'
+		return
+	fi
+	ok "$name"
+}
+
+case_missing_scan_dependencies() {
+	local name='PFR missing scan dependencies fail before composition' missing tool
+	for missing in rg jq; do
+		new_case
+		mkdir "$REPO/bin"
+		for tool in bash gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm; do
+			[ "$tool" != "$missing" ] || continue
+			ln -s "$(command -v "$tool")" "$REPO/bin/$tool"
+		done
+		cp "$LEDGER" "$REPO/ledger-before"
+		run_preflight required "$REVIEW" /usr/bin/env PATH="$FAKES:$REPO/bin"
+		if [ "$STATUS" -eq 0 ] || [ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] ||
+			! cmp -s "$LEDGER" "$REPO/ledger-before" || body_file >/dev/null; then
+			fail "$name" 'missing dependency did not stop before composition with sources retained'
+			return
+		fi
+		assert_no_post "$name" || return
+		if ! grep -q "required command is unavailable: $missing" "$REPO/error"; then
+			fail "$name" 'missing tool was not named'
+			return
+		fi
+	done
 	ok "$name"
 }
 
@@ -985,6 +1021,7 @@ case_argument_arity_is_bounded() {
 printf 'publish-forge-review\n\n'
 case_required_safe_review
 case_public_safety_stops_publication
+case_missing_scan_dependencies
 case_compose_source_failure_stops_publication
 case_publication_modes
 case_comment_failures_never_retry
