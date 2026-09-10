@@ -95,7 +95,10 @@ the challenge summary.
    numbers are already known — so no crash window exists before their links land.
 2. **One topological pass over all entries** — adopted and created alike, blockers
    before dependents, so every `Blocked by #<n>` resolves to an already-numbered
-   sibling. Per entry, in graph order:
+   sibling. The accepted dependency-record forms are the bare `Blocked by #<n>` and
+   `Blocked by #<n> — <non-empty explanation>` forms; prefer the bare form, use the exact
+   delimiter for an explanation, and put each blocker on its own line with no leading
+   whitespace. Per entry, in graph order:
    - **Adopted entry:** link via the `sub_issues` API. If it sits in a dependent
      position, apply `status:blocked` + append a `Blocked by #<n>` line (the stated,
      confirmed exception to leave-untouched) — its blocker was handled earlier in the

@@ -507,7 +507,8 @@ profile_link_blocks() {
 	# Already linked: return without writing. Skipping the write makes the
 	# operation idempotent in the common case and keeps it out of the
 	# read-modify-write race entirely.
-	if printf '%s\n' "$body" | rg -q "^Blocked by #$blocker\r?\$"; then
+	if printf '%s\n' "$body" |
+		rg -q --no-config "^Blocked by #$blocker( — [^[:space:]].*)?\r?\$"; then
 		printf '{}\n'
 		return 0
 	fi

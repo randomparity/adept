@@ -4,6 +4,11 @@
 
 Accepted (2026-08-12)
 
+> **Amended (2026-09-10):** A canonical `Blocked by #N` record may carry a non-empty
+> explanation after the exact ` — ` delimiter. The record must still begin at the start of
+> a line, contain one blocker, and fail closed when malformed. The occupancy and
+> revalidation decisions otherwise stand as written.
+
 ## Context
 
 Issue #56 asks for two things: a `$seek-quest` skill that recommends the next

@@ -59,14 +59,21 @@ Rules:
   blocker is open or cannot be resolved. Exit is the canonical cleared-dependency edge
   below; explicit `$sort-board` and `$quest` remain manual fallback edges.
 - **Cleared-dependency exit edge.** An open, non-epic issue carrying `status:blocked` moves
-  to `status:ready` only when its body has at least one canonical whole-line
-  `Blocked by #N` record and every referenced issue resolves closed. `$return-to-town` is
+  to `status:ready` only when its body has at least one canonical `Blocked by #N`
+  record and every referenced issue resolves closed. `$return-to-town` is
   the primary owner after a verified merge and closure. `$resurrection` owns the same
-  repair edge behind its plan-and-confirm gate. A canonical line is case-sensitive, has no
-  leading or trailing content, and contains decimal digits after `#`. A line beginning
-  exactly `Blocked by #` but failing that grammar is malformed and holds the issue blocked;
-  other prose and every comment are ignored. Open, missing, malformed, or unreadable
-  references fail closed and produce an actionable report.
+  repair edge behind its plan-and-confirm gate. A canonical record is case-sensitive, starts
+  at the beginning of a line, and contains decimal digits after `#`. It either ends after the
+  issue number or carries a non-empty explanation after the exact delimiter ` — `. Each
+  blocker gets its own record. A line beginning exactly `Blocked by #` but failing that
+  grammar is malformed and holds the issue blocked; other prose and every comment are
+  ignored. Open, missing, malformed, or unreadable references fail closed and produce an
+  actionable report. Writers prefer the bare form; readers accept both:
+
+  ```text
+  Blocked by #123
+  Blocked by #123 — the schema change must land first
+  ```
 
 ### Recipe: reconcile cleared dependencies
 

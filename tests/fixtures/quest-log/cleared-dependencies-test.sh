@@ -34,7 +34,7 @@ gh() {
 			printf 'API \033[31mdenied\n' >&2
 			return 1
 		fi
-		printf '%s\n' '[[{"number":101,"state":"open","body":"Blocked by #1","labels":[{"name":"status:blocked"},{"name":"status:in-progress"}]},{"number":102,"state":"open","body":"Blocked by #1\nBlocked by #2","labels":[{"name":"status:blocked"}]},{"number":103,"state":"open","body":"Blocked by #abc","labels":[{"name":"status:blocked"}]},{"number":104,"state":"open","body":"Blocked by #1","labels":[{"name":"status:blocked"},{"name":"epic"}]}],[{"number":106,"state":"open","body":"Blocked by #1","labels":[{"name":"status:blocked"}]}]]'
+		printf '%s\n' '[[{"number":101,"state":"open","body":"Blocked by #1","labels":[{"name":"status:blocked"},{"name":"status:in-progress"}]},{"number":102,"state":"open","body":"Blocked by #1\nBlocked by #2","labels":[{"name":"status:blocked"}]},{"number":103,"state":"open","body":"Blocked by #abc","labels":[{"name":"status:blocked"}]},{"number":104,"state":"open","body":"Blocked by #1","labels":[{"name":"status:blocked"},{"name":"epic"}]}],[{"number":106,"state":"open","body":"Blocked by #1 — prerequisite lands first","labels":[{"name":"status:blocked"}]}]]'
 		return
 	fi
 	if [[ $1 == label && $2 == create ]]; then
@@ -116,6 +116,12 @@ reset_cleared_dependency_cache
 cleared_dependency_body_verdict owner/repo 10 $'Blocked by #1\nBlocked by #1' ||
 	fail 'multiple closed canonical blockers should clear'
 [[ $(wc -l <"$blocker_log") -eq 1 ]] || fail 'duplicate blockers were not deduplicated'
+reset_cleared_dependency_cache
+: >"$blocker_log"
+cleared_dependency_body_verdict owner/repo 10 \
+	'Blocked by #1 — required registration point lands first' ||
+	fail 'an annotated closed blocker should clear'
+[[ $(cat "$blocker_log") == 1 ]] || fail 'annotated record did not resolve its blocker id'
 if cleared_dependency_body_verdict owner/repo 10 $'Blocked by #1\nBlocked by #2'; then
 	fail 'an open blocker must retain the dependent'
 fi
@@ -123,7 +129,20 @@ fi
 # shellcheck disable=SC2154
 [[ $cleared_dependency_reason == 'open blocker #2 retains #10' ]] ||
 	fail 'open-blocker report is not actionable'
-for fixture in 'Blocked by #404' 'Blocked by #500' 'Blocked by #abc' ' Blocked by #1'; do
+reset_cleared_dependency_cache
+if cleared_dependency_body_verdict owner/repo 10 'Blocked by #2 — prerequisite is pending'; then
+	fail 'an annotated open blocker must retain the dependent'
+fi
+[[ $cleared_dependency_reason == 'open blocker #2 retains #10' ]] ||
+	fail 'annotated open-blocker report is not actionable'
+for fixture in \
+	'Blocked by #404' \
+	'Blocked by #500' \
+	'Blocked by #abc' \
+	' Blocked by #1' \
+	'Blocked by #1 explanation without delimiter' \
+	'Blocked by #1 —' \
+	'Blocked by #1 —  explanation after two spaces'; do
 	if cleared_dependency_body_verdict owner/repo 10 "$fixture"; then
 		fail "invalid dependency record cleared: $fixture"
 	fi

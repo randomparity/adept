@@ -122,10 +122,11 @@ cleared_dependency_body_verdict() { # repo number body
 	cleared_dependency_reason=
 	cleared_dependency_error=false
 	while IFS= read -r line; do
-		if [[ $line =~ ^Blocked\ by\ \#([0-9]+)$ ]]; then
+		if [[ $line =~ ^Blocked\ by\ \#([0-9]+)(\ —\ [^[:space:]].*)?$ ]]; then
 			blockers+=("${BASH_REMATCH[1]}")
 		elif [[ $line == 'Blocked by #'* ]]; then
-			cleared_dependency_reason="malformed reference on #$number; expected Blocked by #N"
+			cleared_dependency_reason="malformed reference on #$number;"
+			cleared_dependency_reason+=" expected Blocked by #N or Blocked by #N — explanation"
 			cleared_dependency_error=true
 			return 1
 		fi

@@ -162,7 +162,15 @@ operator confirmation.
    report line. Birth labels come from the caller's
    per-entry state, overriding step 5: `status:blocked` + a `Blocked by #<n>` body line
    for dependents, `status:needs-triage` for open-question entries (blocked wins when
-   both apply), else `status:ready` — the same rule recovery applies below.
+   both apply), else `status:ready` — the same rule recovery applies below. Prefer the bare
+   dependency record. When its rationale must remain on the same line, use the exact ` — `
+   delimiter and non-empty prose. Use one record per blocker, with no leading whitespace;
+   arbitrary trailing prose and combined references are malformed:
+
+   ```text
+   Blocked by #123
+   Blocked by #123 — the schema change must land first
+   ```
 
    **Epic-parent recovery.** When the parent carries the `epic` label, its Decomposition
    section is the authoritative sub-issue list. Enumerate existing native sub-issues
