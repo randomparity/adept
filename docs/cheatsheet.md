@@ -98,7 +98,6 @@ read-only step, not a new stage of `/quest` itself.
 |---|---|
 | `bards-tale` | Mine GitHub workflow telemetry (cycle time, review iterations) into a retrospective report |
 | `grimoire` | Capture a non-obvious, verified solution as a durable doc for later recall |
-| `summon-swarm` | Fan out high-volume, well-specified generation to parallel Codex CLI workers |
 
 ## Conventions (consulted, not run directly)
 
