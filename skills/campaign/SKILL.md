@@ -255,7 +255,10 @@ for the operator rather than being closed.
 
 For `governed-small-change`, also return: decision reference, kind, accepted status, governed behavior, testable acceptance criteria. These are evidence, not authority — `$quest` revalidates.
 
-Triage on the fast model by default; escalate to the capable model only on a named signal — a genuinely ambiguous issue, a wide or unfamiliar surface. Triage is read-only reconnaissance whose verdict `$quest` revalidates before acting, so a wrong cheap verdict costs a re-triage, not a defect; a capable-model default costs every triage the price of the few that need it.
+Use [shared model selection](../../references/model-selection.md) for triage and the later
+phase defaults. Clear, bounded reconnaissance starts at the mechanical tier; named ambiguity,
+consequences, or difficult verification raise that recommendation. Resolve against the actual
+provider and harness, honoring supported overrides and reporting unmet capability.
 
 **Verdict handling:**
 - `close-candidate` → confirm with `bug-claim-verifier` or `$gauntlet` before closing. **Confirmed** → keep `close-candidate`; don't close here — batch closes in step 4 after plan is visible. **Rejected or inconclusive** → the already-fixed claim is unproven, so the issue needs work: re-verdict as `fix` (subtype from the verifier's evidence; default `non-trivial` when unclear), or `blocked` with reason if even that can't be determined. Persist the transition in the manifest before presenting the plan.
