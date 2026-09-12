@@ -82,6 +82,11 @@ git -C "$campaign_root" ls-files --error-unmatch .agent/.gitignore  # exit 0=tra
 
 Verify: `git -C "$campaign_root" check-ignore -q .agent/campaigns/`. Stop if fails.
 
+At settled campaign boundaries, apply the shared
+[coordinator continuation paths](../../references/model-selection.md#coordinator-continuation-at-phase-boundaries).
+Select capability for unresolved campaign decisions separately from worker/reviewer settings and
+mechanical waits; a phase boundary does not itself switch the root or end this continuous task.
+
 On campaign handoff/resume, apply quest-log's
 [handoff checklist and receiver checks](../quest-log/SKILL.md#model-and-session-handoffs).
 The orchestrator retains the compact continuity facts in the existing private manifest notes

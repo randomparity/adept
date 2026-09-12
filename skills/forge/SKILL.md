@@ -584,7 +584,9 @@ where the harness permits it; do not describe inheritance as an explicit selecti
 
 The final whole-branch review still uses the strongest available permitted model. Coordinator
 recommendations are separate from reviewer selection; keep waiting off the model as described
-under Silent party workers. This policy does not itself switch the coordinating session.
+under Silent party workers. At a settled boundary, use the shared
+[coordinator continuation paths](../../references/model-selection.md#coordinator-continuation-at-phase-boundaries)
+to distinguish the current root, an exposed native switch and an explicitly resumed session.
 
 Before dispatch or model/session continuation, read quest-log's
 [handoff checklist and receiver checks](../quest-log/SKILL.md#model-and-session-handoffs).

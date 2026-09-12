@@ -287,6 +287,10 @@ claimants wins (ADR 0018 carries the probe evidence).
 
 ## Model and session handoffs
 
+Use the shared [coordinator continuation paths](../../references/model-selection.md#coordinator-continuation-at-phase-boundaries)
+to decide whether the current root continues, an exposed native control changes it, or an
+explicitly resumed successor receives this handoff. A model choice alone transfers no ownership.
+
 Before a phase or session handoff, read back a compact continuity record in the owning workflow's
 **existing private** notes, ledger, brief or campaign manifest. The receiver reads it before the
 next dependent mutation. This is a human-readable checklist, not a new schema, annotation type,
