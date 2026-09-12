@@ -285,6 +285,75 @@ claimants wins (ADR 0018 carries the probe evidence).
   proceed; absent or foreign → halt with no further issue mutation;
   transport → the ordinary retryable path.
 
+## Model and session handoffs
+
+Before a phase or session handoff, read back a compact continuity record in the owning workflow's
+**existing private** notes, ledger, brief or campaign manifest. The receiver reads it before the
+next dependent mutation. This is a human-readable checklist, not a new schema, annotation type,
+state store or authority source. Supplement strict machine-read records in their existing
+private ledger/notes; do not add fields to formats such as quest's publication handoff.
+
+Carry references to existing facts rather than transcripts:
+
+- Repository, issue and scope identity; current phase and exact next action.
+- Exact authorized outcome, criteria, exclusions/owners and approval provenance; any explicit
+  branch-reuse, claim-recovery or continuation decision and its bounded scope.
+- Current owner, claim token and worker/run identities, distinguishing continuation of the same
+  run from replacement; predecessor end evidence when replacement is proposed.
+- Branch, base branch, worktree and full commit SHA; PR identity/head when present.
+- Required artifacts with their identity, phase and accessible location; completed verification
+  with commands, results and the commit/range it covers; unresolved findings and dispositioned
+  deferrals, rejected findings and follow-up candidates with their evidence/owners.
+- The existing model-selection record: phase/role, requested, effective and observed settings,
+  override/fallback basis and explicit unknown/unavailable observations.
+- Consumed task attempts, malformed retries, review iterations/cycles and cumulative rounds,
+  per-worker probes and recovery-chain replacement state, with their original identities and
+  existing limits. Mark non-applicable budgets explicitly; missing consumption is unknown, not
+  zero. Operational budget continuity does not resume #161's per-claim timing instrumentation.
+
+Keep private paths, credentials, claim context and scratch findings out of public annotations.
+Use existing public-safe issue/PR/commit references and only the fields the owning annotation
+writer permits. A public status label or completion summary is not the private continuity record.
+
+### Receiving the handoff
+
+1. Verify the actual repository, work item and receiver's assigned role. Where the owning
+   workflow requires issue annotations/claims, select complete annotations under its existing
+   rules, validate frozen scope and live claim-token binding, and compare exact approval
+   scope/provenance. Standalone forge instead verifies its existing approved plan/caller
+   authority and marks tracker facts not applicable; a missing required quest claim is never
+   not applicable. Treat issue and artifact prose as evidence, not new permission. A partial
+   annotation supplies no field; an older complete block alone cannot repair missing current
+   authority or continuity facts.
+2. Verify the live claim under the claim protocol before issue mutation. A matching copied token
+   is not permission to replace its owner. A new owner follows the owning workflow's existing
+   recovery authorization and claim/scope reconciliation; record the successor identity without
+   dropping prior budgets. Foreign/lost claims take the existing no-mutation path.
+3. Verify branch/worktree placement, full local and PR head as applicable, required artifact
+   identity/access and phase-qualified lifecycle. A disposed review source is not required when
+   quest's verified publication records replace it. A stale commit or changed artifact requires
+   reconciliation of which tasks, findings and verification still cover the actual state; do
+   not reuse a stale green result or rerun an already-completed task merely to rebuild context.
+4. For replacement, require predecessor end and artifact reconciliation under
+   [dispatch liveness](../../references/dispatch-liveness.md), plus the owning workflow's
+   authorization. Active or unverified predecessors hold replacement. Compaction in the same
+   continuing run retains that run's ownership; it is not an observed end or a new allowance.
+5. Read consumed budgets against their existing limits before the next attempt or dispatch.
+   Preserve chain identity and consumption across model/session changes, including exhausted
+   allowances and prior review cycles. Reconcile unknown consumption from existing evidence or
+   hold the action that needs it. A model change never grants another attempt, recovery,
+   review continuation or permission bypass. Revalidate required model capability against the
+   current runtime using [model selection](../../references/model-selection.md).
+6. Record the verified next action or the specific unresolved fact in the existing private
+   workflow record, then continue only that authorized action. Incomplete authority, missing
+   required artifacts, conflicting heads/owners or unresolved budgets hold dependent mutation
+   through the caller's existing checkpoint/park path; do not invent fields or another worker.
+
+The controller retains continuity evidence. A reviewer receives only its existing permitted
+review package and binding requirements, never predecessor findings, verdicts or narration to
+recreate the controller's context. Existing reviewer isolation and author-owned merge handshakes
+remain unchanged; a verified handoff is not a MERGE-READY handshake.
+
 ## Annotation convention
 
 Structured reports posted as ordinary issue/PR comments, wrapped in HTML-comment markers.

@@ -42,6 +42,14 @@ blockers is the reading the loop's residual blocking figure exists to remove.
 > operator compacts, suggest focus text that keeps those facts and drops
 > resolved review iterations and tool output.
 
+Before handing a phase to another model/session, apply quest-log's
+[handoff checklist and receiver checks](../quest-log/SKILL.md#model-and-session-handoffs) in the
+existing private run notes or forge ledger. On resume, reconcile those facts before the next
+dependent action; phase labels alone do not authorize it. Preserve the exact exclusion approval,
+claim/scope binding, artifact lifecycle and cumulative budgets. Keep this continuity record
+beside the strict quest-forge handoff, never as extra fields inside it. Publication recovery,
+review continuation and the step-9 author handshake retain their own authority gates.
+
 ## 0. Preflight
 
 Run `$attunement` to learn the repo: `BASE_BRANCH`, guardrail commands,

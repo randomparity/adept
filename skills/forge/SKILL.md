@@ -586,6 +586,14 @@ The final whole-branch review still uses the strongest available permitted model
 recommendations are separate from reviewer selection; keep waiting off the model as described
 under Silent party workers. This policy does not itself switch the coordinating session.
 
+Before dispatch or model/session continuation, read quest-log's
+[handoff checklist and receiver checks](../quest-log/SKILL.md#model-and-session-handoffs).
+Carry the task-relevant continuity facts in the existing brief and progress ledger, retaining
+attempt/dispatch identity, completed verification, model evidence and consumed review/recovery
+allowances. The receiver verifies them with placement and artifact access before editing.
+Keep controller continuity narration out of reviewer prompts; the existing review-package
+contract still determines their inputs.
+
 ### What goes in a dispatch
 
 **Subagents inherit nothing.** Each implementer prompt must include:
@@ -703,6 +711,12 @@ Resolve the workspace with `scripts/sdd-workspace`, which prints its absolute
 path, and check for `<workspace>/progress.md`. Tasks marked complete there are
 done: resume at the first that is not, and never re-dispatch one the ledger has
 already closed.
+
+On a resumed ledger, reconcile the same
+[handoff evidence](../quest-log/SKILL.md#receiving-the-handoff) before the first uncompleted
+task or review. Missing counters do not reset attempts, review rounds, probes or the recovery
+chain's replacement allowance; unknown ownership or inaccessible required evidence holds that
+dependent work under the existing recovery rules.
 
 **Only that script creates the workspace**, and that matters: it writes a
 self-ignoring `.gitignore` (`*`) into `.agent/`, which is the whole mechanism

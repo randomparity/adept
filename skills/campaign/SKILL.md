@@ -82,6 +82,15 @@ git -C "$campaign_root" ls-files --error-unmatch .agent/.gitignore  # exit 0=tra
 
 Verify: `git -C "$campaign_root" check-ignore -q .agent/campaigns/`. Stop if fails.
 
+On campaign handoff/resume, apply quest-log's
+[handoff checklist and receiver checks](../quest-log/SKILL.md#model-and-session-handoffs).
+The orchestrator retains the compact continuity facts in the existing private manifest notes
+or run report: exact approvals, assigned reservations, row/worker identities, reachable
+artifacts, resolved model evidence and consumed per-worker/review/recovery budgets. Validate
+the loaded manifest identity before using them. This adds no queue state or table column.
+Reconcile them against live claims, branches and worker end evidence before dependent dispatch;
+a resumed orchestrator does not replace a still-active worker.
+
 **Routing:**
 - **No file** → create with `Status: active`
 - **File with `Status: active`** → **resume**: load it, skip init, don't overwrite non-`pending`
@@ -433,6 +442,14 @@ Before the parallel background wait, emit the before-wait progress update requir
 The operator's answer to that hold is what reaches the harness's stop control. Told to re-dispatch, stop the agent, wait for its end-of-run notification, and dispatch only then.
 
 **A re-dispatch resumes where it can and restarts where it cannot.** Reconcile the row's artifacts first (step 3) — a dying agent may have pushed a branch or opened a PR you have not recorded. A row where that turns up no branch has nothing to resume; dispatch it fresh. Otherwise hand the successor the context it had before plus the recovered branch name, an explicit `reuse` decision, and the last phase the events showed. The branch carries the committed work by reference, so do not paste a diff into the prompt — bulky going in, stale on arrival. Reclaim the dead agent's worktree before dispatching: it still has the branch checked out, so the successor's own `git worktree add` on that path fails until you either hand it that path or remove it, and any uncommitted edits stranded there are readable only until you do.
+
+Carry only the issue-relevant
+[continuity packet](../quest-log/SKILL.md#model-and-session-handoffs) in that successor dispatch,
+including exact reuse/recovery authority, prior scope identity, artifact dispositions and
+consumed budgets. Reconcile successor claim/scope identity through quest's existing rules.
+Preserve the original worker/recovery-chain and probe/replacement consumption in the existing
+private run report; a new orchestrator session does not mint a new allowance. Missing records
+hold the affected replacement until reconciled, while independent rows may drain.
 
 **Report each read as one table**, no prose per row. `State` is one of `alive`, `quiet`, `hold`, `ended`:
 
