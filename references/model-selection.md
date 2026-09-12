@@ -63,6 +63,51 @@ and override or fallback basis. Distinguish a recommendation from settings actua
 unknown observations cannot prove a required capability. Keep account and endpoint details private.
 This is human-readable evidence, not a new schema or state store.
 
+## Coordinator continuation at phase boundaries
+
+A settled phase boundary is an opportunity to reassess the coordinator's next decisions,
+not an instruction to switch models or end a continuous workflow. Use the defaults above for
+those decisions: bookkeeping can be mechanical, while unresolved dependencies, scope conflicts
+or consequential merge judgments can require deep capability. A pending CI/worker wait does
+not reduce the capability required when it returns. Keep waiting in the existing harness wait
+mechanism; select reviewers independently under the strongest-available final-review rule.
+
+First resolve the effective user/project choice and actual host controls as above. Distinguish
+an agent-callable root control, an operator-only host control, child dispatch settings, and
+startup/resume options. CLI flags or a provider's model catalog alone do not prove that this
+active session can switch. Record which control is exposed, who can use it, and any unsupported
+or unknown setting in existing private workflow notes. Do not write configuration or launch a
+provider session to turn an unavailable control into an available one.
+
+Choose one of these paths:
+
+| Path | Preconditions | Action |
+|---|---|---|
+| Continue the current root | Its effective settings meet the next action's requirements | Continue the same workflow and ownership. No switch or session handoff is needed just because a skill or phase changed. |
+| Native root switch | The active host actually exposes the control to this actor, the choice is permitted, and continuity can be verified | Record continuity before the control is used; then verify the effective settings and continuity before dependent work. An operator-only control requires the operator to perform it. |
+| Explicit new-session continuation | The operator explicitly resumes a successor with the required capability and accessible continuity evidence | Use quest-log's sender/receiver checks, including predecessor ownership/end and existing recovery authorization. A copied token is not a transferred claim. |
+
+For either switching path, apply quest-log's
+[handoff checklist and receiver checks](../skills/quest-log/SKILL.md#model-and-session-handoffs)
+using existing private records. Preserve exact permissions and approved exclusions, claim/run
+ownership, branch/worktree and full commit identity, required artifact access, verification,
+findings and consumed budgets. A native switch in the same continuing run does not replace its
+owner; a host action that creates a successor instead takes the new-session path. Reconcile
+changed heads, artifacts or owners before reusing proof. Unknown budget use is not zero.
+
+After an attempted native switch, distinguish requested from observed effective settings.
+Host fallback or an unconfirmed result does not prove the requested capability applied. Continue
+only if the actual available evidence establishes the next action's requirements and continuity;
+otherwise name the unmet fact through the owning workflow's existing checkpoint/park path.
+When no root control is available, use the current adequate model or report the unmet capability
+before dependent work. An explicit override remains in force; a recommendation is not authority
+to replace it. Do not automatically retry a switch or gain attempts by opening a new session.
+
+Child model/effort selection affects that child only. Record it separately from the root's
+settings; invoking a skill, receiving a child result or reaching a phase boundary supplies no
+root-switch evidence. Carry only the already-permitted review package to a reviewer, not the
+controller's continuity narrative. None of these paths weakens review, permissions or merge gates.
+
 ## Boundaries
 
 [Review-depth routing](review-depth.md) still determines single-pass versus iterating review;
