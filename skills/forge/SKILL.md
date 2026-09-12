@@ -577,30 +577,14 @@ review would look at it again.
 
 ### Choosing a model
 
-Use the least powerful model that can do the job, and **always name it
-explicitly** — an omitted model inherits your session's, usually the most
-capable and most expensive.
+Use [shared model selection](../../references/model-selection.md) for capability tiers,
+phase defaults, runtime availability, overrides, and supported reasoning controls. Resolve
+provider identifiers only through its centralized mapping. Name the supported choice explicitly
+where the harness permits it; do not describe inheritance as an explicit selection.
 
-- Mechanical task, complete spec, one or two files, no design latitude → cheap.
-- Multi-file integration or pattern matching → standard.
-- Design judgment, broad codebase understanding, or the final whole-branch
-  review → most capable.
-
-**Turn count beats token price.** Give a weak model something multi-step and it
-will often need two or three times as many turns to finish, which is more
-expensive than the stronger model would have been. Use a mid-tier floor for
-implementers working from prose; reserve the cheapest tier for transcription —
-where the plan text already contains the code to write — and for single-file
-mechanical fixes.
-
-**This governs your own model too.** A coordinating session runs on the most
-capable model by default and then pays that rate for every turn it spends
-dispatching, waiting, checking and reporting — which across a long build
-outnumbers the turns it spends deciding anything. Capability is what the
-dispatches above need; coordination is not where it earns its price. Where the
-harness allows it, run a coordinating session no higher than the most capable
-worker it dispatches, and keep the waiting off the model entirely — see Silent
-party workers.
+The final whole-branch review still uses the strongest available permitted model. Coordinator
+recommendations are separate from reviewer selection; keep waiting off the model as described
+under Silent party workers. This policy does not itself switch the coordinating session.
 
 ### What goes in a dispatch
 
