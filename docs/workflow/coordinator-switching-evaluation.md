@@ -44,4 +44,4 @@ Each row records an input, the evaluator's observable route, and the forbidden a
 
 No automated prose assertions were added: these contracts have no executable consumer.
 Structural/link, privacy, plugin and version checks passed during implementation; the
-required full guardrail and CI outcomes are recorded on the pull request for its delivered SHA.
+required full guardrail and CI outcomes belong on the pull request for its delivered SHA.
