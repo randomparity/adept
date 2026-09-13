@@ -562,12 +562,44 @@ Four statuses, four responses:
 - **DONE_WITH_CONCERNS** — read the concerns first. Correctness or scope
   concerns get addressed before the task is closed; observations get noted.
 - **NEEDS_CONTEXT** — supply what was missing and re-dispatch.
-- **CANNOT_COMPLETE** — assess it. A context problem gets more context; a reasoning
-  problem gets a more capable model; an oversized task gets split; a wrong plan
-  gets escalated.
+- **CANNOT_COMPLETE** — verify the failure class below before changing the brief,
+  task, plan or model. Route only a demonstrated reasoning gap to a stronger tier.
 
-**Never retry an unchanged prompt after `CANNOT_COMPLETE`, and never ignore an
-escalation.** If the implementer says it is stuck, something has to change.
+**Diagnose before escalating or re-dispatching.** Apply the shared
+[failure classification](../../references/model-selection.md#escalation-after-difficulty-or-failure)
+to the report, task brief and actual failure artifact. A worker's `CANNOT_COMPLETE` alone does not
+show a reasoning gap. Check that required context was present and the verification result is
+trustworthy before selecting a stronger tier. `NEEDS_CONTEXT` gets the precise missing facts;
+transport, authentication, rate limit and service errors use their owning recovery path or hold.
+An oversized task or wrong plan returns to the existing split/plan checkpoint; changed scope
+returns to the caller's scope checkpoint. A safety or authority restriction stops at its owning
+gate. Do not route any of those failures through a model switch.
+
+For a returned worker, record the report and new failure evidence, diagnosis, distinct corrective
+change, selected capability and observed effective settings or unmet capability in the existing
+private brief/report and `progress.md`. Record every returned-worker dispatch in that history;
+`task-<N>.<attempt>` still counts only the one liveness replacement, so `NEEDS_CONTEXT` or
+`CANNOT_COMPLETE` re-dispatch keeps the current suffix. Before another dispatch, reconcile the
+prior worker's observed end, branch artifacts and ownership under dispatch-liveness and, inside
+`$quest`, verify the live claim under quest-log. Read existing malformed-return retries, review
+rounds, probes and replacement use from the ledger/handoff, including earlier models or sessions.
+Missing consumption is unknown, not zero; an exhausted allowance cannot be renewed by a model
+change. A returned-worker retry needs new failure evidence and a different evidence-backed brief,
+task, approved plan or effective tier. The same failure after that correction is a stop for
+diagnosis, not another attempt with the same correction. This adds no numeric retry allowance.
+
+Bounded examples for this decision, with all existing authorization gates still applying:
+
+| Observed case | Next action and budget disposition |
+|---|---|
+| A complete in-scope task fails a deterministic check because the worker cannot reason through it | Document the check and missing reasoning, then choose an available stronger tier for a distinct corrective dispatch; preserve dispatch history and existing allowances. |
+| The same failure returns after the same tier correction | Stop for diagnosis; do not send an unchanged failing prompt or count the model change as a new allowance. |
+| A service timeout prevents a task result | Follow transport recovery or hold; do not call it a reasoning failure or reset counters. |
+| No adequate stronger permitted model is available | Name the unmet capability and hold; do not guess an identifier or weaken final review. |
+| Review rounds or the one liveness replacement are exhausted | Keep each exhausted state; another tier grants neither a review pass nor a replacement. |
+| A worker asks to bypass safety or change approved scope | Stop at the owning safety or scope checkpoint; capability selection grants no authority. |
+| A successor sees partial scope, stale head, foreign claim or live predecessor | Reconcile under quest-log and dispatch-liveness before mutation; preserve prior budget use. |
+| A report identifies missing context that the brief omitted | Supply those facts, record the change and use the existing returned-worker route; do not infer a reasoning gap. |
 
 **A reported flake is dispositioned here, before the task is closed** — fix the
 determinism, or file it and record the reference. Filing is yours to do, not the
