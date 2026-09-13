@@ -24,6 +24,10 @@ Forge's task brief and dispatch are the direct callers of the inventory; the
 whole-branch reviewer is quest's direct caller. No executable entry point is
 removed. Retain `renewal.eligible(user)` in the evaluation as the ADR A-1
 compatibility path; it delegates to the new owner and does not duplicate policy.
+The manifest bump was applied with the design commit. Before the bump, with
+the design files staged, `BASE_SHA=284a0ea697feb3c34e9882235aca1e6465ac8406 just version-check`
+exited 1 because 5.5.0 did not increase; after setting 5.6.0 it exited 0.
+Tasks consume this verified manifest state and do not re-stage that red step.
 
 ## Global constraints
 
@@ -95,8 +99,8 @@ Update `skills/quest/SKILL.md`'s existing whole-branch review focus to ask
 whether intended ownership landed, all affected callers migrated, obsolete
 paths were removed, and protected contracts and justified compatibility paths
 survived. Use the approved design and actual branch diff as evidence. Keep
-review routing, finding severities, and merge authorization unchanged. Apply
-the reserved plugin version. Record four bounded evaluations against baseline
+review routing, finding severities, and merge authorization unchanged. Retain
+the already-applied reserved plugin version. Record four bounded evaluations against baseline
 and revised instructions in the spec's eval path, including failed or
 inconclusive outcomes; do not assert on prose.
 
@@ -107,27 +111,21 @@ inconclusive outcomes; do not assert on prose.
   a text assertion would test incidental wording, not reviewer behavior. The
   four fresh-context cases provide observation, and `just verify` gates the
   shipped structure.
-- Contract: installable plugin version.
-  Mode: focused-test. With `BASE_SHA=284a0ea697feb3c34e9882235aca1e6465ac8406`,
-  `just version-check` must fail while changed files retain `5.5.0`; after
-  setting `5.6.0`, the same command must pass.
 
 ### Steps and acceptance
 
-1. Run `BASE_SHA=284a0ea697feb3c34e9882235aca1e6465ac8406 just version-check`
-   before the bump; expect nonzero because the changed tree still says `5.5.0`.
-2. In quest's existing review-focus paragraph, require comparison of approved
+1. In quest's existing review-focus paragraph, require comparison of approved
    owner, direct callers, obsolete paths, protected contracts, and each retained
    compatibility path's contract/reason with the diff. Missing caller or
    unjustified independent policy is an in-scope finding; a delegating public
    facade with an accepted contract is justified.
-3. Set only `.claude-plugin/plugin.json` version to `5.6.0`, then rerun the
-   exact command from step 1; expect exit 0.
-4. Run the spec's four frozen packets once each with baseline and revised
+2. Run `BASE_SHA=284a0ea697feb3c34e9882235aca1e6465ac8406 just version-check`;
+   expect exit 0 with the committed `5.6.0` value.
+3. Run the spec's four frozen packets once each with baseline and revised
    instructions in fresh contexts. Record routes, source relationships cited,
    elapsed time, model/harness, revision SHAs, and inconclusive/failures in
    the eval path. No prose assertion becomes a gate.
-5. Run `just verify`; expect exit 0. Inspect the final diff for changes to
+4. Run `just verify`; expect exit 0. Inspect the final diff for changes to
    review frequency, claim/tracking, or merge rules; none are authorized.
 
 Acceptance: The existing branch review asks about the whole transition and

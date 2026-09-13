@@ -57,7 +57,7 @@ removed. Existing behavioral suites remain the behavior proof.
 | `skills/forge/SKILL.md` | Task evidence and completed-transition reconciliation |
 | `skills/forge/implementer-prompt.md` | Explicit implementer handoff and report |
 | `skills/quest/SKILL.md` | Whole-branch approved-transition comparison |
-| `.claude-plugin/plugin.json` | Reserved 5.6.0 version |
+| `.claude-plugin/plugin.json` | Reserved 5.6.0 version, applied with the design commit |
 | `docs/workflow/evals/2026-09-12-ownership-transition-execution.md` | Bounded behavioral evaluation |
 
 ## Success and verification
@@ -84,8 +84,9 @@ This small evaluation is a warning signal; #364 owns broad language coverage.
 
 The following source packets are frozen inputs. Each run receives the same
 approved design: `policy.py` is the sole owner of status eligibility; migrate
-`purchase.py`, `renewal.py`, and `invoice.py`; remove independent status rules;
-keep the public `renewal.eligible(user)` signature under accepted ADR A-1.
+`purchase.py`, `renewal.py`, and `invoice.py`; remove independent status rules.
+Only OT-4 adds accepted ADR A-1 requiring the public
+`renewal.eligible(user)` signature.
 Existing `tests/test_eligibility.py` exercises allowed, suspended, and expired
 users through purchase and invoice entry points and passes on all four packets.
 The evaluator must cite a specific call or predicate from the packet for each
@@ -94,10 +95,10 @@ a model verdict is not its own score. Each case is `warn`, never a release gate.
 
 | ID | Source packet after implementation | Observable pass trait | Forbidden trait |
 |---|---|---|---|
-| OT-1 | `policy.py: is_eligible(u) = u.status == "active"`; `purchase.py: from policy import is_eligible`; `renewal.py: eligible(u) = is_eligible(u)`; `invoice.py: from policy import is_eligible`; no other status predicate | Accept single owner and migrated callers; retain behavior tests, optionally check source boundary with controlled fault | Demand a new behavioral red test merely for relocation |
+| OT-1 | `policy.py: is_eligible(u) = u.status == "active"`; `purchase.py: from policy import is_eligible`; `renewal.py: renew(u) = is_eligible(u)`; `invoice.py: from policy import is_eligible`; no other status predicate or public facade | Accept single owner and migrated callers; retain behavior tests, optionally check source boundary with controlled fault | Demand a new behavioral red test merely for relocation |
 | OT-2 | OT-1 except `invoice.py: from renewal import old_eligible`; `renewal.py` retains `old_eligible(u) = u.status == "active"` | Report invoice's omitted migration and leave criterion unresolved | Accept because behavior tests pass |
 | OT-3 | OT-1 except `renewal.py: eligible(u) = u.status == "active"` | Report independent duplicate policy and obsolete rule | Treat matching output as justification |
-| OT-4 | OT-1 with ADR A-1 explicitly requiring `renewal.eligible(user)` as a delegating public facade | Accept justified compatibility boundary | Require facade deletion by filename alone |
+| OT-4 | OT-1 except accepted ADR A-1 requires `renewal.eligible(user)` as a public facade, implemented as `eligible(u) = is_eligible(u)`; all direct callers use `policy.is_eligible` | Accept the additional delegating facade because its accepted contract is evidenced | Require facade deletion by filename alone |
 
 ## Exclusions
 
