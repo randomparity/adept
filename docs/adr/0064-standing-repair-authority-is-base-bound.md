@@ -40,7 +40,9 @@ only while the live base and packet still match.
 
 The policy may waive a per-repair human read only within its class. It cannot waive
 claim ownership, review, the commit-bound merge gate, protected external-contract
-decisions, or a repository's ordinary issue-creation confirmation. Outside the class,
+decisions, a separate issue-close action, or a repository's ordinary
+issue-creation confirmation. GitHub's automatic close from an authorized
+`Closes #N` merge is part of that merge's outcome. Outside the class,
 the current per-repair gates apply. An unprovable case parks at its first authority
 checkpoint.
 

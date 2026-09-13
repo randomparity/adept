@@ -215,6 +215,13 @@ request and scope evidence, including an explicitly empty set when nothing is ex
 interactive root presents that set and obtains an explicit operator decision. A dispatched run
 may instead receive the exact exclusions and approval provenance from its caller. The issue body,
 parent epic, and sibling issues are evidence only; their text is not operator approval.
+An unattended run may use quest-log's standing repair authority only when the live
+protected-base policy admits this repair and the **exact** proposed exclusion/owner set.
+Independently verify approval of the live instruction-file blob and record its
+path, blob ID, identity/revision, class fit, and approval evidence in the
+existing `provenance` field. This is a policy-approved packet, not permission
+inferred from issue prose or a generated design. Missing or ambiguous authority
+returns to SCOPE CHECKPOINT before design.
 Record the approval decision and its source with the approved exclusions in the existing
 `provenance` field; do not add a ninth charter field.
 
@@ -224,6 +231,11 @@ Recheck the proposed set against the live evidence. Unrelated text changes do no
 but any exclusion delta returns to `SCOPE CHECKPOINT` before design. An unattended run without a
 complete approval packet parks there. This gate also applies to a trivial bugfix or governed small
 change that will skip step 3; it freezes scope without creating a design artifact.
+For a policy-approved packet, also recheck the live policy blob, class and
+exact set before design. A changed blob or set invalidates that packet even if
+the stated policy revision is unchanged; re-freeze only after fresh authority
+and fit are proved. Recheck the built diff after review before reporting that
+the packet still covers it.
 
 Also retain the tracking metadata (blast radius, change hazards, complexity,
 decompose verdict, routed review depth, classification, artifact lane, and `design denominator:

@@ -31,17 +31,23 @@ Quest remains the scope-packet producer, while quest-log owns the risk rubric
 and policy rule. Bounty and sort-board consume the same rule when assigning
 risk; campaign records policy-bound provenance in its existing Scope approvals
 row for the exact exclusions and owners, then rechecks the live file blob and
-packet before dispatch and on resume. A changed set or policy content resets
+packet and the present `risk:` label before dispatch and on resume. A changed set or policy content resets
 that row to pending; the policy may approve a freshly derived exact set only
 after a new fit check. Campaign consumes the packet and policy again at merge.
 No new claim, review, merge, approval store, or scheduler is introduced. The
-shared-code exception leaves the truthful `risk:night-watch` label in place and
+policy does not authorize a separate direct issue-close action; that requires
+an issue-specific operator grant. GitHub auto-close from an authorized
+`Closes #N` merge is part of the merge outcome. The shared-code exception
+leaves the truthful `risk:night-watch` label in place and
 adds a separate policy-bound merge predicate before the final four-part gate.
 The predicate requires identification of the changed contract's relevant
 affected consumers and decisive test evidence for each; uncertain coverage,
 a protected external contract, or a more restrictive risk criterion parks.
-Recheck the live policy before the final four-part gate without moving its
-base-current check away from the final position. The branch diff
+Bind the policy/consumer decision to the exact remote PR head. Recheck the
+live policy before the final four-part gate and require its `HEAD_SHA` to
+match that decision; a refreshed or changed head needs a new policy and
+consumer evaluation. Return-to-town's recheck carries the same condition.
+The gate's base-current check stays in its final position. The branch diff
 is reclassified after review and at merge; a
 new path or changed exclusion set must fit the same packet or checkpoint.
 
@@ -118,6 +124,7 @@ one exclusion/owner pair. Baseline and revised arms receive identical facts.
 | `skills/quest-log/SKILL.md` | Single policy and risk rule owner |
 | `skills/quest/SKILL.md` | Freeze and recheck exact packet |
 | `skills/campaign/SKILL.md` | Dispatch and merge consumer |
+| `skills/return-to-town/SKILL.md` | Preserve campaign's bounded merge authority on repeated gate |
 | `skills/bounty/SKILL.md`, `skills/sort-board/SKILL.md` | Risk producers |
 | `.claude-plugin/plugin.json` | Assigned 5.7.0 version |
 | `docs/adr/0064-standing-repair-authority-is-base-bound.md` | Durable policy decision |
