@@ -83,7 +83,15 @@ Worker (implementer):
        entries red then green. For `task-test-not-applicable`, preserve the exact
        reason and do not invent a prose search, snapshot, or unrelated assertion.
     3. Inventory the completed diff and reconcile every material changed contract
-       one-to-one with the plan before reporting.
+       one-to-one with the plan before reporting. When the brief selects an ownership
+       transition, reconcile its criterion-linked inventory against the actual changed
+       paths and direct callers: intended owner present; every affected caller migrated;
+       obsolete paths removed; protected contracts still exercised by existing behavioral
+       tests; and every retained compatibility path has its contract and reason. For a
+       meaningful structural boundary, the controlled violation must fail. A pure
+       relocation keeps its non-applicable reason and does not need an invented behavioral
+       red test. An omitted caller or unjustified independent duplicate is unresolved,
+       not DONE.
     4. Confirm the implementation actually works.
     5. Commit to [BRANCH_NAME] — the branch you verified in Placement.
     6. Review your own work, as set out below.
@@ -174,6 +182,9 @@ Worker (implementer):
     one-to-one. Every focused entry covers its named contract; every non-applicable
     entry still has no meaningful executable or structural observation. A newly
     discovered or reclassified contract is NEEDS_CONTEXT, not a silent plan repair.
+    For a selected ownership transition, the actual owner, direct callers, removals,
+    protected contracts, and retained compatibility paths reconcile with the brief's
+    criteria; an omitted caller or unjustified duplicate is unresolved.
 
     Anything you find here, fix before reporting rather than after.
 
@@ -199,6 +210,11 @@ Worker (implementer):
       the plan's exact reason and confirmation that the implemented contract stayed
       non-executable and non-structural;
     - the actual-diff inventory and its one-to-one reconciliation with those entries;
+    - for a selected ownership transition, the criterion-by-criterion reconciliation of
+      intended owner, affected direct callers and migration, obsolete paths, protected
+      contracts, and each retained compatibility path's contract and reason; name every
+      unresolved criterion, and record the existing behavioral-test result or the
+      meaningful structural boundary's controlled-fault result when applicable;
     - the files you changed;
     - anything your own review turned up;
     - concerns of any other kind.

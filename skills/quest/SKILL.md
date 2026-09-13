@@ -566,6 +566,14 @@ the preset as target-specific context. Name the selected lens beside the routed 
 transcript. This broad branch review retains the existing `gauntlet` route; the Security pass
 below retains the `detect-evil` route and its `security` lens.
 
+When the approved design selects an ownership transition, add its transition evidence to that
+review focus and compare it with the actual branch diff: the approved intended owner, every
+affected direct caller and migration, obsolete paths to remove, protected contracts, and each
+retained compatibility path's contract and reason. A missing caller or unjustified independent
+policy is an in-scope finding. A retained compatibility path is justified only when its protected
+contract and reason are evidenced; a delegating public facade with an accepted contract is not a
+finding merely because it remains in a separate file.
+
 On `iterating`, run `$trial-loop --reviewer gauntlet --base <BASE_BRANCH> <composed focus>`. On
 `single-pass`, dispatch the one `gauntlet` pass the reference specifies, with the same `--base`
 and composed focus, and give each finding its single disposition. On either route the review
