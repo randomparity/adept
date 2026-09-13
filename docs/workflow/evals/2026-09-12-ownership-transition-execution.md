@@ -6,6 +6,14 @@ without retries. The evaluator model is inherited and not exposed by the
 harness. Elapsed time is recorded as `<60s`: each run completed within its
 single 60-second harness wait, which does not expose an exact duration.
 
+The frozen plan budget was eight runs: four packets by two instruction
+variants. Twelve evaluator invocations actually occurred: eight valid retained
+runs and four invalid baseline attempts. Those four used Task 1 revision
+`d33b3780bc6c17ba53b10f20c1273a1a34d02277` rather than pre-change
+`284a0ea697feb3c34e9882235aca1e6465ac8406`, so they are excluded from the
+outcomes below. The attempted-run budget was exceeded to correct that setup
+error; this is not a measured-quality claim.
+
 Baseline forge, quest, and implementer instruction revision:
 `284a0ea697feb3c34e9882235aca1e6465ac8406` (`origin/main` before #362).
 Revised instruction revision: `8b19732b2c783d680824b8683320e8ec1686ac8b`.
@@ -25,7 +33,7 @@ The packets and expected traits are frozen in
 
 The four baseline rows were rerun from the pre-change forge, quest, and
 implementer instructions after a provenance correction; the original baseline
-observations are superseded and omitted. All retained rows use the frozen
-packet, matched instruction, and a fresh evaluator context. The observed error
-and inconclusive outcome in the revised rows remain limitations; no retry or
-prose assertion was added.
+observations are invalid and omitted. All retained rows use the frozen packet,
+matched instruction, and a fresh evaluator context. The observed error and
+inconclusive outcome in the revised rows remain limitations; no additional
+evaluation, retry, or prose assertion was added.
