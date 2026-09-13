@@ -63,6 +63,36 @@ and override or fallback basis. Distinguish a recommendation from settings actua
 unknown observations cannot prove a required capability. Keep account and endpoint details private.
 This is human-readable evidence, not a new schema or state store.
 
+## Escalation after difficulty or failure
+
+Classify the observed signal before changing capability. A worker's statement that it cannot
+complete a task is evidence to investigate, not proof that its model was too weak. Check the task,
+provided context, failure artifact and verification result against these routes:
+
+| Signal and evidence | Existing route | Tier decision |
+|---|---|---|
+| Demonstrated reasoning failure despite complete task context and a check that exposes the error | Correct the dispatch under the owning workflow | Consider a stronger available, permitted tier |
+| In-scope ambiguity or difficult verification shown by the task or check | Resolve the ambiguity or verification plan within approved scope | Select the adequate tier for that action |
+| Missing or wrong context named by the report and confirmed against the brief | Supply the specific missing or corrected context | Do not infer a capability gap |
+| Transport, authentication, rate limit or service failure before the task result is trustworthy | Use the owning recovery path or hold | Do not infer a capability gap |
+| Wrong plan, oversized task or changed scope | Return to the existing plan, split or scope checkpoint | No model change authorizes the revised work |
+| Safety restriction or denied authority | Stop at the owning safety or authorization gate | No model may bypass the restriction |
+
+Resolve any stronger tier through the ordinary availability, override and control checks above.
+An unavailable adequate model is a named unmet capability, not permission to guess an identifier,
+repeat the same prompt, or weaken the strongest-available final whole-branch review. For a later
+bounded unit, select a lower adequate tier only when the evidence that required the higher one no
+longer applies; changing tiers is not itself a corrective action or a new budget.
+
+Before a returned-worker retry, record new failure evidence and a distinct evidence-backed
+change to the context, task, approved plan or effective capability. If the same failure recurs
+after the same correction, stop for diagnosis instead of dispatching it again. Keep the returned
+dispatch history separate from existing malformed-return, review, probe and liveness-replacement
+allowances; preserve their cumulative use across model or session changes. Unknown consumption
+holds the dependent action, and an exhausted allowance stays exhausted. Use the owning workflow's
+predecessor-end, ownership and artifact checks before replacing a worker. Keep private evidence
+in its existing ledger or handoff, and record only public-safe outcomes in public trackers.
+
 ## Coordinator continuation at phase boundaries
 
 A settled phase boundary is an opportunity to reassess the coordinator's next decisions,
