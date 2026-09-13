@@ -65,6 +65,15 @@ requirement and acceptance criteria in your own words before touching code. Apar
 mandatory exclusion approval below, ask the user only when something is genuinely ambiguous
 *and* the answer changes the design; otherwise state your assumption and proceed.
 
+Before freezing the permitted surface, inspect the responsibilities affected by the criteria,
+their direct callers, and shared dependencies. Bound this inquiry to the affected behavior;
+do not inventory the repository. Where current ownership duplicates policy, misplaces a
+responsibility, or adds avoidable indirection, identify a credible ownership change and the
+caller migration or obsolete path it would require. A clean extension remains valid.
+Current file layout is evidence, not external scope authority. If a public, persisted, or
+security contract or an accepted decision would change, resolve its authority at SCOPE
+CHECKPOINT rather than treating the move as permission.
+
 Classify the work:
 
 - **Trivial bugfix** -- clear acceptance criteria; no API, schema, auth,
@@ -194,6 +203,12 @@ Record all eight fields:
 - `surface` -- permitted change surface and direct dependencies;
 - `ambiguities` -- unresolved design-changing ambiguities, or explicit empty;
 - `interaction` -- the root value above.
+
+Use the existing outcome, criteria, surface, and ambiguity fields to retain the bounded
+ownership evidence and intended owner, affected caller migration, obsolete-path removal,
+and any protected contract or justified compatibility path. Link a proposed move or retained
+path to its completion criterion; file count alone does not justify or reject it. Do not
+add a charter field or absorb unrelated restructuring into the surface.
 
 **Approve the exclusions before freezing.** Propose concrete non-goals and their owners from the
 request and scope evidence, including an explicitly empty set when nothing is excluded. An

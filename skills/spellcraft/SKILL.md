@@ -135,7 +135,14 @@ understood and tested by itself. If you cannot say what a unit does without
 reading its internals, or cannot change those internals without breaking its
 callers, the boundary is in the wrong place. In an existing codebase, follow
 the patterns already there and fold in targeted improvements to the code this
-change actually touches — and propose no unrelated refactoring.
+change actually touches — and propose no unrelated refactoring. When affected
+responsibilities or callers reveal duplicated policy, misplaced ownership, or avoidable
+indirection, compare a clean extension with credible reuse, move, consolidation,
+replacement, or deletion. Choose the simpler coherent design linked to frozen criteria.
+A clean extension needs no move; a justified move is not out of scope merely because it
+touches more files. Keep protected public, persisted, and security contracts and accepted
+decisions unless the frozen charter or a later explicit decision authorizes changing them;
+otherwise return to SCOPE CHECKPOINT.
 
 Cut ruthlessly while the design is still cheap to cut. A feature nobody asked
 for costs the same to maintain as one somebody did.
@@ -465,14 +472,19 @@ task to a context-free implementer that cannot ask you what a step meant.
 If the spec still spans several independent subsystems, say so and split it —
 one plan per subsystem, each producing working, testable software on its own.
 
-**Map the files before defining any task.** Which files get created, which get
-changed, and what each is answerable for. Decomposition gets settled here
+**Map the files before defining any task.** Which files get created, changed, moved, or
+removed, what each currently owns, and what it will own. Link the intended owner to a
+completion criterion; identify affected callers, their migration, obsolete paths to remove,
+and any compatibility path retained with its contract and reason. Fit the same evidence into
+the existing Scope and Validation sections of a light spec, without another document or
+exceeding its caps. Decomposition gets settled here
 whether or not you do it deliberately, so do it deliberately instead of letting
 it emerge one task at a time. Keep files focused — one clear responsibility each, split by
 responsibility rather than by technical layer, with things that change together
-living together. In an existing codebase, follow the patterns already there
-rather than restructuring unilaterally, though a split is reasonable to plan for
-a file you are modifying that has grown unwieldy.
+living together. In an existing codebase, use the bounded ownership comparison from step 1:
+extend a coherent owner or plan the criterion-linked transition, including caller migration
+and obsolete-path removal. Do not turn unrelated cleanup into a dependency or preserve an
+old path without a protected-contract reason.
 
 **Right-size the tasks.** Draw the boundary where a review verdict could
 plausibly differ on either side of it: if no reviewer could accept the work
