@@ -22,7 +22,7 @@ this change adds no executable dependency or target-specific behavior.
 
 Forge's task brief and dispatch are the direct callers of the inventory; the
 whole-branch reviewer is quest's direct caller. No executable entry point is
-removed. Retain `renewal.eligible(user)` in the evaluation as the ADR A-1
+removed. In OT-4 only, retain `renewal.eligible(user)` as the ADR A-1
 compatibility path; it delegates to the new owner and does not duplicate policy.
 The manifest bump was applied with the design commit. Before the bump, with
 the design files staged, `BASE_SHA=284a0ea697feb3c34e9882235aca1e6465ac8406 just version-check`
