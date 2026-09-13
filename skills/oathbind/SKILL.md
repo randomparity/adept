@@ -32,6 +32,14 @@ criterion that requires it. Challenge unsupported guarantees, absorbed adjacent 
 dependencies on exclusions, and unnecessary persistence, authentication, schema, permission,
 concurrency, operational, file, test, or runtime surface.
 
+For a proposed ownership change, trace the current and intended owner to the sourced
+criterion, then check affected callers, their migration, obsolete paths, and the reason for
+each retained compatibility path. Compare this transition with a clean extension. A move is
+not expansion merely because it changes more files, but a missing caller, unexplained
+leftover path, or unapproved public, persisted, or security contract or accepted-decision
+change is a finding. Checkpoint unrelated restructuring rather than treating the design's
+file map as new authority.
+
 Compare the aggregate design with a materially smaller viable alternative. Behavior owned by
 another issue is a checkpoint or a split, never an in-scope dependency shortcut. A concern this
 change depends on or worsens cannot be deferred. Preserve uncertainty in provenance, ownership,
