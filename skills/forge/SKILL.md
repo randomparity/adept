@@ -57,6 +57,16 @@ supported mode:
 - `task-test-not-applicable` names the changed surface and explains why no task-specific
   executable or structural observation could fail meaningfully.
 
+When the approved design selects an ownership transition, every affected task's existing
+inventory and brief must also carry its criterion-linked transition evidence: current and
+intended owner; every affected direct caller and its migration; obsolete paths to remove;
+protected contracts; and every retained compatibility path with its protected contract and
+reason. Link each fact to the design criterion and task that consumes it. A meaningful
+structural boundary uses `focused-test` and its controlled violation must fail; existing
+behavioral tests remain the behavior proof. Pure prose and a pure relocation with no meaningful
+new executable or structural observation retain `task-test-not-applicable`; do not invent a
+behavioral red test for either.
+
 Reject an omitted, vague, or contradicted entry at the plan checkpoint. File type, task size,
 convenience, and repository guardrails are not reasons. Changed script behavior, parsers, schemas,
 record shapes, validation rules, generated artifacts, and other machine-checkable contracts use
@@ -446,7 +456,15 @@ and incrementing would spend a replacement budget no recovery consumed.
    reverted. Running it at HEAD proves nothing about whether it could ever have
    failed, which is the whole of what this step establishes.
 7. Inventory the actual task diff and reconcile its material contracts one-to-one with the plan
-   and report. An unmatched or reclassified contract returns to the plan checkpoint.
+   and report. For an ownership transition, compare the actual changed paths and direct callers
+   with its transition evidence: the intended owner is present; every affected caller migrated;
+   each obsolete path is removed; protected contracts remain exercised by existing behavioral
+   tests; and every retained compatibility path still has its contract and reason. Where a
+   meaningful structural boundary is named, confirm its controlled violation failed. A missing
+   caller, retained independent duplicate, unprotected contract, unjustified compatibility path,
+   unmatched, or reclassified contract is unresolved and returns to the plan checkpoint; it is
+   not a completed task. A pure relocation keeps its non-applicable reason and does not acquire
+   an invented behavioral red test.
 8. Mark the task complete in the todo list and append exactly one line, using `mixed` when both
    modes occur: `Task N: complete (commits <base-sha>..<head-sha>, verification
    <focused-test|task-test-not-applicable|mixed>, red <confirmed=<n>,
@@ -648,6 +666,10 @@ contract still determines their inputs.
 - applicable `AGENTS.md` conventions
 - exact guardrail commands to run before committing
 - the task's complete Verification inventory and the contract-evidence rules below
+- for every selected ownership transition, the brief's criterion-linked inventory of current and
+  intended owner, affected direct callers and migration, obsolete paths, protected contracts, and
+  each retained compatibility path's contract and reason; state that an omitted caller or
+  unjustified duplicate is unresolved rather than DONE
 - the report-file path, named after the brief (`…/task-N-brief.md` →
   `…/task-N-report.md`)
 - the **worker report contract** (`AGENTS.md`), last, so the implementer
