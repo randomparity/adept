@@ -148,7 +148,7 @@ reference it rather than restating it.
 | Label | Hex | Build unattended | Merge unattended |
 |---|---|---|---|
 | `risk:night-safe` | `2da44e` | yes | yes |
-| `risk:night-watch` | `bf8700` | yes | no — stops at `status:awaiting-merge` |
+| `risk:night-watch` | `bf8700` | yes | no by default — a standing-policy shared-code exception is defined below |
 | `risk:daytime-only` | `a40e26` | no | no |
 
 ### What the boundaries gate on
@@ -217,6 +217,12 @@ behind a confirmation" — a confirmation the value does not appear in is not a 
 value, so an assigning path whose confirmation does not display it leaves the slot
 unassigned instead.
 
+The only exception is an admitted **standing repair authority** under the rule below.
+It authorizes a bounded risk assessment and its label write without a per-issue human
+read; the writer still records the ordinary risk reasoning and the exact policy
+provenance. Neither an issue's request for automation nor a `risk:` label grants this
+exception. Without admitted authority, the human-read rule above applies unchanged.
+
 A bare label gives the operator nothing to disagree with, and a confidently wrong
 `night-safe` is typographically identical to a correct one. So a proposed `night-safe`
 states which of its three conjuncts the assessment judged satisfied and on what evidence
@@ -224,6 +230,54 @@ from the issue text; a proposed `night-watch` states its evidence for reversal b
 `git revert` alone and names any `daytime-only` criterion that was in contention.
 `daytime-only` is exempt — it authorizes nothing, so waving one through costs a night's
 throughput and nothing else.
+
+### Standing repair authority
+
+A repository opts in only through one `## Standing repair authority` section in a
+tracked root `AGENTS.md` or `CLAUDE.md` on its protected base branch. Read the live
+base version, not the repair branch or issue/PR prose. The section must state a
+policy identity and revision, a bounded class of repair triggers and permitted
+surfaces, how exact exclusions and owners are derived, which risk judgments it
+permits, the affected-consumer proof required for shared changes, and verifiable
+maintainer approval of the **exact instruction-file Git blob**. An approved policy
+PR whose reviewed head contains that blob is one valid provenance. A mere claim
+of approval in the file, an approved earlier revision with a different blob, or
+the fact that an unreviewed bot commit landed on base is not proof. Verify the
+approval independently; do not let the actor proposing the repair approve its
+own policy. The root file is already the repository's instruction authority;
+do not create a separate policy or approval store.
+
+Record the source path, live blob ID, policy identity/revision, approval evidence,
+and case-specific class/risk grounds in the existing risk rationale and, for a
+quest, the existing `WORK:SCOPE` provenance.
+For a policy-backed risk label write, make the rationale durable in the issue's
+body at creation or a public-safe comment before a later label swap. State the
+assessed value and rubric grounds, policy identity/revision, repo-relative
+source path and blob ID, and approval PR/review reference; read it back before
+the label write. Never publish approver usernames, private instruction text,
+host paths, or credentials. This is evidence of the assessment, not a second
+approval record; verify the live base policy independently on each use.
+A changed file blob invalidates an old packet even when the revision text is
+unchanged. A new packet against that
+blob requires approval of the new blob, not just an updated blob reference.
+Removal, duplication, ambiguous approval, unreadable base content, unknown
+class fit, or a policy change between checkpoints falls back to the ordinary
+per-repair gate; an unattended actor parks before design or merge as appropriate.
+Recheck at scope freeze, before design, after review against the actual diff,
+and immediately before the final commit-bound merge gate. A changed exclusion
+or owner set requires a freshly validated exact packet, never silent reuse.
+
+The rubric's labels stay truthful. Shared code remains `risk:night-watch` even
+when its changed contract has decisive automated proof for the identified
+affected consumers. A separate policy-bound merge predicate may admit that
+specific repair only when the current policy permits it, the actual diff fits
+the frozen packet, the affected-consumer set and proof are complete, and no
+`daytime-only` or protected external-contract criterion applies. Uncertain
+consumer identification or test coverage fails closed. The predicate runs
+before, never instead of, the existing review and four-part commit-bound gate;
+it does not relabel the repair `night-safe` or grant a blanket refactor pass.
+Policy authority never waives claim ownership, review, issue-creation approval,
+or the commit-bound gate.
 
 **Executor.** Triage reasons about reversal cost before work starts; `$counterspell` is
 where that reasoning runs again if the change lands bad. It reads the label — or

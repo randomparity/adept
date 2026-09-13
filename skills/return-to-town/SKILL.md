@@ -100,8 +100,11 @@ authorization holds in exactly two cases:
 - a direct human instruction this session (including a goal you typed asking for
   these issues to be *merged* — distinct from a `$trial-loop` stop goal, which
   never authorizes a merge), or
-- you are the **`$campaign` orchestrator itself** and merging is its stated
-  completion condition.
+- you are the **`$campaign` orchestrator itself** and it carries a human
+  invocation, an issue-specific operator merge grant, or a live standing-policy
+  admission for this exact row and remote head SHA. A re-run of this skill's
+  merge gate that observes a different SHA returns to campaign for fresh
+  policy, diff and affected-consumer evaluation before any merge.
 
 Authorization does **not** inherit through delegation. If you are a `$quest`
 run that a `$campaign` dispatched — inline or as a subagent — you are **not**
@@ -154,9 +157,15 @@ standalone, the same applies: once cleanup is verified, report and stop.
 The default hand-off path already posted its `WORK:TRAJECTORY` above. This section covers the
 operator-merge path only:
 
-- **Operator-merge path** (you merged, above): if `Closes #N` did not auto-close the issue,
-  close it; strip its `status:` labels; post a `WORK:TRAJECTORY` comment on the issue with
-  `outcome: merged via PR #N`, guardrail status, and any surprises.
+- **Operator-merge path** (you merged, above): read the issue's state. If `Closes #N`
+  did not auto-close it, close it only when this was a human-run merge or an
+  independently verified operator grant covers closure of this exact issue.
+  A standing repair policy grants no separate close action. Without closure
+  authority, return `MERGED_ISSUE_OPEN` to campaign with the actual PR and issue
+  state; leave its labels intact and let campaign park it for operator
+  reconciliation. After verified closure, strip its `status:` labels and post
+  a `WORK:TRAJECTORY` comment with `outcome: merged via PR #N`, guardrail
+  status, and any surprises.
 - **Restock PR-only path:** do not invent or close an issue and do not reconcile cleared
   dependents. After the guarded merge, complete the pending/applied terminal trajectory on the pull
   request and remove its `status:` labels. Terminal tracking precedes unit cleanup.
@@ -171,7 +180,9 @@ operator-merge path only:
 
 The operator-path issue writes above run only when this invocation performed the merge. On an
 entry snapshot that was already `MERGED`, do not repeat them; verify the merged issue's current
-closed state, then perform the shared dependent reconciliation below.
+closed state. A merged-but-open issue returns `MERGED_ISSUE_OPEN` for operator
+reconciliation without an inferred close grant. Perform shared dependent
+reconciliation below only after verified closure.
 
 #### Release cleared dependents
 

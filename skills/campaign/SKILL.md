@@ -22,9 +22,15 @@ completed guardrails, and next awaited event. Mark unavailable facts unknown or 
 never infer them from elapsed time or silence. Use one compact sentence for one row and the
 existing status table for several rows.
 
-**Authorization.** Invoking `$campaign` authorizes you to auto-close issues shown as
-already-fixed and self-merge only after the four-part gate passes for one `HEAD_SHA`. This
-authorization stays with the orchestrator — never propagate merge rights to workers. Each
+**Authorization.** A human invoking `$campaign` authorizes you to auto-close issues shown as
+already-fixed and self-merge only after the four-part gate passes for one `HEAD_SHA`.
+An unattended workflow invoking this skill grants neither action by invocation alone:
+closing needs a verified, issue-specific operator closure grant; merging needs
+an issue-specific operator merge grant or quest-log's admitted standing policy
+for that repair and head. The standing repair policy never authorizes a
+separate issue-close action or replaces the four-part merge gate; GitHub's
+auto-close from an authorized `Closes #N` merge is part of that merge. This authority
+stays with the orchestrator — never propagate merge rights to workers. Each
 `$quest` stops only after review and publishes its matching `MERGE-READY` handshake; the
 orchestrator verifies the gate and handles the merge.
 
@@ -161,12 +167,23 @@ Status progression: `pending → triaged → in-flight → merged | closed | blo
 
 The Scope approvals table has one unique row for every queued `fix` verdict. Encode `&` and `|`
 as for the other manifest tables. Normalize exclusions as an order-independent set of
-exclusion/owner pairs after collapsing whitespace. `Approval provenance` is either `pending` or
-the durable record of the operator confirmation that displayed this exact exclusion set. On
+exclusion/owner pairs after collapsing whitespace. `Approval provenance` is `pending`,
+the durable record of the operator confirmation that displayed this exact exclusion set,
+or the standing-policy provenance defined below. On
 resume, re-derive the proposed exclusions from live scope evidence. Preserve the approval when
 the normalized set is unchanged; unrelated issue or epic edits do not invalidate it. Replace it
 with `pending` when the set changes. Older manifests add this section empty and populate it during
 triage before any fix dispatch.
+
+For an unattended repository with quest-log's admitted standing repair authority,
+`Approval provenance` may instead record the policy identity/revision, tracked
+base instruction path and exact blob ID, independently verified maintainer
+approval of that blob, and this row's exact exclusion/owner set and class fit.
+This is an alternative provenance value in the **existing row**, not a second
+store or blanket approval of later discoveries. On resume and before dispatch,
+re-read the live base, approval evidence and exact proposed set. A changed
+blob or set resets the row to `pending` until a fresh policy admission is
+proved and recorded; a same-revision file edit still invalidates it.
 
 The pending-occurrence table is not a fix queue. Validate unique occurrence numbers, the three
 normalized states shown above, and a non-empty state reason. `CLOSED` remains pending unless its
@@ -309,6 +326,13 @@ Take one explicit operator confirmation over all displayed `pending` rows, recor
 in each matching manifest row, and read those rows back before their first dispatch. A prior
 approval carries across workers and campaign resume only while its normalized exclusion set and
 owners remain unchanged; an exclusion delta returns the row to `pending`.
+An unattended root may move a `pending` row to policy-bound provenance only
+after validating quest-log's live protected-base authority for that issue and
+its exact exclusions/owners; read the row back before dispatch. No policy,
+inconclusive proof, or out-of-class evidence leaves it `pending` and held.
+Before unattended dispatch, also read the issue's single-active `risk:` value.
+An absent, ambiguous, or more restrictive value than the proposed repair
+permits holds the row; a policy packet does not fill an absent risk label.
 
 An unattended root proceeds only with unchanged, already-approved rows. Hold a `pending` row
 before design, name the missing approval in the run output, and continue draining the rest of the
@@ -340,6 +364,12 @@ and drains the rest; it never splits an issue on its own authority and never dis
 gate.
 
 Emit the after-plan progress update before the first close or dispatch.
+
+On an unattended run, hold a close-candidate or close-not-planned row before
+its first comment or close unless an independently verified operator grant
+authorizes closure of that exact issue and reason. A standing repair policy
+cannot supply this separate grant; retain the row as issue-local blocked work and
+continue draining fixes.
 
 Execute **close-candidates** (all remaining ones are confirmed — rejected/inconclusive candidates were re-routed in step 3): post research comment citing fixing code/PR, `gh issue close` each. Set `Status: closed`, append to outcomes log before removing from queue.
 
@@ -384,6 +414,10 @@ Each prompt carries:
 - Exact approved exclusions and owners, their operator-approval provenance, and the relevant epic
   direction copied from the manifest. The quest rechecks the exclusion set and stops before design
   if it changed; the worker does not ask again when it is unchanged
+- For a policy-approved row, copy the exact policy path, blob ID,
+  identity/revision, approval evidence and class fit instead of claiming an
+  operator approved this repair. Quest rechecks live base authority and
+  freezes its own matching `WORK:SCOPE` packet before design
 - The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
@@ -478,7 +512,7 @@ Immediately before a potentially long PR verification, branch-refresh guardrail/
 
 **Verify each issue's PR before merging it.** Green + mergeable says CI passed and Git can fast-forward — neither says the PR contains the work you dispatched. Two `gh` queries answer that; if either fails twice, hold rather than merge, since the merge is the irreversible half. (Your own ADR-index PR below has no issue and no manifest row, so none of this applies to it.)
 
-- **The PR must close its assigned issue** — `gh pr view <PR> --json closingIssuesReferences`. A reference to any *other* issue takes the hold below: merging closes a row the campaign may still have queued, and a later resume reads that close as already-fixed. A missing reference is recorded and left to the post-merge auto-close check below.
+- **The PR must close its assigned issue** — `gh pr view <PR> --json closingIssuesReferences`. A reference to any *other* issue takes the hold below: merging closes a row the campaign may still have queued, and a later resume reads that close as already-fixed. A missing reference is recorded and left to the post-merge auto-close check below. For an unattended policy-authorized merge, a missing assigned-issue reference holds **before merge** unless an issue-specific operator closure grant exists; policy authority cannot supply that grant.
 - **List its changed files** — `gh pr diff <PR> --name-only`, on every PR, including a row step 3 adopted with no scope assigned; that PR has no worker report behind it, so the list is worth more there, not less. Never `gh pr view --json files`: that field returns the first 100 paths and says nothing about the rest, so it reports a clean prefix of the largest PRs. A diff that succeeded and listed nothing blocks — nothing was changed, so nothing can be carrying the fix.
 - **Compare that list against the issue's `File scope` cell from step 4.** A path is in scope when the cell names it, names a directory above it, or holds a glob whose directory is above it. A cell still at `—`, or holding nothing that parses as a path, leaves nothing to compare — record that and read every path through the next bullet, rather than treating an absent hint as a mismatch.
 - **Paths outside the scope do not block by themselves.** Step 4 assigns scope as a hint, and a correct fix routinely touches a file the plan didn't predict; a check that hard-blocks on any deviation fires on legitimate work and gets routed around. A path is accounted for when the PR body, a commit message, or the worker's report ties it to **the assigned issue**, or when this step itself mandated the change (the ADR index under `coupled` coupling, your own branch refresh, your own artifact regeneration). Everything else is **unrelated** — hold that one merge for the operator's decision. A path tied to a *different* tracked issue most needs that decision rather than being exempt from it: merging it lands a sibling's work early and can auto-close a row still queued. Never split, revert, or cherry-pick inside the PR; that surgery is undefined here and risks discarding work.
@@ -490,6 +524,28 @@ Whether the PR *implements* its issue is not what any of this answers: the refer
 Apply [the commit-bound merge gate](../../references/merge-gate.md) before each issue-backed
 merge in this step. The reference is the complete normative gate; green + mergeable alone is
 not authorization to merge.
+
+For every unattended merge without an issue-specific operator grant, first
+read the issue's `risk:` labels and apply quest-log's absence and multi-value
+rules. A missing label or a label less restrictive than the current diff
+classification holds the merge until the risk producer corrects it. Bind the
+policy decision to the exact remote PR head SHA whose diff and consumer proof
+were inspected. Reclassify that actual reviewed diff using quest-log's rubric
+and recheck the live policy, frozen `WORK:SCOPE` packet and this row's approval
+provenance. A protected
+external contract or any `daytime-only` criterion parks for a separate
+operator decision. Shared code stays `risk:night-watch`; allow its automatic
+merge only if the policy explicitly admits that repair and decisive tests
+cover the identified affected consumers of its changed contract. An
+unidentified or unproved consumer, a new path outside the packet, changed
+exclusions, stale policy blob, or incomplete approval evidence holds that
+merge. Run these checks before the **final** four-part gate and require its
+`HEAD_SHA` to equal the policy-evaluated SHA. If the head changes, the base is
+refreshed, or `$return-to-town`'s repeated gate sees another SHA, redo policy,
+diff and consumer evaluation for the new head before any merge; never reuse
+the old verdict. The gate's fresh-base check keeps its immediately-before-merge
+position. Explicitly human-run campaigns retain their existing merge
+authorization and review gates.
 
 As each issue's pull request passes the four-part merge gate above — all four parts, for
 one `HEAD_SHA` — run `$return-to-town` (you are authorized), which re-runs the gate and
@@ -534,7 +590,12 @@ The end of run does not by itself hand you the branch. The worker never removes 
 - **`not coupled`** (index exists, not CI-gated): workers write only the ADR file, report `index row pending`. You append all pending rows **once** after wave's last PR merges, on its own branch.
 - **`coupled`** (index is CI-gated): workers add their own rows in their PRs. You resolve adjacent-insertion conflicts during the serial-merge branch refresh. Expect no `index row pending` reports.
 
-Verify auto-close: `gh issue view <n> --json state` after merge. If still open, close explicitly and note why. Record outcome in manifest before moving to next PR.
+Verify auto-close: `gh issue view <n> --json state` after merge. If still open,
+close explicitly and note why only for a human-run campaign or an independently
+verified issue-specific closure grant. An unattended policy-authorized row
+without that grant stays open and blocked for operator reconciliation; the
+merge itself does not grant a second closure action. Record the actual outcome
+in the manifest before moving to the next PR.
 
 After each verified merge outcome is recorded, emit the after-merge progress update required by the top-level contract before advancing to the next row or finalization.
 

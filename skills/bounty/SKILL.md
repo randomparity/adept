@@ -95,6 +95,13 @@ operator confirmation.
    decline there stays declined rather than being undone by the next `$bounty` run. Show the
    value's reasoning in the step-6 draft, per the human-read invariant.
 
+   A quest-log standing policy may supply the risk assessment without a
+   per-issue human read only when its exact base-file blob is independently
+   approved and the new issue fits its bounded class. Carry the policy path,
+   blob ID, identity/revision, approval evidence, and ordinary risk reasoning
+   in the draft. This does not waive step 6's confirmation to create the issue;
+   an unattended call without that separate authority still stops there.
+
    `risk:` is deliberately **not** part of the born-ready conjunction above. Born-ready
    governs eligibility for *daytime* work; `risk:` gates only unattended work, and coupling
    them would park every issue the dimension has not reached.
