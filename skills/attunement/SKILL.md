@@ -159,6 +159,16 @@ re-invoking after an apparent timeout restarts the suite instead of ending
 it. Repo instruction files often name such hazards; carry them into the
 record so a reader of the task plan does not have to find them there.
 
+**Verification results.** In this same task plan or durable workflow record,
+carry each result that later work may consult: tested commit/tree, paths and
+content identity of relevant dirty or untracked inputs, exact command and
+scope, exit status and output reference, environment and target, and observed
+duration. Record no result for a command that has not run; keep its cost as
+`unknown` until measured. On resume, compare these facts with current inputs
+and scope using [true-seeing](../../references/true-seeing.md) before making a claim or
+reusing a baseline. Missing facts do not establish applicability; failed,
+cancelled, incomplete, and flaky results cannot support a passing claim.
+
 Also identify mandatory per-PR edits shared by concurrent branches: paths that
 a repository rule requires every pull request to change, such as release
 metadata. Record each path, its governing rule, its value or ordering
