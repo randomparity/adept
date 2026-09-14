@@ -449,7 +449,8 @@ parks, and `build-complete` resumes from the parsed handoff without calling `$fo
 its mode rule below. Never replace an existing same-issue, same-scope handoff.
 
 Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the selected artifact lane and
-run the guardrail suite. For `light-spec`, pass the lane, validated complexity and hazards, and
+require its assembled-branch guardrail results; do not repeat that suite solely for this
+handoff. For `light-spec`, pass the lane, validated complexity and hazards, and
 the spec path, with no plan path. For `full-spec`, pass the plan path. For a
 `governed-small-change`, pass the classification and revalidated decision
 evidence (reference, kind, accepted status, governed behavior, acceptance
@@ -774,7 +775,10 @@ is where a human is reliably present to run it.
 
 ## 7. Simplify
 
-Run `$dispel` on the branch diff, re-run the guardrails, and commit.
+Run `$dispel` on the branch diff. If it makes an edit, use the checks `$dispel`
+ran for that edit and commit it; if it makes no edit, add no check run or empty
+commit. The assembled-branch and shipping checks remain separate obligations,
+not reasons to repeat them solely for this step.
 Quality only -- do not reopen settled design decisions. Step 6 reviewed the
 pre-simplify code, so if simplification changed behavior (anything beyond a
 pure rename or format), re-run `$trial-loop` -- or at minimum `$gauntlet` --
