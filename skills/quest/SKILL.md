@@ -449,7 +449,7 @@ parks, and `build-complete` resumes from the parsed handoff without calling `$fo
 its mode rule below. Never replace an existing same-issue, same-scope handoff.
 
 Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the selected artifact lane and
-require its assembled-branch guardrail results; do not repeat that suite solely for this
+require its assembled-branch integration results; do not repeat those checks solely for this
 handoff. For `light-spec`, pass the lane, validated complexity and hazards, and
 the spec path, with no plan path. For `full-spec`, pass the plan path. For a
 `governed-small-change`, pass the classification and revalidated decision
@@ -777,8 +777,8 @@ is where a human is reliably present to run it.
 
 Run `$dispel` on the branch diff. If it makes an edit, use the checks `$dispel`
 ran for that edit and commit it; if it makes no edit, add no check run or empty
-commit. The assembled-branch and shipping checks remain separate obligations,
-not reasons to repeat them solely for this step.
+commit. The assembled-branch integration and final-candidate checks remain
+obligations, not reasons to repeat them solely for this step.
 Quality only -- do not reopen settled design decisions. Step 6 reviewed the
 pre-simplify code, so if simplification changed behavior (anything beyond a
 pure rename or format), re-run `$trial-loop` -- or at minimum `$gauntlet` --
@@ -1027,6 +1027,8 @@ branch and the worktree in place for whoever merges; the reclaim is theirs.
 Include every public-safe follow-up-candidate row from step 6 in the completion
 report so a campaign caller can route it without rereading a private findings
 artifact. Do not return its scratch path.
+Carry `$deliver`'s full local run count, reasons, and observed total duration into
+that report, with CI stated separately and unknown durations left unknown.
 
 When this path is authorized to merge, apply
 [the commit-bound merge gate](../../references/merge-gate.md). The reference is the complete

@@ -128,6 +128,14 @@ package scripts, `pyproject.toml`, `Cargo.toml`, or `.github/workflows/`.
 Record the exact commands in the task plan. Note which checks CI hard-gates
 **individually** vs. only via an aggregate recipe — a guard added to an
 umbrella `ci` target may not gate PRs if CI calls the sub-recipes directly.
+Separate iteration checks, assembled-branch integration checks, the full local
+suite, mandatory push hooks, and CI. Inspect the effective installed hook as
+well as its installer and target to establish whether it runs the full suite,
+what object it tests, and whether it blocks a failed push; its name proves none of
+these. Name the owner of final full local verification before scheduling it:
+the mandatory full hook when it covers the pushed candidate, otherwise an
+applicable earlier result or an explicit final run. Record any repository rule
+that requires a separate full run even when the hook covers the same candidate.
 
 Where the repo keeps an ADR index, also determine whether a gated check couples
 the two — an ADR file requiring a matching index row, or the reverse. Read the
@@ -146,6 +154,8 @@ layered on top of a measurement, and an unrun command supports neither claim.
 `unknown` tells the reader to bound the first run generously; a duration tells
 them what every later run costs. Update the entry when a later run replaces
 an `unknown`.
+Record cost and coverage separately for each phase and hook; a fast focused
+check does not inherit the full suite's coverage or duration.
 
 **Prerequisites.** Everything the command needs that a default checkout does
 not supply: installed tools with version floors, one-time setup targets such
