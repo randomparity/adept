@@ -189,10 +189,19 @@ never paper over it with a `.gitignore` entry.
 If `git worktree add` fails on a sandbox permission denial, say the sandbox
 blocked it, work in the current directory, and run setup and baseline there.
 
-**Then set up and verify a clean baseline.** Install dependencies for whatever
-manifests are present — `package.json`, `Cargo.toml`, `requirements.txt`,
-`pyproject.toml`, `go.mod` — and run the project's test command. A baseline you
-did not check is a baseline that gets blamed on your change.
+**Then set up and verify a clean baseline.** Check the checkout's local
+prerequisites and readiness; install missing dependencies for applicable
+manifests — `package.json`, `Cargo.toml`, `requirements.txt`, `pyproject.toml`,
+`go.mod`. Reuse a recorded successful baseline only if it covers the exact
+base, its tested inputs (including dependencies, configuration, generated and
+untracked files), command scope, and applicable environment/target. Compare
+the evidence under [true-seeing](../../references/true-seeing.md); a commit ID
+alone does not prove this checkout's baseline, and CI results support only
+their recorded environment, not unrun local or target-specific checks. If the
+record is missing, incomplete, or inapplicable, run the project's test command
+and record the result. Do not reuse a failed, cancelled, incomplete, or flaky
+result as a clean baseline. A baseline you did not check is a baseline blamed on
+your change.
 
 On a failing baseline the response depends on who is reachable:
 
