@@ -660,9 +660,14 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    to an interactive root or park an unattended root; do not fix, defer,
    subtract, or iterate it. If any finding is `blocked`, stop and report the
    blocker; do not proceed.
-8. Run the relevant guardrails (discovered via `$attunement` if part of a
-   workflow, or the repo's standard check suite) before committing. Commit one
-   logical change at a time with an imperative subject of 72 characters or
+8. For a fix, run tests covering changed behavior and affected callers or shared
+   boundaries, plus applicable lint, type, and structural checks (discovered via
+   `$attunement` if part of a workflow). Select by impact, not only edited files;
+   broaden and state why if impact cannot be bounded. Record commands, coverage
+   reasons, and results. A review pass with no edit adds no check run or empty
+   commit. A pass ending or commit being next does not itself require the full
+   suite. Honor required repository hooks. Commit one logical change at a time
+   with an imperative subject of 72 characters or
    fewer, ending with the project's required `Co-Authored-By` trailer if the
    repo requires one. Stage **explicit paths only** — never `git add -A` or
    `git commit -am` — so the findings scratch file is never swept into a commit.
@@ -677,9 +682,10 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
 ## Stop conditions
 
 **On every exit, whatever the verdict:** if the run reviewed the **working tree** *and
-this exit ends the run*, run the relevant guardrails and then
-commit its accumulated fixes now — this is the only place every exit passes through,
-and step 8 deferred to here. Step 8's discipline governs that commit in full: guardrails
+this exit ends the run*, run the checks covering any uncommitted fixes and then
+commit those fixes now. With no uncommitted fix, add no run or empty commit. This
+is the only place every exit passes through, and step 8 deferred to here. Step 8's
+discipline governs that commit in full: guardrails
 first, one logical change at a time, imperative subject of 72 characters or fewer, the
 project's `Co-Authored-By` trailer, and **explicit paths only** — never `git add -A` or
 `git commit -am`, which on a deliberately dirty tree would sweep in unrelated content and

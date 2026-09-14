@@ -260,8 +260,9 @@ correction or declaring the blocker unresolved. If the same artifact recurs afte
 evidence-backed correction with no new evidence, stop instead of repeating the diagnose-fix cycle.
 Guessing past a blocker produces work that looks finished and is not.
 
-After all Cast tasks and the guardrails below pass, emit the Cast
-`not-required` ledger/result from *Forge result contract* before returning to
+After all Cast tasks, run the assembled-branch guardrail suite below once. When
+it passes, emit the Cast `not-required` ledger/result from *Forge result contract*
+before returning to
 the caller. `$quest` consumes that verified result; it must not treat Cast's
 lack of a whole-branch reviewer as an implicit no-review mode.
 
@@ -488,7 +489,7 @@ mostly re-reading the loop's own output. What such a pass could see, the
 whole-branch review sees too; what it could not see — the defect spanning
 tasks — is why that review exists. ADR 0052 records the decision.
 
-After the last task, run the guardrail suite under *Guardrails* over the
+After the last task, run the full guardrail suite under *Guardrails* over the
 assembled branch and fix anything red before going further. With no per-task
 reviewer, this is the first executable check that has seen every task's work
 together. Then dispatch the whole-branch review with
@@ -673,7 +674,8 @@ contract still determines their inputs.
   the brief itself has no way of carrying
 - your resolution of any ambiguity you noticed in the brief
 - applicable `AGENTS.md` conventions
-- exact guardrail commands to run before committing
+- exact applicable guardrail commands to run before committing, and the affected
+  contracts, callers, or shared boundaries that determine test scope
 - the task's complete Verification inventory and the contract-evidence rules below
 - for every selected ownership transition, the brief's criterion-linked inventory of current and
   intended owner, affected direct callers and migration, obsolete paths, protected contracts, and
@@ -720,10 +722,12 @@ review itself.
 
 Every fix dispatch carries the implementer contract, placement included: the
 assigned worktree path, branch name, and the `review-fix.<attempt>` dispatch
-identity, verified before the first edit. Re-run the tests covering the change
-and report the command and its output. Name the covering test files — a
-one-line fix does not need the whole suite. Confirm the report carries the
-command, its output, and the covering test files before closing the fix wave.
+identity, verified before the first edit. Run the tests covering the changed
+behavior and affected callers, plus applicable lint, type, and structural checks.
+Broaden if the impact cannot be bounded. Report each command, coverage reason,
+and result; name the covering test files. A review with no edit needs no new
+check or commit. Confirm the report carries the commands, results, coverage
+reasons, and covering test files before closing the fix wave.
 
 Verify the fix wave's commits the way step 5 verifies a task's: every commit
 from the reviewed HEAD to the branch tip must carry `review-fix.<attempt>`.
@@ -877,19 +881,28 @@ correction, allow one confirming pass. A second failure parks instead of startin
 
 ## Guardrails
 
-Run the project's local check suite discovered in `$attunement`. At minimum,
-for the languages involved, it must cover:
+Before each task or review-fix commit, run its meaningful contract tests, affected
+regression and integration tests, and applicable checks discovered in `$attunement`:
 
 - format check
 - lint
 - type check, when the language has one
 - tests
 
-Zero warnings. Fix every warning or add a narrow inline ignore with a
-justification. Whatever is hard-gating in CI must be green locally before
-every commit unless it requires hardware, credentials, or external services
-unavailable locally; in that case, run the closest local equivalent and state
-the limitation in the PR body.
+Select tests by changed behavior and affected callers or shared boundaries, not
+only edited filenames. Record each selected command, its coverage reason, and
+result in the existing task or review-fix evidence. If impact cannot be bounded,
+broaden verification and state why. Keep required repository hooks; a task,
+commit, or review pass alone does not require a full-suite run. After the last
+task, run the assembled-branch suite as required above for both execution modes.
+Shared build, configuration, or dependency changes and newly found
+cross-component failures can require broader checks.
+
+Zero warnings. Fix every warning or add a narrow inline ignore with a justification.
+For checks requiring
+hardware, credentials, or external services unavailable locally, run the closest
+local equivalent and state the limitation in the PR body. Do not claim unrun
+full-suite coverage from focused results.
 
 If a guardrail fails, stop and fix it. Do not commit with red guardrails.
 

@@ -97,8 +97,13 @@ Worker (implementer):
     6. Review your own work, as set out below.
     7. Report back.
 
-    Run each focused-test entry as you go. Run the full suite once, before you
-    commit — not after every edit.
+    Run each focused-test entry as you go. Before committing, run affected
+    regression and integration tests plus applicable lint, type, and structural
+    checks. Select by changed behavior and affected callers or shared boundaries,
+    not only by edited filenames. If you cannot bound the impact, broaden the
+    checks and say why. Honor required repository hooks. The orchestrator runs
+    the assembled-branch suite after the last task; a task or commit alone does
+    not require that suite.
 
     ## When the suite fails on something you did not touch
 
@@ -190,9 +195,12 @@ Worker (implementer):
 
     ## If a reviewer sends work back
 
-    When you fix something a reviewer raised, re-run the tests covering the code
-    you amended and append their results to your report file. No reviewer will
-    re-run them on your behalf: the report is the evidence.
+    When you fix something a reviewer raised, run the tests covering the amended
+    behavior and affected callers, plus applicable lint, type, and structural
+    checks. Broaden when the impact cannot be bounded. Append the commands,
+    coverage reasons, and results to your report file. A review with no edit
+    needs no new run or commit. No reviewer will re-run checks on your behalf:
+    the report is the evidence.
 
     ## Reporting
 
@@ -200,8 +208,9 @@ Worker (implementer):
 
     - what you built, or attempted, if you could not finish;
     - what you tested, and what the tests said;
-    - the guardrail commands you were given, and what each returned — the
-      orchestrator closes the task on this evidence and nothing else;
+    - each selected check's exact command, coverage reason, and result, including
+      the guardrail commands you were given — the orchestrator closes the task
+      on this evidence and nothing else;
     - **any test you ran more than once**, whatever the reason — both outcomes,
       the test's name. A test that
       failed and then passed is the one the reviewer most needs told about;
