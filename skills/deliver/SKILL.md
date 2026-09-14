@@ -16,17 +16,25 @@ discover them first.
 (green CI + mergeable) means proceed to the next step — do not end your turn.
 Stop only on a genuine blocker you have named.
 
-## 1. Final pre-push check
+## 1. Final local verification
 
-Before the first push, run the **full** local check suite once (not just the
-focused tests for the files you touched) — architecture, boundary, and
-doc-generation tests often live outside the directories you edited and only
-fail in a full run. Fold any fixup commits into the logical commits they
-belong to before pushing, because once a branch is pushed to a shared remote
-the harness blocks force-push and interactive rebase, so a messy history can
-no longer be cleaned up. Keep commits small and logically scoped (do not
-collapse them) so a later `git bisect` can pin a regression to a minimal
-change.
+Identify the final candidate after implementation, review fixes, and
+simplification. Use the command and hook coverage recorded by `$attunement`.
+The final candidate needs one full local suite result, including checks outside
+the edited paths. If a mandatory pre-push hook runs that suite on the exact
+branch object being pushed and blocks failure, let the hook own this gate: do
+not run an equivalent full suite manually before pushing. Otherwise reuse a
+prior successful full result only when [true-seeing](../../references/true-seeing.md)
+establishes that its tested inputs, scope, environment, and integration base
+still apply; run the full suite before pushing when no applicable result exists.
+Focused assembled-branch checks cannot stand in for full coverage. A repository
+rule requiring an additional full run still applies; name the rule and both runs.
+
+Fold any fixup commits into the logical commits they belong to before pushing.
+Once a branch is pushed to a shared remote, the harness blocks force-push and
+interactive rebase, so a messy history can no longer be cleaned up. Keep
+commits small and logically scoped (do not collapse them) so a later `git bisect`
+can pin a regression to a minimal change.
 
 ## 2. Create the PR
 
@@ -36,12 +44,26 @@ because this is the first step that needs a branch name. Create one at the
 current commit (`git switch -c <name>`) before pushing; derive the name from the
 work and say what you chose.
 
-Push the branch and open a PR against `BASE_BRANCH` with `gh pr create`. The
-body describes only what is in the diff, in plain factual language. Avoid
-inflated words such as "critical", "crucial", "essential", "significant",
+Push the branch. The hook's successful exit counts only for the object it
+actually checked. Confirm the pushed branch object's full SHA matches the
+checked candidate before recording a full pass. A skipped, failed, cancelled,
+or inconclusive hook has no passing result. Diagnose a failed hook before
+another push. If HEAD, relevant inputs, the integration base, or the execution
+environment change, reassess the assembled-branch and final evidence before
+claiming coverage. A new phase alone never invalidates an applicable result or
+requires another full run.
+
+Open a PR against `BASE_BRANCH` with `gh pr create`. Its body describes only
+what is in the diff, in plain factual language. Avoid inflated words such as
+"critical", "crucial", "essential", "significant",
 "comprehensive", "robust", or "elegant". End with `Closes #<issue-number>` only if
 an issue number was supplied; omit the trailer for standalone use with no
 linked issue.
+At hand-back, report the actual number of full local runs, including failed
+attempts, why each ran, and their observed total duration from the verification
+record. Keep unknown durations unknown; do not benchmark solely to fill the
+report. Report CI
+separately.
 
 ## 3. Drive to green + mergeable
 
@@ -96,9 +118,13 @@ frames carry no decision value, only the terminal states do.
    branch (a pushed branch cannot be rebased — force-push is denied; rebase is
    an option only before first push). After resolving, **regenerate any
    generated docs or snapshots** the base may have moved (a recurring
-   cross-PR conflict zone), rerun guardrails, push, and restart the loop.
+   cross-PR conflict zone), reassess assembled-branch coverage, run affected
+   checks, and establish final full evidence as in step 1 before pushing and
+   restarting the loop.
 6. If merge state is `DIRTY` or `CONFLICTING`, resolve conflicts, regenerate
-   generated artifacts, rerun guardrails, push, and restart the loop. If one
+   generated artifacts, reassess assembled-branch coverage, run affected
+   checks, and establish final full evidence as in step 1 before pushing and
+   restarting the loop. If one
    conflict-resolution pass does not clear it, stop and report the blocker
    instead of spinning.
 7. If merge state is `UNKNOWN`, retry a small number of times with short

@@ -70,8 +70,13 @@ Unit tests support two refinements while iterating:
   assertion line — for inspecting a failure or a suspiciously quiet pass (the quiet
   default hides warnings a passing suite printed).
 
-Selection speeds up iteration; it never substitutes for `just verify` before shipping —
-CI and the pre-push hook always run the full suite set.
+Selection speeds up iteration; it never substitutes for final full coverage.
+The managed pre-push hook runs `just ci` against the pushed commit and owns
+this repository's final full local gate after review and simplification. Do not
+run an equivalent `just verify` immediately before `git push` merely to repeat
+it. CI independently runs the full suite. If the hook is absent or does not
+cover the pushed commit, run `just verify` on the final candidate before
+shipping; never bypass a required hook or treat a failed hook as a pass.
 
 The recipe uses just's `[positional-arguments]` attribute, so it requires `just` ≥ 1.29
 (the release that added the attribute); older binaries fail at parse time.
