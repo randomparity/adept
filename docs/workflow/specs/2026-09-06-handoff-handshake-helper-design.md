@@ -481,6 +481,26 @@ The genuinely untrusted input is GitHub's response, which the helper parses.
 - *`gh pr view` JSON → head branch name.* The branch name is passed to `git ls-remote` as a
   `refs/heads/` argument, never interpolated into a shell string, and the SHA that comes back must
   match `^[0-9a-f]{40}$` before it is composed into the handshake.
+- *`REPO` argument → REST path segments.* `REPO` becomes a path segment twice, at
+  `/repos/$repo/issues/$issue` and `/repos/$repo/issues/comments/<id>`, so it earns the same
+  segment discipline as `ISSUE` and the comment id. Validation: exactly one slash, neither half
+  empty, every character in `[A-Za-z0-9._/-]`, **and neither half beginning with `.` or `-`**. The
+  last clause is the one the first three do not imply: `.` is inside the permitted character set,
+  so `../..` carries one slash and two non-empty halves and clears everything else.
+- *`NOTES` argument → the tools that read it.* `iconv`, `od`, `cat` and `tail` take the path as a
+  bare operand, so a name beginning with `-` is consumed as an option and those tools read stdin
+  instead — three byte validations returning clean having never opened the file. A leading `-` is
+  therefore rewritten to `./-…` at argument validation. This is a control against vacuous
+  validation, not against a caller: it is the same "a scan that could not run must never report as
+  a scan that found nothing" rule the `od`, `awk` and `grep` status branches enforce.
+- *The process environment → the script's own location.* `cd` consults `CDPATH` for any relative
+  operand not beginning with `./` or `../`, and echoes the directory it chose, so the substitutions
+  that resolve `SCRIPT_DIR` and `ROOT` can be both doubled and steered by the caller's environment
+  — and `ROOT` is what `scripts/check-public-safety.sh` is executed from. Both use
+  `CDPATH= cd -P --`. The documented `${CLAUDE_PLUGIN_ROOT}` invocation is absolute and immune; a
+  relative one is not, and these two lines run above the `EXIT` trap and above `fault()`, so a
+  failure there spends exit 1 — the status reserved for a hand-off condition — on something that is
+  not one.
 
 **Explicitly out of scope.** Authentication and authorization: the helper runs whatever `gh` is
 configured with and asserts nothing about who that is. The merge gate, not this helper, pins the

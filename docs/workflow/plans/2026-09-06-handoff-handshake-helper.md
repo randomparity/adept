@@ -60,8 +60,9 @@ denominator and never sets one.
 
 The suite is the larger half, and that is proportionate rather than inflated — its sibling
 `tests/fixtures/quest/publish-forge-review-test.sh` runs 1046 lines for a helper of 339, and this
-one covers 37 cases including one regression per defect logged in the issue. Cases 36 and 37 were
-added during branch review, which constructed a second post-write failure the design had ruled out.
+one covers 40 cases including one regression per defect logged in the issue. Cases 36 and 37 were
+added during branch review, which constructed a second post-write failure the design had ruled out;
+cases 38–40 by the security pass, which found three boundaries the threat model had not inventoried.
 
 **How the two code files are specified here differs, deliberately.** The helper appears in full, at
 step 1.2, because its exact bytes are the contract — the markers, the handshake, and the assertion
@@ -253,8 +254,16 @@ MAX_NOTES_BYTES=8192
 
 SCRIPT_DIR=${BASH_SOURCE[0]%/*}
 [ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR=.
-SCRIPT_DIR=$(cd "$SCRIPT_DIR" && pwd)
-ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
+# `CDPATH='' cd -P --` on both, and the empty assignment is the load-bearing half.
+# cd consults CDPATH whenever its operand is relative and does not begin with ./
+# or ../, and echoes the directory it chose -- so under a caller's exported
+# CDPATH (`.` alone is enough) a relative invocation resolves the script's own
+# location to a directory that environment named, and the command substitution
+# captures the echo as well. These two lines run above the EXIT trap and above
+# fault(), so a failure here exits 1 with cd's bare diagnostic: the status this
+# script reserves for a hand-off condition, spent on something that is not one.
+SCRIPT_DIR=$(CDPATH='' cd -P -- "$SCRIPT_DIR" && pwd)
+ROOT=$(CDPATH='' cd -P -- "$SCRIPT_DIR/../../.." && pwd)
 
 operation=publish
 repo=''
@@ -321,7 +330,7 @@ require_commands() {
 	# rg is here because check-public-safety.sh needs it and exits 2 without it.
 	# Refusing at this preflight names the missing binary; letting it through
 	# reaches that gate's fault status instead, which says nothing useful.
-	for required in gh jq git grep rg iconv od awk wc tail cat mktemp rm; do
+	for required in gh jq git grep rg iconv od awk wc tail cat tr mktemp rm; do
 		command -v "$required" >/dev/null 2>&1 ||
 			fault "required command is unavailable: $required"
 	done
@@ -355,11 +364,33 @@ validate_arguments() {
 		fail "repository carries a character that is not permitted in owner/name: $repo"
 		;;
 	esac
+	# Shape, not just charset. Both halves become REST path segments -- twice,
+	# at /repos/$repo/issues/$issue and /repos/$repo/issues/comments/<id> -- and
+	# `.` is inside the permitted set above, so `../..` clears every test before
+	# this one: one slash, two non-empty halves, no forbidden character. This is
+	# the discipline the ISSUE argument and the comment id already get. A
+	# leading `-` is refused with them: harmless at today's call sites, where
+	# $repo is never a command's first token, but not a property to rely on.
+	case ${repo%%/*} in
+	.* | -*) fail "repository owner may not begin with a dot or a dash: $repo" ;;
+	esac
+	case ${repo#*/} in
+	.* | -*) fail "repository name may not begin with a dot or a dash: $repo" ;;
+	esac
 	case $issue in
 	'' | *[!0123456789]* | 0) fail "issue number is invalid: $issue" ;;
 	esac
 	case $pr in
 	'' | *[!0123456789]* | 0) fail "pull request number is invalid: $pr" ;;
+	esac
+	# iconv, od, cat and tail all take this path as a bare operand, so a name
+	# beginning with `-` is consumed as an option and those tools read stdin
+	# instead. Three of the byte validations then return clean having never
+	# opened the file -- a scan that could not run reporting as one that found
+	# nothing, which is the failure this script states it exists to prevent.
+	# `./` makes it a path to every one of them, and changes nothing else.
+	case $notes in
+	-*) notes=./$notes ;;
 	esac
 }
 
@@ -831,6 +862,23 @@ The 35 cases, one line each — case name, then the single thing it asserts:
     naming the missing canonical URL, having posted nothing. Without it, the empty prefix the fix
     would otherwise build matches every URL, which is worse than what it replaced.
 
+Cases 38–40 were added by the `$detect-evil` pass, which is why each names a boundary rather than a
+gate condition:
+
+38. `case_repo_path_segments` — `../..`, `acme/..`, `./x`, `-x/y` and `.hidden/x` each exit 1
+    naming the repository, having posted nothing. Observed red at **exit 0**: `../..` carries one
+    slash and two non-empty halves and every character is in the permitted set, so before the fix
+    the helper accepted it and published a complete block.
+39. `case_notes_option_shaped` — a notes file literally named `-s`, containing invalid UTF-8, is
+    refused naming the byte class. Observed red at exit 2 with `tail: invalid option -- s`, which
+    is the proof rather than a detail: `iconv`, `od` and `cat` had all already returned clean on a
+    file they never opened, and only the fourth tool objected.
+40. `case_cdpath_does_not_steer_resolution` — the helper is copied into a fake plugin root inside
+    the work repository and invoked by a **relative** path with `CDPATH` exported to a decoy root
+    that satisfies the same relative operand. Exits 0 and posts a complete block. Observed red at
+    exit 1 with `cd:` naming the *decoy* root, which shows both halves of the defect: the value was
+    doubled, and it was steered.
+
 **1.6** Verify the tests bite. For each of these, introduce the fault, run
 `./tests/fixtures/return-to-town/publish-handoff-test.sh`, observe the named red, then revert:
 
@@ -942,10 +990,13 @@ instruction sends the caller into an unbounded loop of public comments at every 
 such exit. See the specification's *What this does and does not close*.)
 
 **Also state where the notes file goes.** The step introduces an artifact the prose version never
-had, and nothing removes it. Say to write it outside the checkout — `"${TMPDIR:-/tmp}"`, matching
-where the helper puts its own scratch — and to remove it after exit 0. An untracked file left in
-the branch's worktree makes this same skill's `git worktree remove` refuse, and its own prose
-forbids the `--force` that would clear it.
+had, and nothing removes it. Say to write it outside the checkout, in a directory of its own
+(`mktemp -d`), and to remove it after exit 0. Two reasons: an untracked file left in the branch's
+worktree makes this same skill's `git worktree remove` refuse, and its own prose forbids the
+`--force` that would clear it; and a bare `/tmp` is world-writable on a shared host, while the
+narrative is read again after two network round trips, so the published bytes would not be the
+bytes that were checked. The security pass raised the second against the first draft of this
+step, which named `"${TMPDIR:-/tmp}"`.
 
 **Also update the paragraph immediately above it**, which currently reads "post a `WORK:TRAJECTORY`
 comment on the issue with `outcome: ...`, guardrail status, and any surprises". Its content list is

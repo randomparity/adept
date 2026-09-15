@@ -219,13 +219,18 @@ run_helper() { # [args...] -- sets RUN_STATUS, RUN_OUT, RUN_ERR
 		if [ -n "${STRAY_GIT_DIR:-}" ]; then
 			export GIT_DIR="$STRAY_GIT_DIR"
 		fi
+		# Likewise: only the case that tests it exports CDPATH, because an
+		# exported empty CDPATH is itself the hardening under test.
+		if [ -n "${STRAY_CDPATH:-}" ]; then
+			export CDPATH="$STRAY_CDPATH"
+		fi
 		PATH="$BIN:$ORIGINAL_PATH" \
 			FAKE_STATE=$STATE FAKE_BRANCH=${FAKE_BRANCH:-$BRANCH} \
 			FAKE_CROSS=${FAKE_CROSS:-false} \
 			FAKE_CLOSES="$closes" \
 			FAKE_ISSUE_MODE="${FAKE_ISSUE_MODE:-present}" \
 			FAKE_CANONICAL_REPO="${FAKE_CANONICAL_REPO:-}" \
-			"$SCRIPT" "$@"
+			"${HELPER_PATH:-$SCRIPT}" "$@"
 	) >"$CASE/out" 2>"$CASE/err"
 	RUN_STATUS=$?
 	set -e
@@ -842,6 +847,86 @@ case_destination_url_missing() {
 	ok "$label"
 }
 
+# REPO becomes a REST path segment twice, so it needs the segment-shape
+# discipline ISSUE and the comment id already get. The charset check permits `.`
+# and `/`, which is not enough: `../..` carries exactly one slash and two
+# non-empty halves, so it passes every other test.
+case_repo_path_segments() {
+	local label='a repository whose segments are dot, dot-dot, or option-shaped is rejected'
+	local candidate
+	new_case
+	for candidate in '../..' 'acme/..' './x' '-x/y' '.hidden/x'; do
+		run_helper "$candidate" "$ISSUE" "$PR" "$NOTES"
+		if [ "$RUN_STATUS" -ne 1 ]; then
+			fail_case "$label" "expected exit 1 for repository '$candidate', got $RUN_STATUS"
+			return 0
+		fi
+		case $RUN_ERR in
+		*repository*) ;;
+		*)
+			fail_case "$label" "the refusal of '$candidate' did not name the repository: $RUN_ERR"
+			return 0
+			;;
+		esac
+	done
+	case $(cat "$STATE/events" 2>/dev/null || true) in
+	*post*)
+		fail_case "$label" 'the helper posted despite an invalid repository'
+		return 0
+		;;
+	esac
+	ok "$label"
+}
+
+# A validation that silently did not run is the failure class this script states
+# it exists to prevent. iconv, od, cat and tail all take the notes path as a
+# bare operand, so a path beginning with `-` is consumed as an option and three
+# of the byte checks return clean having read stdin instead of the file.
+case_notes_option_shaped() {
+	local label='notes at a path beginning with a dash are still read, not parsed as an option'
+	new_case
+	# In $WORK, because that is the helper's working directory, so the bare
+	# `-s` argument below names this file and nothing else.
+	printf 'outcome: \377\376 bad\n' >"$WORK/-s"
+	run_helper "$REPO" "$ISSUE" "$PR" "-s" </dev/null
+	expect_status "$label" 1 || return 0
+	expect_stderr "$label" 'not UTF-8 text' || return 0
+	ok "$label"
+}
+
+# `cd` consults CDPATH whenever its operand is relative and does not begin with
+# ./ or ../, and echoes the directory it picked -- so the command substitution
+# that resolves the script's own location captures a doubled value, and picks it
+# from a directory the caller's environment named. The documented invocation is
+# absolute and immune; a relative one is not, and the script would exit 1 (the
+# status reserved for "a hand-off condition failed") on a fault it never named.
+case_cdpath_does_not_steer_resolution() {
+	local label='a relative invocation under an exported CDPATH still resolves the scripts own root'
+	local plug decoy
+	new_case
+	plug="$WORK/plug"
+	mkdir -p "$plug/skills/return-to-town/scripts" "$plug/scripts"
+	cp "$SCRIPT" "$plug/skills/return-to-town/scripts/publish-handoff"
+	chmod +x "$plug/skills/return-to-town/scripts/publish-handoff"
+	printf '#!/usr/bin/env bash\nexit 0\n' >"$plug/scripts/check-public-safety.sh"
+	chmod +x "$plug/scripts/check-public-safety.sh"
+	# A decoy that satisfies the same relative operand, so CDPATH has a match to
+	# make. Its public-safety gate refuses, which is what a hijacked root costs.
+	decoy="$CASE/decoy-root"
+	mkdir -p "$decoy/plug/skills/return-to-town/scripts" "$decoy/plug/scripts"
+	printf '#!/usr/bin/env bash\nexit 1\n' >"$decoy/plug/scripts/check-public-safety.sh"
+	chmod +x "$decoy/plug/scripts/check-public-safety.sh"
+	HELPER_PATH='plug/skills/return-to-town/scripts/publish-handoff' \
+		STRAY_CDPATH="$decoy" \
+		run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 0 || return 0
+	grep -qxF -- '<!-- TRAJECTORY:COMPLETE -->' "$STATE/comment-body" || {
+		fail_case "$label" 'no complete block was posted'
+		return 0
+	}
+	ok "$label"
+}
+
 case_usage
 case_bad_repo
 case_bad_numbers
@@ -879,6 +964,9 @@ case_issue_is_pull_request
 case_stray_git_env_is_cleared
 case_repo_case_variant_is_canonicalized
 case_destination_url_missing
+case_repo_path_segments
+case_notes_option_shaped
+case_cdpath_does_not_steer_resolution
 
 printf 'publish-handoff-test: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

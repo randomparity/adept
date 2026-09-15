@@ -76,10 +76,14 @@ skill). Write the narrative to a notes file — `outcome: handed off — PR #N g
 awaiting human merge`, guardrail status, and any surprises — and let the helper post it. Write
 it only once the work is finished; "the pull request is green" is not that moment.
 
-Put that file **outside the checkout** — under `"${TMPDIR:-/tmp}"`, where the helper already
-puts its own scratch — and remove it once the helper has exited 0. An untracked file left in
-the branch's worktree makes the `git worktree remove` below refuse, and the `--force` that
-would clear it is forbidden there for reasons that have nothing to do with this file.
+Put that file **outside the checkout**, in a directory of its own —
+`notes_dir=$(mktemp -d)`, which the helper's own scratch directory already models — and remove
+it once the helper has exited 0. Two reasons, and the second is not the obvious one. An
+untracked file left in the branch's worktree makes the `git worktree remove` below refuse, and
+the `--force` that would clear it is forbidden there for reasons that have nothing to do with
+this file. And a bare `/tmp` is world-writable on a shared host: the narrative is read again
+after two network round trips, so a file another local user can replace is a file whose
+published bytes are not the bytes that were checked. `mktemp -d` is 0700 and costs one word.
 
 **The helper owns the annotation, and you own only the narrative.** `publish-handoff` writes
 the opening marker, the closing sentinel, and the `MERGE-READY` handshake line itself; your

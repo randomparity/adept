@@ -25,8 +25,16 @@ MAX_NOTES_BYTES=8192
 
 SCRIPT_DIR=${BASH_SOURCE[0]%/*}
 [ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR=.
-SCRIPT_DIR=$(cd "$SCRIPT_DIR" && pwd)
-ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
+# `CDPATH='' cd -P --` on both, and the empty assignment is the load-bearing half.
+# cd consults CDPATH whenever its operand is relative and does not begin with ./
+# or ../, and echoes the directory it chose -- so under a caller's exported
+# CDPATH (`.` alone is enough) a relative invocation resolves the script's own
+# location to a directory that environment named, and the command substitution
+# captures the echo as well. These two lines run above the EXIT trap and above
+# fault(), so a failure here exits 1 with cd's bare diagnostic: the status this
+# script reserves for a hand-off condition, spent on something that is not one.
+SCRIPT_DIR=$(CDPATH='' cd -P -- "$SCRIPT_DIR" && pwd)
+ROOT=$(CDPATH='' cd -P -- "$SCRIPT_DIR/../../.." && pwd)
 
 operation=publish
 repo=''
@@ -93,7 +101,7 @@ require_commands() {
 	# rg is here because check-public-safety.sh needs it and exits 2 without it.
 	# Refusing at this preflight names the missing binary; letting it through
 	# reaches that gate's fault status instead, which says nothing useful.
-	for required in gh jq git grep rg iconv od awk wc tail cat mktemp rm; do
+	for required in gh jq git grep rg iconv od awk wc tail cat tr mktemp rm; do
 		command -v "$required" >/dev/null 2>&1 ||
 			fault "required command is unavailable: $required"
 	done
@@ -127,11 +135,33 @@ validate_arguments() {
 		fail "repository carries a character that is not permitted in owner/name: $repo"
 		;;
 	esac
+	# Shape, not just charset. Both halves become REST path segments -- twice,
+	# at /repos/$repo/issues/$issue and /repos/$repo/issues/comments/<id> -- and
+	# `.` is inside the permitted set above, so `../..` clears every test before
+	# this one: one slash, two non-empty halves, no forbidden character. This is
+	# the discipline the ISSUE argument and the comment id already get. A
+	# leading `-` is refused with them: harmless at today's call sites, where
+	# $repo is never a command's first token, but not a property to rely on.
+	case ${repo%%/*} in
+	.* | -*) fail "repository owner may not begin with a dot or a dash: $repo" ;;
+	esac
+	case ${repo#*/} in
+	.* | -*) fail "repository name may not begin with a dot or a dash: $repo" ;;
+	esac
 	case $issue in
 	'' | *[!0123456789]* | 0) fail "issue number is invalid: $issue" ;;
 	esac
 	case $pr in
 	'' | *[!0123456789]* | 0) fail "pull request number is invalid: $pr" ;;
+	esac
+	# iconv, od, cat and tail all take this path as a bare operand, so a name
+	# beginning with `-` is consumed as an option and those tools read stdin
+	# instead. Three of the byte validations then return clean having never
+	# opened the file -- a scan that could not run reporting as one that found
+	# nothing, which is the failure this script states it exists to prevent.
+	# `./` makes it a path to every one of them, and changes nothing else.
+	case $notes in
+	-*) notes=./$notes ;;
 	esac
 }
 
