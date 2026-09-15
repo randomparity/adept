@@ -117,6 +117,10 @@ condition still holds on it: a usable block is already on the issue. It is the e
 whole set — and the exits checked *before* the write are why the instruction above is to inspect
 first rather than to proceed.
 
+Those network calls carry no bound today, so an unreachable remote blocks the helper rather than
+returning any exit at all. [Network bounds](../../references/network-bounds.md) records the
+convention for bounding them and the class a timed-out call reports.
+
 ## Default: hand off, do not self-merge
 
 Leave the issue open and `status:awaiting-merge` intact — do not close, do not strip. The
