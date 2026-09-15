@@ -135,11 +135,10 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
    done
    rm -f "$SCRATCH/repo/host.md"
 
-   # Reserved documentation domains identify nobody, and the forge SSH user and
-   # the commit trailer are published constants a repository's prose carries.
+   # Reserved documentation domains identify nobody, and the GitHub SSH user and
+   # the commit trailer are published constants this repository's prose carries.
    {
    	printf 'clone with git@github.com:randomparity/adept.git\n'
-   	printf 'or with git@gitlab.com: or git@bitbucket.org:\n'
    	printf 'Co-Authored-By: Claude <noreply@anthropic.com>\n'
    	printf 'git config user.email fixture@example.invalid\n'
    	printf 'write to user@example.com, or to hook@example.test\n'
@@ -264,15 +263,15 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
    # so documentation and fixtures can name an address that reaches nobody. This
    # repository's suites use them for every fixture Git identity.
    #
-   # git@ plus a public forge host is the fixed user in an SSH remote URL rather
-   # than a mailbox, and noreply@anthropic.com is the published constant in this
-   # repository's commit trailers. Neither names a person. An address under
-   # users.noreply.github.com deliberately is not exempt: it carries a username,
-   # which CLAUDE.md lists as PII, and so does a forge host that is not one of
-   # these three.
+   # git@github.com is the fixed user in an SSH remote URL rather than a mailbox,
+   # and noreply@anthropic.com is the published constant in this repository's
+   # commit trailers. Neither names a person, and both occur in tracked prose
+   # here; another forge's equivalent is not exempt until one does. An address
+   # under users.noreply.github.com deliberately is not exempt either: it
+   # carries a username, which CLAUDE.md lists as PII.
    exempt_submatch='^(/home/(runner|linuxbrew)'
    exempt_submatch="$exempt_submatch"'|[[:alnum:]._%+-]+@([[:alnum:]-]+\.)*(example\.(com|net|org)|invalid|test|example)'
-   exempt_submatch="$exempt_submatch"'|git@(github|gitlab)\.com|git@bitbucket\.org|noreply@anthropic\.com)$'
+   exempt_submatch="$exempt_submatch"'|git@github\.com|noreply@anthropic\.com)$'
    ```
 
 8. Point the filter at the new name. In the same file, in the `jq` invocation

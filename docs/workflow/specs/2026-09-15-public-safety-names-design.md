@@ -56,7 +56,7 @@ cannot run must not read as a scan that found nothing.
 
 **Accepted failure classes.**
 
-- A hostname, a link-local `.local` name, or an internal domain outside the six
+- A hostname, a link-local `.local` name, or an internal domain outside the four
   enumerated suffixes reaches a public comment — no tractable pattern exists
   (ADR 0067), and the gate is declared a shape backstop, not exhaustive PII
   detection.
@@ -106,7 +106,7 @@ one. Detection of names, per ADR 0067.
 ## Success
 
 1. The scanner denies an email address and a private-use suffix drawn from the
-   six enumerated suffixes, each reported with the existing path, line and
+   four enumerated suffixes, each reported with the existing path, line and
    content record.
 2. Every address form in this repository's tracked tree at the branch point is
    exempt, and the scan over that tree stays green.

@@ -23,10 +23,11 @@ not add a general hostname pattern, and say so where callers read the scanner's
 description rather than leaving the gap implicit.
 
 The suffix set is four of RFC 6762 Appendix G's six top-level domains used on
-private internal networks: `.intranet`, `.internal`, `.corp` and `.lan`. Three
-of the appendix's seven candidates are left out — `.home` and `.private`
-because they are also the trailing component of ordinary dotted identifiers, and
-`.local` because that appendix recommends against using it this way.
+private internal networks: `.intranet`, `.internal`, `.corp` and `.lan`. The
+appendix's other two are left out — `.home` and `.private` are also the trailing
+component of ordinary dotted identifiers. So is `.local`, which is not in that
+list at all: the same appendix recommends against using it this way, and RFC
+6762 §3 reserves it for link-local names.
 
 The suffix is matched only where the label in front of it starts a dotted token,
 using the leading-boundary idiom the private-address patterns already use. That
@@ -41,8 +42,8 @@ binaries `--text` hands to every pattern here.
 Exemptions stay one anchored alternation compared against whole submatch text,
 extended rather than replaced. It carries three classes: the published CI home
 paths it already held, addresses in RFC 2606's reserved documentation domains,
-and the published constants a repository's prose carries — the commit trailer,
-and the fixed `git` user of the three public forges' SSH remote URLs.
+and the two published constants this repository's tracked prose carries — the
+`git` user of a GitHub SSH remote URL, and the commit trailer.
 
 ## Consequences
 
@@ -53,9 +54,11 @@ and the fixed `git` user of the three public forges' SSH remote URLs.
 - A dotted token that starts a clause and ends in a kept suffix is denied even
   when it is an identifier rather than a host — a bare module path ending in
   `.internal` is the shape, and this record cannot spell one, because the gate
-  scans this record too. Both publishers discard the scanner's stdout, so the
-  operator sees a refusal and a pattern string but not the token; the remedy is
-  to reword, and an exemption entry only where the same token recurs.
+  scans this record too. Both publishers discard the scanner's stdout, which is
+  where the token is; `publish-handoff` passes stderr through, so it names the
+  pattern, and `publish-forge-review` discards that too. The operator re-runs
+  the scanner by hand. The remedy is to reword, and an exemption entry only
+  where the same token recurs.
 - A further exemption class is a data append while submatch texts stay disjoint
   between classes. A class whose submatches could equal another's needs a
   per-pattern mechanism instead; anchored whole-submatch comparison is what
