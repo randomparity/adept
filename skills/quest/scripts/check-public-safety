@@ -34,7 +34,7 @@ denied_patterns=(
 	'172\.(1[6-9]|2[0-9]|3[0-1])\.'
 	'[[:alnum:]-]+\.atlassian\.net'
 	'[[:alnum:]._%+-]+@[[:alnum:]-]+(\.[[:alnum:]-]+)*\.[[:alpha:]]{2,}\b'
-	'(^|[^[:alnum:].-])[[:alnum:]-]+\.(intranet|internal|corp|lan)\b'
+	'(?i)(^|[^[:alnum:].-])[[:alnum:]-]+\.(intranet|internal|corp|lan)\b'
 	'Basic[[:space:]]+[A-Za-z0-9+/=]{12,}'
 	'ATATT[A-Za-z0-9_=.-]{20,}'
 	"ATLASSIAN[A-Z0-9_]*['\"]?[[:space:]]*[=:][[:space:]]*['\"]?[A-Za-z0-9+/]{20,}"

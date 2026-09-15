@@ -865,8 +865,10 @@ its other commands before composing content. Missing commands name an installati
 A missing bundled scanner requires repairing the installed skill, not substituting a repository gate.
 The scanner checks generic private paths (including Windows profile paths), private addresses,
 email addresses, an enumerated set of private-use domain suffixes, and credential patterns. It
-matches shapes, not names: it does not detect hostnames, and no enumeration covers every internal
-domain. It is a backstop to the public-safety review, not exhaustive PII detection.
+matches shapes, not names: it does not detect hostnames, no enumeration covers every internal
+domain, and the suffix check reaches a host written as one label plus a suffix but not a longer
+dotted name such as a three-label FQDN. It is a backstop to the public-safety review, not
+exhaustive PII detection.
 Unsafe content and scan failures both stop publication and retain evidence, with distinct messages
 that do not echo matched content.
 

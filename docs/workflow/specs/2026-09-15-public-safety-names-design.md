@@ -22,7 +22,8 @@ selects the shape of the widening. Two entries join `denied_patterns`:
 - an email address — a local part, `@`, one or more domain labels, and an
   alphabetic top-level domain closed by a word boundary;
 - a private-use domain suffix — a dotted token's first label followed by one of
-  `.intranet`, `.internal`, `.corp` or `.lan`, closed by a word boundary.
+  `.intranet`, `.internal`, `.corp` or `.lan`, closed by a word boundary, matched
+  case-insensitively.
 
 `.local`, `.home` and `.private` are deliberately absent, and no general
 hostname pattern is added. ADR 0067 records all three decisions, and the
@@ -61,8 +62,15 @@ cannot run must not read as a scan that found nothing.
   (ADR 0067), and the gate is declared a shape backstop, not exhaustive PII
   detection.
 - An address in a reserved documentation domain, `git@github.com`, or
-  `noreply@anthropic.com` reaches a public comment — none identifies a person,
-  and all three occur in this repository's tracked prose.
+  `noreply@anthropic.com` reaches a public comment. The two constants name no
+  person; the reserved-domain class is safe because the domain reaches nobody,
+  and its local part is unconstrained, so a half-redacted address that kept the
+  name and rewrote the domain passes. All three occur in tracked prose here.
+- A host of three or more labels under a kept suffix is not matched: the leading
+  boundary that keeps a dotted identifier out puts the suffix out of reach for
+  `build01.dc2.corp` too. The permissive form that would reach it reddens on
+  package paths (ADR 0067), so this false negative is taken deliberately, pinned
+  by a fixture, and stated in `skills/quest/SKILL.md`.
 - An address whose top-level domain is not alphabetic is not matched — not an
   address in prose, and the alphabetic form keeps the pattern off binary content.
 - A dotted token that starts a clause and ends in a kept suffix is denied even
@@ -105,9 +113,10 @@ one. Detection of names, per ADR 0067.
 
 ## Success
 
-1. The scanner denies an email address and a private-use suffix drawn from the
-   four enumerated suffixes, each reported with the existing path, line and
-   content record.
+1. The scanner denies an email address, and a host written as one label plus one
+   of the four enumerated suffixes in either case, each reported with the
+   existing path, line and content record. A longer dotted name under the same
+   suffix is out of shape, per the failure model.
 2. Every address form in this repository's tracked tree at the branch point is
    exempt, and the scan over that tree stays green.
 3. No entry in the exemption alternation silences a non-exempt submatch sharing

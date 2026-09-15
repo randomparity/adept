@@ -30,9 +30,12 @@ list at all: the same appendix recommends against using it this way, and RFC
 6762 §3 reserves it for link-local names.
 
 The suffix is matched only where the label in front of it starts a dotted token,
-using the leading-boundary idiom the private-address patterns already use. That
-is the difference between a host written into prose and a suffix that is one
-segment of a longer dotted name.
+using the leading-boundary idiom the private-address patterns already use, and
+case-insensitively, because an uppercase host is the ordinary rendering where
+these suffixes are most used. The boundary is what separates a host written into
+prose from a suffix that is one segment of a longer dotted identifier — and, as
+the consequences below record, it also puts a host of three or more labels out
+of reach.
 
 The email pattern requires an alphabetic top-level domain closed by a word
 boundary. That is what an address looks like in prose, and it also keeps the
@@ -43,7 +46,9 @@ Exemptions stay one anchored alternation compared against whole submatch text,
 extended rather than replaced. It carries three classes: the published CI home
 paths it already held, addresses in RFC 2606's reserved documentation domains,
 and the two published constants this repository's tracked prose carries — the
-`git` user of a GitHub SSH remote URL, and the commit trailer.
+`git` user of a GitHub SSH remote URL, and the commit trailer. The RFC 2606
+class pins the domain and leaves the local part unconstrained: what makes it
+safe is that the domain reaches nobody, not that the address names nobody.
 
 ## Consequences
 
@@ -59,6 +64,13 @@ and the two published constants this repository's tracked prose carries — the
   pattern, and `publish-forge-review` discards that too. The operator re-runs
   the scanner by hand. The remedy is to reword, and an exemption entry only
   where the same token recurs.
+- The leading boundary that keeps a dotted identifier out also keeps a host of
+  three or more labels out: for `build01.dc2.corp` there is no start position
+  from which a match can begin, so an internal FQDN is a false negative. The
+  permissive form that would reach it was measured and reddens on package paths
+  such as `com.acme.internal`, which is the collision this record's rejected
+  alternative already names — so the shape limit is taken and stated rather than
+  traded away. `skills/quest/SKILL.md` says it where callers read it.
 - A token that is not an address but has an address's shape is denied — a retina
   asset filename and a version-suffixed package spec are the ones seen, and this
   record cannot spell either, because the gate reddened on the first attempt to.
@@ -82,14 +94,26 @@ and the two published constants this repository's tracked prose carries — the
   `rg --no-config -n 'ibm\.com' $(git ls-files)` reports two attributed source
   URLs in `scripts/reserved-skill-names.txt`; any pattern broad enough to catch
   a leaked internal host catches those and every other vendor URL in the tree.
-- **Appendix G's full six, with `\b` on both ends and `(?i)`.** verified: over
-  prose about code, that form matches `user.home`, `path.home`, `java.home`,
-  `maven.home`, `gradle.home`, `CATALINA.HOME`, `this.private`, `vpc.private`
-  and `com.acme.internal` — no host among them, and `CATALINA.HOME` only under
-  the case-insensitive flag, which is why the flag went too. Dropping `.home`
-  and `.private` and requiring a leading boundary leaves all nine green while a
-  real host still matches. `scripts/check-public-safety-test.sh` carries both
-  halves; it assembles the denied literal, which this record cannot.
+- **Appendix G's full six, with `\b` on both ends.** verified: over prose about
+  code, that form matches `user.home`, `path.home`, `java.home`, `maven.home`,
+  `gradle.home`, `CATALINA.HOME`, `this.private`, `vpc.private` and
+  `com.acme.internal` — no host among them. Dropping `.home` and `.private` and
+  requiring a leading boundary leaves all nine green while a real host still
+  matches. The case-insensitive flag was dropped with them and then restored:
+  its only measured cost was `CATALINA.HOME`, a `.home` collision, and with the
+  four kept suffixes it is green over this repository's tracked tree. It does
+  admit a capitalised two-label namespace fragment — this record cannot spell
+  one, because the gate reddened on the first attempt to — which falls in the
+  identifier class the spec's failure model already accepts.
+  `scripts/check-public-safety-test.sh` carries both halves; it assembles the
+  denied literal, which this record cannot.
+- **The permissive multi-label form
+  `(^|[^[:alnum:].-])[[:alnum:]-]+(\.[[:alnum:]-]+)*\.(intranet|internal|corp|lan)`.**
+  verified: it reaches `build01.dc2.corp` and `jenkins.eng.internal`, and over
+  the tracked set built from `git ls-files` plus `git ls-tree -r HEAD` it exits
+  0 on the package paths this change's own records and fixtures carry. Reaching
+  the FQDN costs the identifier protection outright, so the false negative is
+  taken and recorded above.
 - **Keeping `.local` in the suffix set.** verified: at 29a64d5,
   `rg --no-config -n '[[:alnum:]-]+\.local\b' $(git ls-files)` reports seven
   lines, `.gitignore` lines 3 and 5 among them. The ground is this repository's

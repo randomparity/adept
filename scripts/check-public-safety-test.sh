@@ -224,6 +224,30 @@ for suffix in intranet internal corp lan; do
 done
 rm -f "$SCRATCH/repo/host.md"
 
+# An uppercase host is the ordinary rendering where .corp and .intranet are most
+# used, so the suffix pattern is case-insensitive.
+printf 'the box is BUILD-AGENT.%s\n' 'CORP' >"$SCRATCH/repo/shouting.md"
+if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: an uppercase private-use host should be denied\n' >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/shouting.md"
+
+# The same leading boundary that keeps a dotted identifier out also keeps a host
+# of three or more labels out: no start position can reach the suffix. That is a
+# false negative the gate accepts rather than a bug (ADR 0067), and it is pinned
+# here so it is a decision rather than an accident.
+{
+	printf 'the box is build01.dc2.%s\n' 'corp'
+	printf 'jenkins.eng.%s timed out\n' 'internal'
+} >"$SCRATCH/repo/fqdn.md"
+if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: a multi-label host is outside the suffix shape\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/fqdn.md"
+
 # Reserved documentation domains identify nobody, and the GitHub SSH user and
 # the commit trailer are published constants this repository's prose carries.
 {

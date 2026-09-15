@@ -87,6 +87,15 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
   are exempt.** Mode: `focused-test`. Case: the exempt-constants block.
   Expected red at step 6: `public-safety-test: published address constants
   should not be denied`. Green: `just test check-public-safety`.
+- **Contract: an uppercase private-use host is denied.** Mode: `focused-test`.
+  Case: the uppercase block. Bite shown at step 10 by dropping `(?i)`:
+  `public-safety-test: an uppercase private-use host should be denied`. Green:
+  same command.
+- **Contract: a host of three or more labels is outside the suffix shape.**
+  Mode: `focused-test`. Case: the FQDN block. Bite shown at step 10 by the
+  permissive multi-label form: `public-safety-test: a multi-label host is
+  outside the suffix shape`. Green: same command. This pins an accepted false
+  negative so it stays a decision (ADR 0067) rather than an accident.
 - **Contract: a dotted identifier ending in a kept suffix stays green.**
   Mode: `focused-test`. Case: the identifier block. Bite shown at step 10 by
   restoring `\b` in place of the leading boundary: `public-safety-test: a dotted
@@ -137,6 +146,30 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
    	fi
    done
    rm -f "$SCRATCH/repo/host.md"
+
+   # An uppercase host is the ordinary rendering where .corp and .intranet are most
+   # used, so the suffix pattern is case-insensitive.
+   printf 'the box is BUILD-AGENT.%s\n' 'CORP' >"$SCRATCH/repo/shouting.md"
+   if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+   	printf 'public-safety-test: an uppercase private-use host should be denied\n' >&2
+   	exit 1
+   fi
+   rm -f "$SCRATCH/repo/shouting.md"
+
+   # The same leading boundary that keeps a dotted identifier out also keeps a host
+   # of three or more labels out: no start position can reach the suffix. That is a
+   # false negative the gate accepts rather than a bug (ADR 0067), and it is pinned
+   # here so it is a decision rather than an accident.
+   {
+   	printf 'the box is build01.dc2.%s\n' 'corp'
+   	printf 'jenkins.eng.%s timed out\n' 'internal'
+   } >"$SCRATCH/repo/fqdn.md"
+   if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+   	printf 'public-safety-test: a multi-label host is outside the suffix shape\n' >&2
+   	cat "$SCRATCH/output" >&2
+   	exit 1
+   fi
+   rm -f "$SCRATCH/repo/fqdn.md"
 
    # Reserved documentation domains identify nobody, and the GitHub SSH user and
    # the commit trailer are published constants this repository's prose carries.
@@ -231,7 +264,7 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
 5. Add the suffix pattern, on the line after the one step 3 added:
 
    ```bash
-   	'(^|[^[:alnum:].-])[[:alnum:]-]+\.(intranet|internal|corp|lan)\b'
+   	'(?i)(^|[^[:alnum:].-])[[:alnum:]-]+\.(intranet|internal|corp|lan)\b'
    ```
 
    The leading alternative is the idiom the `10\.` private-address entry already
@@ -295,6 +328,12 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
       address`;
     - add `|local` to the suffix alternation — expect `public-safety-test:
       excluded suffixes should not be denied`;
+    - drop `(?i)` from the suffix pattern — expect `public-safety-test: an
+      uppercase private-use host should be denied`;
+    - replace the suffix pattern with the permissive multi-label form
+      `(^|[^[:alnum:].-])[[:alnum:]-]+(\.[[:alnum:]-]+)*\.(intranet|internal|corp|lan)\b`
+      — expect `public-safety-test: a multi-label host is outside the suffix
+      shape`;
     - change the `jq` filter's `any` to `all` over submatches — expect
       `public-safety-test: home leak sharing a line with a CI path should fail`,
       the suite's first instance of the per-submatch contract;
