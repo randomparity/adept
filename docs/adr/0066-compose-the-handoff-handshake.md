@@ -1,4 +1,4 @@
-# 0057 — Compose the hand-off handshake, and only the hand-off
+# 0066 — Compose the hand-off handshake, and only the hand-off
 
 ## Status
 
@@ -43,6 +43,16 @@ against the body it composed, before anything is posted, and again against the b
 re-read through the API. The first makes `--preflight` mean something and stops a composition
 defect from being published at all; only the second says what the gate will read.
 
+**It corroborates the write destination to the same standard, before composing.** The issue number
+decides where the block lands, and every check after the write is derived from that same
+argument — the expected comment-URL prefix is composed from it, and the readback path is taken from
+the id in that URL — so no post-write check can detect it being wrong. The helper therefore
+resolves the issue and requires the resource to exist, to report the number it was asked for, and
+**not to be a pull request**. GitHub's issues API returns pull requests too, carrying a
+`pull_request` key that ordinary issues lack; that key is the discriminator, so passing the pull
+request number where the issue number belongs is refused by name rather than surfacing after the
+comment is created as an unparseable URL.
+
 **This ships an executable, so CLAUDE.md anatomy rule 2 has to be satisfied explicitly.** The bar
 is that a script does "something a model cannot do reliably inline". The ground here is the rule's
 second limb — performed inconsistently — and the evidence is the four holds issue #308 logs, from
@@ -84,9 +94,19 @@ emit the same handful of bytes correctly on every occasion.
   losing its sentinel makes a parked issue read as unparked, which a reader recovers from by
   opening the issue — where the hand-off case had no such recovery, because the gate reads bytes
   and no one reads the gate.
-- `$return-to-town` gains a dependency on a checkout whose `origin` is the repository being handed
-  off. It already required one to read the SHA; the helper makes the requirement explicit and names
-  it in its own failure message.
+- A wrong issue number can no longer publish a gate-valid block somewhere nobody reads. Without the
+  destination check the helper would exit 0 printing a verified URL for a complete block on the
+  wrong issue, while the orchestrator's gate read the right issue and found none — reaching, with a
+  success status, the exact symptom this record exists to make unreachable, and reaching it where
+  re-running cannot help because latest-complete-wins never visits an issue nobody wrote to.
+- **The helper runs from the plugin cache but against the consumer's checkout, and the two are
+  different directories.** `$CLAUDE_PLUGIN_ROOT` locates the executable; the process working
+  directory must remain the checkout whose `origin` is the repository being handed off, because
+  that is what `git ls-remote origin` reads. `$return-to-town` already depended on such a checkout
+  to read the SHA — the helper makes the requirement explicit and names it in its own failure
+  message. A call site written as a repository-relative path satisfies neither half: it does not
+  resolve from the consumer's working directory, so the hand-off would fall back to hand
+  composition and the change would deliver nothing outside this repository.
 - **A pull request opened from a fork cannot be handed off by this helper**, and that is a narrowing
   rather than a bug it hides. No single checkout has the upstream as `origin` and the fork's head
   under `refs/heads/`, so the SHA read cannot be satisfied at all. The helper reads
@@ -100,9 +120,11 @@ emit the same handful of bytes correctly on every occasion.
 - **An exact invocation written into `skills/return-to-town/SKILL.md`, shipping no executable.**
   judgment: this is the rung anatomy rule 2 exists to force, and it fails on its own terms. A
   fenced command block is still text the model must transcribe, and mis-transcription is the shared
-  root of all four logged defects — so the inline route reintroduces the failure one step earlier.
-  The 40-character SHA read, the two-source corroboration, and the readback assertions do not fit
-  an inline block honestly either.
+  root of three of the four logged defects — the fourth is a worker that died mid-hand-off, which
+  the Consequences above record as narrowed rather than closed, and which no inline block reaches
+  either. So the inline route reintroduces the failure one step earlier for the three it does
+  reach. The 40-character SHA read, the two-source corroboration, and the readback assertions do
+  not fit an inline block honestly either.
 - **A general `post-annotation` helper covering every `WORK:*` type.** judgment: the remaining
   types would gain markers-and-sentinel only, which is two `printf` calls at each call site, and
   three of the four other annotation types in quest-log's table are written by skills this change
@@ -131,6 +153,21 @@ emit the same handful of bytes correctly on every occasion.
   the composed body is not an input already known to be correct — the premise of this whole record
   is that a composer's output must be verified rather than trusted, and that applies first to this
   script's own. Both run, and the compose-side pass is three `grep` calls against a local file.
+- **Validate the issue number for syntax only, and treat a wrong-but-well-formed one as the
+  caller's problem.** verified: this was the first draft's behaviour and it is unsound, because the
+  helper's own success signal is derived from the unchecked argument. `read_stored_body` builds its
+  expected prefix as `https://github.com/$repo/issues/$issue#issuecomment-` from the same value it
+  would need to be checking, so the URL match, the id extraction, the readback and all four stored
+  assertions pass on the wrong issue. Exit 0 would then be a true statement about the wrong
+  destination, which is a worse failure than the one being fixed: it is silent on the writer's side
+  *and* on the reader's.
+- **Reject a pull request number by checking the comment URL after posting.** verified: the
+  `/issues/<n>` URL space is shared, so `gh issue comment <pr-number>` addresses a resource that
+  does exist and the comment is created before anything can object. The failure would surface as a
+  malformed-URL message one step after the write — the same one-actor-away misdiagnosis this record
+  exists to remove, with a stray comment on the pull request as a side effect. Checking
+  `pull_request` on the resource before composing costs one API read and refuses by name.
 - **Do nothing.** verified: four holds across four hand-offs in one campaign run, from three
   different worker agents, every one an annotation defect on work that was finished and green
-  (issue #308's table).
+  (issue #308's table). Three further recurrences of the same shape have been logged on the issue
+  since, at v5.7.4, from workers dispatched independently.

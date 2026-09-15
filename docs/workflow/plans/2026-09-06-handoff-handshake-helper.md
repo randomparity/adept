@@ -1,7 +1,7 @@
 # Hand-off handshake helper — implementation plan
 
 Derived from [the design](../specs/2026-09-06-handoff-handshake-helper-design.md) and
-[ADR 0057](../../adr/0057-compose-the-handoff-handshake.md).
+[ADR 0066](../../adr/0066-compose-the-handoff-handshake.md).
 
 **Goal.** Replace `$return-to-town`'s hand-composed merge hand-off annotation with one executable
 that composes the block, computes the head SHA itself, asserts every condition the merge gate checks
@@ -9,7 +9,9 @@ against what it composed, posts the comment, and asserts them again against the 
 
 **Architecture.** One new executable, `skills/return-to-town/scripts/publish-handoff`. It takes the
 repository, issue, pull request, and a narrative file, and owns everything the gate reads: both
-annotation markers and the `MERGE-READY` line. It resolves the head branch from the pull request,
+annotation markers and the `MERGE-READY` line. It corroborates the destination issue before
+composing — it must exist, report the number asked for, and not be a pull request — resolves the
+head branch from the pull request,
 reads the SHA from `git ls-remote origin`, requires GitHub's `headRefOid` to agree, composes the
 body, runs the repository's existing public-safety gate over it, asserts the gate's four whole-line
 conditions on what it composed, posts with `gh issue comment`, re-reads the stored comment, and
@@ -19,16 +21,21 @@ remote. `skills/return-to-town/SKILL.md` replaces its composition prose with the
 
 **Tech stack.** Bash and Markdown. No dependencies, no build step. Gates are `just verify`.
 
-**Expected implementation size: 1080–1180 changed lines (L) — summed from the file map below: 397
-(`publish-handoff`) + 688 (its suite), the two code files, plus roughly 25 lines of contract text in
+**Expected implementation size: 1130–1240 changed lines (L) — summed from the file map below: 397
+(`publish-handoff`) + 688 (its suite) as they stand, plus roughly 50 lines across both for the
+destination corroboration and its two cases, plus roughly 25 lines of contract text in
 `skills/return-to-town/SKILL.md` and the one-line version bump.**
 
-The band disagrees with the `M` this run recorded in its `WORK:SCOPE` tracking metadata, and the
-band is the one that is wrong there rather than here: `M` was read off the issue before any file
-map existed, and the range above is what the file map and task list actually yield. The suite is
-the larger half, and that is proportionate rather than inflated — its sibling
+The band is the complexity frozen in `WORK:SCOPE` before this design cycle, carried forward
+unchanged; only the numeric range is this plan's own estimate, and the two agree. They did not in
+the 2026-09-06 cycle, which froze `M` — a band read off the issue before any file map existed and
+one no implementation naming twenty distinct failure conditions could have met. That was corrected
+at this cycle's scope checkpoint, from the completion criteria rather than from this estimate: a
+plan estimate corroborates a denominator and never sets one.
+
+The suite is the larger half, and that is proportionate rather than inflated — its sibling
 `tests/fixtures/quest/publish-forge-review-test.sh` runs 928 lines for a helper of 310, and this
-one covers 30 cases including one regression per defect logged in the issue.
+one covers 32 cases including one regression per defect logged in the issue.
 
 **How the two code files are specified here differs, deliberately.** The helper appears in full, at
 step 1.2, because its exact bytes are the contract — the markers, the handshake, and the assertion
@@ -36,7 +43,7 @@ order are the deliverable. The suite is specified by an enumerated case list, at
 per case naming the case and the single assertion it makes. That is a complete specification of what
 the suite must do without transcribing 688 lines whose shape is mechanical once the case list and
 the fixture sketch are fixed, and it is what makes the pinned pass count derivable rather than
-asserted. An implementer who writes exactly the 30 enumerated cases reaches the acceptance criterion
+asserted. An implementer who writes exactly the 32 enumerated cases reaches the acceptance criterion
 below.
 
 ## Global constraints
@@ -52,9 +59,14 @@ below.
 - Exit taxonomy: **0** success, **1** a condition failed, **2** the script could not run. A fault
   must never read as a clean hand-off.
 - `.claude-plugin/plugin.json` carries the plugin `version` and **every change bumps it**. This
-  change adds a capability, so `MINOR`. The base moved while this branch was parked: `main` is now at
-  `4.1.2`, and `4.2.0` and `4.1.3` are held by concurrent siblings, so this branch takes **`4.3.0`**
-  by orchestrator assignment. Re-check it against the base at resume — it may have moved again.
+  change adds a capability, so `MINOR`. The base moved twice while this branch was parked: `main`
+  was at `4.1.2` when this plan was written and is at **`5.7.4`** as of 2026-09-15, so this branch
+  takes **`5.8.0`**. The original `4.3.0` assignment is dead. Re-check against the base at resume —
+  it may move again, and the gate requires strictly greater than the base's, not a fixed value.
+- Records are numbered against the live `docs/adr/` at resume, never from an earlier assignment.
+  The number this change was assigned in triage (`0043`) and the one it first took (`0057`) are
+  both merged records owned by other decisions; `0065` is the highest on `main` as of 2026-09-15,
+  so this change takes **`0066`**.
 - The repository is public. No absolute user paths, hostnames, addresses, or credentials in any
   committed file.
 - Skill-script behaviour suites live under `tests/fixtures/<skill>/`, **outside** the shipped tree.
@@ -69,7 +81,7 @@ below.
 | `tests/fixtures/return-to-town/publish-handoff-test.sh` | new | the helper's behaviour, including one regression case per logged defect |
 | `skills/return-to-town/SKILL.md` | modified | invoking the helper instead of describing the composition |
 | `.claude-plugin/plugin.json` | modified | the version bump |
-| `docs/adr/0057-compose-the-handoff-handshake.md` | new | the decision recorded alongside this plan |
+| `docs/adr/0066-compose-the-handoff-handshake.md` | new | the decision recorded alongside this plan |
 
 `skills/return-to-town/` has no `scripts/` directory today; Task 1 creates it. No new skill is
 added, so `check-skill-shape.sh` rules 6 and 7 (cheatsheet and README coverage) are unaffected, and
@@ -122,7 +134,15 @@ Consumed from the existing codebase, each confirmed to exist with the signature 
   MERGE-READY: #42 @ <sha>` — the compose-side assertion catches the omission before anything is
   posted, which is that assertion doing its job. Green command:
   `./tests/fixtures/return-to-town/publish-handoff-test.sh`, expected final line
-  `publish-handoff-test: 30 passed, 0 failed`, exit 0.
+  `publish-handoff-test: 32 passed, 0 failed`, exit 0.
+- **Contract: the write destination is corroborated before composing, and an `ISSUE` naming a pull
+  request is refused by name.** Mode: focused-test. Same file, cases
+  `case_issue_not_corroborated` and `case_issue_is_pull_request`. Expected red with the
+  `pull_request` key check removed from `resolve_destination`:
+  `FAIL an ISSUE naming a pull request is refused before anything is posted: expected exit 1,
+  got 0`. Green command:
+  `./tests/fixtures/return-to-town/publish-handoff-test.sh`, expected final line
+  `publish-handoff-test: 32 passed, 0 failed`, exit 0.
 - **Contract: a narrative carrying a handshake — backticked or bare — is rejected before posting.**
   Mode: focused-test. Same file, case `case_notes_carry_handshake`. Expected red with the
   substring check removed: `FAIL regression: a backticked handshake in the notes is rejected:
@@ -379,6 +399,37 @@ validate_notes() {
 	esac
 }
 
+# The issue number decides where the block lands, and every check after the write
+# is derived from it -- the expected comment-URL prefix is composed from it, and
+# the readback path comes from the id in that URL -- so none of them can detect it
+# being wrong. A transposed number would publish a complete, gate-valid block
+# where nobody reads, and exit 0 printing a verified URL for it. Corroborated
+# here, before composing, so a refusal leaves nothing posted.
+resolve_destination() {
+	local issue_json number is_pull
+	# A fault, not a finding, and for the same reason resolve_head faults on an
+	# unreadable pull request: gh's exit status does not separate "no such issue"
+	# from "could not reach GitHub", and this script does not guess between them.
+	# A fault never reads as a clean hand-off, which is the property that matters
+	# on either branch.
+	issue_json=$(gh api --hostname github.com "/repos/$repo/issues/$issue") ||
+		fault "the hand-off destination could not be read: $repo#$issue"
+	number=$(jq -r '.number' <<<"$issue_json") ||
+		fault 'the destination response could not be parsed'
+	[ "$number" = "$issue" ] ||
+		fail "the destination reported number $number, not $issue"
+	# GitHub serves pull requests from the issues number space and returns them
+	# with a pull_request key an ordinary issue does not carry. Without this,
+	# passing the pull request number where the issue number belongs addresses a
+	# resource that does exist, and the comment is created before anything can
+	# object -- surfacing one step later as an unparseable URL rather than as the
+	# swapped argument it is.
+	is_pull=$(jq -r 'if has("pull_request") then "yes" else "no" end' <<<"$issue_json") ||
+		fault 'the destination response could not be parsed'
+	[ "$is_pull" = no ] ||
+		fail "$repo#$issue is a pull request, not an issue; the hand-off block is recorded on the issue, so ISSUE and PR appear to have been swapped"
+}
+
 # The SHA is read from the remote, never from headRefOid, per
 # skills/return-to-town/SKILL.md. headRefOid is then required to agree: it is a
 # second independent observation, and a disagreement means the branch moved
@@ -548,6 +599,7 @@ validate_arguments "$@"
 require_commands
 make_workspace
 validate_notes
+resolve_destination
 resolve_head
 compose_body
 if [ "$operation" = preflight ]; then
@@ -576,7 +628,22 @@ file; a `run_helper` that runs the script from `work` with the fake on `PATH` an
 per-case `FAKE_BRANCH` override; and `expect_status` / `expect_stderr` assertion helpers. `chmod +x`
 it.
 
-The 28 cases, one line each — case name, then the single thing it asserts:
+The fake's `api` arm now serves two distinct paths and must dispatch on which one it was given,
+because the helper reads both through `gh api`:
+
+- `/repos/<owner>/<name>/issues/<n>` — the destination read. Default response is a well-formed
+  issue object `{"number": <n>}` with **no** `pull_request` key. `FAKE_ISSUE_MODE=absent` makes it
+  exit nonzero; `FAKE_ISSUE_MODE=mismatch` makes it report a `number` that is not `<n>`; and
+  `FAKE_ISSUE_MODE=pull` makes it return `{"number": <n>, "pull_request": {"url": "..."}}` — an
+  otherwise-correct payload differing from the default only in that key, so case 32 bites on the
+  key and nothing else.
+- `/repos/<owner>/<name>/issues/comments/<id>` — the existing readback. Its `GH_MODE` branches are
+  unchanged.
+
+Dispatch on the path shape rather than on argument position: the two differ only in the segment
+after `issues`, and a fake that matched a prefix would answer the readback with an issue object.
+
+The 32 cases, one line each — case name, then the single thing it asserts:
 
 1. `case_usage` — no arguments exits 2 naming the usage line.
 2. `case_bad_repo` — `acme`, `a/b/c`, and `acme/wid gets` each exit 1 naming the repository.
@@ -622,6 +689,17 @@ The 28 cases, one line each — case name, then the single thing it asserts:
     with 127 and never reaches the check.
 30. `case_rerun_is_safe` — after a readback failure, a second run posts a fresh complete block
     carrying both markers and the handshake, and exits 0.
+31. `case_issue_not_corroborated` — two sub-assertions, as cases 2–5 bundle theirs. An `ISSUE` the
+    fake reports as not found exits **2** naming the destination that could not be read — exit 2
+    rather than 1 for the reason `case_pr_view_fails` takes it: `gh` does not separate "no such
+    resource" from "could not reach GitHub", and the script does not guess. An `ISSUE` whose
+    resolved payload reports a different `number` exits **1** naming both numbers. Both assert
+    `gh issue comment` was never called — the whole value of this check is that it refuses *before*
+    the write.
+32. `case_issue_is_pull_request` — an `ISSUE` the fake resolves to a resource carrying a
+    `pull_request` key exits 1 naming the swapped argument, having posted nothing. The fake must
+    return an otherwise well-formed issue payload whose `number` matches, so the case bites on the
+    `pull_request` key alone and not on some other mismatch.
 
 **1.6** Verify the tests bite. For each of these, introduce the fault, run
 `./tests/fixtures/return-to-town/publish-handoff-test.sh`, observe the named red, then revert:
@@ -634,6 +712,7 @@ The 28 cases, one line each — case name, then the single thing it asserts:
 | move the CR check after the whole-line checks in `assert_gate_conditions` | `FAIL a stored copy carrying a carriage return fails, naming it`, with stderr naming the opening marker instead |
 | collapse the `case $safety_status` block back to `\|\| fail ...` | `FAIL a public-safety scan that could not run is a fault, not a finding: expected exit 2, got 1` |
 | delete the `[ "$cross" = false ]` check | `FAIL a pull request whose head is in a fork is rejected, naming the fork: expected exit 1, got 0` |
+| delete the `pull_request` key check in `resolve_destination` | `FAIL an ISSUE naming a pull request is refused before anything is posted: expected exit 1, got 0` |
 
 The second row exists because the others bite narrow guards and would leave the task's primary
 contract — that the composed and posted block satisfies every gate condition — with no bite evidence
@@ -646,18 +725,26 @@ reaches its own body inspection.
 each.
 
 **1.8** Run `./tests/fixtures/return-to-town/publish-handoff-test.sh` bare. Expect the final line
-`publish-handoff-test: 30 passed, 0 failed` and exit 0.
+`publish-handoff-test: 32 passed, 0 failed` and exit 0. Run it by path, not through `just test`:
+the recipe discovers suites from `git ls-files`, so a brand-new file is invisible to it until
+staged or committed. `just test publish-handoff` is the check to run after step 1.9's commit.
 
 **1.9** Commit: `feat(return-to-town): compose and verify the hand-off handshake`.
+
+**1.10** Now that the suite is tracked, run `just test publish-handoff` bare. Expect exit 0 and the
+same pass line.
 
 ### Acceptance criteria
 
 - `publish-handoff` exists, is executable, and passes `shellcheck -x` and `shfmt -d`.
 - The suite exists under `tests/fixtures/return-to-town/`, is discovered by
-  `just test publish-handoff`, and passes.
-- Each of the six faults in step 1.6 was observed red and reverted.
-- Every row of the design's failure table has a case, except the non-SHA-from-`ls-remote` guard the
-  design exempts by name and for the reason it gives.
+  `just test publish-handoff` once committed, and passes with `32 passed, 0 failed`.
+- Each of the seven faults in step 1.6 was observed red and reverted.
+- Every row of the design's failure table has a case **except the two the design exempts by name**:
+  the non-SHA-from-`ls-remote` guard, and the compose-side assertion that the body carries both
+  markers and the handshake. Both are unreachable by any input to this suite, and both are covered
+  instead by step 1.6's controlled faults — the second by its first two rows. Any other uncovered
+  row is a defect in the suite, not an exemption.
 
 ### Rollback
 
@@ -678,11 +765,20 @@ Provides to later tasks: nothing.
   Command `./scripts/check-skill-shape.sh`, expected output
   `check-skill-shape: <n> skills, all rules pass`, exit 0. Expected red if the edit introduced a
   broken `../../references/` link: `reference link does not resolve: <path>`, exit 1.
+- **Contract: the documented invocation resolves the way a consumer's would.** Mode: focused-test.
+  The observable contract is that the path in the fenced block expands, under
+  `CLAUDE_PLUGIN_ROOT`, to an executable file. Command:
+  `CLAUDE_PLUGIN_ROOT="$PWD" bash -c 'test -x "$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff"'`,
+  expected exit 0 with no output. Expected red before Task 1 creates the helper, and red again if
+  the call site is written as a repository-relative path: the expansion yields a path that does not
+  exist at the consumer's working directory and `test -x` exits 1. This is a structural
+  observation about a path, not an assertion about prose, so anatomy rule 4 is not engaged.
 - **Contract: the prose replacement itself.** Mode: task-test-not-applicable. The changed surface is
-  the hand-off instruction text in `skills/return-to-town/SKILL.md`. No executable or structural
-  observation can fail meaningfully on it, and anatomy rule 4 forbids a gate that asserts on prose —
-  no test may check that a document contains a given sentence. The structural half of the change
-  (that the invoked path exists) is covered by the criterion below rather than by a prose assertion.
+  the hand-off instruction *text* in `skills/return-to-town/SKILL.md` — that it no longer tells a
+  reader to compose markers by hand, and that it names the working-directory requirement. No
+  executable or structural observation can fail meaningfully on the wording, and anatomy rule 4
+  forbids a gate that asserts on prose: no test may check that a document contains a given
+  sentence. The structural half of this task is the separate entry above, which can fail.
 
 ### Steps
 
@@ -704,22 +800,51 @@ sentence still instructs the reader to post the comment — which is to write th
 directly above a block telling them to invoke a helper that writes it for them, and Task 2's first
 acceptance criterion would be false. Keep the other surrounding paragraphs.
 
-**2.2** Add the invocation, in a fenced `sh` block, immediately after that paragraph:
+**2.2** Add the invocation, in a fenced `sh` block, immediately after that paragraph. **Resolve the
+executable through `$CLAUDE_PLUGIN_ROOT`, not through a repository-relative path.** This project
+ships only as a plugin: the harness copies the whole repository into the plugin cache, so at run
+time the helper is under the plugin root while the calling agent's working directory must be the
+consumer's own checkout — it has to be, because the helper reads the head SHA with `git ls-remote
+origin` from there. A repository-relative path does not exist at that working directory; the
+command would fail at exec and the hand-off would silently fall back to hand composition, which is
+the whole defect this change removes. `skills/quest-log/SKILL.md` states the resolution rule and
+`skills/return-to-town/SKILL.md` already follows it about a hundred lines below this edit site.
 
 ```sh
-skills/return-to-town/scripts/publish-handoff --preflight <owner/name> <issue> <PR> <notes-file>
-skills/return-to-town/scripts/publish-handoff <owner/name> <issue> <PR> <notes-file>
+"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" --preflight <owner/name> <issue> <PR> <notes-file>
+"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" <owner/name> <issue> <PR> <notes-file>
 ```
 
-**2.3** Run `./scripts/check-skill-shape.sh` bare. Expect `all rules pass`, exit 0.
+**2.3** In the same step, state the working-directory requirement in prose beside the block: run it
+from the checkout whose `origin` is the repository being handed off. The path and the working
+directory are two different directories, and naming only one of them is what makes the mistake
+easy.
 
-**2.4** Commit: `docs(return-to-town): invoke the hand-off helper`.
+**2.4** Run `./scripts/check-skill-shape.sh` bare. Expect `all rules pass`, exit 0.
+
+**2.5** Run this bare, from the repository root, to confirm the documented invocation resolves the
+way a consumer's would:
+
+```sh
+CLAUDE_PLUGIN_ROOT="$PWD" bash -c 'test -x "$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff"'
+```
+
+Expect exit 0, no output. Expected red if the call site reverts to a repository-relative form:
+extract the path from the fenced block and this check fails to expand `$CLAUDE_PLUGIN_ROOT`,
+exiting 1.
+
+**2.6** Commit: `docs(return-to-town): invoke the hand-off helper`.
 
 ### Acceptance criteria
 
 - The composition instructions are gone; nothing in `SKILL.md` still tells a reader to write the
   markers or the handshake by hand.
-- The path named in `SKILL.md` exists in the tree.
+- **The invocation in `SKILL.md` resolves the executable through `$CLAUDE_PLUGIN_ROOT`, and the
+  step names the working-directory requirement separately.** The earlier criterion here — that the
+  path named in `SKILL.md` exists in the tree — is replaced because it could not fail on the defect
+  it was meant to catch: a repository-relative path *does* exist in the tree; it just is not where
+  the caller runs. `rg -q 'CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff'
+  skills/return-to-town/SKILL.md` exits 0, and step 2.5's check exits 0.
 - `./scripts/check-skill-shape.sh` exits 0.
 
 ### Rollback
@@ -728,7 +853,7 @@ Revert the single file; Task 1's helper becomes unused but harmless.
 
 ## Task 3 — the decision record and the version bump
 
-Creates `docs/adr/0057-compose-the-handoff-handshake.md` and modifies `.claude-plugin/plugin.json`.
+Creates `docs/adr/0066-compose-the-handoff-handshake.md` and modifies `.claude-plugin/plugin.json`.
 
 ### Interfaces
 
@@ -745,7 +870,7 @@ Consumes: nothing. Provides: nothing.
 
 ### Steps
 
-**3.1** Write `docs/adr/0057-compose-the-handoff-handshake.md` with the five required
+**3.1** Write `docs/adr/0066-compose-the-handoff-handshake.md` with the five required
 sections — `## Status`, `## Context`, `## Decision`, `## Consequences`, `## Considered & rejected` —
 a `## Status` body of `Accepted (2026-09-06)`, and an H1 carrying the record's number. Every
 `Considered & rejected` bullet names its alternative and opens its ground with `verified:` or
@@ -756,7 +881,7 @@ the adr profile warns `W-INDEX-TABLE` if one appears.
 
 **3.3** Link the record from the spec and from this plan's header.
 
-**3.4** Bump `.claude-plugin/plugin.json` `version` to `4.3.0` (from whatever the refreshed base
+**3.4** Bump `.claude-plugin/plugin.json` `version` to `5.8.0` (from whatever the refreshed base
 carries; it was `4.1.2` at the time of writing). `MINOR`, because this
 change adds a capability — a new helper — and removes or renames nothing.
 
@@ -768,7 +893,7 @@ change adds a capability — a new helper — and removes or renames nothing.
 
 - The record carries all five sections and every rejected alternative carries an evidence tag.
 - No row was added to `docs/adr/README.md`.
-- `.claude-plugin/plugin.json` declares `4.3.0`, and it is strictly greater than the base's.
+- `.claude-plugin/plugin.json` declares `5.8.0`, and it is strictly greater than the base's.
 - `just records` and `./scripts/check-plugin-version.sh` both exit 0.
 
 ### Rollback

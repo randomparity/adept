@@ -1,6 +1,6 @@
 # Hand-off handshake helper — design
 
-Decision record: [ADR 0057](../../adr/0057-compose-the-handoff-handshake.md).
+Decision record: [ADR 0066](../../adr/0066-compose-the-handoff-handshake.md).
 
 ## Goal
 
@@ -108,12 +108,21 @@ orchestrator currently has to diagnose by re-reading the stored body.
 issue. The helper posts with `gh issue comment`, and reads back through the shared
 `/repos/.../issues/comments/<id>` endpoint.
 
-**R8 — a preflight mode.** `--preflight` runs every argument, narrative, SHA-resolution, and
-composition check — including R5's four gate conditions on the composed body — makes no comment,
-and prints `preflight-ok`. It exists so a caller can learn that its hand-off is unpublishable while
-that is still a local failure, the same separation ADR 0048 drew for `publish-forge-review`.
-`preflight-ok` therefore means the block the helper will compose is gate-valid, not merely that the
-narrative was acceptable.
+**R8 — a preflight mode.** `--preflight` runs every argument, narrative, destination, SHA-resolution
+and composition check — including R5's four gate conditions on the composed body — makes no comment,
+and prints `preflight-ok`. `preflight-ok` therefore means the block the helper will compose is
+gate-valid, not merely that the narrative was acceptable.
+
+It follows ADR 0048's separation — learn that a publication is impossible before attempting
+it — but **not** that record's stronger property, and the divergence is stated here rather than
+left to be discovered. `publish-forge-review`'s preflight is purely local: it validates and
+composes and makes no network call, so a preflight failure there is always a local failure. This
+preflight cannot be local, because three of the things it must check are remote — the destination
+resource, the pull request's state and head branch, and the remote tip that supplies the SHA. It
+therefore makes read-only network calls and creates nothing. What it preserves is the part that
+matters to a caller: no comment exists after a failed preflight, so the failure is recoverable
+without an artifact on a public issue. What it cannot promise is that a preflight failure means the
+network was never touched, and the requirement does not claim it.
 
 **R9 — the body passes the repository's public-safety gate.** The composed body is posted to a
 public issue. `scripts/check-public-safety.sh` already scans for absolute user paths, private
@@ -142,6 +151,38 @@ preflight names the missing binary, which the gate's fault status cannot.
 Latest-complete-wins (`skills/quest-log/SKILL.md:296-298`) makes a second successful run supersede
 a first, so a caller that cannot tell whether its previous invocation completed may simply run it
 again. Nothing reads, modifies, or deletes an existing comment.
+
+**R11 — the write destination is corroborated before composing.** The issue number decides where
+the block lands, and it is the one argument whose correctness nothing downstream can check: the
+expected comment-URL prefix is composed from it and the readback path is taken from the id in that
+URL, so the URL match, the id extraction, the readback, and all four stored assertions in R5 pass
+just as readily on the wrong issue. A transposed or stale number would therefore publish a
+complete, gate-valid block where nobody reads, and the helper would exit 0 printing a verified URL
+for it — reaching, with a success status, the exact symptom this change exists to make unreachable.
+R10's remedy does not apply, because latest-complete-wins never visits an issue nobody wrote to.
+
+The helper resolves the issue before composing and requires three things of it: that it exists,
+that it reports the number it was asked for, and that it is **not a pull request**. The third is
+the sub-case that a syntax check cannot reach — GitHub's issues API serves pull requests from the
+same number space and returns them with a `pull_request` key that ordinary issues lack, so passing
+the pull request number where the issue number belongs addresses a resource that does exist and the
+comment is created before anything objects. That key is the discriminator, and the refusal names
+the swapped argument rather than surfacing one step later as an unparseable URL.
+
+This is the same corroboration the pull request already gets in R3 and R4, applied to the argument
+that determines the destination rather than only to the one that determines the content.
+
+**R12 — the documented invocation resolves for a consumer.** This project ships only as a plugin:
+the harness copies the whole repository into the plugin cache, so at run time the helper lives
+under the plugin root while the calling agent's working directory must be the *consumer's*
+checkout — it has to be, because R3 reads the head SHA with `git ls-remote origin` from there. The
+call site written into `skills/return-to-town/SKILL.md` therefore resolves the executable through
+`${CLAUDE_PLUGIN_ROOT}`, per `skills/quest-log/SKILL.md`'s resolution rule, which the same file
+already follows elsewhere. A repository-relative path satisfies neither half: it does not exist at
+the consumer's working directory, so the command fails at exec and the hand-off falls back to hand
+composition — the change would deliver nothing outside this repository. The step states the
+working-directory requirement alongside the path, because the two are different directories and
+only naming one of them is what makes the mistake easy.
 
 ## What this does and does not close
 
@@ -225,6 +266,9 @@ which names the condition, and the remedy is the same either way — re-run, per
 | notes carrying a whole-line `<!-- WORK:TRAJECTORY -->` or `<!-- TRAJECTORY:COMPLETE -->` | which marker |
 | notes mentioning `MERGE-READY:` anywhere | that the helper owns that line |
 | notes over the size cap | the cap |
+| issue unreadable (exit 2, as for an unreadable pull request) | the destination that could not be read |
+| issue reporting a number other than `ISSUE` | both numbers |
+| `ISSUE` naming a pull request rather than an issue | the swapped argument, before anything is posted |
 | pull request not `OPEN`, or its number disagrees | the observed state |
 | pull request head branch in a fork | the fork, and that cross-fork hand-off is unsupported |
 | `git ls-remote` returning no line, several lines, or a non-SHA | what it returned |
@@ -241,14 +285,64 @@ which names the condition, and the remedy is the same either way — re-run, per
 | stored copy carrying CR | that a carriage return reached the stored body |
 | stored copy ≠ composed body | that GitHub's copy differs |
 
+## Failure model
+
+**Actors and deployments.**
+
+- A `$return-to-town` hand-off step, run by a model in an operator's own session with that
+  operator's `gh` credentials, from a checkout whose `origin` is the repository being handed off.
+- The same, dispatched as a `$quest` or `$campaign` worker — up to five concurrently, each on its
+  own issue and pull request.
+- The repository's own behaviour suite, with a fake `gh` and a real local git remote.
+- Not designed for: unattended CI, a checkout whose `origin` is not the target repository, a
+  GitHub Enterprise host, or a pull request opened from a fork.
+
+**Invariants and assets at stake.**
+
+- A hand-off block that the merge gate can select — the whole point; an unselectable block reads
+  as "never handed off".
+- The handshake binds the pull request number to the head SHA that was actually the tip.
+- Public issue content: anything composed here is published and cannot be unpublished.
+- The destination: a block lands on the issue the caller named and nowhere else.
+- No comment exists after a refusal that happened before the write.
+
+**Accepted failure classes.**
+
+- The head branch moving after a successful hand-off, leaving a complete block the gate will not
+  select. Bounded and stated: nothing binds the head before `gh pr merge --match-head-commit`, so
+  no writer-side control can do better; the remedy is re-running, per R10.
+- A duplicate block from a re-run. Held by an existing guardrail: quest-log's
+  latest-complete-wins selection makes the newest complete block the operative one.
+- A caller that bypasses the helper and posts the comment itself. Not reachable by any control
+  here — the helper makes the correct path easy, not the manual path impossible.
+- A worker that dies mid-invocation. Narrowed rather than accepted whole: death before the command
+  leaves nothing, death during it leaves at most one unverified comment, and R10 is the remedy.
+- Byte-level round-trip differences introduced by GitHub's storage. Bounded and stated: assertion
+  5 detects them, and where conditions 1–4 still hold on the stored copy a usable block is on the
+  issue, so the disposition is to inspect rather than retry.
+- A park note losing its sentinel. Out of this change's surface — the park path stays prose — and
+  its cost is bounded: a parked issue reads as unparked to a human who opens it, where the hand-off
+  case had no reader at all.
+
+**Covered elsewhere.**
+
+- What the merge gate should check, beyond the four conditions above: issue #235.
+- Stating the sentinel requirement in prose for an author who composes by hand: issue #375, which
+  this change supersedes by removing hand composition.
+- A forged hand-off from an account that is not the pull request's author: `references/merge-gate.md`
+  part 4's author pinning, which protects the reader and which no writer-side control can do.
+- The normative text of the gate itself: ADR 0042, which makes `references/merge-gate.md` the
+  single normative location.
+
 ## Threat model
 
 The helper posts to a public repository and reads a caller-supplied file, so it crosses a trust
 boundary and this section is required.
 
-**Boundaries added.** One: the narrative file, read from the filesystem and composed into a body
-that is published. **Boundaries widened.** None — `$return-to-town` already posts this comment; the
-helper changes who composes it, not who may post it.
+**Boundaries added.** Two: the narrative file, read from the filesystem and composed into a body
+that is published; and the `ISSUE` argument, which selects the destination that body is published
+to. **Boundaries widened.** None — `$return-to-town` already posts this comment; the helper changes
+who composes it, not who may post it.
 
 **Actor model.** The caller is a model running inside the operator's own session with the
 operator's `gh` credentials. It is not an untrusted party, and the helper does not pretend
@@ -264,6 +358,13 @@ The genuinely untrusted input is GitHub's response, which the helper parses.
   `scripts/check-public-safety.sh` over the composed result, which is the repository's existing
   control for exactly this — content leaving for a public destination. Nothing is executed and
   nothing is interpolated into a shell command; the body reaches `gh` as `--body-file`.
+- *`ISSUE` argument → publication destination.* This is a boundary because the argument selects
+  where public content is written and no later control re-derives it independently — every
+  post-write check is built from the same value, so all of them agree with a wrong one. Validation:
+  digits only, then the resource is resolved and required to exist, to report the number asked for,
+  and to carry no `pull_request` key. The number becomes a REST path segment, so the digits-only
+  check precedes the read, and the corroboration precedes composition so a refusal leaves nothing
+  posted.
 - *Comment URL → API path.* The URL is matched against the exact expected prefix for this repo and
   issue, and the remainder must be digits only before it is placed in a REST path. This is the
   control `publish-forge-review` already applies, for the same reason: the id becomes a path
@@ -287,16 +388,38 @@ repository's layout rule, with a fake `gh` on `PATH` driven by a mode variable a
 git repository with a bare remote — `git ls-remote` is exercised for real rather than stubbed,
 because the SHA it returns is the value the whole contract turns on.
 
-The suite covers one case per row of the failure table above bar one, plus the happy path, the
-preflight path, and one regression case per logged defect in issue #308.
+The suite covers one case per row of the failure table above except the two named below, plus the
+happy path, the preflight path, and one regression case per logged defect in issue #308.
 
-The exception is stated rather than left to be discovered. Two rows are guards on the parse of
-GitHub's and git's responses rather than reachable conditions. *Several refs for one head branch* is
-reachable only through a branch name containing a glob character, which GitHub will not return —
-but it is testable, because the fake controls the name, so it has a case. *A non-SHA from
-`ls-remote`* is not reachable at all without faking `git`, and faking `git` would forfeit the
-property this suite is built around: that the SHA the contract turns on is read from a real remote.
-That guard therefore ships without a case, deliberately, and this sentence is the record of why.
+**The exempt rows are named here rather than left to be discovered, and there are exactly two.**
+Both are guards against something no input to this suite can produce, so neither can be driven by a
+case; both are instead covered by the controlled-fault verification, which introduces the defect
+into the helper and observes the red.
+
+- *A non-SHA from `ls-remote`* is not reachable without faking `git`, and faking `git` would
+  forfeit the property this suite is built around: that the SHA the contract turns on is read from
+  a real remote. It shares a failure-table row with two conditions that are **not** exempt: *no
+  line* has a case, and *several refs for one head branch* has one too — reachable only through a
+  branch name containing a glob character, which GitHub will not return but the fake can, since the
+  fake controls the name the pull request reports.
+- *The composed body missing a marker, the sentinel, or the handshake* is unreachable by
+  construction: the helper writes all three itself, so no input makes it compose a body without
+  them. This is the R5 compose-side assertion, and the only way to observe it is to break the
+  composer — which the controlled-fault table does, in its first two rows, and which is why those
+  two rows exist.
+
+Every other row has a case. In particular *a stored copy carrying CR* is **not** exempt: the fake
+returns whatever stored body a case gives it, so a CR-laden stored copy is directly inducible even
+though the helper rejects a CR in the narrative long before composing.
+
+Two further cases exist for R11, which no failure-table row existed for before: an issue number
+naming a resource that does not exist, and an issue number naming a **pull request**, which the
+fake reports with a `pull_request` key. Both must refuse before any comment is created, and the
+second asserts the message names the swapped argument.
+
+`just test` discovers suites from the repository's tracked shell sources, so a brand-new suite file
+must be staged or committed before `just test publish-handoff` will find it. Running it directly is
+what works on a first, unstaged pass.
 
 The regression cases:
 
