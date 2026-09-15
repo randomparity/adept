@@ -395,8 +395,10 @@ saying.
    ```markdown
    The scanner checks generic private paths (including Windows profile paths), private addresses,
    email addresses, an enumerated set of private-use domain suffixes, and credential patterns. It
-   matches shapes, not names: it does not detect hostnames, and no enumeration covers every internal
-   domain. It is a backstop to the public-safety review, not exhaustive PII detection.
+   matches shapes, not names: it does not detect hostnames, no enumeration covers every internal
+   domain, and the suffix check reaches a host written as one label plus a suffix but not a longer
+   dotted name such as a three-label FQDN. It is a backstop to the public-safety review, not
+   exhaustive PII detection.
    ```
 
 2. In `.claude-plugin/plugin.json`, set the `version` field to `5.9.0`.
@@ -407,8 +409,8 @@ saying.
 4. Commit with `git add -A && git commit` and a conventional subject such as
    `docs: say the public-safety gate matches shapes, not names`.
 
-**Acceptance criteria.** `skills/quest/SKILL.md` names the two new classes and
-the hostname limit. `.claude-plugin/plugin.json` declares `5.9.0`.
+**Acceptance criteria.** `skills/quest/SKILL.md` names the two new classes, the
+hostname limit, and the one-label shape limit on the suffix check. `.claude-plugin/plugin.json` declares `5.9.0`.
 `just version-check`, `just records`, `just shape-check` and `just plugin-check`
 each exit 0.
 Then `just verify` bare exits 0 over the finished branch; the managed pre-push

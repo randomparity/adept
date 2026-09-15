@@ -56,10 +56,12 @@ safe is that the domain reaches nobody, not that the address names nobody.
   is a backstop against shapes; names stay a reading problem, and
   `skills/quest/SKILL.md` now says so. Link-local `.local` names are likewise
   not caught.
-- A dotted token that starts a clause and ends in a kept suffix is denied even
-  when it is an identifier rather than a host — a bare module path ending in
-  `.internal` is the shape, and this record cannot spell one, because the gate
-  scans this record too. Both publishers discard the scanner's stdout, which is
+- A dotted token is denied when it ends in a kept suffix and its first label
+  begins a whitespace- or punctuation-delimited run — anywhere in a line, not
+  only at its start — even where the token is an identifier rather than a host.
+  A bare module path ending in `.internal` is the shape, and this record cannot
+  spell one, because the gate scans this record too. Both publishers discard the
+  scanner's stdout, which is
   where the token is; `publish-handoff` passes stderr through, so it names the
   pattern, and `publish-forge-review` discards that too. The operator re-runs
   the scanner by hand. The remedy is to reword, and an exemption entry only

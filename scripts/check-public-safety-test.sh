@@ -302,6 +302,17 @@ if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
 fi
 rm -f "$SCRATCH/repo/excluded.md"
 
+# The exemption is anchored at both ends, so a submatch that merely ends with a
+# published constant is not one. Without the leading anchor this line would be
+# exempted and the address would ship. The constant is split off the local part
+# so this file carries only the exempt form.
+printf 'mail not%s\n' 'git@github.com' >"$SCRATCH/repo/prefixed.md"
+if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: an address ending in a constant should be denied\n' >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/prefixed.md"
+
 # The exemption is compared against each submatch, not the line: a real
 # address beside an exempt one is reported, and it is the one printed.
 printf 'mail git@github.com or person@leaky-ho%s\n' 'st.net' \
