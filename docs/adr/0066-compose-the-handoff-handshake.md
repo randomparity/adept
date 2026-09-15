@@ -32,10 +32,19 @@ rejects a narrative file that carries either marker or the token `MERGE-READY:` 
 There is no flag selecting a different block shape.
 
 The park path is unchanged and stays prose. Nothing about the dual purpose needs a write-side
-control, because the read side already discriminates: `references/merge-gate.md` part 4 selects the
-latest complete block *that carries a `MERGE-READY` line for `HEAD_SHA`*, not the latest complete
-block simpliciter, and its `jq` applies all three tests before `last`. A park note therefore cannot
-revoke a valid hand-off today, and the helper does not change that.
+control, because the reader the merge gate specifies already discriminates: `references/merge-gate.md`
+part 4 selects the latest complete block *that carries a `MERGE-READY` line for `HEAD_SHA`*, not the
+latest complete block simpliciter, and **the `jq` printed in part 4 itself** applies all three tests
+before `last`. A park note therefore cannot revoke a valid hand-off through that reader, and the
+helper does not change that.
+
+The claim is bounded to that reader deliberately, because it does not hold of every reader part 4
+mentions. Part 4 also directs readers to "the quest-log skill's selection rules", and quest-log's
+general latest-complete recipe (`skills/quest-log/SKILL.md:523-530`) tests only the two markers —
+it carries no `MERGE-READY` discriminator, so a park note posted after a hand-off *is* what `last`
+returns there. That divergence between part 4's own `jq` and the recipe it points at is a defect in
+the reader, not in this helper, and it is left to issue #235, which owns what the gate checks. It is
+recorded here rather than silently relied past.
 
 The helper computes the SHA from `git ls-remote origin` and requires GitHub's `headRefOid` to
 agree, refusing when they differ. It asserts the gate's four whole-line conditions twice: once
@@ -43,15 +52,22 @@ against the body it composed, before anything is posted, and again against the b
 re-read through the API. The first makes `--preflight` mean something and stops a composition
 defect from being published at all; only the second says what the gate will read.
 
-**It corroborates the write destination to the same standard, before composing.** The issue number
-decides where the block lands, and every check after the write is derived from that same
-argument — the expected comment-URL prefix is composed from it, and the readback path is taken from
-the id in that URL — so no post-write check can detect it being wrong. The helper therefore
-resolves the issue and requires the resource to exist, to report the number it was asked for, and
-**not to be a pull request**. GitHub's issues API returns pull requests too, carrying a
-`pull_request` key that ordinary issues lack; that key is the discriminator, so passing the pull
-request number where the issue number belongs is refused by name rather than surfacing after the
-comment is created as an unparseable URL.
+**It corroborates the write destination before composing, from a source other than the argument it
+is checking.** The issue number decides where the block lands, and every check after the write is
+derived from that same argument — the expected comment-URL prefix is composed from it, and the
+readback path is taken from the id in that URL — so no post-write check can detect it being wrong.
+Resolving the issue and asking whether it exists and is an issue does not help either: those
+questions are answered by the resource the argument selected, so a transposed but valid number
+passes them.
+
+The independent source is the pull request. The helper requires `ISSUE` to appear in the pull
+request's `closingIssuesReferences`, read from the `gh pr view --json` call it already makes. That
+binding runs from the pull request to the issue, so it does not inherit the argument under test. It
+also requires the resolved resource not to be a pull request — GitHub's issues API serves pull
+requests from the same number space and returns them with a `pull_request` key ordinary issues
+lack, and a pull request number may legitimately appear in no closing-reference list, so the two
+checks catch different mistakes. A pull request declaring no closing issue is refused as
+uncorroborated.
 
 **This ships an executable, so CLAUDE.md anatomy rule 2 has to be satisfied explicitly.** The bar
 is that a script does "something a model cannot do reliably inline". The ground here is the rule's
@@ -71,34 +87,41 @@ emit the same handful of bytes correctly on every occasion.
 - A disagreement between the remote tip and `headRefOid` now blocks the hand-off. That is a new
   refusal, and it is the intended one: it is precisely the moment the SHA a handshake would bind is
   already stale.
-- That agreement binds the two reads to each other, not to merge time. A push to the head branch
-  after the hand-off leaves a complete block the gate will not select, and exit 0 does not survive
-  that — it asserts the bytes GitHub stored, never that the SHA is still the tip. The remedy is
-  re-running, which appends a fresh block for the new head. Nothing binds the head before
-  `--match-head-commit`, so no writer-side control can do better and none is added.
-- Exit 1 does not mean nothing was published. Three conditions are checked after the comment is
-  created, and a comment the helper composed is gate-valid whether or not the readback succeeded.
-  The message names which condition failed, and the remedy is the same either way: re-run.
+- That agreement binds the two reads to each other, not to merge time; and a nonzero exit does not
+  by itself mean nothing was published. Both residuals, and the one exit whose remedy is *not*
+  re-running, are stated once in the specification's *What this does and does not close*. They are
+  not restated here: this record governs the decision, the specification owns the residuals, and
+  four copies of a residual is the drift this record elsewhere accepts having created once already.
 - **The helper becomes a second encoding of the gate's byte-level contract, and ADR 0042's drift
   concern now reaches it.** 0042 centralized the gate in one reference precisely because copies
   cannot be held in agreement — anatomy rule 4 forbids a gate that compares prose, so nothing
   automated can detect the divergence. This helper hardcodes the two markers and the handshake
   shape, so a change to `references/merge-gate.md` part 4 silently desynchronizes it. That is a real
   new drift surface and it is accepted rather than solved: the alternative is parsing the normative
-  prose at runtime, which is the prose-assertion anatomy rule 4 exists to forbid. What bounds it is
-  that the helper is the *writer* and the reference governs the *reader*, so a divergence fails
-  closed — the gate stops selecting the block, which is the loud failure this record is about, not a
-  silent admission.
+  prose at runtime, which is the prose-assertion anatomy rule 4 exists to forbid. **What it is not
+  is bounded.** An earlier draft of this bullet claimed the divergence "fails closed" and was
+  therefore loud; that is wrong, and the correction matters. If part 4's byte contract changes and
+  this helper does not, the helper still exits 0 on a block the gate no longer selects — silent on
+  the writer's side, and on the reader's side indistinguishable from a worker that never handed
+  off. That is precisely the pre-change symptom this record exists to remove, reproduced by the
+  mechanism meant to remove it. Nothing automated can detect it, because rule 4 forbids the only
+  check that would. The mitigation is procedural and stated as such: a change to
+  `references/merge-gate.md` part 4 must change this helper in the same pull request. Issue #235,
+  which owns what the gate checks, is the anticipated trigger.
 - Park notes keep the sentinel-omission exposure the hand-off just lost. That is a real residual,
   not an oversight, and it is left as accepted exposure rather than absorbed here: a park note
   losing its sentinel makes a parked issue read as unparked, which a reader recovers from by
   opening the issue — where the hand-off case had no such recovery, because the gate reads bytes
   and no one reads the gate.
-- A wrong issue number can no longer publish a gate-valid block somewhere nobody reads. Without the
-  destination check the helper would exit 0 printing a verified URL for a complete block on the
+- A wrong issue number can no longer publish a complete block somewhere nobody reads. Without the
+  destination binding the helper would exit 0 printing a verified URL for a complete block on the
   wrong issue, while the orchestrator's gate read the right issue and found none — reaching, with a
   success status, the exact symptom this record exists to make unreachable, and reaching it where
   re-running cannot help because latest-complete-wins never visits an issue nobody wrote to.
+- **A pull request with no `Closes #<n>` trailer can no longer be handed off.** That is a new
+  refusal and a real narrowing. Its ground is this helper's own requirement that the destination be
+  corroborated before composing, not any rule in `references/merge-gate.md`, which imposes no
+  closing-reference requirement at all. The remedy is the caller's and the message names it.
 - **The helper runs from the plugin cache but against the consumer's checkout, and the two are
   different directories.** `$CLAUDE_PLUGIN_ROOT` locates the executable; the process working
   directory must remain the checkout whose `origin` is the repository being handed off, because
@@ -161,9 +184,11 @@ emit the same handful of bytes correctly on every occasion.
   assertions pass on the wrong issue. Exit 0 would then be a true statement about the wrong
   destination, which is a worse failure than the one being fixed: it is silent on the writer's side
   *and* on the reader's.
-- **Reject a pull request number by checking the comment URL after posting.** verified: the
-  `/issues/<n>` URL space is shared, so `gh issue comment <pr-number>` addresses a resource that
-  does exist and the comment is created before anything can object. The failure would surface as a
+- **Reject a pull request number by checking the comment URL after posting.** verified:
+  `gh api /repos/randomparity/adept/issues/374` returns pull request #374 carrying a `pull_request`
+  key, observed on this repository at gh 2.100.0 — the `/issues/<n>` space is shared, so
+  `gh issue comment <pr-number>` addresses a resource that does exist and the comment is created
+  before anything can object. The failure would surface as a
   malformed-URL message one step after the write — the same one-actor-away misdiagnosis this record
   exists to remove, with a stray comment on the pull request as a side effect. Checking
   `pull_request` on the resource before composing costs one API read and refuses by name.

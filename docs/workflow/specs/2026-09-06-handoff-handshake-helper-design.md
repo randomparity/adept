@@ -76,8 +76,14 @@ second, independent observation and requires it to equal the `ls-remote` value. 
 the branch moved between the two reads, which is exactly the moment a handshake must not be posted;
 the helper refuses and names the two SHAs. The value posted is always the `ls-remote` one.
 
-**R5 — the gate's conditions are asserted twice, on both copies.** Four conditions make up the
-gate's contract:
+**R5 — the gate's byte-level conditions are asserted twice, on both copies.** Part 4 has five
+requirements. Four are byte-level conditions on the body and are asserted here; the fifth pins the
+comment's **author** to the pull request's author or a login with write permission, and is asserted
+by the reader, not by this helper — it protects the reader from a forged hand-off, which no
+writer-side control can do. Wherever this design says a block is gate-valid, it means the four
+below hold, never that the fifth does.
+
+The four:
 
 1. no carriage-return byte anywhere in the body,
 2. the opening marker as a whole line,
@@ -104,14 +110,15 @@ withdraw from its caller.
 condition that failed, not a generic one. "Which of the gate's conditions failed" is what the
 orchestrator currently has to diagnose by re-reading the stored body.
 
-**R7 — the block is issue-side.** `skills/quest-log/SKILL.md:307` puts `WORK:TRAJECTORY` on the
+**R7 — the block is issue-side.** `skills/quest-log/SKILL.md:441` puts `WORK:TRAJECTORY` on the
 issue. The helper posts with `gh issue comment`, and reads back through the shared
 `/repos/.../issues/comments/<id>` endpoint.
 
 **R8 — a preflight mode.** `--preflight` runs every argument, narrative, destination, SHA-resolution
 and composition check — including R5's four gate conditions on the composed body — makes no comment,
-and prints `preflight-ok`. `preflight-ok` therefore means the block the helper will compose is
-gate-valid, not merely that the narrative was acceptable.
+and prints `preflight-ok`. `preflight-ok` therefore means the block the helper will compose
+satisfies every byte-level condition the gate checks on the body, not merely that the narrative was
+acceptable. It says nothing about part 4's author requirement, which is the reader's.
 
 It follows ADR 0048's separation — learn that a publication is impossible before attempting
 it — but **not** that record's stronger property, and the divergence is stated here rather than
@@ -148,7 +155,7 @@ also requires `rg` in its own preflight, since that gate exits 2 without it — 
 preflight names the missing binary, which the gate's fault status cannot.
 
 **R10 — retry is safe by construction.** The helper only ever appends a fresh complete block.
-Latest-complete-wins (`skills/quest-log/SKILL.md:296-298`) makes a second successful run supersede
+Latest-complete-wins (`skills/quest-log/SKILL.md:523-530`) makes a second successful run supersede
 a first, so a caller that cannot tell whether its previous invocation completed may simply run it
 again. Nothing reads, modifies, or deletes an existing comment.
 
@@ -161,16 +168,43 @@ complete, gate-valid block where nobody reads, and the helper would exit 0 print
 for it — reaching, with a success status, the exact symptom this change exists to make unreachable.
 R10's remedy does not apply, because latest-complete-wins never visits an issue nobody wrote to.
 
-The helper resolves the issue before composing and requires three things of it: that it exists,
-that it reports the number it was asked for, and that it is **not a pull request**. The third is
-the sub-case that a syntax check cannot reach — GitHub's issues API serves pull requests from the
-same number space and returns them with a `pull_request` key that ordinary issues lack, so passing
-the pull request number where the issue number belongs addresses a resource that does exist and the
-comment is created before anything objects. That key is the discriminator, and the refusal names
-the swapped argument rather than surfacing one step later as an unparseable URL.
+**The corroboration must come from somewhere other than the `ISSUE` argument, or it corroborates
+nothing.** Resolving the issue and asking whether it exists, reports the number requested, and
+lacks a `pull_request` key establishes only that `ISSUE` names *an* issue — every one of those
+questions is answered by the resource `ISSUE` selected. A transposed but valid number, which is the
+likeliest form of the mistake, passes all three and lands the block on a real, open, wrong issue.
 
-This is the same corroboration the pull request already gets in R3 and R4, applied to the argument
-that determines the destination rather than only to the one that determines the content.
+The independent source is the pull request. The helper reads `closingIssuesReferences` from the
+`gh pr view --json` call it already makes for R3, and requires `ISSUE` to be among the numbers it
+reports. That binding runs from the pull request to the issue, so it does not inherit the argument
+it is checking: a caller who types the wrong issue number is refused by a fact the pull request
+asserts about itself. `$deliver` writes `Closes #<issue-number>` into the body of every
+issue-backed pull request, and this repository already reads the same field for the same purpose in
+`skills/campaign/SKILL.md` and `skills/counterspell/SKILL.md`.
+
+The helper therefore requires, in order:
+
+1. `closingIssuesReferences` contains `ISSUE` — the check that catches a transposition;
+2. the resolved resource is not a pull request — the check that catches a swapped `ISSUE`/`PR`,
+   which the first cannot, because a pull request number may legitimately appear nowhere in that
+   list and the failure would otherwise surface after the write as an unparseable URL;
+3. the resource exists and reports the number requested.
+
+**A pull request that declares no closing issue is refused, and the ground is stated honestly.**
+It is *not* that the merge gate rejects such a pull request — `references/merge-gate.md` imposes no
+closing-reference requirement, and a design that claimed otherwise would be asserting a contract
+the reference does not contain. The ground is narrower: the helper's own completion criterion is
+that the destination is corroborated before composing, an empty list leaves it uncorroborated, and
+this helper's consistent stance is to refuse rather than publish something it cannot check. The
+remedy is in the caller's hands and the message says so — add the `Closes #<issue-number>` trailer
+the pull request was expected to carry. `skills/campaign/SKILL.md` records a missing reference and
+defers it; this helper cannot, because deferring means publishing.
+
+What this closes and what it does not: a transposed issue number, a swapped `ISSUE`/`PR` pair, and
+a nonexistent resource are all refused before composition. A pull request whose `Closes` trailer is
+itself wrong would corroborate the wrong issue — the binding is only as good as the trailer, and no
+writer-side control can do better without a second independent statement of intent, which nothing
+in the repository produces.
 
 **R12 — the documented invocation resolves for a consumer.** This project ships only as a plugin:
 the harness copies the whole repository into the plugin cache, so at run time the helper lives
@@ -213,9 +247,17 @@ binds the head before `gh pr merge --match-head-commit`, so none is added.
 
 **Exit 1 does not imply nothing was published.** Three of the failure conditions below are checked
 after the comment is created — a failed readback, a stored copy differing from the composed one, and
-the three whole-line assertions. A comment the helper composed is gate-valid whether or not the
-readback succeeded, so an exit 1 from that side leaves a usable hand-off on the issue. The message
-names which condition failed, and the remedy is the same on either side of the post: re-run.
+the three whole-line assertions. A comment the helper composed satisfies the four byte-level
+conditions whether or not the readback succeeded, so an exit 1 from that side leaves a usable
+hand-off on the issue. The message names which condition failed.
+
+**The remedy for a nonzero exit is to re-run — except where the message says otherwise, and exactly
+one condition says otherwise.** That condition is assertion 5's, described immediately below:
+re-running it reproduces the same failure forever while appending another complete block each time.
+Every other nonzero exit, on either side of the post, is re-run. The rule is stated in this
+qualified form everywhere it appears — here, in the Interface section, in the decision record, and
+in the `SKILL.md` text the plan writes — because a blanket "re-run on nonzero" instruction sends a
+caller into an unbounded loop of public comments at the one exit that must not be retried.
 
 **Assertion 5's evidence class, and what to do when it fails.** No GitHub documentation guarantees
 that an issue comment's body round-trips byte for byte, and it is not checkable without posting to a
@@ -223,9 +265,11 @@ live issue. The evidence is a shipped precedent that is *adjacent* rather than i
 `skills/quest/scripts/publish-forge-review` runs the same `jq -e --rawfile expected` equality
 against a newline-terminated body in production — but it writes with `gh pr comment`, and this
 helper writes with `gh issue comment`. Only the readback endpoint is shared. The write path is
-assumed to behave the same and is not evidenced. Alongside that: bodies submitted through the web UI
-come back CRLF-normalized while API-posted LF bodies do not, which is why condition 1 exists as a
-separate diagnostic.
+assumed to behave the same and is not evidenced. Alongside that, and **assumed on the same terms
+rather than evidenced**: bodies submitted through the web UI are believed to come back
+CRLF-normalized while API-posted LF bodies do not. No command here establishes that, and condition 1
+exists as a separate diagnostic whether or not it holds — a CR defeats all three whole-line
+patterns at once, so it earns its own message regardless of how it got there.
 
 The disposition matters more than the premise. If assertion 5 ever fails while conditions 1–4 pass
 on the stored copy, a **gate-valid block is on the issue** — it is selectable and the hand-off has
@@ -254,7 +298,9 @@ configured default host, so on a workstation defaulting to an Enterprise instanc
 be created on one host and looked for on another.
 Exit 1 before the comment is posted means nothing was published; exit 1 after it means a complete
 block may be on the issue and merely unverified here. The distinction is carried by the message,
-which names the condition, and the remedy is the same either way — re-run, per R10.
+which names the condition. The remedy is re-running, per R10, unless the message says otherwise —
+assertion 5's is the one exit that says otherwise, and it says to inspect the stored comment and
+proceed.
 
 ## Failure modes and their messages
 
@@ -266,7 +312,9 @@ which names the condition, and the remedy is the same either way — re-run, per
 | notes carrying a whole-line `<!-- WORK:TRAJECTORY -->` or `<!-- TRAJECTORY:COMPLETE -->` | which marker |
 | notes mentioning `MERGE-READY:` anywhere | that the helper owns that line |
 | notes over the size cap | the cap |
-| issue unreadable (exit 2, as for an unreadable pull request) | the destination that could not be read |
+| `ISSUE` not among the pull request's closing references | `ISSUE`, what the pull request does close, and that one of them is wrong |
+| pull request declaring no closing issue at all | that the destination cannot be corroborated, and the `Closes #<n>` trailer as the remedy |
+| issue unreadable (exit 2, as for an unreadable pull request) | the destination that could not be read, naming `ISSUE` as the first thing to check |
 | issue reporting a number other than `ISSUE` | both numbers |
 | `ISSUE` naming a pull request rather than an issue | the swapped argument, before anything is posted |
 | pull request not `OPEN`, or its number disagrees | the observed state |
@@ -323,6 +371,17 @@ which names the condition, and the remedy is the same either way — re-run, per
 - A park note losing its sentinel. Out of this change's surface — the park path stays prose — and
   its cost is bounded: a parked issue reads as unparked to a human who opens it, where the hand-off
   case had no reader at all.
+- A pull request whose `Closes #<n>` trailer names the wrong issue. The destination binding is only
+  as good as that trailer, and nothing in the repository produces a second independent statement of
+  intent to check it against. Bounded and stated: the trailer is written by `$deliver` from the
+  issue number the run was dispatched with, so it is wrong only when the run itself was aimed at
+  the wrong issue — a condition no writer-side control at hand-off time can detect.
+- A stray `GIT_DIR` or `GIT_INDEX_FILE` in the caller's environment. **Not accepted** — the helper
+  clears git's local environment variables before `git ls-remote`, the way
+  `skills/quest/scripts/check-public-safety` does before its own `git` calls. Listed here because
+  silence would read as acceptance: without that clearing, the SHA could be read from a different
+  repository than the process working directory, and the handshake would bind a real SHA from the
+  wrong remote.
 
 **Covered elsewhere.**
 
@@ -361,10 +420,15 @@ The genuinely untrusted input is GitHub's response, which the helper parses.
 - *`ISSUE` argument → publication destination.* This is a boundary because the argument selects
   where public content is written and no later control re-derives it independently — every
   post-write check is built from the same value, so all of them agree with a wrong one. Validation:
-  digits only, then the resource is resolved and required to exist, to report the number asked for,
-  and to carry no `pull_request` key. The number becomes a REST path segment, so the digits-only
-  check precedes the read, and the corroboration precedes composition so a refusal leaves nothing
-  posted.
+  digits only; then the **pull request's** `closingIssuesReferences` must contain `ISSUE`, which is
+  the only check here whose evidence does not come from `ISSUE` itself; then the resolved resource
+  must carry no `pull_request` key, exist, and report the number asked for. The number becomes a
+  REST path segment, so the digits-only check precedes any read, and the whole corroboration
+  precedes composition so a refusal leaves nothing posted.
+- *`gh pr view` JSON → closing-issue numbers.* Each element's `number` is compared as an integer
+  against `ISSUE` and is never interpolated into a path or a command; a non-numeric or absent
+  `number` is a malformed response and faults rather than being skipped, because silently skipping
+  an unparseable element would weaken the check to "some element matched or none did".
 - *Comment URL → API path.* The URL is matched against the exact expected prefix for this repo and
   issue, and the remainder must be digits only before it is placed in a REST path. This is the
   control `publish-forge-review` already applies, for the same reason: the id becomes a path
@@ -412,10 +476,14 @@ Every other row has a case. In particular *a stored copy carrying CR* is **not**
 returns whatever stored body a case gives it, so a CR-laden stored copy is directly inducible even
 though the helper rejects a CR in the narrative long before composing.
 
-Two further cases exist for R11, which no failure-table row existed for before: an issue number
-naming a resource that does not exist, and an issue number naming a **pull request**, which the
-fake reports with a `pull_request` key. Both must refuse before any comment is created, and the
-second asserts the message names the swapped argument.
+Four cases exist for R11, which no failure-table row existed for before: an issue number the pull
+request does not close, a pull request declaring no closing issue at all, an issue number naming a
+resource that cannot be read, and an issue number naming a **pull request**, which the fake reports
+with a `pull_request` key. All four must refuse before any comment is created — each asserts that
+`gh issue comment` was never called, since refusing *before* the write is the entire value of the
+control. The first is the transposition case and is the one that matters most: the fake reports a
+`closingIssuesReferences` list naming a different, valid, open issue, so the case bites on the
+binding rather than on the destination being unreachable.
 
 `just test` discovers suites from the repository's tracked shell sources, so a brand-new suite file
 must be staged or committed before `just test publish-handoff` will find it. Running it directly is
@@ -429,8 +497,10 @@ The regression cases:
 - a second invocation after an unverified first posts a fresh complete block and succeeds
   (defect 4's remedy, R10).
 
-Each new assertion is verified to bite: the fault is introduced, red is observed, and the fault
-reverted.
+Each contract named in the implementation plan's Verification blocks is verified to bite: the fault
+is introduced, red is observed, and the fault reverted. That is the plan's enumerated fault set, not
+one controlled fault per case — the claim is bounded to what the plan actually schedules, because a
+promise to bite-test all thirty-odd assertions individually is one no step in the plan discharges.
 
 ## Non-goals
 
