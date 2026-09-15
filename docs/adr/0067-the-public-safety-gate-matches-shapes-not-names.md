@@ -22,10 +22,16 @@ Deny email addresses and an enumerated set of private-use domain suffixes. Do
 not add a general hostname pattern, and say so where callers read the scanner's
 description rather than leaving the gap implicit.
 
-The suffix set is RFC 6762 Appendix G's list of top-level domains used on
-private internal networks — `.intranet`, `.internal`, `.private`, `.corp`,
-`.home` and `.lan` — without `.local`, which that same appendix recommends
-against using this way.
+The suffix set is four of RFC 6762 Appendix G's six top-level domains used on
+private internal networks: `.intranet`, `.internal`, `.corp` and `.lan`. Three
+of the appendix's seven candidates are left out — `.home` and `.private`
+because they are also the trailing component of ordinary dotted identifiers, and
+`.local` because that appendix recommends against using it this way.
+
+The suffix is matched only where the label in front of it starts a dotted token,
+using the leading-boundary idiom the private-address patterns already use. That
+is the difference between a host written into prose and a suffix that is one
+segment of a longer dotted name.
 
 The email pattern requires an alphabetic top-level domain closed by a word
 boundary. That is what an address looks like in prose, and it also keeps the
@@ -35,7 +41,8 @@ binaries `--text` hands to every pattern here.
 Exemptions stay one anchored alternation compared against whole submatch text,
 extended rather than replaced. It carries three classes: the published CI home
 paths it already held, addresses in RFC 2606's reserved documentation domains,
-and the two published constants this repository's tracked prose carries.
+and the published constants a repository's prose carries — the commit trailer,
+and the fixed `git` user of the three public forges' SSH remote URLs.
 
 ## Consequences
 
@@ -43,6 +50,12 @@ and the two published constants this repository's tracked prose carries.
   is a backstop against shapes; names stay a reading problem, and
   `skills/quest/SKILL.md` now says so. Link-local `.local` names are likewise
   not caught.
+- A dotted token that starts a clause and ends in a kept suffix is denied even
+  when it is an identifier rather than a host — a bare module path ending in
+  `.internal` is the shape, and this record cannot spell one, because the gate
+  scans this record too. Both publishers discard the scanner's stdout, so the
+  operator sees a refusal and a pattern string but not the token; the remedy is
+  to reword, and an exemption entry only where the same token recurs.
 - A further exemption class is a data append while submatch texts stay disjoint
   between classes. A class whose submatches could equal another's needs a
   per-pattern mechanism instead; anchored whole-submatch comparison is what
@@ -56,13 +69,22 @@ and the two published constants this repository's tracked prose carries.
   `rg --no-config -n 'ibm\.com' $(git ls-files)` reports two attributed source
   URLs in `scripts/reserved-skill-names.txt`; any pattern broad enough to catch
   a leaked internal host catches those and every other vendor URL in the tree.
+- **Appendix G's full six, with `\b` on both ends.** verified: over prose about
+  code, that form matches `user.home`, `path.home`, `java.home`, `maven.home`,
+  `gradle.home`, `CATALINA.HOME`, `this.private`, `vpc.private` and
+  `com.acme.internal` — no host among them. Dropping `.home` and `.private` and
+  requiring a leading boundary leaves all nine green while a real host still
+  matches. `scripts/check-public-safety-test.sh` carries both halves; it
+  assembles the denied literal, which this record cannot.
 - **Keeping `.local` in the suffix set.** verified: at 29a64d5,
   `rg --no-config -n '[[:alnum:]-]+\.local\b' $(git ls-files)` reports seven
-  lines, `.gitignore` lines 3 and 5 among them, so the gate would redden on the
-  tracked tree it has to pass over.
+  lines, `.gitignore` lines 3 and 5 among them. The ground is this repository's
+  own `CLAUDE.local.md` and `settings.local.json` convention, not a general one.
 - **A per-pattern exemption array beside `denied_patterns`.** judgment: two
-  parallel arrays on a Bash 3.2 floor to express what one anchored alternation
-  expresses, against a collision whole-submatch equality already prevents.
+  parallel arrays on a Bash 3.2 floor to hold what one anchored alternation
+  holds. The single alternation is sound because the classes' submatch shapes
+  are disjoint, not because it is narrower — narrowing a pattern is a pattern
+  change, and this change makes one.
 - **Re-encoding `docs/assets/adept-logo-grimoire-original.png` to drop the
   embedded certificate chain whose subject holds an address.** verified: at
   29a64d5 the alphabetic-TLD-plus-boundary form exits 1 over `docs/assets/`, so

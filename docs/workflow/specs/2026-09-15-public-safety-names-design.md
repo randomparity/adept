@@ -21,12 +21,13 @@ selects the shape of the widening. Two entries join `denied_patterns`:
 
 - an email address — a local part, `@`, one or more domain labels, and an
   alphabetic top-level domain closed by a word boundary;
-- a private-use domain suffix — a label followed by one of RFC 6762 Appendix G's
-  six unofficial internal top-level domains, closed by a word boundary.
+- a private-use domain suffix — a dotted token's first label followed by one of
+  `.intranet`, `.internal`, `.corp` or `.lan`, closed by a word boundary.
 
-`.local` is deliberately absent, and no general hostname pattern is added. ADR
-0067 records both, and the caller-facing sentence at `skills/quest/SKILL.md`
-gains the limit rather than leaving a reader to infer it.
+`.local`, `.home` and `.private` are deliberately absent, and no general
+hostname pattern is added. ADR 0067 records all three decisions, and the
+caller-facing sentence at `skills/quest/SKILL.md` gains the limit rather than
+leaving a reader to infer it.
 
 The exemption mechanism keeps its present shape: one anchored regular
 expression compared against whole submatch text inside the existing `jq`
@@ -47,7 +48,9 @@ running `just commit-check` on every commit; CI running `just ci`;
 before a public write.
 
 **Invariants and assets at stake.** The gate must stay green over this
-repository's own tracked tree, or every commit in it reddens. A finding must
+repository's own tracked tree, or every commit in it reddens. A false positive
+in a composed body fails a public write closed, and both publishers discard the
+scanner's stdout, so the operator cannot see which token matched. A finding must
 not be silenced by an exemption written for an unrelated pattern. A scan that
 cannot run must not read as a scan that found nothing.
 
@@ -62,6 +65,12 @@ cannot run must not read as a scan that found nothing.
   and all three occur in this repository's tracked prose.
 - An address whose top-level domain is not alphabetic is not matched — not an
   address in prose, and the alphabetic form keeps the pattern off binary content.
+- A dotted token that starts a clause and ends in a kept suffix is denied even
+  when it is an identifier rather than a host — a bare module path ending in
+  `.internal`, in a sentence about an import. The cost is bounded: the write
+  fails closed, the remedy is to
+  reword the narrative, and the leading-boundary requirement already clears the
+  reproduced collisions (`user.home`, `com.acme.internal` and their kind).
 
 **Covered elsewhere.** Redaction of already-merged history, documents and
 assets — excluded from #377 by the frozen charter. The fifteen existing
@@ -69,9 +78,10 @@ patterns' own behaviour — excluded by the same charter.
 
 ## Threat model
 
-**Boundary inventory.** No boundary is added. One is widened: the exemption
-alternation, the only input that can turn a match into a pass. The two new
-patterns narrow the scan surface rather than widening it.
+**Boundary inventory.** No boundary is added. Two existing ones move: the
+exemption alternation, the only input that can turn a match into a pass, is
+widened; and the denied-pattern list, which decides what fails a write closed,
+gains two entries — availability, not confidentiality.
 
 **Actor model.** The untrusted content is the text under scan — a hand-off or
 review body assembled from model and tool output, and the tracked tree of a
@@ -79,14 +89,19 @@ public repository. The operator, the exemption list and the pattern list are
 trusted; they are code review's subject, not the gate's input.
 
 **Control per boundary.** Each exemption is compared anchored (`^…$`) against
-whole submatch text, so it can exempt only an exact string, never a substring
-or a line, and the `jq` filter reports a line when any submatch is non-exempt.
-Nothing is echoed on a fault; the existing clean/finding/fault status branches
-are unchanged.
+whole submatch text, so it can exempt only a whole submatch — never a substring,
+and never the line a non-exempt submatch shares with it. An exemption class may
+still be open-ended, as the RFC 2606 one is. The `jq` filter reports a line when
+any submatch is non-exempt. Nothing is echoed on a fault; the existing
+clean/finding/fault status branches are unchanged.
 
-**Explicitly out of scope.** Deliberate evasion by an author who controls the
-scanned bytes — the subject is accidental leakage, and an author who can edit
-the tree can edit the patterns. Detection of names, per ADR 0067.
+**Explicitly out of scope.** Deliberate evasion, for a different reason at each
+boundary. On the tracked tree, an author who can add a leak can edit the
+patterns in the same commit, so the gate is not a boundary against them. On the
+composed body that reason fails — the composer controls the bytes and cannot
+reach the bundled pattern list — so the posture is stated instead: it is
+untrusted but not adversarial, and a regex list is not claimed to stop a steered
+one. Detection of names, per ADR 0067.
 
 ## Success
 
@@ -102,8 +117,9 @@ the tree can edit the patterns. Detection of names, per ADR 0067.
 
 ## Validation
 
-Every entry below runs `just test check-public-safety` for its green command,
-against fixtures in `scripts/check-public-safety-test.sh`.
+The first five entries run `just test check-public-safety` against fixtures in
+`scripts/check-public-safety-test.sh`; each remaining entry names its own green
+command.
 
 - **Contract: the email pattern denies an address.** Mode: focused-test — a
   fixture carrying an address in a non-reserved domain; red before the pattern.
@@ -111,8 +127,9 @@ against fixtures in `scripts/check-public-safety-test.sh`.
   — fixtures for each exempt form; red if the exemption is absent.
 - **Contract: the suffix pattern denies a private-use host.** Mode:
   focused-test — one fixture per enumerated suffix.
-- **Contract: `.local` and an address without an alphabetic top-level domain
-  stay green.** Mode: focused-test — two negative fixtures.
+- **Contract: `.local`, `.home`, `.private`, a mid-chain suffix, and an address
+  without an alphabetic top-level domain stay green.** Mode: focused-test —
+  negative fixtures, each shown to bite by a reverted mutation.
 - **Contract: an exemption does not silence a leak on its line.** Mode:
   focused-test — one mixed-line fixture.
 - **Contract: the gate stays green over this repository's tracked tree.** Mode:

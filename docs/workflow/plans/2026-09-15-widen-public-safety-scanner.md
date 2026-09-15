@@ -39,9 +39,9 @@ spec](../specs/2026-09-15-public-safety-names-design.md):
   [ADR 0067](../../adr/0067-the-public-safety-gate-matches-shapes-not-names.md),
   written in the design phase. No task creates or edits it.
 
-Expected implementation size: 110–170 changed lines (M) — derived from this
+Expected implementation size: 130–190 changed lines (M) — derived from this
 plan's file map: two pattern entries plus the rewritten exemption assignment and
-its comment in the scanner, six fixture blocks in the suite, one sentence in
+its comment in the scanner, seven fixture blocks in the suite, four lines in
 `skills/quest/SKILL.md`, and one version field.
 
 ## File map
@@ -79,21 +79,27 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
   block added to `scripts/check-public-safety-test.sh`. Expected red before the
   pattern exists: `public-safety-test: an email address should be denied`.
   Green: `just test check-public-safety`.
-- **Contract: each of the six private-use suffixes is denied.**
+- **Contract: each of the four private-use suffixes is denied.**
   Mode: `focused-test`. Case: the per-suffix loop added to the same suite.
-  Expected red: `public-safety-test: a private-use suffix should be denied: intranet`.
-  Green: `just test check-public-safety`.
-- **Contract: reserved documentation addresses and the two published constants
+  Expected red at step 4: `public-safety-test: a private-use suffix should be
+  denied: intranet`. Green: `just test check-public-safety`.
+- **Contract: reserved documentation addresses and the published constants
   are exempt.** Mode: `focused-test`. Case: the exempt-constants block.
-  Expected red without the exemption: `public-safety-test: published address
-  constants should not be denied`. Green: `just test check-public-safety`.
+  Expected red at step 6: `public-safety-test: published address constants
+  should not be denied`. Green: `just test check-public-safety`.
+- **Contract: a dotted identifier ending in a kept suffix stays green.**
+  Mode: `focused-test`. Case: the identifier block. Bite shown at step 10 by
+  restoring `\b` in place of the leading boundary: `public-safety-test: a dotted
+  identifier is not a private-use host`. Green: same command.
 - **Contract: an address without an alphabetic top-level domain is not
-  matched.** Mode: `focused-test`. Case: the certificate-subject block. Expected
-  red if the pattern omits the alphabetic-TLD requirement: `public-safety-test:
-  a non-alphabetic top-level domain is not an address`. Green: same command.
-- **Contract: `.local` stays green.** Mode: `focused-test`. Case: the link-local
-  block. Expected red if `.local` joins the suffix list: `public-safety-test:
-  link-local names should not be denied`. Green: same command.
+  matched.** Mode: `focused-test`. Case: the certificate-subject block. Bite
+  shown at step 10 by relaxing `[[:alpha:]]` to `[[:alnum:]]`:
+  `public-safety-test: a non-alphabetic top-level domain is not an address`.
+  Green: same command.
+- **Contract: `.local`, `.home` and `.private` stay green.** Mode:
+  `focused-test`. Case: the excluded-suffix block. Bite shown at step 10 by
+  adding `local` to the alternation: `public-safety-test: excluded suffixes
+  should not be denied`. Green: same command.
 - **Contract: an exemption does not silence a leak on its line.** Mode:
   `focused-test`. Case: the mixed-line block. Expected red if the filter
   compares the line instead of each submatch: `public-safety-test: an address
@@ -117,9 +123,9 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
    fi
    rm -f "$SCRATCH/repo/contact.md"
 
-   # RFC 6762 Appendix G's six unofficial internal top-level domains. The
-   # suffix is interpolated so this file carries no labelled instance of one.
-   for suffix in intranet internal private corp home lan; do
+   # Four of RFC 6762 Appendix G's six unofficial internal top-level domains.
+   # The suffix is interpolated so this file carries no labelled instance of one.
+   for suffix in intranet internal corp lan; do
    	printf 'the box is build-agent.%s\n' "$suffix" >"$SCRATCH/repo/host.md"
    	if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
    		printf 'public-safety-test: a private-use suffix should be denied: %s\n' \
@@ -129,10 +135,11 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
    done
    rm -f "$SCRATCH/repo/host.md"
 
-   # Reserved documentation domains identify nobody, and the SSH remote user and
-   # the commit trailer are published constants this repository's prose carries.
+   # Reserved documentation domains identify nobody, and the forge SSH user and
+   # the commit trailer are published constants a repository's prose carries.
    {
    	printf 'clone with git@github.com:randomparity/adept.git\n'
+   	printf 'or with git@gitlab.com: or git@bitbucket.org:\n'
    	printf 'Co-Authored-By: Claude <noreply@anthropic.com>\n'
    	printf 'git config user.email fixture@example.invalid\n'
    	printf 'write to user@example.com, or to hook@example.test\n'
@@ -142,6 +149,23 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
    	cat "$SCRATCH/output" >&2
    	exit 1
    fi
+   rm -f "$SCRATCH/repo/exempt.md"
+
+   # A dotted identifier is not a host. The suffix pattern requires the label in
+   # front of the suffix to start a dotted token, which is what separates a name
+   # written into prose from one segment of a longer dotted identifier.
+   {
+   	printf 'System.getProperty("user.home") in package com.acme.internal;\n'
+   	printf 'path.home was unset and java.home pointed at a stale JDK\n'
+   	printf 'at com.example.internal.FooService.bar(FooService.java:42)\n'
+   	printf 'the class exposes this.private and self.private accessors\n'
+   } >"$SCRATCH/repo/identifiers.md"
+   if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+   	printf 'public-safety-test: a dotted identifier is not a private-use host\n' >&2
+   	cat "$SCRATCH/output" >&2
+   	exit 1
+   fi
+   rm -f "$SCRATCH/repo/identifiers.md"
 
    # An address in prose ends in an alphabetic top-level domain. --text hands
    # binaries to every pattern, and a certificate subject inside one runs into
@@ -154,21 +178,22 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
    fi
    rm -f "$SCRATCH/repo/binaryish.md"
 
-   # .local is excluded from the suffix set: it collides with this repository's
-   # own file-naming convention, which .gitignore carries (ADR 0067).
-   printf 'ignore CLAUDE.local.md and .claude/settings.local.json\n' \
-   	>"$SCRATCH/repo/ignored.md"
+   # .local, .home and .private are outside the suffix set (ADR 0067): the first
+   # collides with this repository's own file naming, which .gitignore carries,
+   # and the other two with ordinary dotted identifiers.
+   printf 'ignore CLAUDE.local.md, settings.local.json, user.home, vpc.private\n' \
+   	>"$SCRATCH/repo/excluded.md"
    if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
-   	printf 'public-safety-test: link-local names should not be denied\n' >&2
+   	printf 'public-safety-test: excluded suffixes should not be denied\n' >&2
    	cat "$SCRATCH/output" >&2
    	exit 1
    fi
-   rm -f "$SCRATCH/repo/ignored.md"
+   rm -f "$SCRATCH/repo/excluded.md"
 
    # The exemption is compared against each submatch, not the line: a real
    # address beside an exempt one is reported, and it is the one printed.
    printf 'mail git@github.com or person@leaky-ho%s\n' 'st.net' \
-   	>"$SCRATCH/repo/exempt.md"
+   	>"$SCRATCH/repo/mixed.md"
    if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
    	printf 'public-safety-test: an address leak beside an exempt one should fail\n' >&2
    	exit 1
@@ -178,23 +203,49 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
    	cat "$SCRATCH/output" >&2
    	exit 1
    fi
-   rm -f "$SCRATCH/repo/exempt.md"
+   rm -f "$SCRATCH/repo/mixed.md"
    ```
 
-2. Confirm the expected failure: run `just test check-public-safety`. Expect a
-   non-zero exit and, in the replayed output,
-   `public-safety-test: an email address should be denied`.
+2. Confirm the first expected failure: run `just test check-public-safety`.
+   Expect a non-zero exit and, in the replayed output,
+   `public-safety-test: an email address should be denied`. Each fixture block
+   ends in `exit 1`, so the suite stops at the first one and the edits below
+   unblock the next red in turn. Only the three blocks that assert a denial can
+   be red before the patterns exist; step 10 shows the three that assert a pass.
 
-3. Add the two patterns. In `skills/quest/scripts/check-public-safety`, in the
+3. Add the email pattern. In `skills/quest/scripts/check-public-safety`, in the
    `denied_patterns` array, insert immediately after the
    `'[[:alnum:]-]+\.atlassian\.net'` entry:
 
    ```bash
    	'[[:alnum:]._%+-]+@[[:alnum:]-]+(\.[[:alnum:]-]+)*\.[[:alpha:]]{2,}\b'
-   	'(?i)[[:alnum:]-]+\.(intranet|internal|private|corp|home|lan)\b'
    ```
 
-4. Replace the exemption. In the same file, keep the existing two paragraphs of
+4. Confirm the second expected failure: run `just test check-public-safety`.
+   The email block now passes and the suite reaches the suffix loop. Expect a
+   non-zero exit and `public-safety-test: a private-use suffix should be denied:
+   intranet`.
+
+5. Add the suffix pattern, on the line after the one step 3 added:
+
+   ```bash
+   	'(^|[^[:alnum:].-])[[:alnum:]-]+\.(intranet|internal|corp|lan)\b'
+   ```
+
+   The leading alternative is the idiom the `10\.` private-address entry already
+   uses: ripgrep's Rust regex engine has no lookbehind, so the character in
+   front is matched rather than asserted. It is what keeps `com.acme.internal`
+   and `java.home` out while a bare label in front of the suffix stays in. This
+   plan spells no such label: the gate scans this file too, which is why the
+   fixture above interpolates the suffix instead of writing it.
+
+6. Confirm the third expected failure: run `just test check-public-safety`. The
+   suffix loop now passes and the suite reaches the exempt-constants block,
+   which the email pattern denies until the exemption below lands. Expect a
+   non-zero exit and `public-safety-test: published address constants should not
+   be denied`.
+
+7. Replace the exemption. In the same file, keep the existing two paragraphs of
    comment beginning `# Two names under /home are not people.` exactly as they
    are, insert this paragraph above them, and replace the
    `public_home_match='^/home/(runner|linuxbrew)$'` line below them with the
@@ -202,46 +253,61 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
 
    ```bash
    # Three classes of submatch are not leaks, and one anchored alternation holds
-   # all three. The comparison below is against a submatch's whole text, so an
-   # entry here can only ever exempt an exact string: it cannot exempt a
-   # substring, and it cannot exempt the line a non-exempt submatch shares with
-   # it. That is what lets the classes share one expression while their shapes
-   # stay disjoint -- a home path can never equal an address (ADR 0067).
+   # all three. What lets them share one expression is that their shapes are
+   # disjoint: a home path can never equal an address, so no class can silence
+   # another's finding (ADR 0067). Anchoring bounds each entry to a whole
+   # submatch, which is not the same as bounding it to one string -- the RFC
+   # 2606 class below is deliberately open-ended, and a fourth class may be too.
    #
    # RFC 2606 reserves .test, .example and .invalid as top-level domains and
    # example.com, example.net and example.org as second-level domains, precisely
    # so documentation and fixtures can name an address that reaches nobody. This
    # repository's suites use them for every fixture Git identity.
    #
-   # git@github.com is the fixed user in an SSH remote URL rather than a mailbox,
-   # and noreply@anthropic.com is the published constant in this repository's
-   # commit trailers. Neither names a person. An address under
+   # git@ plus a public forge host is the fixed user in an SSH remote URL rather
+   # than a mailbox, and noreply@anthropic.com is the published constant in this
+   # repository's commit trailers. Neither names a person. An address under
    # users.noreply.github.com deliberately is not exempt: it carries a username,
-   # which CLAUDE.md lists as PII.
+   # which CLAUDE.md lists as PII, and so does a forge host that is not one of
+   # these three.
    exempt_submatch='^(/home/(runner|linuxbrew)'
    exempt_submatch="$exempt_submatch"'|[[:alnum:]._%+-]+@([[:alnum:]-]+\.)*(example\.(com|net|org)|invalid|test|example)'
-   exempt_submatch="$exempt_submatch"'|git@github\.com|noreply@anthropic\.com)$'
+   exempt_submatch="$exempt_submatch"'|git@(github|gitlab)\.com|git@bitbucket\.org|noreply@anthropic\.com)$'
    ```
 
-5. Point the filter at the new name. In the same file, in the `jq` invocation
+8. Point the filter at the new name. In the same file, in the `jq` invocation
    inside the `0)` branch of the pattern loop, change
    `--arg allowed "$public_home_match"` to `--arg allowed "$exempt_submatch"`.
 
-6. Confirm the pass: run `just test check-public-safety`. Expect exit 0 and
+9. Confirm the pass: run `just test check-public-safety`. Expect exit 0 and
    `test: 1 suites passed`.
 
-7. Run `just public-safety`, then `just lint`, then `just format-check`. Expect
-   exit 0 and no output from each.
+10. Show that the three blocks asserting a pass bite. Make each mutation, run
+    `just test check-public-safety`, confirm the named message, then revert the
+    mutation and re-confirm exit 0 before making the next one:
 
-8. Commit with `git add -A && git commit` and a conventional subject such as
-   `feat: deny addresses and private-use domain suffixes`. `prek` runs
-   `just commit-check`, which includes `public-safety`; expect it to pass.
+    - replace the suffix pattern's `(^|[^[:alnum:].-])` with `\b` — expect
+      `public-safety-test: a dotted identifier is not a private-use host`;
+    - replace the email pattern's `[[:alpha:]]{2,}` with `[[:alnum:]]{2,}` —
+      expect `public-safety-test: a non-alphabetic top-level domain is not an
+      address`;
+    - add `|local` to the suffix alternation — expect `public-safety-test:
+      excluded suffixes should not be denied`.
 
-**Acceptance criteria.** The two patterns are present in `denied_patterns`.
-`public_home_match` no longer appears anywhere in the repository. `just test
-check-public-safety`, `just public-safety`, `just lint` and `just format-check`
-each exit 0. **Rollback:** `git revert` the commit; nothing outside the working
-tree changed.
+11. Run `just public-safety`, then `just lint`, then `just format-check`. Expect
+    exit 0 and no output from each.
+
+12. Commit with `git add -A && git commit` and a conventional subject such as
+    `feat: deny addresses and private-use domain suffixes`. `prek` runs
+    `just commit-check`, which includes `public-safety`; expect it to pass.
+
+**Acceptance criteria.** The two patterns are present in `denied_patterns`, and
+`public_home_match` no longer appears in
+`skills/quest/scripts/check-public-safety` — the design records keep their own
+references to the old name, which are the record of the rename rather than
+residue of it. `just test check-public-safety`, `just public-safety`,
+`just lint` and `just format-check` each exit 0. **Rollback:** `git revert` the
+commit; nothing outside the working tree changed.
 
 ## Task 2 — State the limit where callers read it, and bump the manifest
 
@@ -266,33 +332,38 @@ saying.
   `scripts/check-plugin-version.sh` accepts the declared version. Command
   `just version-check`, exit 0. The strictly-greater rule runs in CI, which
   supplies `BASE_SHA`; a local run checks presence and format and says so.
+- **Contract: ADR 0067 is a well-formed record.** Mode: `focused-test`.
+  Observable contract: the `adr` profile of `.github/scripts/check-records.sh`
+  accepts it. Command `just records`, exit 0. The record was written in the
+  design phase, so no step edits it; this is where the plan verifies it.
 
 ### Steps
 
-1. In `skills/quest/SKILL.md`, replace the sentence that currently reads
-   `The scanner checks generic private paths (including Windows profile paths),
-   private addresses, and credential patterns. It is a backstop to the
-   public-safety review, not exhaustive PII detection.` with:
+1. In `skills/quest/SKILL.md`, replace the two lines at 866-867 — the sentence
+   beginning `The scanner checks generic private paths` and the one that follows
+   it — with these four. The surrounding paragraph wraps at 90-101 columns, so
+   the replacement does too; a narrower rewrap would reflow this paragraph alone
+   and no gate in this repository formats Markdown.
 
    ```markdown
-   The scanner checks generic private paths (including Windows profile paths),
-   private addresses, email addresses, an enumerated set of private-use domain
-   suffixes, and credential patterns. It matches shapes, not names: it does not
-   detect hostnames, and no enumeration covers every internal domain. It is a
-   backstop to the public-safety review, not exhaustive PII detection.
+   The scanner checks generic private paths (including Windows profile paths), private addresses,
+   email addresses, an enumerated set of private-use domain suffixes, and credential patterns. It
+   matches shapes, not names: it does not detect hostnames, and no enumeration covers every internal
+   domain. It is a backstop to the public-safety review, not exhaustive PII detection.
    ```
 
 2. In `.claude-plugin/plugin.json`, set the `version` field to `5.9.0`.
 
-3. Run `just version-check`, `just shape-check` and `just plugin-check`. Expect
-   exit 0 from each.
+3. Run `just version-check`, `just records`, `just shape-check` and
+   `just plugin-check`. Expect exit 0 from each.
 
 4. Commit with `git add -A && git commit` and a conventional subject such as
    `docs: say the public-safety gate matches shapes, not names`.
 
 **Acceptance criteria.** `skills/quest/SKILL.md` names the two new classes and
 the hostname limit. `.claude-plugin/plugin.json` declares `5.9.0`.
-`just version-check`, `just shape-check` and `just plugin-check` each exit 0.
+`just version-check`, `just records`, `just shape-check` and `just plugin-check`
+each exit 0.
 Then `just verify` bare exits 0 over the finished branch; the managed pre-push
 hook re-runs `just ci` in an isolated worktree on `git push` and regularly
 exceeds a two-minute tool timeout — slowness, not a hang, so raise the timeout
