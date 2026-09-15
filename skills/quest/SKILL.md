@@ -864,7 +864,9 @@ Adept maintenance scripts. The scanner requires `rg` and `jq`; the helper checks
 its other commands before composing content. Missing commands name an installation/PATH remedy.
 A missing bundled scanner requires repairing the installed skill, not substituting a repository gate.
 The scanner checks generic private paths (including Windows profile paths), private addresses,
-and credential patterns. It is a backstop to the public-safety review, not exhaustive PII detection.
+email addresses, an enumerated set of private-use domain suffixes, and credential patterns. It
+matches shapes, not names: it does not detect hostnames, and no enumeration covers every internal
+domain. It is a backstop to the public-safety review, not exhaustive PII detection.
 Unsafe content and scan failures both stop publication and retain evidence, with distinct messages
 that do not echo matched content.
 
