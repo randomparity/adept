@@ -108,12 +108,14 @@ repository-relative path would resolve at neither.
 Exit 0 succeeds, 1 means a condition failed, 2 means the helper could not run. A nonzero exit
 holds both paths and never authorizes a merge. Re-run it once rather than diagnosing the block by
 hand. **If the identical condition fails a second time the failure is deterministic** — stop
-re-running, inspect the issue for a complete block, and proceed from what is actually there. A
-nonzero exit does not by itself mean nothing was posted; some conditions are checked after the
-comment is created, so an unbounded retry appends one more public comment per pass while the
-merge stays held. The named instance of that is a stored comment differing byte-for-byte from
-the composed body while every gate condition still holds on it: a usable block is already on the
-issue. It is the example, not the whole set.
+re-running and inspect the issue. If a complete block is there, the hand-off is published: proceed
+from it. If there is none, nothing was posted: report the failure and stop. A nonzero exit does not
+by itself mean nothing was posted; some conditions are checked after the comment is created, so an
+unbounded retry appends one more public comment per pass while the merge stays held. The named
+instance is a stored comment differing byte-for-byte from the composed body while every gate
+condition still holds on it: a usable block is already on the issue. It is the example, not the
+whole set — and the exits checked *before* the write are why the instruction above is to inspect
+first rather than to proceed.
 
 ## Default: hand off, do not self-merge
 

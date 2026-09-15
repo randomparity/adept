@@ -859,8 +859,11 @@ The 35 cases, one line each — case name, then the single thing it asserts:
     before the fix with the real message — `the hand-off comment URL does not name ACME/WIDGETS#308`
     — after the comment had already been created and was gate-valid.
 37. `case_destination_url_missing` — a destination response carrying no `html_url` exits **2**
-    naming the missing canonical URL, having posted nothing. Without it, the empty prefix the fix
-    would otherwise build matches every URL, which is worse than what it replaced.
+    naming the missing canonical URL, having posted nothing. Without the guard the prefix is
+    `#issuecomment-`, which a `case` pattern anchors at the start, so it matches no absolute URL:
+    the helper still fails closed, but only *after* the comment has been created — reproducing the
+    post-write exit 1 that R13 exists to remove. The guard moves that refusal ahead of the write,
+    which is what the case asserts by requiring exit 2 and an events log carrying no `post`.
 
 Cases 38–40 were added by the `$detect-evil` pass, which is why each names a boundary rather than a
 gate condition:
@@ -982,12 +985,15 @@ the helper reads the SHA from `git ls-remote`, requires GitHub's `headRefOid` to
 both the composed and the stored copy; states the exit taxonomy; and states that a nonzero exit
 holds both paths and does not by itself mean nothing was posted, since some conditions are checked
 after the comment is created. **State the re-run rule in its bounded form**: a nonzero exit is
-re-run *once*, and an identical second failure is deterministic — stop, inspect the issue for a
-complete block, and proceed from what is there. The stored-copy condition that reports a usable
+re-run *once*, and an identical second failure is deterministic — stop re-running and inspect the
+issue. If a complete block is there, proceed from it; if there is none, nothing was posted, so
+report the failure and stop. Both halves are needed: the bound reaches the pre-write exits as well,
+and at those there is nothing to proceed from. The stored-copy condition that reports a usable
 block already on the issue is the named example, not the whole set; a blanket "re-run on nonzero"
 instruction sends the caller into an unbounded loop of public comments at every post-write exit.
 (Branch review falsified the enumerated form this step originally carried, by constructing a second
-such exit. See the specification's *What this does and does not close*.)
+such exit, and then caught the pre-write hole the first correction opened. See the specification's
+*What this does and does not close*.)
 
 **Also state where the notes file goes.** The step introduces an artifact the prose version never
 had, and nothing removes it. Say to write it outside the checkout, in a directory of its own

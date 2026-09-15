@@ -831,7 +831,11 @@ case_repo_case_variant_is_canonicalized() {
 }
 
 # The prefix now comes from the destination response, so a response without one
-# is a fault rather than a silently empty prefix that matches any URL.
+# is a fault *before* the write rather than an exit 1 after it. An empty
+# html_url leaves the prefix `#issuecomment-`, which a case pattern anchors at
+# the start, so it matches no absolute URL -- the helper would still fail
+# closed, but only once the comment had been created, which is the post-write
+# refusal R13 exists to remove. Hence the assertion on the events log.
 case_destination_url_missing() {
 	local label='a destination response carrying no html_url is a fault'
 	new_case

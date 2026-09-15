@@ -170,10 +170,11 @@ a first, so a caller that cannot tell whether its previous invocation completed 
 again. Nothing reads, modifies, or deletes an existing comment.
 
 **R11 — the write destination is corroborated before composing.** The issue number decides where
-the block lands, and it is the one argument whose correctness nothing downstream can check: the
-expected comment-URL prefix is composed from it and the readback path is taken from the id in that
-URL, so the URL match, the id extraction, the readback, and all four stored assertions in R5 pass
-just as readily on the wrong issue. A transposed or stale number would therefore publish a
+the block lands, and it is the one argument whose correctness nothing downstream can check: every
+post-write check is reached through the resource that argument selected — the canonical URL R13
+matches against is read from that resource's own response, and the readback path is taken from the
+id in the URL — so the URL match, the id extraction, the readback, and all four stored assertions
+in R5 pass just as readily on the wrong issue. A transposed or stale number would therefore publish a
 complete, gate-valid block where nobody reads, and the helper would exit 0 printing a verified URL
 for it — reaching, with a success status, the exact symptom this change exists to make unreachable.
 R10's remedy does not apply, because latest-complete-wins never visits an issue nobody wrote to.
@@ -289,11 +290,22 @@ again: each pass appends another complete public block while the merge stays hel
 the named instance, described immediately below, and it is the example rather than the whole set —
 the post-write half of this helper also parses the returned URL and reads the stored copy back, and
 any of those can fail the same way twice. The bound is therefore on the *repetition*, not on an
-enumeration of exits: re-run once, and on an identical second failure inspect the issue for a
-complete block and proceed from what is there. The rule is stated in this bounded form everywhere
-it appears — here, in the Interface section, in the decision record, and in the `SKILL.md` text the
-plan writes — because a blanket "re-run on nonzero" instruction sends a caller into an unbounded
-loop of public comments at exactly the exits that must not be retried.
+enumeration of exits: re-run once, and on an identical second failure stop re-running and inspect
+the issue.
+
+**What to do then depends on which side of the write the failure was on**, and the distinction is
+the one the paragraph above already draws. If a complete block is on the issue, the hand-off is
+published — proceed from it. If there is none, nothing was posted: report the failure and stop.
+Without that clause the bound would prescribe "proceed from what is there" at the pre-write exits
+too — a missing command, an unreadable narrative, a refused destination — where there is nothing
+to proceed from, and where proceeding would contradict the rule that a nonzero exit never
+authorizes a merge.
+
+This rule is stated in two places and only two: here, and in the `SKILL.md` text the plan writes,
+which is the surface a caller actually follows. The Interface section and the decision record point
+here rather than restating it — a blanket "re-run on nonzero" instruction sends a caller into an
+unbounded loop of public comments at exactly the exits that must not be retried, and a fourth copy
+of the correction is how that instruction comes back.
 
 An earlier draft of this section stated the bound as an enumeration: one named condition must not be
 retried and every other nonzero exit is safe to re-run. Branch review falsified it by constructing a
@@ -341,9 +353,9 @@ configured default host, so on a workstation defaulting to an Enterprise instanc
 be created on one host and looked for on another.
 Exit 1 before the comment is posted means nothing was published; exit 1 after it means a complete
 block may be on the issue and merely unverified here. The distinction is carried by the message,
-which names the condition. The remedy is re-running, per R10, unless the message says otherwise —
-assertion 5's is the one exit that says otherwise, and it says to inspect the stored comment and
-proceed.
+which names the condition, and it is the distinction the remedy turns on. The remedy is to re-run
+once, per R10; an identical second failure is deterministic and is handled as *What this does and
+does not close* describes. That section owns the rule; this one does not restate it.
 
 ## Failure modes and their messages
 
