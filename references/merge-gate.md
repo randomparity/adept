@@ -97,8 +97,8 @@ fault**.
    *Recipe: read the latest complete annotation of a type* tests only the opening marker and
    the closing sentinel before `last`, so it returns the newest complete `WORK:TRAJECTORY`
    block whatever that block says — including the park note this part exists to exclude — and
-   it selects over comment bodies, which cannot yield the author the check below needs. The
-   two tests it does share keep their usual meaning here: a block missing its
+   it selects over comment bodies, which cannot yield the author the check below needs. What
+   it does share keeps its usual meaning here: a block missing its
    `TRAJECTORY:COMPLETE` sentinel is a write that died midway and counts as absent, and `last`
    is what implements latest-complete-wins over the blocks the `MERGE-READY` test admits.
 
