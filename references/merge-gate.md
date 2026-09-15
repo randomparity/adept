@@ -98,9 +98,9 @@ fault**.
    the closing sentinel before `last`, so it returns the newest complete `WORK:TRAJECTORY`
    block whatever that block says — including the park note this part exists to exclude — and
    it selects over comment bodies, which cannot yield the author the check below needs. What
-   it does share keeps its usual meaning here: a block missing its
-   `TRAJECTORY:COMPLETE` sentinel is a write that died midway and counts as absent, and `last`
-   is what implements latest-complete-wins over the blocks the `MERGE-READY` test admits.
+   it does share keeps its usual meaning here: a block missing its `TRAJECTORY:COMPLETE`
+   sentinel is a write that died midway and counts as absent, and `last` is what implements
+   latest-complete-wins over the blocks the `MERGE-READY` test admits.
 
    ```sh
    gh issue view <n> --repo <owner/name> --json comments |
