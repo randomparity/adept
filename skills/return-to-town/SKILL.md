@@ -72,16 +72,37 @@ When the `OPEN` route satisfies `$deliver`'s exit condition, you are at the hand
 ## Record the author handshake
 
 Before choosing the default or operator-authorized path, record the hand-off (quest-log
-skill): post a `WORK:TRAJECTORY` comment on the
-issue with `outcome: handed off — PR #N green+mergeable, awaiting human merge`, guardrail
-status, and any surprises.
+skill). Write the narrative to a notes file — `outcome: handed off — PR #N green+mergeable,
+awaiting human merge`, guardrail status, and any surprises — and let the helper post it. Write
+it only once the work is finished; "the pull request is green" is not that moment.
 
-**That comment carries the handshake.** Add a whole line reading `MERGE-READY: #<N> @
-<HEAD_SHA>`, where `HEAD_SHA` is the full 40-character SHA from `git ls-remote origin
-"refs/heads/<branch>" | cut -f1` — never `headRefOid`, never an abbreviation. Write it only
-once the work is finished; "the pull request is green" is not that moment. Read the complete
-comment back and verify the markers, pull request number, and exact SHA. A failed, partial, or
-unverifiable write holds both paths; it never authorizes a merge.
+**The helper owns the annotation, and you own only the narrative.** `publish-handoff` writes
+the opening marker, the closing sentinel, and the `MERGE-READY` handshake line itself; your
+notes file must contain none of the three, and it is refused if it does. It reads the head SHA
+from `git ls-remote origin` — never `headRefOid`, never an abbreviation — requires GitHub's
+`headRefOid` to agree with it, and refuses when they disagree, because that is the moment the
+SHA a handshake would bind has already gone stale. It binds the destination to the pull
+request, requiring the issue to be one the pull request closes. It asserts every byte-level
+condition the merge gate checks, first on the body it composed and again on the copy GitHub
+stored, and prints the verified comment URL.
+
+```sh
+"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" --preflight <owner/name> <issue> <PR> <notes-file>
+"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" <owner/name> <issue> <PR> <notes-file>
+```
+
+Run it from the checkout whose `origin` is the repository being handed off. The path and the
+working directory are two different places: `$CLAUDE_PLUGIN_ROOT` locates the executable inside
+the plugin cache, while the head SHA is read from `origin` at your working directory. A
+repository-relative path would resolve at neither.
+
+Exit 0 succeeds, 1 means a condition failed, 2 means the helper could not run. A nonzero exit
+holds both paths and never authorizes a merge. Re-run it rather than diagnosing the block by
+hand — **unless the message says otherwise**, which exactly one condition does: where the stored
+comment differs byte-for-byte from the composed body while every gate condition still holds on
+it, a usable block is already on the issue, and re-running would append another one forever.
+Inspect that one and proceed. A nonzero exit does not by itself mean nothing was posted; some
+conditions are checked after the comment is created.
 
 ## Default: hand off, do not self-merge
 
