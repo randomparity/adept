@@ -66,20 +66,20 @@ cannot run must not read as a scan that found nothing.
   person; the reserved-domain class is safe because the domain reaches nobody,
   and its local part is unconstrained, so a half-redacted address that kept the
   name and rewrote the domain passes. All three occur in tracked prose here.
-- A host of three or more labels under a kept suffix is not matched: the leading
-  boundary that keeps a dotted identifier out puts the suffix out of reach for
-  `build01.dc2.corp` too. The permissive form that would reach it reddens on
+- A host whose kept suffix is its third label or later is not matched: the
+  leading boundary admits no start position for `build01.dc2.corp` or
+  `jenkins.eng.internal`. The permissive form that would reach them reddens on
   package paths (ADR 0067), so this false negative is taken deliberately, pinned
   by a fixture, and stated in `skills/quest/SKILL.md`.
 - An address whose top-level domain is not alphabetic is not matched — not an
   address in prose, and the alphabetic form keeps the pattern off binary content.
-- A dotted token is denied when it ends in a kept suffix and its first label
-  begins a whitespace- or punctuation-delimited run — anywhere in a line, not
-  only at its start — even where the token is an identifier rather than a host:
-  a bare module path ending in `.internal`, in a sentence about an import. The
-  cost is bounded: the write fails closed, the remedy is to reword the
-  narrative, and the leading-boundary requirement already clears the reproduced
-  collisions (`user.home`, `com.acme.internal` and their kind).
+- A dotted token is denied when its second label is a kept suffix, whatever
+  follows it, provided its first label begins a whitespace- or
+  punctuation-delimited run — anywhere in a line, not only at its start. That
+  covers an identifier as well as a host: a package path whose second segment is
+  one of the four. The cost is bounded: the write fails closed, the remedy is to
+  reword the narrative, and the leading-boundary requirement already clears the
+  reproduced collisions (`user.home`, `com.acme.internal` and their kind).
 
 **Covered elsewhere.** Redaction of already-merged history, documents and
 assets — excluded from #377 by the frozen charter. The fifteen existing

@@ -56,19 +56,20 @@ safe is that the domain reaches nobody, not that the address names nobody.
   is a backstop against shapes; names stay a reading problem, and
   `skills/quest/SKILL.md` now says so. Link-local `.local` names are likewise
   not caught.
-- A dotted token is denied when it ends in a kept suffix and its first label
-  begins a whitespace- or punctuation-delimited run — anywhere in a line, not
-  only at its start — even where the token is an identifier rather than a host.
-  A bare module path ending in `.internal` is the shape, and this record cannot
-  spell one, because the gate scans this record too. Both publishers discard the
-  scanner's stdout, which is
+- A dotted token is denied when its **second** label is a kept suffix, whatever
+  follows it, provided its first label begins a whitespace- or
+  punctuation-delimited run — anywhere in a line, not only at its start. So a
+  vendor URL whose host carries a kept suffix in second position is denied along
+  with a bare two-label host, and so is an identifier such as a package path
+  whose second segment is one of the four. This record cannot spell either,
+  because the gate scans it. Both publishers discard the scanner's stdout, which is
   where the token is; `publish-handoff` passes stderr through, so it names the
   pattern, and `publish-forge-review` discards that too. The operator re-runs
   the scanner by hand. The remedy is to reword, and an exemption entry only
   where the same token recurs.
-- The leading boundary that keeps a dotted identifier out also keeps a host of
-  three or more labels out: for `build01.dc2.corp` there is no start position
-  from which a match can begin, so an internal FQDN is a false negative. The
+- The other direction is the false negative: a host whose kept suffix is its
+  third label or later is out of reach, because the leading boundary admits no
+  start position — `build01.dc2.corp` and `jenkins.eng.internal` both pass. The
   permissive form that would reach it was measured and reddens on package paths
   such as `com.acme.internal`, which is the collision this record's rejected
   alternative already names — so the shape limit is taken and stated rather than
