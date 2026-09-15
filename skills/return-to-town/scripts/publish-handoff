@@ -1,0 +1,477 @@
+#!/usr/bin/env bash
+# Compose, post, and verify the merge hand-off WORK:TRAJECTORY annotation.
+#
+# The merge gate (references/merge-gate.md part 4) admits a hand-off only when
+# one comment satisfies three anchored whole-line conditions at once: the
+# opening marker, the closing sentinel, and a MERGE-READY line carrying this
+# pull request's number and the exact head SHA. Composing that by hand failed
+# four times in one campaign run -- a backticked handshake, a missing sentinel
+# twice, and a worker that died partway -- and every failure surfaced one actor
+# away, in the orchestrator's gate, as "zero matching blocks".
+#
+# So the caller supplies the narrative and nothing else. This script writes both
+# markers and the handshake line, computes the SHA itself, and asserts every
+# condition against the copy GitHub stored rather than the copy it composed --
+# the composed copy proves nothing about what the gate will read.
+#
+# Exit 0 success, 1 a condition failed, 2 the script could not run. Every
+# nonzero exit names the condition: "which of the three failed" is precisely
+# what the orchestrator otherwise has to work out by re-reading the body.
+set -euo pipefail
+
+MARKER='<!-- WORK:TRAJECTORY -->'
+SENTINEL='<!-- TRAJECTORY:COMPLETE -->'
+MAX_NOTES_BYTES=8192
+
+SCRIPT_DIR=${BASH_SOURCE[0]%/*}
+[ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR=.
+SCRIPT_DIR=$(cd "$SCRIPT_DIR" && pwd)
+ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
+
+operation=publish
+repo=''
+issue=''
+pr=''
+notes=''
+workspace=''
+body=''
+stored=''
+handshake=''
+head_sha=''
+pr_closing_refs=''
+response=''
+
+# A finding and a fault are different verdicts and get different statuses. Exit
+# 1 means the hand-off is not publishable and says why; exit 2 means this script
+# could not decide, which must never read as a clean hand-off.
+fail() { # message
+	printf 'publish-handoff: %s\n' "$1" >&2
+	exit 1
+}
+
+fault() { # message
+	printf 'publish-handoff: %s\n' "$1" >&2
+	exit 2
+}
+
+# Under `set -e` an EXIT trap's non-zero return becomes the shell's exit status,
+# so a scratch directory this cannot remove must not silently become the finding
+# status -- it reports itself and takes exit 2 only on a run that was otherwise
+# clean, leaving a real verdict its own. The prefix guard is defence in depth on
+# the one recursive removal here: $workspace is what mktemp returned from a fixed
+# template and no code reassigns it.
+#
+# shellcheck disable=SC2329 # run by the EXIT trap, not called directly
+cleanup() {
+	local exit_status=$?
+	if [ -n "$workspace" ] && [ -d "$workspace" ]; then
+		case $workspace in
+		"${TMPDIR:-/tmp}"/publish-handoff.*)
+			if ! rm -Rf -- "$workspace"; then
+				printf 'publish-handoff: retained scratch path: %s\n' "$workspace" >&2
+				if [ "$exit_status" -eq 0 ]; then
+					exit 2
+				fi
+			fi
+			;;
+		*)
+			printf 'publish-handoff: refusing cleanup outside the scratch root: %s\n' \
+				"$workspace" >&2
+			if [ "$exit_status" -eq 0 ]; then
+				exit 2
+			fi
+			;;
+		esac
+	fi
+	exit "$exit_status"
+}
+trap cleanup EXIT
+
+require_commands() {
+	local required
+	# rg is here because check-public-safety.sh needs it and exits 2 without it.
+	# Refusing at this preflight names the missing binary; letting it through
+	# reaches that gate's fault status instead, which says nothing useful.
+	for required in gh jq git grep rg iconv od awk wc tail cat mktemp rm; do
+		command -v "$required" >/dev/null 2>&1 ||
+			fault "required command is unavailable: $required"
+	done
+	[ -x "$ROOT/scripts/check-public-safety.sh" ] ||
+		fault "public-safety check is unavailable: $ROOT/scripts/check-public-safety.sh"
+}
+
+validate_arguments() {
+	if [ "${1-}" = --preflight ]; then
+		operation=preflight
+		shift
+	fi
+	[ "$#" -eq 4 ] ||
+		fault 'usage: publish-handoff [--preflight] REPO ISSUE PR NOTES'
+	repo=$1
+	issue=$2
+	pr=$3
+	notes=$4
+	# Enumerated rather than a range: a bash bracket expression takes its ranges
+	# from the locale's collation, so under a territory UTF-8 locale [A-Za-z]
+	# admits accented letters this must not accept in a path segment.
+	case $repo in
+	*/*/*) fail "repository is invalid, expected owner/name: $repo" ;;
+	*/*) ;;
+	*) fail "repository is invalid, expected owner/name: $repo" ;;
+	esac
+	[ -n "${repo%%/*}" ] && [ -n "${repo#*/}" ] ||
+		fail "repository is invalid, expected owner/name: $repo"
+	case $repo in
+	*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/-]*)
+		fail "repository carries a character that is not permitted in owner/name: $repo"
+		;;
+	esac
+	case $issue in
+	'' | *[!0123456789]* | 0) fail "issue number is invalid: $issue" ;;
+	esac
+	case $pr in
+	'' | *[!0123456789]* | 0) fail "pull request number is invalid: $pr" ;;
+	esac
+}
+
+make_workspace() {
+	workspace=$(mktemp -d "${TMPDIR:-/tmp}/publish-handoff.XXXXXX") ||
+		fault 'could not create a scratch directory'
+	body="$workspace/body"
+	stored="$workspace/stored"
+}
+
+# od answers three ways and awk collapses two of them, so both statuses are read
+# explicitly: a scan that could not run must never report as a scan that found
+# nothing.
+contains_byte() { # byte path -- 0 present, 1 absent
+	local byte=$1 path=$2 od_status awk_status statuses
+	if LC_ALL=C od -An -v -t x1 "$path" |
+		awk -v byte="$byte" '{ for (i = 1; i <= NF; i += 1) if ($i == byte) found = 1 }
+			END { exit found ? 0 : 1 }'; then
+		statuses=("${PIPESTATUS[@]}")
+	else
+		statuses=("${PIPESTATUS[@]}")
+	fi
+	od_status=${statuses[0]}
+	awk_status=${statuses[1]}
+	[ "$od_status" -eq 0 ] || fault "could not read $path to check its bytes"
+	case $awk_status in
+	0) return 0 ;;
+	1) return 1 ;;
+	*) fault "byte validation of $path failed (awk exit $awk_status)" ;;
+	esac
+}
+
+byte_count_of() { # label path
+	local count
+	count=$(wc -c <"$2") || fault "$1 could not be measured: $2"
+	count=${count//[[:space:]]/}
+	case $count in
+	'' | *[!0123456789]*) fault "$1 size could not be read: $2" ;;
+	esac
+	printf '%s\n' "$count"
+}
+
+grep_whole_line() { # line path label -- 0 present, 1 absent
+	local scan_status=0
+	grep -qxF -- "$1" "$2" || scan_status=$?
+	case $scan_status in
+	0) return 0 ;;
+	1) return 1 ;;
+	*) fault "scanning $3 failed (grep exit $scan_status)" ;;
+	esac
+}
+
+validate_notes() {
+	local count marker scan_status
+	[ -f "$notes" ] && [ ! -L "$notes" ] && [ -r "$notes" ] ||
+		fail "hand-off notes are not a readable regular file: $notes"
+	[ -s "$notes" ] || fail "hand-off notes are empty: $notes"
+	count=$(byte_count_of 'hand-off notes' "$notes")
+	[ "$count" -le "$MAX_NOTES_BYTES" ] ||
+		fail "hand-off notes are $count bytes, over the $MAX_NOTES_BYTES-byte limit: $notes"
+	iconv -f UTF-8 -t UTF-8 "$notes" >/dev/null 2>&1 ||
+		fail "hand-off notes are not UTF-8 text: $notes"
+	if contains_byte 00 "$notes"; then
+		fail "hand-off notes contain a NUL byte: $notes"
+	fi
+	if contains_byte 0d "$notes"; then
+		fail "hand-off notes contain a carriage return: $notes"
+	fi
+	for marker in "$MARKER" "$SENTINEL"; do
+		if grep_whole_line "$marker" "$notes" 'the hand-off notes for an annotation marker'; then
+			fail "hand-off notes already carry the whole line $marker; this script writes both markers"
+		fi
+	done
+	# Substring, not an anchored line. The defect this closes wrote the
+	# handshake inside backticks, which no line-anchored pattern sees, and the
+	# narrative has no legitimate reason to contain the token at all.
+	scan_status=0
+	grep -qF -- 'MERGE-READY:' "$notes" || scan_status=$?
+	case $scan_status in
+	0) fail "hand-off notes mention MERGE-READY:; this script composes that line itself, so the notes must not contain it" ;;
+	1) ;;
+	*) fault "scanning the hand-off notes for a handshake line failed (grep exit $scan_status)" ;;
+	esac
+}
+
+# Read from git rather than hardcoded: the list of repository-local variables is
+# git's to define, and a hardcoded copy silently goes stale when git adds one.
+clear_local_git_env() {
+	local variable variables
+	variables=$(git rev-parse --local-env-vars) ||
+		fault 'could not read the list of git local environment variables'
+	[ -n "$variables" ] ||
+		fault 'git reported no local environment variables'
+	while IFS= read -r variable; do
+		[ -n "$variable" ] || continue
+		unset "$variable"
+	done <<<"$variables"
+}
+
+# The issue number decides where the block lands, and every check after the write
+# is derived from it -- the expected comment-URL prefix is composed from it, and
+# the readback path comes from the id in that URL -- so none of them can detect it
+# being wrong. A transposed number would publish a complete block where nobody
+# reads, and exit 0 printing a verified URL for it.
+#
+# Which is why asking the issue about itself is not enough: "does it exist", "is
+# it an issue", "does it report this number" are all answered by the resource the
+# argument selected, so a transposed but valid number passes every one. The
+# binding that bites comes from the pull request instead -- it names the issues it
+# closes, and that statement does not inherit the argument under test.
+resolve_destination() {
+	local issue_json is_pull number matched
+	# The independent check, first, because it is the one that catches the
+	# likeliest mistake. An empty list is refused rather than waved through: the
+	# requirement is that the destination be corroborated before composing, and an
+	# uncorroborated destination is the state this function exists to eliminate.
+	# Note the ground is this script's own requirement -- references/merge-gate.md
+	# imposes no closing-reference rule, and claiming it did would be inventing a
+	# contract the reference does not contain.
+	[ -n "$pr_closing_refs" ] ||
+		fail "pull request $repo#$pr declares no closing issue, so the hand-off destination cannot be corroborated; add a 'Closes #$issue' trailer to the pull request body and re-run"
+	matched=no
+	# An if, not `[ ... ] && matched=yes`: under `set -e` a failing && list as the
+	# last command in the loop body exits the shell, so the common case -- a
+	# closing reference that is not this issue -- would abort mid-check.
+	while IFS= read -r number; do
+		case $number in
+		'' | *[!0123456789]*)
+			fault "the pull request reported an unparseable closing-issue number: $number"
+			;;
+		esac
+		if [ "$number" = "$issue" ]; then
+			matched=yes
+		fi
+	done <<<"$pr_closing_refs"
+	[ "$matched" = yes ] ||
+		fail "pull request $repo#$pr closes $(printf '%s' "$pr_closing_refs" | tr '\n' ' ')but the hand-off names issue $issue; one of the two is wrong"
+	issue_json=$(gh api --hostname github.com "/repos/$repo/issues/$issue") ||
+		fault "the hand-off destination could not be read: $repo#$issue -- check the ISSUE argument first, then whether GitHub is reachable"
+	# GitHub serves pull requests from the issues number space and returns them
+	# with a pull_request key an ordinary issue does not carry. The closing-issue
+	# check above does not cover this: a pull request number may legitimately
+	# appear in no closing-reference list, so a swapped ISSUE/PR pair would fail
+	# there with a message about the wrong thing. Without this check the comment is
+	# created before anything can object, surfacing one step later as an
+	# unparseable URL rather than as the swapped argument it is.
+	is_pull=$(jq -r 'if has("pull_request") then "yes" else "no" end' <<<"$issue_json") ||
+		fault 'the destination response could not be parsed'
+	[ "$is_pull" = no ] ||
+		fail "$repo#$issue is a pull request, not an issue; the hand-off block is recorded on the issue, so ISSUE and PR appear to have been swapped"
+	number=$(jq -r '.number' <<<"$issue_json") ||
+		fault 'the destination response could not be parsed'
+	[ "$number" = "$issue" ] ||
+		fail "the destination reported number $number, not $issue"
+}
+
+# The SHA is read from the remote, never from headRefOid, per
+# skills/return-to-town/SKILL.md. headRefOid is then required to agree: it is a
+# second independent observation, and a disagreement means the branch moved
+# between the two reads -- exactly the moment a handshake must not be posted.
+resolve_head() {
+	local pr_json number state head_branch head_ref_oid cross ls_output line_count
+	pr_json=$(gh pr view "$pr" --repo "github.com/$repo" \
+		--json number,state,headRefName,headRefOid,isCrossRepository,closingIssuesReferences) ||
+		fault "the pull request could not be read: $repo#$pr"
+	# Read here because this is the call that already exists; consumed by
+	# resolve_destination, which runs next. One number per line, empty when the
+	# pull request body carries no Closes trailer.
+	pr_closing_refs=$(jq -r '.closingIssuesReferences[].number' <<<"$pr_json") ||
+		fault 'the pull request response could not be parsed'
+	number=$(jq -r '.number' <<<"$pr_json") ||
+		fault 'the pull request response could not be parsed'
+	state=$(jq -r '.state' <<<"$pr_json") ||
+		fault 'the pull request response could not be parsed'
+	head_branch=$(jq -r '.headRefName' <<<"$pr_json") ||
+		fault 'the pull request response could not be parsed'
+	head_ref_oid=$(jq -r '.headRefOid' <<<"$pr_json") ||
+		fault 'the pull request response could not be parsed'
+	cross=$(jq -r '.isCrossRepository' <<<"$pr_json") ||
+		fault 'the pull request response could not be parsed'
+	[ "$number" = "$pr" ] ||
+		fail "the pull request reported number $number, not $pr"
+	[ "$state" = OPEN ] ||
+		fail "the pull request is $state, not OPEN; a hand-off records an open pull request"
+	case $head_branch in
+	'' | null) fail 'the pull request reported no head branch' ;;
+	esac
+	# Checked before the remote read, because after it a fork is indistinguishable
+	# from a moved branch: origin either lacks the branch or carries an unrelated
+	# one of the same name, and "the branch moved -- re-run once it settles" is a
+	# permanent refusal wearing a transient message.
+	[ "$cross" = false ] ||
+		fail "the pull request head branch $head_branch lives in a fork; this script reads the head SHA from the origin of the local checkout, which never carries a fork's branch under refs/heads/, so cross-fork hand-off is not supported"
+	# git's local environment variables outrank the process working directory, so
+	# a stray GIT_DIR or GIT_INDEX_FILE would have ls-remote read a different
+	# repository's origin and return a real SHA from the wrong remote. Cleared the
+	# way skills/quest/scripts/check-public-safety clears it before its own git
+	# calls, and for the same reason.
+	clear_local_git_env
+	ls_output=$(git ls-remote origin "refs/heads/$head_branch") ||
+		fault "git ls-remote could not read refs/heads/$head_branch from origin; run this from the checkout whose origin is $repo"
+	[ -n "$ls_output" ] ||
+		fail "origin has no refs/heads/$head_branch, which is the pull request's head branch"
+	line_count=$(printf '%s\n' "$ls_output" | wc -l) ||
+		fault 'could not count the refs origin reported'
+	line_count=${line_count//[[:space:]]/}
+	[ "$line_count" -eq 1 ] ||
+		fail "origin reported $line_count refs for refs/heads/$head_branch; expected exactly one"
+	head_sha=${ls_output%%$'\t'*}
+	case $head_sha in
+	*[!0123456789abcdef]* | '')
+		fail "origin reported a head that is not a 40-character lowercase SHA: $head_sha"
+		;;
+	esac
+	[ ${#head_sha} -eq 40 ] ||
+		fail "origin reported a head that is not a 40-character lowercase SHA: $head_sha"
+	[ "$head_sha" = "$head_ref_oid" ] ||
+		fail "the branch moved: origin has $head_sha for refs/heads/$head_branch but the pull request reports $head_ref_oid; re-run once the branch settles"
+	handshake="MERGE-READY: #$pr @ $head_sha"
+}
+
+compose_body() {
+	local last_byte count
+	printf '%s\n' "$MARKER" >"$body" ||
+		fault 'the hand-off body could not be composed'
+	cat "$notes" >>"$body" ||
+		fault "the hand-off notes could not be read: $notes"
+	# Command substitution strips trailing newlines, so an empty result means
+	# the notes already end with one.
+	last_byte=$(tail -c 1 "$notes") ||
+		fault "the hand-off notes could not be read: $notes"
+	if [ -n "$last_byte" ]; then
+		printf '\n' >>"$body" || fault 'the hand-off body could not be composed'
+	fi
+	# The blank line is for the reader, not the gate: without it the handshake
+	# is absorbed into the narrative's last rendered paragraph, while still
+	# matching the anchored pattern in the raw body.
+	printf '\n%s\n%s\n' "$handshake" "$SENTINEL" >>"$body" ||
+		fault 'the hand-off body could not be composed'
+	# Three-way, never two. The gate exits 0 clean, 1 on a finding, and 2 when it
+	# could not run -- and `|| fail` would report a scanner that never ran as one
+	# that found a credential, which is a permanent refusal wearing a transient
+	# message. Its stderr is passed through rather than discarded, because on the
+	# fault branch it is the only text that says why.
+	safety_status=0
+	"$ROOT/scripts/check-public-safety.sh" "$body" >/dev/null || safety_status=$?
+	case $safety_status in
+	0) ;;
+	1) fail 'the composed hand-off body did not pass public-safety validation' ;;
+	*) fault "the public-safety scan could not run (exit $safety_status); the body was not published" ;;
+	esac
+	# The gate's own conditions, checked on what this script composed, before
+	# anything is posted. The premise of this whole script is that a composer's
+	# output is verified rather than trusted, and that applies to its own output
+	# first: without this, a composition defect is published and only then
+	# detected, leaving exactly the unselectable block the change exists to
+	# prevent. It also makes --preflight mean what R8 says it means.
+	assert_gate_conditions "$body" 'the composed hand-off body'
+}
+
+post_comment() {
+	local output post_status=0 candidate
+	# Host-qualified, as publish-forge-review does. A bare owner/name resolves
+	# against gh's configured default host, while the readback below pins
+	# github.com -- so on a workstation defaulting to an Enterprise instance the
+	# comment would be created on one host and looked for on another.
+	output=$(gh issue comment "$issue" --repo "github.com/$repo" --body-file "$body") || post_status=$?
+	[ "$post_status" -eq 0 ] ||
+		fail "the hand-off comment was not created on $repo#$issue"
+	candidate=$(printf '%s\n' "$output" |
+		awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }')
+	[ -n "$candidate" ] ||
+		fail 'creating the hand-off comment returned no usable comment URL'
+	printf '%s\n' "$candidate"
+}
+
+read_stored_body() { # url
+	local url=$1 expected_prefix comment_id endpoint api_status=0
+	expected_prefix="https://github.com/$repo/issues/$issue#issuecomment-"
+	case $url in
+	"$expected_prefix"*) comment_id=${url#"$expected_prefix"} ;;
+	*) fail "the hand-off comment URL does not name $repo#$issue: $url" ;;
+	esac
+	# The id becomes a REST path segment below, so it is digits or nothing.
+	case $comment_id in
+	'' | *[!0123456789]*) fail "the hand-off comment URL carries no numeric comment id: $url" ;;
+	esac
+	endpoint="/repos/$repo/issues/comments/$comment_id"
+	response=$(gh api --hostname github.com "$endpoint") || api_status=$?
+	[ "$api_status" -eq 0 ] ||
+		fail "the stored hand-off comment could not be read back: $endpoint"
+	jq -r '.body' <<<"$response" >"$stored" ||
+		fail "the stored hand-off comment could not be parsed: $endpoint"
+}
+
+# The merge gate's four whole-line conditions, checked against whichever copy is
+# named. compose_body runs this on what this script wrote; assert_stored_body
+# runs it again on what GitHub stored, because only the second says what the
+# gate will read.
+#
+# The carriage-return check runs first deliberately. A CR at the end of every
+# line defeats all three whole-line patterns at once, and reporting the first of
+# them -- "missing the opening marker", of a body whose opening marker is right
+# there -- is the same misdiagnosis one actor away that this script exists to
+# remove. A CR explains the other three, so it is the finding worth reporting.
+assert_gate_conditions() { # path label
+	local path=$1 label=$2
+	if contains_byte 0d "$path"; then
+		fail "$label contains a carriage return, which defeats the merge gate anchored match"
+	fi
+	grep_whole_line "$MARKER" "$path" "$label" ||
+		fail "$label is missing the opening marker on its own line: $MARKER"
+	grep_whole_line "$SENTINEL" "$path" "$label" ||
+		fail "$label is missing the closing sentinel on its own line: $SENTINEL"
+	grep_whole_line "$handshake" "$path" "$label" ||
+		fail "$label is missing the handshake on its own line: $handshake"
+}
+
+assert_stored_body() {
+	assert_gate_conditions "$stored" 'the stored hand-off comment'
+	# Reaching here means all four gate conditions hold on GitHub's copy, so a
+	# gate-valid block IS on the issue. A difference now is a storage or
+	# transport normalization, not a broken hand-off -- and re-running would
+	# reproduce it forever while appending another complete block, so the
+	# message says to verify rather than retry.
+	jq -e --rawfile expected "$body" '.body == $expected' <<<"$response" >/dev/null ||
+		fail 'the stored hand-off comment differs byte-for-byte from the body this script composed, though every gate condition holds on it; a usable block is on the issue -- inspect it and proceed rather than re-running'
+}
+
+validate_arguments "$@"
+require_commands
+make_workspace
+validate_notes
+resolve_head
+resolve_destination
+compose_body
+if [ "$operation" = preflight ]; then
+	printf 'preflight-ok\n'
+	exit 0
+fi
+comment_url=$(post_comment)
+read_stored_body "$comment_url"
+assert_stored_body
+printf '%s\n' "$comment_url"

@@ -22,8 +22,8 @@ remote. `skills/return-to-town/SKILL.md` replaces its composition prose with the
 
 **Tech stack.** Bash and Markdown. No dependencies, no build step. Gates are `just verify`.
 
-**Expected implementation size: 1180–1280 changed lines (L) — summed from the file map below: the
-step 1.2 transcript at 477 lines, the suite at roughly 700 once its 35 enumerated cases are
+**Expected implementation size: 1340–1360 changed lines (L) — summed from the file map below: the
+step 1.2 transcript at 477 lines, the suite at 837 lines with its 35 enumerated cases
 written, roughly 25 lines of contract text in `skills/return-to-town/SKILL.md`, and the one-line
 version bump.**
 
@@ -35,12 +35,21 @@ gate measures rather than here.
 
 The band is the complexity frozen in `WORK:SCOPE` before this design cycle, carried forward
 unchanged. Only the numeric range is this plan's own estimate, and it has moved: `950–1050` when
-this plan was first written, then `1080–1180`, then `1130–1240`, and now `1180–1280`. Each raise
-is traceable to an accepted review finding that added checked behaviour — the destination binding,
-the git-environment clearing, and the cases for both — and none widened a criterion. The charter at
-`#issuecomment-5687258622` cites `1080–1180` as corroborating the `L` band; that citation is now a
-hundred lines stale, though the band it corroborates is unaffected, because the estimate moved
-further above the 1000-line denominator rather than back toward `M`.
+this plan was first written, then `1080–1180`, then `1130–1240`, then `1180–1280`, and now
+`1340–1360` — the last one measured from the written files rather than projected. Each earlier
+raise is traceable to an accepted review finding that added checked behaviour: the destination
+binding, the git-environment clearing, and the cases for both. None widened a criterion.
+
+**The final move is a projection error, not new work, and it is classified rather than trimmed.**
+The suite was projected at roughly 700 lines and came in at 837 for the same 35 enumerated cases.
+Nothing in the diff is absent from the reviewed design: every case maps to a failure-table row or a
+named regression, and the helper is byte-identical to the transcript at step 1.2. The estimate was
+wrong; the work is required by the frozen scope. Reducing lines to meet the number would be the one
+response this plan's own guardrails forbid, so the number is corrected and the miss recorded here.
+
+The charter at `#issuecomment-5687258622` cites `1080–1180` as corroborating the `L` band. That
+citation is now some 250 lines stale, though the band it corroborates is unaffected: the estimate
+moved further above the 1000-line denominator, never back toward `M`.
 
 The drift is recorded rather than quietly restated, because an estimate that ratchets while nobody
 is counting is how a design stops being the thing that was reviewed. The band was `M` in the
@@ -57,7 +66,7 @@ one covers 35 cases including one regression per defect logged in the issue.
 step 1.2, because its exact bytes are the contract — the markers, the handshake, and the assertion
 order are the deliverable. The suite is specified by an enumerated case list, at step 1.5: one line
 per case naming the case and the single assertion it makes. That is a complete specification of what
-the suite must do without transcribing 688 lines whose shape is mechanical once the case list and
+the suite must do without transcribing its 800-odd lines, whose shape is mechanical once the case list and
 the fixture sketch are fixed, and it is what makes the pinned pass count derivable rather than
 asserted. An implementer who writes exactly the 35 enumerated cases reaches the acceptance criterion
 below.
@@ -803,8 +812,8 @@ The 35 cases, one line each — case name, then the single thing it asserts:
 
 | Fault | Expected red |
 |---|---|
-| drop `"$SENTINEL"` from `compose_body`'s final `printf` | every case that reaches composition fails, led by the preflight case, stderr naming the missing sentinel on the **composed** body |
-| drop `"$handshake"` from `compose_body`'s final `printf` | every case that reaches composition fails, led by `FAIL preflight validates and composes without posting`, stderr naming the missing handshake on the **composed** body |
+| drop `"$SENTINEL"` from `compose_body`'s final `printf` | every case that reaches composition fails, led by the preflight case, stderr naming the missing sentinel on the **composed** body — observed `24 passed, 11 failed` |
+| drop `"$handshake"` from `compose_body`'s final `printf` | every case that reaches composition fails, led by `FAIL preflight validates and composes without posting`, stderr naming the missing handshake on the **composed** body — observed `24 passed, 11 failed` |
 | replace the notes `grep -qF 'MERGE-READY:'` with `scan_status=1` | `FAIL regression: a backticked handshake in the notes is rejected: expected exit 1, got 0` |
 | move the CR check after the whole-line checks in `assert_gate_conditions` | `FAIL a stored copy carrying a carriage return fails, naming it`, with stderr naming the opening marker instead |
 | collapse the `case $safety_status` block back to `\|\| fail ...` | `FAIL a public-safety scan that could not run is a fault, not a finding: expected exit 2, got 1` |
@@ -823,8 +832,9 @@ assertion added in R5 catches either omission at `--preflight`, before any case 
 inspection, so the failure count is whatever the case list happens to contain that reaches
 composition — a figure this plan cannot derive from the case list without also modelling each
 case's early-exit path, and a pinned prediction that the run then contradicts is a verification
-defect rather than a finding about the code. Record the observed count during step 1.6; do not
-predict it here. The stderr text is the load-bearing half and it is pinned, because that is what
+defect rather than a finding about the code. The counts above are recorded from the step 1.6 run,
+not predicted: an earlier draft of this plan pinned `10 cases FAIL` for both, and the observed
+figure is 11. The stderr text is the load-bearing half and it is pinned, because that is what
 proves the compose-side assertion fired rather than some later check.
 
 **1.7** Run `shellcheck -x` and `shfmt -d` over both new files. Expect no output and exit 0 from
