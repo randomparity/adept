@@ -100,8 +100,9 @@ issue)
 	printf '%s\n' "$issue_number" >"$state/issue-number"
 	# Real gh accepts a host-qualified --repo and still returns a plain
 	# https://github.com/<owner>/<name>/... URL, so the fake must not echo the
-	# host prefix back into the path.
-	url_repo=${issue_repo#github.com/}
+	# host prefix back into the path. It also canonicalizes owner/name rather
+	# than echoing the case it was given, which FAKE_CANONICAL_REPO reproduces.
+	url_repo=${FAKE_CANONICAL_REPO:-${issue_repo#github.com/}}
 	printf 'comment-invocation\n' >>"$state/events"
 	case ${GH_MODE:-success} in
 	comment-fail) exit 1 ;;
@@ -140,10 +141,17 @@ api)
 		absent) exit 1 ;;
 		esac
 		want=${endpoint##*/}
+		# The canonical issue URL, which the helper uses to build the comment-URL
+		# prefix. Derived from the endpoint, then overridden by
+		# FAKE_CANONICAL_REPO exactly as GitHub overrides the requested case.
+		path_repo=${endpoint#/repos/}
+		path_repo=${path_repo%%/issues/*}
+		issue_url="https://github.com/${FAKE_CANONICAL_REPO:-$path_repo}/issues/$want"
 		case ${FAKE_ISSUE_MODE:-present} in
-		mismatch) jq -n --argjson n "$((want + 1))" '{number: $n}' ;;
-		pull) jq -n --argjson n "$want" '{number: $n, pull_request: {url: "x"}}' ;;
-		*) jq -n --argjson n "$want" '{number: $n}' ;;
+		mismatch) jq -n --argjson n "$((want + 1))" --arg u "$issue_url" '{number: $n, html_url: $u}' ;;
+		pull) jq -n --argjson n "$want" --arg u "$issue_url" '{number: $n, html_url: $u, pull_request: {url: "x"}}' ;;
+		no-url) jq -n --argjson n "$want" '{number: $n}' ;;
+		*) jq -n --argjson n "$want" --arg u "$issue_url" '{number: $n, html_url: $u}' ;;
 		esac
 		exit 0
 		;;
@@ -216,6 +224,7 @@ run_helper() { # [args...] -- sets RUN_STATUS, RUN_OUT, RUN_ERR
 			FAKE_CROSS=${FAKE_CROSS:-false} \
 			FAKE_CLOSES="$closes" \
 			FAKE_ISSUE_MODE="${FAKE_ISSUE_MODE:-present}" \
+			FAKE_CANONICAL_REPO="${FAKE_CANONICAL_REPO:-}" \
 			"$SCRIPT" "$@"
 	) >"$CASE/out" 2>"$CASE/err"
 	RUN_STATUS=$?
@@ -797,6 +806,42 @@ case_stray_git_env_is_cleared() {
 	esac
 }
 
+# GitHub canonicalizes owner/name in every URL it returns, so the URL of a
+# comment the helper just created does not carry the case the caller supplied.
+# Deriving the expected prefix from the REPO argument turns that into an exit 1
+# on a hand-off that was in fact published -- a success reported as a failure,
+# whose documented remedy is to re-run and post another one.
+case_repo_case_variant_is_canonicalized() {
+	local label='a case-variant REPO still verifies against the canonical comment URL'
+	local variant
+	new_case
+	variant=$(printf '%s' "$REPO" | tr '[:lower:]' '[:upper:]')
+	FAKE_CANONICAL_REPO="$REPO" run_helper "$variant" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 0 || return 0
+	[ "$RUN_OUT" = "https://github.com/$REPO/issues/$ISSUE#issuecomment-73" ] || {
+		fail_case "$label" "expected the canonical comment URL, got: $RUN_OUT"
+		return 0
+	}
+	ok "$label"
+}
+
+# The prefix now comes from the destination response, so a response without one
+# is a fault rather than a silently empty prefix that matches any URL.
+case_destination_url_missing() {
+	local label='a destination response carrying no html_url is a fault'
+	new_case
+	FAKE_ISSUE_MODE=no-url run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 2 || return 0
+	expect_stderr "$label" 'canonical URL' || return 0
+	case $(cat "$STATE/events" 2>/dev/null || true) in
+	*post*)
+		fail_case "$label" 'the helper posted despite an unusable destination response'
+		return 0
+		;;
+	esac
+	ok "$label"
+}
+
 case_usage
 case_bad_repo
 case_bad_numbers
@@ -832,6 +877,8 @@ case_pr_no_closing_issue
 case_issue_not_corroborated
 case_issue_is_pull_request
 case_stray_git_env_is_cleared
+case_repo_case_variant_is_canonicalized
+case_destination_url_missing
 
 printf 'publish-handoff-test: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

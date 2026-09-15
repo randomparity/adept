@@ -38,6 +38,7 @@ body=''
 stored=''
 handshake=''
 head_sha=''
+issue_html_url=''
 pr_closing_refs=''
 response=''
 
@@ -285,6 +286,17 @@ resolve_destination() {
 		fault 'the destination response could not be parsed'
 	[ "$number" = "$issue" ] ||
 		fail "the destination reported number $number, not $issue"
+	# Kept for read_stored_body. GitHub canonicalizes owner/name in every URL it
+	# returns, so the URL of the comment this script is about to create will not
+	# carry the case REPO was given. Rebuilding the expected prefix from REPO
+	# therefore refuses a comment that was created correctly -- a published
+	# hand-off reported as unpublished, whose remedy is to publish another one.
+	# The destination's own html_url is the canonical form, from the same
+	# response the checks above already trust.
+	issue_html_url=$(jq -r '.html_url // empty' <<<"$issue_json") ||
+		fault 'the destination response could not be parsed'
+	[ -n "$issue_html_url" ] ||
+		fault "the destination reported no canonical URL: $repo#$issue"
 }
 
 # The SHA is read from the remote, never from headRefOid, per
@@ -409,7 +421,9 @@ post_comment() {
 
 read_stored_body() { # url
 	local url=$1 expected_prefix comment_id endpoint api_status=0
-	expected_prefix="https://github.com/$repo/issues/$issue#issuecomment-"
+	# From the destination's canonical URL, never from the REPO argument --
+	# see resolve_destination.
+	expected_prefix="$issue_html_url#issuecomment-"
 	case $url in
 	"$expected_prefix"*) comment_id=${url#"$expected_prefix"} ;;
 	*) fail "the hand-off comment URL does not name $repo#$issue: $url" ;;

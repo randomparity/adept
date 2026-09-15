@@ -237,6 +237,19 @@ composition — the change would deliver nothing outside this repository. The st
 working-directory requirement alongside the path, because the two are different directories and
 only naming one of them is what makes the mistake easy.
 
+**R13 — the post-write checks compare against GitHub's identifiers, not the caller's.** The
+readback locates the stored comment from the URL `gh issue comment` returned, and must decide that
+URL names the destination before it turns the tail into a REST path segment. It builds the expected
+prefix from the `html_url` of the destination response R11 already read — never by re-assembling one
+from the `REPO` argument. GitHub canonicalizes `owner/name` in every URL it returns, so the two
+differ whenever the caller supplied a case variant or a name the repository has since been renamed
+away from: `gh api /repos/RandomParity/Adept --jq .full_name` answers `randomparity/adept`, and the
+comment URL is canonical with it. Every check before the write passes on such an argument and the
+comment is created gate-valid; a prefix rebuilt from the argument then rejects it, reporting a
+published hand-off as unpublished. That is the failure this whole change exists to remove, arriving
+from the other side — so the argument is not permitted to be the authority for a comparison GitHub
+answers itself.
+
 ## What this does and does not close
 
 Three of the four logged defects are closed by construction: the helper writes the sentinel (R1),
@@ -270,13 +283,24 @@ the three whole-line assertions. A comment the helper composed satisfies the fou
 conditions whether or not the readback succeeded, so an exit 1 from that side leaves a usable
 hand-off on the issue. The message names which condition failed.
 
-**The remedy for a nonzero exit is to re-run — except where the message says otherwise, and exactly
-one condition says otherwise.** That condition is assertion 5's, described immediately below:
-re-running it reproduces the same failure forever while appending another complete block each time.
-Every other nonzero exit, on either side of the post, is re-run. The rule is stated in this
-qualified form everywhere it appears — here, in the Interface section, in the decision record, and
-in the `SKILL.md` text the plan writes — because a blanket "re-run on nonzero" instruction sends a
-caller into an unbounded loop of public comments at the one exit that must not be retried.
+**The remedy for a nonzero exit is to re-run once, and an identical second failure is
+deterministic.** A deterministic failure checked *after* the comment is created must not be retried
+again: each pass appends another complete public block while the merge stays held. Assertion 5's is
+the named instance, described immediately below, and it is the example rather than the whole set —
+the post-write half of this helper also parses the returned URL and reads the stored copy back, and
+any of those can fail the same way twice. The bound is therefore on the *repetition*, not on an
+enumeration of exits: re-run once, and on an identical second failure inspect the issue for a
+complete block and proceed from what is there. The rule is stated in this bounded form everywhere
+it appears — here, in the Interface section, in the decision record, and in the `SKILL.md` text the
+plan writes — because a blanket "re-run on nonzero" instruction sends a caller into an unbounded
+loop of public comments at exactly the exits that must not be retried.
+
+An earlier draft of this section stated the bound as an enumeration: one named condition must not be
+retried and every other nonzero exit is safe to re-run. Branch review falsified it by constructing a
+second such condition — a case-variant `owner/name` argument, which GitHub canonicalizes in the URL
+it returns, so the comment is created and gate-valid and the prefix match then rejects it. That
+particular instance is now fixed at the source (R13), but the shape of the error was the
+enumeration, so the enumeration is what this replaces.
 
 **Assertion 5's evidence class, and what to do when it fails.** No GitHub documentation guarantees
 that an issue comment's body round-trips byte for byte, and it is not checkable without posting to a

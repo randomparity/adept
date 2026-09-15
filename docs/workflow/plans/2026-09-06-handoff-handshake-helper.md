@@ -60,7 +60,8 @@ denominator and never sets one.
 
 The suite is the larger half, and that is proportionate rather than inflated — its sibling
 `tests/fixtures/quest/publish-forge-review-test.sh` runs 1046 lines for a helper of 339, and this
-one covers 35 cases including one regression per defect logged in the issue.
+one covers 37 cases including one regression per defect logged in the issue. Cases 36 and 37 were
+added during branch review, which constructed a second post-write failure the design had ruled out.
 
 **How the two code files are specified here differs, deliberately.** The helper appears in full, at
 step 1.2, because its exact bytes are the contract — the markers, the handshake, and the assertion
@@ -265,6 +266,7 @@ body=''
 stored=''
 handshake=''
 head_sha=''
+issue_html_url=''
 pr_closing_refs=''
 response=''
 
@@ -512,6 +514,17 @@ resolve_destination() {
 		fault 'the destination response could not be parsed'
 	[ "$number" = "$issue" ] ||
 		fail "the destination reported number $number, not $issue"
+	# Kept for read_stored_body. GitHub canonicalizes owner/name in every URL it
+	# returns, so the URL of the comment this script is about to create will not
+	# carry the case REPO was given. Rebuilding the expected prefix from REPO
+	# therefore refuses a comment that was created correctly -- a published
+	# hand-off reported as unpublished, whose remedy is to publish another one.
+	# The destination's own html_url is the canonical form, from the same
+	# response the checks above already trust.
+	issue_html_url=$(jq -r '.html_url // empty' <<<"$issue_json") ||
+		fault 'the destination response could not be parsed'
+	[ -n "$issue_html_url" ] ||
+		fault "the destination reported no canonical URL: $repo#$issue"
 }
 
 # The SHA is read from the remote, never from headRefOid, per
@@ -636,7 +649,9 @@ post_comment() {
 
 read_stored_body() { # url
 	local url=$1 expected_prefix comment_id endpoint api_status=0
-	expected_prefix="https://github.com/$repo/issues/$issue#issuecomment-"
+	# From the destination's canonical URL, never from the REPO argument --
+	# see resolve_destination.
+	expected_prefix="$issue_html_url#issuecomment-"
 	case $url in
 	"$expected_prefix"*) comment_id=${url#"$expected_prefix"} ;;
 	*) fail "the hand-off comment URL does not name $repo#$issue: $url" ;;
@@ -806,6 +821,15 @@ The 35 cases, one line each — case name, then the single thing it asserts:
     handshake carrying the SHA from the *checkout's* origin. Asserts on the posted body's SHA, not
     on an error: the failure this guards is a silent wrong answer, so the case has to observe the
     right answer rather than a refusal.
+36. `case_repo_case_variant_is_canonicalized` — **added during branch review, which constructed the
+    defect it covers.** The fake gains `FAKE_CANONICAL_REPO`, reproducing GitHub's canonicalization
+    of `owner/name` in every URL it returns; the helper is invoked with an uppercase `REPO`, which
+    the argument grammar permits. Exits 0 and prints the *canonical* comment URL. Observed red
+    before the fix with the real message — `the hand-off comment URL does not name ACME/WIDGETS#308`
+    — after the comment had already been created and was gate-valid.
+37. `case_destination_url_missing` — a destination response carrying no `html_url` exits **2**
+    naming the missing canonical URL, having posted nothing. Without it, the empty prefix the fix
+    would otherwise build matches every URL, which is worse than what it replaced.
 
 **1.6** Verify the tests bite. For each of these, introduce the fault, run
 `./tests/fixtures/return-to-town/publish-handoff-test.sh`, observe the named red, then revert:
@@ -909,11 +933,19 @@ the caller writes the narrative only and must not write either marker or the han
 the helper reads the SHA from `git ls-remote`, requires GitHub's `headRefOid` to agree, and asserts
 both the composed and the stored copy; states the exit taxonomy; and states that a nonzero exit
 holds both paths and does not by itself mean nothing was posted, since some conditions are checked
-after the comment is created. **State the re-run rule in its qualified form**: a nonzero exit is
-re-run rather than diagnosed by hand *unless the message says otherwise* — exactly one condition
-reports that a usable block is already on the issue and must be inspected rather than retried, and
-a blanket "re-run on nonzero" instruction sends the caller into an unbounded loop of public
-comments at that one exit.
+after the comment is created. **State the re-run rule in its bounded form**: a nonzero exit is
+re-run *once*, and an identical second failure is deterministic — stop, inspect the issue for a
+complete block, and proceed from what is there. The stored-copy condition that reports a usable
+block already on the issue is the named example, not the whole set; a blanket "re-run on nonzero"
+instruction sends the caller into an unbounded loop of public comments at every post-write exit.
+(Branch review falsified the enumerated form this step originally carried, by constructing a second
+such exit. See the specification's *What this does and does not close*.)
+
+**Also state where the notes file goes.** The step introduces an artifact the prose version never
+had, and nothing removes it. Say to write it outside the checkout — `"${TMPDIR:-/tmp}"`, matching
+where the helper puts its own scratch — and to remove it after exit 0. An untracked file left in
+the branch's worktree makes this same skill's `git worktree remove` refuse, and its own prose
+forbids the `--force` that would clear it.
 
 **Also update the paragraph immediately above it**, which currently reads "post a `WORK:TRAJECTORY`
 comment on the issue with `outcome: ...`, guardrail status, and any surprises". Its content list is

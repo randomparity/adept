@@ -102,8 +102,8 @@ emit the same handful of bytes correctly on every occasion.
   refusal, and it is the intended one: it is precisely the moment the SHA a handshake would bind is
   already stale.
 - That agreement binds the two reads to each other, not to merge time; and a nonzero exit does not
-  by itself mean nothing was published. Both residuals, and the one exit whose remedy is *not*
-  re-running, are stated once in the specification's *What this does and does not close*. They are
+  by itself mean nothing was published. Both residuals, and the bound on re-running that the second
+  one forces, are stated once in the specification's *What this does and does not close*. They are
   not restated here: this record governs the decision, the specification owns the residuals, and
   four copies of a residual is the drift this record elsewhere accepts having created once already.
 - **The helper becomes a second encoding of the gate's byte-level contract, and ADR 0042's drift

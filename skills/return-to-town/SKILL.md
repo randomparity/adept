@@ -76,6 +76,11 @@ skill). Write the narrative to a notes file — `outcome: handed off — PR #N g
 awaiting human merge`, guardrail status, and any surprises — and let the helper post it. Write
 it only once the work is finished; "the pull request is green" is not that moment.
 
+Put that file **outside the checkout** — under `"${TMPDIR:-/tmp}"`, where the helper already
+puts its own scratch — and remove it once the helper has exited 0. An untracked file left in
+the branch's worktree makes the `git worktree remove` below refuse, and the `--force` that
+would clear it is forbidden there for reasons that have nothing to do with this file.
+
 **The helper owns the annotation, and you own only the narrative.** `publish-handoff` writes
 the opening marker, the closing sentinel, and the `MERGE-READY` handshake line itself; your
 notes file must contain none of the three, and it is refused if it does. It reads the head SHA
@@ -97,12 +102,14 @@ the plugin cache, while the head SHA is read from `origin` at your working direc
 repository-relative path would resolve at neither.
 
 Exit 0 succeeds, 1 means a condition failed, 2 means the helper could not run. A nonzero exit
-holds both paths and never authorizes a merge. Re-run it rather than diagnosing the block by
-hand — **unless the message says otherwise**, which exactly one condition does: where the stored
-comment differs byte-for-byte from the composed body while every gate condition still holds on
-it, a usable block is already on the issue, and re-running would append another one forever.
-Inspect that one and proceed. A nonzero exit does not by itself mean nothing was posted; some
-conditions are checked after the comment is created.
+holds both paths and never authorizes a merge. Re-run it once rather than diagnosing the block by
+hand. **If the identical condition fails a second time the failure is deterministic** — stop
+re-running, inspect the issue for a complete block, and proceed from what is actually there. A
+nonzero exit does not by itself mean nothing was posted; some conditions are checked after the
+comment is created, so an unbounded retry appends one more public comment per pass while the
+merge stays held. The named instance of that is a stored comment differing byte-for-byte from
+the composed body while every gate condition still holds on it: a usable block is already on the
+issue. It is the example, not the whole set.
 
 ## Default: hand off, do not self-merge
 
