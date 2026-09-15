@@ -321,8 +321,9 @@ done
 # The exception applies only to exact submatches. A line that names
 # /home/runner and a real home directory or a token still carries a non-exempt
 # submatch and is reported, while a person named `runnerbee` is never exempt.
+reserved_domain='([[:alnum:]-]+\.)*(example\.(com|net|org)|invalid|test|example)'
 exempt_submatch='^(/home/(runner|linuxbrew)'
-exempt_submatch="$exempt_submatch"'|[[:alnum:]._%+-]+@([[:alnum:]-]+\.)*(example\.(com|net|org)|invalid|test|example)'
+exempt_submatch="$exempt_submatch"'|[[:alnum:]._%+-]+@'"$reserved_domain"
 exempt_submatch="$exempt_submatch"'|git@github\.com|noreply@anthropic\.com)$'
 
 status=0

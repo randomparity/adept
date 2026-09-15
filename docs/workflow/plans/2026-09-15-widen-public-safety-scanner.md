@@ -305,8 +305,9 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
    # here; another forge's equivalent is not exempt until one does. An address
    # under users.noreply.github.com deliberately is not exempt either: it
    # carries a username, which CLAUDE.md lists as PII.
+   reserved_domain='([[:alnum:]-]+\.)*(example\.(com|net|org)|invalid|test|example)'
    exempt_submatch='^(/home/(runner|linuxbrew)'
-   exempt_submatch="$exempt_submatch"'|[[:alnum:]._%+-]+@([[:alnum:]-]+\.)*(example\.(com|net|org)|invalid|test|example)'
+   exempt_submatch="$exempt_submatch"'|[[:alnum:]._%+-]+@'"$reserved_domain"
    exempt_submatch="$exempt_submatch"'|git@github\.com|noreply@anthropic\.com)$'
    ```
 
