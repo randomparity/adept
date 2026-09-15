@@ -92,10 +92,15 @@ fault**.
    complete block simpliciter, because the park protocol writes that block type too and a
    hold posted after a valid hand-off would otherwise revoke it. `$return-to-town`'s hand-off
    is what writes the block, and it computes `HEAD_SHA` from `git ls-remote` at that moment;
-   read it there rather than relying on a report reaching you. Use the quest-log skill's
-   selection rules, not an ad-hoc `jq` over every comment: a block missing its
-   `TRAJECTORY:COMPLETE` sentinel is a write that died midway and counts as absent, and
-   `last` is what implements latest-complete-wins.
+   read it there rather than relying on a report reaching you. **The `jq` block below is this
+   part's selection rule**, not an illustration of one stated elsewhere: quest-log's general
+   *Recipe: read the latest complete annotation of a type* tests only the opening marker and
+   the closing sentinel before `last`, so it returns the newest complete `WORK:TRAJECTORY`
+   block whatever that block says — including the park note this part exists to exclude — and
+   it selects over comment bodies, which cannot yield the author the check below needs. The
+   two tests it does share keep their usual meaning here: a block missing its
+   `TRAJECTORY:COMPLETE` sentinel is a write that died midway and counts as absent, and `last`
+   is what implements latest-complete-wins over the blocks the `MERGE-READY` test admits.
 
    ```sh
    gh issue view <n> --repo <owner/name> --json comments |
