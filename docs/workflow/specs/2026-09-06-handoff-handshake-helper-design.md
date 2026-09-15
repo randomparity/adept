@@ -131,6 +131,16 @@ matters to a caller: no comment exists after a failed preflight, so the failure 
 without an artifact on a public issue. What it cannot promise is that a preflight failure means the
 network was never touched, and the requirement does not claim it.
 
+**R9a — the notes cap, and where its value comes from.** The narrative is capped at 8,192 bytes:
+a quarter of the 32,768-byte composed-body cap that `docs/adr/0048-preflight-forge-review-publication.md`
+records as the effective bound for the sibling publication helper. It is chosen so the cap that
+fires is the one whose message a caller can act on — a hand-off narrative is a short status note,
+and a caller who has written eight kilobytes of one has made a different mistake than a caller who
+has overflowed a transport limit. Because the composed body is the narrative plus roughly 120 bytes
+of markers and handshake, this cap bounds the body too, which is why the helper carries no separate
+body cap: a second, larger ceiling could never fire, and a guard that cannot fire is one the
+repository's own ladder says to skip.
+
 **R9 — the body passes the repository's public-safety gate.** The composed body is posted to a
 public issue. `scripts/check-public-safety.sh` already scans for absolute user paths, private
 addresses, and credential shapes; the helper runs it on the composed body rather than growing its
@@ -199,6 +209,15 @@ this helper's consistent stance is to refuse rather than publish something it ca
 remedy is in the caller's hands and the message says so — add the `Closes #<issue-number>` trailer
 the pull request was expected to carry. `skills/campaign/SKILL.md` records a missing reference and
 defers it; this helper cannot, because deferring means publishing.
+
+**The binding assumes a pull request whose base is the repository's default branch**, which is what
+`$deliver` opens, and that bound is stated rather than left to be discovered. GitHub populates
+`closingIssuesReferences` from a `Closes #<n>` keyword; whether it does so for a pull request
+targeting a non-default base is *not verified here* and no claim is made either way. If it does
+not, a stacked or release-branch pull request would be refused with a message telling the author to
+add a trailer that is already present — a wrong diagnosis rather than a wrong refusal. That
+deployment is named in the failure model as one this change is not designed for, and a repository
+working that way needs a different corroboration source, which is a different design.
 
 What this closes and what it does not: a transposed issue number, a swapped `ISSUE`/`PR` pair, and
 a nonexistent resource are all refused before composition. A pull request whose `Closes` trailer is
@@ -343,7 +362,9 @@ proceed.
   own issue and pull request.
 - The repository's own behaviour suite, with a fake `gh` and a real local git remote.
 - Not designed for: unattended CI, a checkout whose `origin` is not the target repository, a
-  GitHub Enterprise host, or a pull request opened from a fork.
+  GitHub Enterprise host, a pull request opened from a fork, or a pull request whose base is not
+  the repository's default branch — the last because the destination binding reads
+  `closingIssuesReferences`, whose behaviour on a non-default base is unverified here.
 
 **Invariants and assets at stake.**
 

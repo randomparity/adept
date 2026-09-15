@@ -34,11 +34,20 @@ produces, and a decision record is a design artifact, counted in the design set 
 gate measures rather than here.
 
 The band is the complexity frozen in `WORK:SCOPE` before this design cycle, carried forward
-unchanged; only the numeric range is this plan's own estimate, and the two agree. They did not in
-the 2026-09-06 cycle, which froze `M` — a band read off the issue before any file map existed and
-one no implementation naming twenty distinct failure conditions could have met. That was corrected
-at this cycle's scope checkpoint, from the completion criteria rather than from this estimate: a
-plan estimate corroborates a denominator and never sets one.
+unchanged. Only the numeric range is this plan's own estimate, and it has moved: `950–1050` when
+this plan was first written, then `1080–1180`, then `1130–1240`, and now `1180–1280`. Each raise
+is traceable to an accepted review finding that added checked behaviour — the destination binding,
+the git-environment clearing, and the cases for both — and none widened a criterion. The charter at
+`#issuecomment-5687258622` cites `1080–1180` as corroborating the `L` band; that citation is now a
+hundred lines stale, though the band it corroborates is unaffected, because the estimate moved
+further above the 1000-line denominator rather than back toward `M`.
+
+The drift is recorded rather than quietly restated, because an estimate that ratchets while nobody
+is counting is how a design stops being the thing that was reviewed. The band was `M` in the
+2026-09-06 cycle — read off the issue before any file map existed, and unmeetable by any
+implementation naming twenty distinct failure conditions. It was corrected at this cycle's scope
+checkpoint from the completion criteria, not from this estimate: a plan estimate corroborates a
+denominator and never sets one.
 
 The suite is the larger half, and that is proportionate rather than inflated — its sibling
 `tests/fixtures/quest/publish-forge-review-test.sh` runs 1046 lines for a helper of 339, and this
@@ -145,14 +154,30 @@ Consumed from the existing codebase, each confirmed to exist with the signature 
   posted, which is that assertion doing its job. Green command:
   `./tests/fixtures/return-to-town/publish-handoff-test.sh`, expected final line
   `publish-handoff-test: 35 passed, 0 failed`, exit 0.
-- **Contract: the write destination is corroborated before composing, and an `ISSUE` naming a pull
-  request is refused by name.** Mode: focused-test. Same file, cases
-  `case_issue_not_corroborated` and `case_issue_is_pull_request`. Expected red with the
-  `pull_request` key check removed from `resolve_destination`:
-  `FAIL an ISSUE naming a pull request is refused before anything is posted: expected exit 1,
-  got 0`. Green command:
+- **Contract: the write destination is bound to the pull request before composing.** Mode:
+  focused-test. Same file, case `case_issue_not_closed_by_pr`. Expected red with the
+  `closingIssuesReferences` match removed from `resolve_destination`:
+  `FAIL an ISSUE the pull request does not close is refused: expected exit 1, got 0` — with the
+  check gone the run posts a complete block to the wrong issue and exits 0, which is the defect the
+  control exists to close. Green command:
   `./tests/fixtures/return-to-town/publish-handoff-test.sh`, expected final line
-  `publish-handoff-test: 35 passed, 0 failed`, exit 0.
+  `publish-handoff-test: 35 passed, 0 failed`, exit 0. This is the contract the other destination
+  checks cannot cover: every one of them is answered by the resource `ISSUE` selected, so only this
+  one fails on a transposed-but-valid number.
+- **Contract: an `ISSUE` naming a pull request is refused by name, before anything is posted.**
+  Mode: focused-test. Same file, case `case_issue_is_pull_request`; the supporting cases
+  `case_pr_no_closing_issue` and `case_issue_not_corroborated` cover the empty-list and
+  unreadable/mismatched branches. Expected red with the `pull_request` key check removed from
+  `resolve_destination`:
+  `FAIL an ISSUE naming a pull request is refused before anything is posted: expected exit 1,
+  got 0`. Green command as above.
+- **Contract: the head SHA is read from the checkout's own origin, whatever git environment the
+  caller exported.** Mode: focused-test. Same file, case `case_stray_git_env_is_cleared`. Expected
+  red with the `clear_local_git_env` call removed from `resolve_head`:
+  `FAIL the head SHA is read from the checkout's own origin` — the handshake carries the SHA of the
+  repository `GIT_DIR` pointed at. The case asserts on the posted body's SHA rather than on a
+  refusal, because the failure it guards is a silent wrong answer, not an error. Green command as
+  above.
 - **Contract: a narrative carrying a handshake — backticked or bare — is rejected before posting.**
   Mode: focused-test. Same file, case `case_notes_carry_handshake`. Expected red with the
   substring check removed: `FAIL regression: a backticked handshake in the notes is rejected:
@@ -1042,5 +1067,24 @@ would hide the failure.
 
 ## Deferrals
 
-None recorded by the design review. Any deferral a `$trial-loop` run on this branch disposes of
-gets appended here with its owning record path or tracker issue.
+**No `deferred-tracked` findings, and no deferral record.** Across the 2026-09-06 design cycle's
+three rounds and this cycle's two independent passes, every finding was `accepted-fixed` bar one
+`rejected-with-evidence`. `docs/debt/` does not exist in this repository and this change does not
+create it — the debt profile exempts no `README.md`, so the directory cannot be added empty, and it
+would have to arrive in the same commit as a first deferral record there is no call for.
+
+Any deferral a `$trial-loop` run on this branch disposes of gets appended here with its owning
+record path or tracker issue.
+
+### Unowned residuals surfaced, not deferred
+
+These are not deferrals: nothing here is owned, scheduled, or tracked, and this change neither
+creates nor widens any of them. They are recorded so the pull request can route them.
+
+1. **`references/merge-gate.md` part 4 points readers at a selection recipe that does not
+   discriminate the way part 4's own `jq` does.** The general recipe at
+   `skills/quest-log/SKILL.md:523-530` tests only the two markers, so a park note posted after a
+   hand-off is what `last` returns there. Both files are read-only in this change. **No owner** —
+   #235 was checked and does not cover it, and no other open issue does. See ADR 0066.
+2. **The park path keeps the sentinel-omission exposure the hand-off path loses.** It stays prose;
+   this change does not touch it. Recorded in ADR 0066's Consequences.

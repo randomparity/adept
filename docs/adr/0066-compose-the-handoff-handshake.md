@@ -42,9 +42,23 @@ The claim is bounded to that reader deliberately, because it does not hold of ev
 mentions. Part 4 also directs readers to "the quest-log skill's selection rules", and quest-log's
 general latest-complete recipe (`skills/quest-log/SKILL.md:523-530`) tests only the two markers —
 it carries no `MERGE-READY` discriminator, so a park note posted after a hand-off *is* what `last`
-returns there. That divergence between part 4's own `jq` and the recipe it points at is a defect in
-the reader, not in this helper, and it is left to issue #235, which owns what the gate checks. It is
-recorded here rather than silently relied past.
+returns there.
+
+That divergence between part 4's own `jq` and the recipe it points at is a defect in the reader,
+not in this helper, and fixing it is outside this change's surface — both files are read-only here.
+**It has no owner.** An earlier draft of this record deferred it to issue #235 on the strength of
+that issue owning "what the gate should check"; that attribution does not survive checking. #235 is
+about whether "green + mergeable" is a sufficient merge gate, and searching its body for
+`quest-log`, `latest-complete`, `selection rule`, `sentinel`, or `TRAJECTORY` returns nothing. No
+other open issue covers it either. It is recorded here as an observed, unowned residual and
+surfaced on this change's pull request for routing, rather than parked against an issue that would
+never have reached it.
+
+This decision does not depend on that divergence being fixed. The helper writes hand-off blocks and
+the merge gate reads them through part 4's own `jq`, which discriminates correctly. What the
+divergence affects is a *different* reader used for a *different* purpose, and the exposure it
+creates — a park note superseding a hand-off in the general recipe's view — exists today and is
+neither created nor widened here.
 
 The helper computes the SHA from `git ls-remote origin` and requires GitHub's `headRefOid` to
 agree, refusing when they differ. It asserts the gate's four whole-line conditions twice: once
