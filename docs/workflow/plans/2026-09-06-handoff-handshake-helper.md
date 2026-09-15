@@ -404,6 +404,12 @@ make_workspace() {
 # od answers three ways and awk collapses two of them, so both statuses are read
 # explicitly: a scan that could not run must never report as a scan that found
 # nothing.
+#
+# The if and else branches below are identical on purpose, and neither is
+# removable. Under `set -e` a bare failing pipeline exits the shell before
+# PIPESTATUS can be read, and `|| true` would overwrite PIPESTATUS with the
+# status of `true`, so `if` is the only construct that both suppresses the exit
+# and leaves the array intact.
 contains_byte() { # byte path -- 0 present, 1 absent
 	local byte=$1 path=$2 od_status awk_status statuses
 	if LC_ALL=C od -An -v -t x1 "$path" |
