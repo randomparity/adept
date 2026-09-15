@@ -101,9 +101,12 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
   adding `local` to the alternation: `public-safety-test: excluded suffixes
   should not be denied`. Green: same command.
 - **Contract: an exemption does not silence a leak on its line.** Mode:
-  `focused-test`. Case: the mixed-line block. Expected red if the filter
-  compares the line instead of each submatch: `public-safety-test: an address
-  leak beside an exempt one should fail`. Green: same command.
+  `focused-test`. Case: the mixed-line block. Bite shown at step 10 by changing
+  the `jq` filter from `any` to `all` over submatches — but the pre-existing
+  home-path fixture asserts the same per-submatch contract and reaches it first,
+  so the observed red is `public-safety-test: home leak sharing a line with a CI
+  path should fail`. The new block extends that contract to the address class
+  rather than establishing it. Green: same command.
 - **Contract: the gate stays green over this repository's tracked tree.**
   Mode: `focused-test`. Command `just public-safety`, exit 0.
 
@@ -291,7 +294,13 @@ reaches the `jq` filter only through the existing `--arg allowed` binding.
       expect `public-safety-test: a non-alphabetic top-level domain is not an
       address`;
     - add `|local` to the suffix alternation — expect `public-safety-test:
-      excluded suffixes should not be denied`.
+      excluded suffixes should not be denied`;
+    - change the `jq` filter's `any` to `all` over submatches — expect
+      `public-safety-test: home leak sharing a line with a CI path should fail`,
+      the suite's first instance of the per-submatch contract;
+    - delete the RFC 2606 branch from `exempt_submatch` and run
+      `just public-safety` — expect exit 1 naming reserved-domain fixture
+      identities across the tracked tree.
 
 11. Run `just public-safety`, then `just lint`, then `just format-check`. Expect
     exit 0 and no output from each.

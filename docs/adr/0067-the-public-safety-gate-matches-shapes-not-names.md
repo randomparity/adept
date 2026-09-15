@@ -59,6 +59,16 @@ and the two published constants this repository's tracked prose carries — the
   pattern, and `publish-forge-review` discards that too. The operator re-runs
   the scanner by hand. The remedy is to reword, and an exemption entry only
   where the same token recurs.
+- A token that is not an address but has an address's shape is denied — a retina
+  asset filename and a version-suffixed package spec are the ones seen, and this
+  record cannot spell either, because the gate reddened on the first attempt to.
+  Nothing in the text separates them from an address, so the write fails closed
+  and the remedy is again to reword. Requiring a letter in the first domain label
+  does not clear them, so no cheap narrowing was available.
+- The pattern's character classes are ASCII, so an address at an
+  internationalised domain is not matched. The Rust regex engine's `\w` is
+  Unicode-aware and would close it, but it widens the ASCII behaviour too and
+  needs its own green run over the tracked tree before it is adopted.
 - A further exemption class is a data append while submatch texts stay disjoint
   between classes. A class whose submatches could equal another's needs a
   per-pattern mechanism instead; anchored whole-submatch comparison is what
@@ -72,13 +82,14 @@ and the two published constants this repository's tracked prose carries — the
   `rg --no-config -n 'ibm\.com' $(git ls-files)` reports two attributed source
   URLs in `scripts/reserved-skill-names.txt`; any pattern broad enough to catch
   a leaked internal host catches those and every other vendor URL in the tree.
-- **Appendix G's full six, with `\b` on both ends.** verified: over prose about
-  code, that form matches `user.home`, `path.home`, `java.home`, `maven.home`,
-  `gradle.home`, `CATALINA.HOME`, `this.private`, `vpc.private` and
-  `com.acme.internal` — no host among them. Dropping `.home` and `.private` and
-  requiring a leading boundary leaves all nine green while a real host still
-  matches. `scripts/check-public-safety-test.sh` carries both halves; it
-  assembles the denied literal, which this record cannot.
+- **Appendix G's full six, with `\b` on both ends and `(?i)`.** verified: over
+  prose about code, that form matches `user.home`, `path.home`, `java.home`,
+  `maven.home`, `gradle.home`, `CATALINA.HOME`, `this.private`, `vpc.private`
+  and `com.acme.internal` — no host among them, and `CATALINA.HOME` only under
+  the case-insensitive flag, which is why the flag went too. Dropping `.home`
+  and `.private` and requiring a leading boundary leaves all nine green while a
+  real host still matches. `scripts/check-public-safety-test.sh` carries both
+  halves; it assembles the denied literal, which this record cannot.
 - **Keeping `.local` in the suffix set.** verified: at 29a64d5,
   `rg --no-config -n '[[:alnum:]-]+\.local\b' $(git ls-files)` reports seven
   lines, `.gitignore` lines 3 and 5 among them. The ground is this repository's
