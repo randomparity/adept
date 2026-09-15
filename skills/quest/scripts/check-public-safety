@@ -33,6 +33,8 @@ denied_patterns=(
 	'(^|[^[:alnum:]])10\.[0-9]{1,3}\.'
 	'172\.(1[6-9]|2[0-9]|3[0-1])\.'
 	'[[:alnum:]-]+\.atlassian\.net'
+	'[[:alnum:]._%+-]+@[[:alnum:]-]+(\.[[:alnum:]-]+)*\.[[:alpha:]]{2,}\b'
+	'(^|[^[:alnum:].-])[[:alnum:]-]+\.(intranet|internal|corp|lan)\b'
 	'Basic[[:space:]]+[A-Za-z0-9+/=]{12,}'
 	'ATATT[A-Za-z0-9_=.-]{20,}'
 	"ATLASSIAN[A-Z0-9_]*['\"]?[[:space:]]*[=:][[:space:]]*['\"]?[A-Za-z0-9+/]{20,}"
@@ -289,6 +291,25 @@ for scan_path in "${scan_paths[@]}"; do
 	esac
 done
 
+# Three classes of submatch are not leaks, and one anchored alternation holds
+# all three. What lets them share one expression is that their shapes are
+# disjoint: a home path can never equal an address, so no class can silence
+# another's finding (ADR 0067). Anchoring bounds each entry to a whole
+# submatch, which is not the same as bounding it to one string -- the RFC
+# 2606 class below is deliberately open-ended, and a fourth class may be too.
+#
+# RFC 2606 reserves .test, .example and .invalid as top-level domains and
+# example.com, example.net and example.org as second-level domains, precisely
+# so documentation and fixtures can name an address that reaches nobody. This
+# repository's suites use them for every fixture Git identity.
+#
+# git@github.com is the fixed user in an SSH remote URL rather than a mailbox,
+# and noreply@anthropic.com is the published constant in this repository's
+# commit trailers. Neither names a person, and both occur in tracked prose
+# here; another forge's equivalent is not exempt until one does. An address
+# under users.noreply.github.com deliberately is not exempt either: it
+# carries a username, which CLAUDE.md lists as PII.
+#
 # Two names under /home are not people. GitHub's runner images publish
 # /home/runner as the workspace root and install Homebrew to /home/linuxbrew,
 # and the ubuntu image's own documentation tells you to run
@@ -300,7 +321,9 @@ done
 # The exception applies only to exact submatches. A line that names
 # /home/runner and a real home directory or a token still carries a non-exempt
 # submatch and is reported, while a person named `runnerbee` is never exempt.
-public_home_match='^/home/(runner|linuxbrew)$'
+exempt_submatch='^(/home/(runner|linuxbrew)'
+exempt_submatch="$exempt_submatch"'|[[:alnum:]._%+-]+@([[:alnum:]-]+\.)*(example\.(com|net|org)|invalid|test|example)'
+exempt_submatch="$exempt_submatch"'|git@github\.com|noreply@anthropic\.com)$'
 
 status=0
 # --text: ripgrep judges a file binary on one NUL byte and skips it while
@@ -332,7 +355,7 @@ for pattern in "${denied_patterns[@]}"; do
 		# exact path, line and content in the finding.
 		filter_status=0
 		matches=$(printf '%s\n' "$matches" |
-			jq -c --arg allowed "$public_home_match" '
+			jq -c --arg allowed "$exempt_submatch" '
 				select(.type == "match")
 				| select(any(.data.submatches[];
 					((.match.text // (.match.bytes | @base64d))
