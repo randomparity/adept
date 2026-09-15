@@ -203,6 +203,131 @@ if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
 fi
 rm -f "$SCRATCH/repo/tenant.md"
 
+# An email address is PII CLAUDE.md names and no pattern matched (issue #377).
+# Assembled at runtime so this file is not itself a match for the gate.
+printf 'reached person@leaky-ho%s\n' 'st.net' >"$SCRATCH/repo/contact.md"
+if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: an email address should be denied\n' >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/contact.md"
+
+# Four of RFC 6762 Appendix G's six unofficial internal top-level domains.
+# The suffix is interpolated so this file carries no labelled instance of one.
+for suffix in intranet internal corp lan; do
+	printf 'the box is build-agent.%s\n' "$suffix" >"$SCRATCH/repo/host.md"
+	if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+		printf 'public-safety-test: a private-use suffix should be denied: %s\n' \
+			"$suffix" >&2
+		exit 1
+	fi
+done
+rm -f "$SCRATCH/repo/host.md"
+
+# An uppercase host is the ordinary rendering where .corp and .intranet are most
+# used, so the suffix pattern is case-insensitive.
+printf 'the box is BUILD-AGENT.%s\n' 'CORP' >"$SCRATCH/repo/shouting.md"
+if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: an uppercase private-use host should be denied\n' >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/shouting.md"
+
+# The same leading boundary that keeps a dotted identifier out also keeps a host
+# of three or more labels out: no start position can reach the suffix. That is a
+# false negative the gate accepts rather than a bug (ADR 0067), and it is pinned
+# here so it is a decision rather than an accident.
+{
+	printf 'the box is build01.dc2.%s\n' 'corp'
+	printf 'jenkins.eng.%s timed out\n' 'internal'
+} >"$SCRATCH/repo/fqdn.md"
+if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: a multi-label host is outside the suffix shape\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/fqdn.md"
+
+# Reserved documentation domains identify nobody, and the GitHub SSH user and
+# the commit trailer are published constants this repository's prose carries.
+{
+	printf 'clone with git@github.com:randomparity/adept.git\n'
+	printf 'Co-Authored-By: Claude <noreply@anthropic.com>\n'
+	printf 'git config user.email fixture@example.invalid\n'
+	printf 'write to user@example.com, or to hook@example.test\n'
+} >"$SCRATCH/repo/exempt.md"
+if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: published address constants should not be denied\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/exempt.md"
+
+# A dotted identifier is not a host. The suffix pattern requires the label in
+# front of the suffix to start a dotted token, which is what separates a name
+# written into prose from one segment of a longer dotted identifier.
+{
+	printf 'System.getProperty("user.home") in package com.acme.internal;\n'
+	printf 'path.home was unset and java.home pointed at a stale JDK\n'
+	printf 'at com.example.internal.FooService.bar(FooService.java:42)\n'
+	printf 'the class exposes this.private and self.private accessors\n'
+} >"$SCRATCH/repo/identifiers.md"
+if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: a dotted identifier is not a private-use host\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/identifiers.md"
+
+# An address in prose ends in an alphabetic top-level domain. --text hands
+# binaries to every pattern, and a certificate subject inside one runs into
+# the bytes after it; that is a byte run, not an address.
+printf 'certificate subject ca@vendor.ai1 and more\n' >"$SCRATCH/repo/binaryish.md"
+if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: a non-alphabetic top-level domain is not an address\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/binaryish.md"
+
+# .local, .home and .private are outside the suffix set (ADR 0067): the first
+# collides with this repository's own file naming, which .gitignore carries,
+# and the other two with ordinary dotted identifiers.
+printf 'ignore CLAUDE.local.md, settings.local.json, user.home, vpc.private\n' \
+	>"$SCRATCH/repo/excluded.md"
+if ! "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: excluded suffixes should not be denied\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/excluded.md"
+
+# The exemption is anchored at both ends, so a submatch that merely ends with a
+# published constant is not one. Without the leading anchor this line would be
+# exempted and the address would ship. The constant is split off the local part
+# so this file carries only the exempt form.
+printf 'mail not%s\n' 'git@github.com' >"$SCRATCH/repo/prefixed.md"
+if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: an address ending in a constant should be denied\n' >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/prefixed.md"
+
+# The exemption is compared against each submatch, not the line: a real
+# address beside an exempt one is reported, and it is the one printed.
+printf 'mail git@github.com or person@leaky-ho%s\n' 'st.net' \
+	>"$SCRATCH/repo/mixed.md"
+if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
+	printf 'public-safety-test: an address leak beside an exempt one should fail\n' >&2
+	exit 1
+fi
+if ! grep -qF 'leaky-host.net' "$SCRATCH/output"; then
+	printf 'public-safety-test: the reported line should name the real address\n' >&2
+	cat "$SCRATCH/output" >&2
+	exit 1
+fi
+rm -f "$SCRATCH/repo/mixed.md"
+
 # Atlassian's own public API domain is not tenant identity and must not match,
 # or every design doc citing the REST endpoint fails the gate.
 printf 'call api.%s/ex/jira/{cloudId}/rest/api/3\n' 'atlassian.com' \
