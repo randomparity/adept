@@ -34,14 +34,16 @@ program emitted, and the defect tracks hand composition rather than any one anno
 composer would clear the *performed inconsistently* limb. **Rule 2 is met, and it is not what
 decides this.**
 
-What decides it is the rung above rule 2. CLAUDE.md's *Cut before adding* asks whether the thing is
-already in the codebase before it asks for new surface, and it is: every hand-composed block goes
+What decides it is anatomy rule 1, which puts the burden of argument on the composer: "A skill is
+instructions, not a program… Supporting files are the exception and must be argued for in the pull
+request that adds them." A park composer is such a supporting file, and that argument fails on its
+merits. Every hand-composed block already goes
 through quest-log's annotation recipe, so a check placed there reaches the park path and every
-other hand-written type at once. Issue #390 owns that recipe and is fixing it. A park composer
-would add an executable to close on one call site a defect a change to shared instructions closes
-on all of them — and both would then be live, with the composer's own call site the only one
-covered twice. That ground is stronger than a rule-2 argument would have been, because it does not
-depend on how the observed instances happened to be distributed.
+other hand-written type at once; #390 owns that recipe and is fixing it. A park composer would add
+an executable to close on one call site a defect a change to shared instructions closes on all of
+them — and both would then be live, with the composer's own call site the only one covered twice.
+That ground holds regardless of how the observed instances happened to be distributed, which is why
+it is the one this record rests on.
 
 **Question 1, shape.** 0066 rejected a `--kind` flag on reachability: a park note that acquired a
 handshake would authorize a merge of parked work, and the flag was "the only way that becomes
@@ -101,16 +103,16 @@ survive — the park residual's stated recovery, "a reader recovers from by open
   is why no park composer is filed beside it.
 - Issue #380's two remaining children — the composer's build and its behaviour suite — are not
   built. Closing them as not planned against this record is the campaign orchestrator's action.
-- **#381's question 2 is answered "no" for the adopted shape, and that is a real gap.** Prose holds
-  the absent handshake by instruction, not by construction — the one requirement this record
-  declines rather than meets. It is the strongest argument against this verdict, and a reader
-  weighing a future park composer should start there.
+- **#381's question 2 is answered "no" for the adopted shape, and that is a real gap.** It is the
+  one requirement this record declines rather than meets, the strongest argument against this
+  verdict, and where a reader weighing a future park composer should start.
 - **Extending rather than superseding leaves no forward pointer on 0066.** This repository's ADR
   convention makes a `Superseded by` banner the only edit a merged record permits — a convention,
   not a gate rule, since `check-records.sh` excludes `## Status` from its append-only comparison.
   The corrected sentence therefore stays in place. Accepted: the banner would falsely claim 0066's
   decision no longer governs.
-- No executable ships, so anatomy rules 1 through 3 are untouched by this change.
+- No executable ships, so nothing here engages anatomy rules 2 or 3; rule 1's burden of argument is
+  discharged by declining the supporting file rather than by carrying it.
 
 ## Considered & rejected
 
