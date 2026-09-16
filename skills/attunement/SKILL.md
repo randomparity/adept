@@ -208,11 +208,12 @@ one-sided line in step 2's `KEY<TAB>VALUE` shape:
 
 - `SHARED_TREE` — raw counts, not a judged verdict: `siblings: <n> (<branch names, or
   none>); pre-existing dirty or staged paths: <yes|no>`, or `unknown` when the probe
-  itself cannot run (e.g. `git worktree list` errors). Fails open like step 2's records
-  — `unknown` never blocks attunement. The counts cannot attribute a sibling worktree or
-  dirty state to a cause — this session's own resumed work, another agent, a stale
-  worktree — so the record states the observation only, leaving attribution to the
-  downstream reader.
+  itself cannot run (e.g. `git worktree list` errors). `git worktree list` always
+  includes this session's own working tree; exclude that one row before counting `n`,
+  since it is not a sibling. Fails open like step 2's records — `unknown` never blocks
+  attunement. The counts cannot attribute a sibling worktree or dirty state to a cause —
+  this session's own resumed work, another agent, a stale worktree — so the record
+  states the observation only, leaving attribution to the downstream reader.
 
 No policy attaches to this record: the disclosed-case bullets below are unchanged, byte
 for byte. What the counts imply in the undisclosed case is `$quest`'s and `$forge`'s own
