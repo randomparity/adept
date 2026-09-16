@@ -50,6 +50,10 @@ claim_list:implemented"
 # written. mktemp's own diagnostic is discarded rather than relayed, because
 # stderr here is the single JSON error object callers parse and a bare line
 # beside it breaks that parse; the object below carries the reason instead.
+# github_out_file is guarded the same way and for the same reason -- reading
+# gh's answer back out of a file rather than a command substitution is what
+# lets the call run under a bound at all; references/network-bounds.md records
+# why a captured command substitution bounds nothing.
 #
 # The removal is guarded for the reason every EXIT trap in this repository now
 # is: under the engine's `set -e` a trap's non-zero return becomes the process's
@@ -61,28 +65,137 @@ claim_list:implemented"
 # the run earned is the thing worth protecting here, so the removal is allowed
 # to fail quietly and nothing else changes.
 github_err_file=''
+github_out_file=''
 GH_OUT=''
 GH_ERR=''
+# Set by github_run alongside GH_ERR: 1 when the last call was a bound breach,
+# 0 otherwise. A timeout's GH_ERR splices in the raw gh argument list --
+# titles, search text, label names, body-file paths, all caller-supplied --
+# and github_classify below matches by substring, so an argument reading
+# "could not resolve payment gateway" or "auth token rotation" once
+# misclassified a timeout as not-found or auth instead of transport. That
+# broke completion criterion 2 for every read routed through github_die, and
+# for a write it defeated criterion 5's indeterminate-report guarantee by
+# sending the call down profile_create's die-outright branch instead of its
+# EXIT_PARTIAL one. GH_TIMED_OUT lets github_classify answer from the call's
+# own outcome instead of pattern-matching text a timeout never chose.
+GH_TIMED_OUT=0
 # shellcheck disable=SC2329 # run by the EXIT trap, not called directly
 github_cleanup() {
-	rm -f -- "$github_err_file" || : # scan-fault: deliberate — cleanup; trap reports retention
+	rm -f -- "$github_err_file" "$github_out_file" || : # scan-fault: deliberate — cleanup; trap reports retention
 }
-github_run() { # gh-args...
-	local rc=0
-	[[ -n $github_err_file ]] || {
+
+# Seconds. 30 for a call that issues one request, 120 for one that may issue
+# more; references/network-bounds.md carries the rule and ADR 0068 the record.
+# `:=` rather than `=` so the behaviour suite can export an override before
+# tracker.sh sources this profile, reaching the timeout path without waiting a
+# field value out.
+: "${github_bound_single:=30}"
+: "${github_bound_multi:=120}"
+
+# Run a command under a bound. Returns the command's own status, or 124 when
+# the bound was exceeded. Trap-free: bounded_call itself takes no EXIT trap of
+# its own, so it cannot collide with github_cleanup's. Transcribed from
+# references/network-bounds.md; ADR 0068 carries the reasoning; the seven
+# non-adaptable properties there hold here unchanged.
+github_bounded_call() { # seconds out-file err-file command...
+	# rc, not status: under zsh `status` is a read-only special parameter, and a
+	# `local status=0` in a sourced body once killed a caller's whole session --
+	# the zsh probe near the foot of tracker-test.sh carries that record, which
+	# is why this file sources cleanly under zsh at all.
+	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
+	shift 3
+	"$@" >"$out" 2>"$err" &
+	pid=$!
+	# Tenths, so the counter stays integer arithmetic on a Bash 3.2 floor.
+	while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$((bound * 10))" ]; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+	if kill -0 "$pid" 2>/dev/null; then
+		# TERM, then KILL only if TERM does not land. Never a bare KILL.
+		kill -TERM "$pid" 2>/dev/null || :
+		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
+			sleep 0.1
+			grace=$((grace + 1))
+		done
+		kill -KILL "$pid" 2>/dev/null || :
+		wait "$pid" 2>/dev/null || :
+		# The writer was killed mid-stream, so the capture is void. Emptying it
+		# here makes that structural: a site that parses it anyway gets nothing,
+		# not a truncated page that reads as a complete short one.
+		: >"$out"
+		return 124
+	fi
+	wait "$pid" || rc=$?
+	return "$rc"
+}
+
+github_run() { # bound gh-args...
+	local bound=$1 rc=0
+	shift
+	# Validated before it reaches $((bound * 10)): bash evaluates an arithmetic
+	# operand as an expression, so a value carrying a command substitution
+	# would run it. Digits alone are not enough for that destination -- bash
+	# reads 010 as octal 8, and 08 is an arithmetic error that set -e's
+	# suspension inside bounded_call's while condition does not abort, so the
+	# poll is abandoned and the child it started survives its bound. Every
+	# production call reaches this through github_bound_single/_multi above,
+	# so the guard is unreachable there; it stays for a future call site or
+	# test override that is not, the same reasoning
+	# cleared-dependencies.sh:118-134 carries for cleared_dependency_run, the
+	# closest structural analog to this wrapper.
+	case $bound in
+	'' | *[!0-9]* | 0?*)
+		die "$EXIT_USAGE" usage \
+			"tracker command bound is not a whole number of seconds without a leading zero: $bound"
+		;;
+	esac
+	((${#bound} <= 7)) ||
+		die "$EXIT_USAGE" usage "tracker command bound is implausibly large: $bound"
+	[[ -n $github_err_file && -n $github_out_file ]] || {
 		github_err_file=$(mktemp 2>/dev/null) ||
 			die "$EXIT_TRANSPORT" transport \
 				'could not create a scratch file for the tracker command'
+		github_out_file=$(mktemp 2>/dev/null) || {
+			rm -f -- "$github_err_file" || : # scan-fault: deliberate — dying anyway; the die below reports the fault
+			github_err_file=''
+			die "$EXIT_TRANSPORT" transport \
+				'could not create a scratch file for the tracker command'
+		}
 		trap github_cleanup EXIT
 	}
-	GH_OUT=$(gh "$@" 2>"$github_err_file") || rc=$?
-	GH_ERR=$(cat "$github_err_file")
+	# Braced so the redirect is in place when bash reaps the killed background
+	# job: bash prints its own "Terminated: 15" notice on this shell's stderr
+	# at that point, and github.sh:58-66 above records that tracker.sh's
+	# stderr is a single JSON error object callers parse -- a bare line beside
+	# it breaks that parse on a run that otherwise timed out cleanly.
+	# references/network-bounds.md:62-69 carries the same requirement.
+	{ github_bounded_call "$bound" "$github_out_file" "$github_err_file" gh "$@" || rc=$?; } 2>/dev/null
+	if ((rc == 124)); then
+		# The capture is already void (github_bounded_call emptied it). The
+		# authored diagnostic below replaces whatever fragment gh had written
+		# to stderr before it was signalled, but it splices in "$@" -- the gh
+		# arguments a caller built from a title, search text, a label, or a
+		# body-file path -- so it is not safe for github_classify's substring
+		# match to read: an ordinary "could not resolve X" or "auth token Y"
+		# argument would misclassify the timeout as not-found or auth. Setting
+		# GH_TIMED_OUT here, not text in GH_ERR, is what keeps this call's
+		# outcome transport.
+		GH_OUT=''
+		GH_ERR="gh $* exceeded its ${bound}s network bound and did not answer"
+		GH_TIMED_OUT=1
+	else
+		GH_OUT=$(<"$github_out_file")
+		GH_ERR=$(<"$github_err_file")
+		GH_TIMED_OUT=0
+	fi
 	return "$rc"
 }
 
 # For the paths whose only failure handling is "classify and die". The write
 # paths that must report partial instead call github_run directly.
-github_run_checked() { # gh-args...
+github_run_checked() { # bound gh-args...
 	github_run "$@" || github_die "$GH_ERR"
 }
 
@@ -110,6 +223,16 @@ github_require_id() { # id name
 # a 401 comes to report itself as a transport failure.
 github_classify() {
 	local output=$1 lowered
+	# A timeout's own outcome, not its message text, decides this: GH_TIMED_OUT
+	# is set by github_run alongside the GH_ERR it is about to classify, and a
+	# timeout's message splices in caller-supplied gh arguments the substring
+	# match below cannot tell from a genuine "not found" or "authentication"
+	# failure. Checked before the match, not folded into a case arm, so a
+	# future arm added below cannot reintroduce the same collision.
+	if [[ $GH_TIMED_OUT == 1 ]]; then
+		printf '%s %s' "$EXIT_TRANSPORT" transport
+		return
+	fi
 	# gh emits "Not Found (HTTP 404)" from the REST paths and "Could not resolve
 	# to an issue" from the GraphQL ones. Matching case-sensitively caught only
 	# the second, so a permanently-missing object reported as retryable.
@@ -135,7 +258,7 @@ github_die() {
 profile_target_url() {
 	github_require_target
 	local out url
-	github_run_checked repo view "$TRACKER_TARGET" --json url --jq .url
+	github_run_checked "$github_bound_single" repo view "$TRACKER_TARGET" --json url --jq .url
 	out=$GH_OUT
 	url=${out%/}
 	printf '%s\n' "$url"
@@ -146,7 +269,7 @@ profile_view() {
 	(($# >= 1)) || die "$EXIT_USAGE" usage 'view needs an issue id'
 	local id=$1 out
 	github_require_id "$id" 'issue id'
-	github_run_checked issue view "$id" --repo "$TRACKER_TARGET" \
+	github_run_checked "$github_bound_single" issue view "$id" --repo "$TRACKER_TARGET" \
 		--json number,title,body,labels,parent,state,url,updatedAt
 	out=$GH_OUT
 	# Validate the source shape before normalizing. The jq below indexes
@@ -185,7 +308,7 @@ profile_comment_list() {
 	(($# >= 1)) || die "$EXIT_USAGE" usage 'comment-list needs an issue id'
 	local id=$1 out
 	github_require_id "$id" 'issue id'
-	github_run_checked issue view "$id" --repo "$TRACKER_TARGET" --json comments
+	github_run_checked "$github_bound_single" issue view "$id" --repo "$TRACKER_TARGET" --json comments
 	out=$GH_OUT
 	jq -e '(.comments | type == "array")
 		and all(.comments[]; type == "object" and (.body | type == "string"))' \
@@ -225,7 +348,10 @@ profile_label_history() {
 		die "$EXIT_USAGE" usage "label cannot be queried safely: $label"
 	# --slurp aggregates pages before filtering. Without it gh applies --jq to
 	# each page separately and a paginated timeline yields one line per page.
-	github_run_checked api "repos/$TRACKER_TARGET/issues/$id/timeline" --paginate --slurp \
+	# github_bound_multi, not _single: --paginate can issue more than one
+	# request, so the bound covers the whole call and its effective
+	# per-page allowance shrinks as the timeline grows.
+	github_run_checked "$github_bound_multi" api "repos/$TRACKER_TARGET/issues/$id/timeline" --paginate --slurp \
 		--jq "[.[][] | select(.event==\"labeled\" and .label.name==\"$label\")] | last | .created_at // \"unknown\""
 	out=$GH_OUT
 	[[ -n $out && $out != null ]] || out=unknown
@@ -286,7 +412,7 @@ profile_search() {
 	[[ -z $parent ]] || query="$query parent-issue:\"$parent\""
 	[[ -z $updated_before ]] || query="$query updated:<\"$updated_before\""
 	[[ -z $text ]] || query="$query \"$text\""
-	github_run_checked search issues "$query" --json number \
+	github_run_checked "$github_bound_single" search issues "$query" --json number \
 		--jq '[.[].number | tostring]'
 	out=$GH_OUT
 	printf '%s\n' "$out"
@@ -341,7 +467,7 @@ profile_create() {
 	fi
 	[[ -z $parent ]] || args+=(--parent "$parent")
 
-	github_run "${args[@]}" || rc=$?
+	github_run "$github_bound_single" "${args[@]}" || rc=$?
 	out=$GH_OUT
 	url=$(printf '%s\n' "$out" |
 		rg -o 'https://[^/[:space:]]+/[^/[:space:]]+/[^/[:space:]]+/issues/[0-9]+' |
@@ -398,7 +524,7 @@ profile_label_edit() {
 		*) die "$EXIT_USAGE" usage "unknown label-edit argument: $1" ;;
 		esac
 	done
-	github_run "${args[@]}" || rc=$?
+	github_run "$github_bound_single" "${args[@]}" || rc=$?
 	out=$GH_OUT
 	if ((rc != 0)); then
 		# partial names what was requested, so a caller can repair rather than
@@ -419,13 +545,21 @@ profile_label_ensure() {
 	github_require_target
 	(($# >= 3)) || die "$EXIT_USAGE" usage 'label-ensure needs a name, colour and description'
 	local name=$1 color=$2 description=$3 rc=0 out
-	github_run label create "$name" --repo "$TRACKER_TARGET" --color "$color" \
+	github_run "$github_bound_single" label create "$name" --repo "$TRACKER_TARGET" --color "$color" \
 		--description "$description" || rc=$?
 	out=$GH_OUT
 	((rc == 0)) && {
 		printf '{}\n'
 		return 0
 	}
+	# A bound breach here is indeterminate the same way every other write in
+	# this file is: the label may already have landed. github_die below would
+	# classify it correctly (GH_TIMED_OUT forces transport), but this is a
+	# write, and transport is a failure class, not the indeterminate report
+	# network-bounds.md's "Writes" section requires -- so it is routed to
+	# EXIT_PARTIAL before that classification runs, matching
+	# profile_comment_add and profile_state_set.
+	((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 	# An already-existing label is the ordinary case, not a failure. gh reports
 	# it on stderr, so this reads GH_ERR; masking a no-scope failure as success
 	# is what this distinction exists to prevent.
@@ -445,7 +579,7 @@ profile_comment_add() {
 	github_require_id "$id" 'issue id'
 	[[ -f $body_file && -s $body_file ]] ||
 		die "$EXIT_USAGE" usage "body file must be a populated regular file: $body_file"
-	github_run issue comment "$id" --repo "$TRACKER_TARGET" \
+	github_run "$github_bound_single" issue comment "$id" --repo "$TRACKER_TARGET" \
 		--body-file "$body_file" || rc=$?
 	out=$GH_OUT
 	((rc == 0)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
@@ -462,7 +596,7 @@ profile_state_set() {
 	closed) verb=close ;;
 	*) die "$EXIT_USAGE" usage "state must be open or closed: $state" ;;
 	esac
-	github_run issue "$verb" "$id" --repo "$TRACKER_TARGET" || rc=$?
+	github_run "$github_bound_single" issue "$verb" "$id" --repo "$TRACKER_TARGET" || rc=$?
 	out=$GH_OUT
 	((rc == 0)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 	printf '{}\n'
@@ -474,17 +608,26 @@ profile_state_set() {
 profile_link_parent() {
 	github_require_target
 	(($# >= 2)) || die "$EXIT_USAGE" usage 'link-parent needs a child and a parent id'
-	local child=$1 parent=$2 out child_db_id
+	local child=$1 parent=$2 rc=0 out child_db_id
 	github_require_id "$child" 'child id'
 	github_require_id "$parent" 'parent id'
-	github_run_checked api "repos/$TRACKER_TARGET/issues/$child" --jq .id
+	github_run_checked "$github_bound_single" api "repos/$TRACKER_TARGET/issues/$child" --jq .id
 	child_db_id=$GH_OUT
 	[[ $child_db_id =~ ^[0-9]+$ ]] ||
 		die "$EXIT_TRANSPORT" transport \
 			"could not resolve a database id for issue $child"
-	github_run_checked api "repos/$TRACKER_TARGET/issues/$parent/sub_issues" \
-		-F "sub_issue_id=$child_db_id"
+	# The sub_issues call is a write -- it creates the parent/child link on
+	# GitHub -- so it takes the direct github_run idiom every other write in
+	# this file uses, not github_run_checked's read-style die-on-any-failure.
+	# A bound breach here is indeterminate, not a plain failure, and is now
+	# reachable for the first time; reported through EXIT_PARTIAL per
+	# completion criterion 5, before the classified die below that answers
+	# only a genuine, non-timeout failure.
+	github_run "$github_bound_single" api "repos/$TRACKER_TARGET/issues/$parent/sub_issues" \
+		-F "sub_issue_id=$child_db_id" || rc=$?
 	out=$GH_OUT
+	((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
+	((rc == 0)) || github_die "$GH_ERR"
 	printf '{}\n'
 }
 
@@ -498,7 +641,7 @@ profile_link_blocks() {
 	# The blocker is also spliced into the regular expression below.
 	github_require_id "$blocker" 'blocker id'
 	github_require_id "$blocked" 'blocked id'
-	github_run_checked issue view "$blocked" --repo "$TRACKER_TARGET" --json body \
+	github_run_checked "$github_bound_single" issue view "$blocked" --repo "$TRACKER_TARGET" --json body \
 		--jq .body
 	body=$GH_OUT
 	# \r? because GitHub stores web-authored bodies with CRLF and rg's $ does not
@@ -524,7 +667,7 @@ Blocked by #$blocker"
 		die "$EXIT_TRANSPORT" transport \
 			'could not create a scratch file for the dependency edit'
 	printf '%s\n' "$body" >"$tmp"
-	github_run issue edit "$blocked" --repo "$TRACKER_TARGET" --body-file "$tmp" ||
+	github_run "$github_bound_single" issue edit "$blocked" --repo "$TRACKER_TARGET" --body-file "$tmp" ||
 		rc=$?
 	out=$GH_OUT
 	rm -f -- "$tmp"
@@ -563,7 +706,7 @@ github_claim_read() { # issue
 	CLAIM_TOKEN=''
 	CLAIM_PRODUCER=''
 	CLAIM_AT=''
-	github_run api "repos/$TRACKER_TARGET/labels/quest-claim%2F$issue" \
+	github_run "$github_bound_single" api "repos/$TRACKER_TARGET/labels/quest-claim%2F$issue" \
 		--jq '.description // ""' || rc=$?
 	if ((rc != 0)); then
 		local code class
@@ -647,7 +790,7 @@ profile_claim_acquire() {
 	github_claim_parse_owner "$@"
 	epoch=$(date -u +%s)
 	desc="$TOKEN;$PRODUCER;$epoch"
-	github_run label create "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+	github_run "$github_bound_single" label create "quest-claim/$issue" --repo "$TRACKER_TARGET" \
 		--color 6b7280 --description "$desc" || rc=$?
 	if ((rc == 0)); then
 		jq -n --arg i "$issue" --arg t "$TOKEN" --arg p "$PRODUCER" --arg a "$epoch" \
@@ -658,8 +801,15 @@ profile_claim_acquire() {
 	# store's state is the only trustworthy discriminator between losing the
 	# race, winning but losing the response, and a create that genuinely
 	# failed. The create's own error is preserved across the read-back --
-	# GH_ERR belongs to whichever gh ran last.
+	# GH_ERR *and* GH_TIMED_OUT belong to whichever gh ran last, and
+	# github_claim_read below makes its own github_run call, which resets
+	# both. Without create_timed_out, a create that genuinely timed out
+	# followed by a read-back that answers (rather than itself timing out)
+	# would reach the absent-case classify below with GH_TIMED_OUT reset to
+	# 0 -- the same message-text misclassification the rest of this file was
+	# just fixed against, just via a stale flag instead of a missing one.
 	create_err=$GH_ERR
+	local create_timed_out=$GH_TIMED_OUT
 	local read_status=0
 	github_claim_read "$issue" || read_status=$?
 	if ((read_status != 0)); then
@@ -682,6 +832,10 @@ profile_claim_acquire() {
 		github_claim_conflict "$issue"
 		;;
 	absent)
+		# Restore the create's own timed-out state before classifying its
+		# error: github_claim_read's own github_run call has already
+		# overwritten GH_TIMED_OUT with the read-back's outcome.
+		GH_TIMED_OUT=$create_timed_out
 		github_die "$create_err"
 		;;
 	esac
@@ -754,8 +908,15 @@ profile_claim_release() {
 		;;
 	held)
 		[[ $CLAIM_TOKEN == "$TOKEN" ]] || github_claim_conflict "$issue"
-		github_run label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+		github_run "$github_bound_single" label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
 			--yes || rc=$?
+		# A bound breach is indeterminate, same as any other write: the delete
+		# may have landed. Reported through EXIT_PARTIAL rather than the
+		# classified die below, per network-bounds.md's "Writes" section and
+		# completion criterion 5 -- a retry still reads absent and returns {}
+		# if the delete did land, so this loses no idempotency, only the
+		# wrong exit class for the ambiguous case.
+		((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 		# A delete that landed with a lost response classifies transport; the
 		# re-run reads absent and returns {}.
 		((rc == 0)) || github_die "$GH_ERR"
@@ -810,8 +971,15 @@ profile_claim_recover() {
 			age=$((now - CLAIM_AT))
 			((age >= older_than)) || github_claim_conflict "$issue"
 		fi
-		github_run label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+		github_run "$github_bound_single" label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
 			--yes || rc=$?
+		# A bound breach here is indeterminate, not a plain delete failure: the
+		# delete may have landed, and unlike claim_release this function still
+		# has a create ahead of it, so reading "untouched" from a merely
+		# unanswered call would be worse than the pure-delete case. Reported
+		# through EXIT_PARTIAL per completion criterion 5, before the die
+		# below that answers only a genuine, non-timeout failure.
+		((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 		# Delete failed: the old claim stands untouched, and a retry matches
 		# the same guard.
 		((rc == 0)) || github_die "$GH_ERR"
@@ -820,8 +988,9 @@ profile_claim_recover() {
 		# No evaluable age: --older-than always refuses; only --force or a
 		# manual delete clears a malformed claim.
 		((force == 1)) || github_claim_conflict "$issue"
-		github_run label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+		github_run "$github_bound_single" label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
 			--yes || rc=$?
+		((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 		((rc == 0)) || github_die "$GH_ERR"
 		;;
 	absent) : ;;
@@ -829,7 +998,7 @@ profile_claim_recover() {
 	epoch=$(date -u +%s)
 	desc="$TOKEN;$PRODUCER;$epoch"
 	rc=0
-	github_run label create "quest-claim/$issue" --repo "$TRACKER_TARGET" \
+	github_run "$github_bound_single" label create "quest-claim/$issue" --repo "$TRACKER_TARGET" \
 		--color 6b7280 --description "$desc" || rc=$?
 	if ((rc != 0)); then
 		# Between delete and create the store may be absent; the caller
@@ -846,7 +1015,9 @@ profile_claim_recover() {
 profile_claim_list() {
 	github_require_target
 	local out
-	github_run_checked api "repos/$TRACKER_TARGET/labels?per_page=100" \
+	# github_bound_multi, not _single: --paginate can issue more than one
+	# request as the claim-label set grows, so the bound covers the whole call.
+	github_run_checked "$github_bound_multi" api "repos/$TRACKER_TARGET/labels?per_page=100" \
 		--paginate \
 		--jq '.[] | select(.name | test("^quest-claim/[0-9]+$")) | {name, description}'
 	out=$GH_OUT

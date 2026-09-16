@@ -412,9 +412,15 @@ jq -e '.[] | select(.issue == "103")
 	>"$sandbox/jq-out" <"$sandbox/out" || fail 'claim-list malformed entry'
 
 # --- liveness boundary ages ---------------------------------------------------------
+# The reference timestamp is taken fresh, immediately before each seed, rather
+# than reusing the file-level $now captured roughly 270 lines above: that
+# stale $now raced the whole intervening suite, not the single seed-then-run
+# pair this loop actually bounds, and a loaded runner reliably lost the race
+# by a handful of seconds beyond the window's own +30s slack.
 new_store
 for age in 100 700 50000; do
-	seed_claim 101 q101-aaaaaaaa alice "$((now - age))"
+	seed_now=$(date -u +%s)
+	seed_claim 101 q101-aaaaaaaa alice "$((seed_now - age))"
 	run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
 	assert_exit 0 "$RUN_STATUS" "verify at age $age"
 	reported=$(jq -r '.age_seconds' <"$sandbox/out")
