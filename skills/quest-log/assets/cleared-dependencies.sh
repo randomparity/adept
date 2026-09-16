@@ -79,11 +79,6 @@ cleared_dependency_safe_text() {
 # the four points has written anything yet. The removal is guarded because a
 # caller running under `set -e` would otherwise end on a failed rm after a lookup
 # that succeeded.
-#
-# A call that exceeds its bound discards gh's partial stderr along with its void
-# stdout: what landed there is a fragment of whatever gh had written when it was
-# signalled, and the authored diagnostic that replaces it cannot accidentally
-# carry the 'not found' substring the blocker read treats as an answer.
 
 # Run a command under a bound. Returns the command's own status, or 124 when the
 # bound was exceeded. Trap-free: this file is sourced, so it cannot take the EXIT
