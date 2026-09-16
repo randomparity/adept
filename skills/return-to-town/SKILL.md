@@ -106,8 +106,8 @@ the plugin cache, while the head SHA is read from `origin` at your working direc
 repository-relative path would resolve at neither.
 
 Exit 0 succeeds, 1 means a condition failed, 2 means the helper could not run. A nonzero exit
-holds both paths and never authorizes a merge. Re-run it once rather than diagnosing the block by
-hand. **If the identical condition fails a second time the failure is deterministic** — stop
+holds both paths and never authorizes a merge. Re-run it once — unless the exit names an exceeded network bound — rather than
+diagnosing the block by hand. **If the identical condition fails a second time the failure is deterministic** — stop
 re-running and inspect the issue. If a complete block is there, the hand-off is published: proceed
 from it. If there is none, nothing was posted: report the failure and stop. A nonzero exit does not
 by itself mean nothing was posted; some conditions are checked after the comment is created, so an
@@ -117,9 +117,14 @@ condition still holds on it: a usable block is already on the issue. It is the e
 whole set — and the exits checked *before* the write are why the instruction above is to inspect
 first rather than to proceed.
 
-Those network calls carry no bound today, so an unreachable remote blocks the helper rather than
-returning any exit at all. [Network bounds](../../references/network-bounds.md) records the
-convention for bounding them and the class a timed-out call reports.
+Every network call it makes is bounded per
+[network bounds](../../references/network-bounds.md), and a call that exceeds its bound exits 2
+naming itself. **A timeout is not a re-run condition.** The instruction above covers conditions
+the helper checked and found false; a timeout checked nothing. Read which call the diagnostic
+names: the three before the write report that nothing was posted, the readback names the comment
+it created and could not verify, and only the write itself may or may not have landed. Inspect the
+issue in every case. If a complete block is there the hand-off is published: proceed from it. If
+there is none, re-run once. Never re-run on the timeout alone.
 
 ## Default: hand off, do not self-merge
 

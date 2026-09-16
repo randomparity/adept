@@ -59,7 +59,7 @@ handshake=''
 head_sha=''
 issue_html_url=''
 pr_closing_refs=''
-response=''
+response_file=''
 call_out=''
 call_err=''
 
@@ -535,16 +535,25 @@ compose_body() {
 }
 
 post_comment() {
-	local output post_status=0 candidate
+	local post_status=0 candidate
 	# Host-qualified, as publish-forge-review does. A bare owner/name resolves
 	# against gh's configured default host, while the readback below pins
 	# github.com -- so on a workstation defaulting to an Enterprise instance the
 	# comment would be created on one host and looked for on another.
-	output=$(gh issue comment "$issue" --repo "github.com/$repo" --body-file "$body") || post_status=$?
+	bounded_network_call comment gh issue comment "$issue" --repo "github.com/$repo" \
+		--body-file "$body" || post_status=$?
+	# A bound cannot make a write atomic. Killed after GitHub created the comment
+	# but before its URL came back, this call leaves a published block the script
+	# cannot see -- so it is indeterminate, not a failure, and it is not retried.
+	[ "$post_status" -ne 124 ] ||
+		timed_out "creating the hand-off comment on $repo#$issue" \
+			"the write may or may not have landed and this script cannot tell; inspect $repo#$issue before re-running, because a re-run appends another comment"
 	[ "$post_status" -eq 0 ] ||
 		fail "the hand-off comment was not created on $repo#$issue"
-	candidate=$(printf '%s\n' "$output" |
-		awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }')
+	# A scan that could not run is a fault, not a finding: the empty-candidate
+	# check below is the condition, and awk failing is not that condition.
+	candidate=$(awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }' "$call_out") ||
+		fault 'the comment-creation response could not be scanned for a URL'
 	[ -n "$candidate" ] ||
 		fail 'creating the hand-off comment returned no usable comment URL'
 	printf '%s\n' "$candidate"
@@ -564,10 +573,17 @@ read_stored_body() { # url
 	'' | *[!0123456789]*) fail "the hand-off comment URL carries no numeric comment id: $url" ;;
 	esac
 	endpoint="/repos/$repo/issues/comments/$comment_id"
-	response=$(gh api --hostname github.com "$endpoint") || api_status=$?
+	bounded_network_call readback gh api --hostname github.com "$endpoint" || api_status=$?
+	# Post-write, and here the create already returned a URL: what a timeout costs
+	# is the verification, not the comment. Reporting it as a failed readback would
+	# understate a published block nobody has checked.
+	[ "$api_status" -ne 124 ] ||
+		timed_out "reading back the stored hand-off comment $endpoint" \
+			"the comment was created at $url and its stored copy was not verified; inspect it rather than re-running, because a re-run appends another comment"
 	[ "$api_status" -eq 0 ] ||
 		fail "the stored hand-off comment could not be read back: $endpoint"
-	jq -r '.body' <<<"$response" >"$stored" ||
+	response_file=$call_out
+	jq -r '.body' "$response_file" >"$stored" ||
 		fail "the stored hand-off comment could not be parsed: $endpoint"
 }
 
@@ -601,7 +617,7 @@ assert_stored_body() {
 	# transport normalization, not a broken hand-off -- and re-running would
 	# reproduce it forever while appending another complete block, so the
 	# message says to verify rather than retry.
-	jq -e --rawfile expected "$body" '.body == $expected' <<<"$response" >/dev/null ||
+	jq -e --rawfile expected "$body" '.body == $expected' "$response_file" >/dev/null ||
 		fail 'the stored hand-off comment differs byte-for-byte from the body this script composed, though every gate condition holds on it; a usable block is on the issue -- inspect it and proceed rather than re-running'
 }
 

@@ -122,6 +122,13 @@ issue)
 	two-urls) printf 'one\ntwo\n' ;;
 	foreign-url) printf '%s\n' 'https://github.com/other/repo/issues/9#issuecomment-73' ;;
 	nonnumeric-url) printf '%s\n' "https://github.com/$url_repo/issues/$issue_number#issuecomment-nope" ;;
+	# The comment is recorded above and a plausible URL is emitted before the
+	# hang, which is the real hazard: the write landed and its response did not
+	# arrive. The case then proves the helper reported neither as settled.
+	hang-comment)
+		printf '%s\n' "https://github.com/$url_repo/issues/$issue_number#issuecomment-73"
+		exec sleep 30
+		;;
 	*) printf '%s\n' "https://github.com/$url_repo/issues/$issue_number#issuecomment-73" ;;
 	esac
 	;;
@@ -168,6 +175,7 @@ api)
 	printf 'api\n' >>"$state/events"
 	case ${GH_MODE:-success} in
 	read-fail) exit 1 ;;
+	hang-readback) exec sleep 30 ;;
 	drop-sentinel) grep -vxF -- '<!-- TRAJECTORY:COMPLETE -->' "$state/comment-body" >"$state/served" ;;
 	drop-marker) grep -vxF -- '<!-- WORK:TRAJECTORY -->' "$state/comment-body" >"$state/served" ;;
 	drop-handshake) grep -v '^MERGE-READY:' "$state/comment-body" >"$state/served" ;;
@@ -751,6 +759,51 @@ case_ls_remote_times_out() {
 	ok "$label"
 }
 
+case_comment_write_times_out() {
+	local label='a write that exceeds the bound reports an indeterminate comment'
+	new_case
+	short_bound_helper || {
+		fail_case "$label" 'the bound constant could not be rewritten'
+		return 0
+	}
+	GH_MODE=hang-comment run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 2 || return 0
+	expect_stderr "$label" "creating the hand-off comment on $REPO#$ISSUE" || return 0
+	expect_stderr "$label" 'network bound' || return 0
+	expect_stderr "$label" 'may or may not have landed' || return 0
+	# The fake recorded the write and emitted a URL before hanging. Both assertions
+	# below are the contract: the helper must not claim nothing was posted, and it
+	# must not print a verified URL it never verified.
+	[ -e "$STATE/comment-body" ] || {
+		fail_case "$label" 'the fixture did not record the write it is meant to model'
+		return 0
+	}
+	[ -z "$RUN_OUT" ] || {
+		fail_case "$label" "stdout carried '$RUN_OUT' for an unverified write"
+		return 0
+	}
+	ok "$label"
+}
+
+case_readback_times_out() {
+	local label='a readback that exceeds the bound names the comment it could not verify'
+	new_case
+	short_bound_helper || {
+		fail_case "$label" 'the bound constant could not be rewritten'
+		return 0
+	}
+	GH_MODE=hang-readback run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 2 || return 0
+	expect_stderr "$label" 'reading back the stored hand-off comment' || return 0
+	expect_stderr "$label" "https://github.com/$REPO/issues/$ISSUE#issuecomment-73" || return 0
+	expect_stderr "$label" 'was not verified' || return 0
+	[ -z "$RUN_OUT" ] || {
+		fail_case "$label" "stdout carried '$RUN_OUT' for an unverified comment"
+		return 0
+	}
+	ok "$label"
+}
+
 # The minimal PATH carries bash alone: `#!/usr/bin/env bash` resolves the
 # interpreter through PATH too, so an empty one fails at exec with 127 and never
 # reaches the check under test.
@@ -1060,6 +1113,8 @@ case_pr_view_fails
 case_pr_view_times_out
 case_issue_read_times_out
 case_ls_remote_times_out
+case_comment_write_times_out
+case_readback_times_out
 case_missing_command
 case_rerun_is_safe
 case_issue_not_closed_by_pr
