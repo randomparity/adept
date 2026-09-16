@@ -184,7 +184,9 @@ metric_json() { # value
 # Verbatim from references/network-bounds.md; all seven of its non-adaptable
 # properties hold here unchanged.
 bounded_call() { # seconds out-file err-file command...
-	# rc, not status: under zsh `status` is a read-only special parameter.
+	# rc, not status: under zsh `status` is a read-only special parameter, and a
+	# `local status=0` in a sourced body once killed a caller's whole session --
+	# cleared-dependencies.sh:5-16 carries that record.
 	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
 	shift 3
 	"$@" >"$out" 2>"$err" &
