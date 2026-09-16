@@ -114,8 +114,10 @@ Capture files are private and unguessable.
   are removed on every path the script itself takes, including `fail`, but neither is reachable
   from a signal handler: `cleared-dependencies.sh` deliberately installs no trap, and
   `publish-forge-review`'s existing EXIT trap does not fire inside the command-substitution
-  subshell that runs its comment write. Two empty private files, in the same class as the orphan
-  process below.
+  subshell that runs its comment write. Two private mode-0600 files holding whatever `gh` had
+  written — the mechanism empties the stdout capture only on the 124 path — in the same class as
+  the orphan process below. Emptying them from a signal handler would need the trap slot both
+  files deliberately refuse.
 - Bash's `Terminated: 15` job notice reaches each file's own stderr, which is prose in both. Only
   `profiles/github.sh` parses its stderr, and that file is out of scope.
 
@@ -135,13 +137,18 @@ already control `PATH` and therefore which `gh` runs. Untrusted: GitHub's respon
 reach `jq` and `awk` as they do today, and any other local user on a shared host, who is the
 reason the captures must not be world-readable or symlink-followable.
 
-**Control per boundary.** Each bound is validated as a whole number of digits before any use —
-`publish-forge-review` in `preflight()`, `cleared-dependencies.sh` at the top of
-`cleared_dependency_run`. That guard is not cosmetic: bash evaluates an arithmetic operand as an
-expression, so `$((bound * 10))` on a value of `x[$(echo PWNED >&2)]` runs the substitution, as
-measured on `/bin/bash` 3.2.57. The guard turns that into a refusal instead; a merely
-non-numeric value would otherwise evaluate to 0 and return 124 on every call, which is a denial
-an actor with environment control already has by other means. Capture files
+**Control per boundary.** Each bound is validated before any use — `publish-forge-review` in
+`preflight()`, `cleared-dependencies.sh` at the top of `cleared_dependency_run`, each the sole
+entry point to its arithmetic. The guard admits digits only, with no leading zero, up to seven of
+them. All three clauses earn their place, measured on `/bin/bash` 3.2.57: `$((bound * 10))` on
+`x[$(echo PWNED >&2)]` runs the substitution; `08` and `09` are arithmetic errors that abort the
+shell *after* `bounded_call` has launched its child, orphaning the process the bound exists to
+reap; `010` is silently read as octal 8, so the site would run under a bound it never chose; and
+a twenty-digit value silently overflows 64 bits. `publish-forge-review` validates its two
+constants separately rather than their concatenation, in which a leading zero on the second value
+would be invisible. A merely non-numeric value would otherwise evaluate to 0 and return 124 on
+every call, which is a denial an actor with environment control already has by other means.
+Capture files
 are allocated by `mktemp` at mode 0600 with unguessable names, never a `$$`-derived path in a
 shared directory — the reference's first non-adaptable property, which exists precisely to keep
 the `>` redirect from following a pre-created symlink. Response bodies are unchanged in handling:

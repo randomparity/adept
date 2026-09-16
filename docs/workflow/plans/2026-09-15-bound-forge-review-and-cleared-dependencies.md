@@ -329,10 +329,16 @@ returning 124 on a bound exceeded. Globals `cleared_dependency_bound_single` (30
   the gate checks only that the field exists and parses, and the base ref's own version would
   satisfy it. Supplying the fork point is what makes the strictly-greater rule run locally, and it
   is the same rule CI hard-gates.
-- **Contract: a non-numeric bound is refused before the arithmetic evaluates it.** Mode:
-  task-test-not-applicable — observing the guard means committing a `$(…)` payload to a fixture
+- **Contract: a bound the arithmetic destination would reject is refused before the call.** Mode:
+  focused-test — the leading-zero half is reachable and costs nothing to commit: the suite sets
+  `cleared_dependency_bound_single=08`, and `cleared_dependency_body_verdict` must return 1 with
+  `not a whole number of seconds` and without `did not answer`, proving the refusal precedes the
+  call rather than following a launched child. Green: `just test cleared-dependencies`.
+- **Contract: a bound carrying a command substitution is refused.** Mode:
+  task-test-not-applicable — observing this half means committing a `$(…)` payload to a fixture
   for a guard whose whole job is that the payload never runs. The behaviour was measured on
-  `/bin/bash` 3.2.57 instead and is recorded in Global Constraints.
+  `/bin/bash` 3.2.57 instead and is recorded in Global Constraints; the same `case` arm the
+  focused entry above exercises is what rejects it.
 - **Contract: `cleared_dependency_run`'s new leading argument.** Mode: task-test-not-applicable —
   a call site that forgets the bound passes its first `gh` word to the guard above, which refuses
   it, so every one of the suite's existing cases fails loudly; there is no separate observation to

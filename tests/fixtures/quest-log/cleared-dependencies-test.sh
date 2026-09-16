@@ -299,6 +299,26 @@ cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
 fake_mode=normal
 reset_cleared_dependency_cache
 
+# A bound the arithmetic destination would reject is refused before the call, not
+# after it. `08` is the reachable half of that guard and costs nothing to commit:
+# bash reads a leading zero as octal, so `$((08 * 10))` is an arithmetic error,
+# and under a caller's `set -e` it would abort the shell after the child had been
+# launched -- orphaning the process the bound exists to reap. The unreachable half
+# is a bound carrying a command substitution, which stays untested because
+# observing it means committing the payload.
+fake_mode=hang-blocker
+cleared_dependency_bound_single=08
+if cleared_dependency_body_verdict owner/repo 10 'Blocked by #1'; then
+	fail 'a bound the arithmetic would reject cleared a dependent'
+fi
+cleared_dependency_bound_single=30
+[[ $cleared_dependency_reason == *'not a whole number of seconds'* ]] ||
+	fail "a leading-zero bound was not refused: $cleared_dependency_reason"
+[[ $cleared_dependency_reason != *'did not answer'* ]] ||
+	fail "a refused bound was reported as a call that did not answer: $cleared_dependency_reason"
+fake_mode=normal
+reset_cleared_dependency_cache
+
 : >"$gh_log"
 fake_mode=hang-api
 cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2

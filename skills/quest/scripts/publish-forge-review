@@ -113,7 +113,7 @@ run_gh() { # seconds gh-args...
 }
 
 preflight() {
-	local command
+	local command bound
 	for command in gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm; do
 		command -v "$command" >/dev/null 2>&1 ||
 			fail "required command is unavailable: $command; install it or expose it in PATH"
@@ -126,9 +126,21 @@ preflight() {
 	esac
 	command -v "$disposer" >/dev/null 2>&1 ||
 		fail "recoverable-delete command is unavailable: $disposer; install it or expose it in PATH"
-	case $BOUND_MULTI$BOUND_SINGLE in
-	'' | *[!0-9]*) fail 'network bound override must be a whole number of seconds' ;;
-	esac
+	# Each bound separately, never the concatenation: a leading zero on the second
+	# value disappears inside it. Digits alone are not enough for the arithmetic
+	# destination -- bash reads 010 as octal 8 and rejects 08 outright, and an
+	# arithmetic error inside bounded_call would abort the script after the child
+	# was launched, orphaning the very process the bound exists to reap. The
+	# length cap keeps the multiplication clear of 64-bit overflow.
+	for bound in "$BOUND_MULTI" "$BOUND_SINGLE"; do
+		case $bound in
+		'' | *[!0-9]* | 0?*)
+			fail 'network bound override must be a whole number of seconds with no leading zero'
+			;;
+		esac
+		[ "${#bound}" -le 7 ] ||
+			fail 'network bound override is implausibly large; give a whole number of seconds'
+	done
 	[ -x "$SCRIPT_DIR/check-public-safety" ] ||
 		fail 'bundled public-safety check is unavailable; repair the installed quest skill'
 }

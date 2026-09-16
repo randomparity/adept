@@ -128,13 +128,22 @@ cleared_dependency_run() { # bound gh-args...
 	shift
 	# Validated before it reaches $((bound * 10)): bash evaluates an arithmetic
 	# operand as an expression, so a value carrying a command substitution would
-	# run it. This is the only entry point, so one guard covers every call.
+	# run it. Digits alone are not enough for that destination -- bash reads 010
+	# as octal 8 and rejects 08 outright, and an arithmetic error there would
+	# abort a caller running under `set -e` after the child was launched,
+	# orphaning the very process the bound exists to reap. The length cap keeps
+	# the multiplication clear of 64-bit overflow. This is the only entry point,
+	# so one guard covers every call.
 	case $bound in
-	'' | *[!0-9]*)
-		cleared_dependency_err='the tracker command bound is not a whole number of seconds'
+	'' | *[!0-9]* | 0?*)
+		cleared_dependency_err='the tracker command bound is not a whole number of seconds without a leading zero'
 		return 1
 		;;
 	esac
+	if [ "${#bound}" -gt 7 ]; then
+		cleared_dependency_err='the tracker command bound is implausibly large'
+		return 1
+	fi
 	out=$(mktemp) || {
 		cleared_dependency_err='no scratch file for the tracker command'
 		return 1
