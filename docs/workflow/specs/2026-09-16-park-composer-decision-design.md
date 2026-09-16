@@ -31,9 +31,9 @@ Invariants and assets at stake:
 
 Accepted failure classes:
 - a reader disagreeing with the verdict — the record states its ground and what would reopen it;
-- the park path keeping the sentinel-omission exposure — accepted in the record's Consequences, bounded
-  by the `status:` label in an ordinary park, unbounded in an interrupted one, where the record states
-  the window and routes it to #390.
+- the park path keeping the sentinel-omission exposure — accepted in the record's Consequences. The
+  `status:` label bounds the parked state in an ordinary park, though latest-complete-wins returns
+  an earlier block as current rather than none; unbounded in an interrupted park. Routed to #390.
 
 Covered elsewhere:
 - the hand-write instruction-shape defect on every hand-composed `WORK:*` surface, park included — #390;
