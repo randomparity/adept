@@ -29,6 +29,14 @@ cleared_dependency_state=
 cleared_dependency_out=
 cleared_dependency_err=
 
+# Seconds. 30 for a call that issues one request, 120 for one that may issue
+# more; references/network-bounds.md carries the rule and ADR 0068 the record.
+# `:=` rather than `=` because the behaviour suite's direct-execution leg exports
+# these into a subprocess, and an unconditional assignment here would overwrite
+# the exported value before any call read it.
+: "${cleared_dependency_bound_single:=30}"
+: "${cleared_dependency_bound_multi:=120}"
+
 reset_cleared_dependency_cache() {
 	cleared_dependency_lookup_count=0
 	clear_cleared_dependency_results
@@ -41,6 +49,42 @@ clear_cleared_dependency_results() {
 
 cleared_dependency_safe_text() {
 	LC_ALL=C tr -cd '[:print:]' | cut -c1-200
+}
+
+# Run a command under a bound. Returns the command's own status, or 124 when the
+# bound was exceeded. Trap-free: this file is sourced, so it cannot take the EXIT
+# trap slot from whichever skill sourced it, and the mechanism needs none.
+# Transcribed from references/network-bounds.md; ADR 0068 carries the reasoning.
+cleared_dependency_bounded_call() { # seconds out-file err-file command...
+	# rc, not status: under zsh `status` is a read-only special parameter, and a
+	# `local status=0` in a sourced body once killed a caller's whole session --
+	# cleared-dependencies.sh:5-16 carries that record.
+	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
+	shift 3
+	"$@" >"$out" 2>"$err" &
+	pid=$!
+	# Tenths, so the counter stays integer arithmetic on a Bash 3.2 floor.
+	while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$((bound * 10))" ]; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+	if kill -0 "$pid" 2>/dev/null; then
+		# TERM, then KILL only if TERM does not land. Never a bare KILL.
+		kill -TERM "$pid" 2>/dev/null || :
+		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
+			sleep 0.1
+			grace=$((grace + 1))
+		done
+		kill -KILL "$pid" 2>/dev/null || :
+		wait "$pid" 2>/dev/null || :
+		# The writer was killed mid-stream, so the capture is void. Emptying it
+		# here makes that structural: a site that parses it anyway gets nothing,
+		# not a truncated page that reads as a complete short one.
+		: >"$out"
+		return 124
+	fi
+	wait "$pid" || rc=$?
+	return "$rc"
 }
 
 # Four calls in this file read a value out of gh's stdout: a blocker's state
@@ -63,26 +107,64 @@ cleared_dependency_safe_text() {
 # capturing stdout would run this function in a subshell, and the stderr it
 # recorded would be discarded along with it.
 #
-# The scratch file is allocated and removed per call rather than held across the
-# run by an EXIT trap: this file is sourced, so a trap installed here would take
-# the slot from whichever skill sourced it. A host that cannot allocate one
-# reports through the same diagnostic as a gh call that did not answer, which is
-# the honest reading -- the lookup did not happen, and none of the four points
-# has written anything yet. The removal is guarded because a caller running
-# under `set -e` would otherwise end on a failed rm after a lookup that
-# succeeded.
-cleared_dependency_run() { # gh-args...
-	local scratch rc=0
+# The two scratch files are allocated and removed per call rather than held
+# across the run by an EXIT trap: this file is sourced, so a trap installed here
+# would take the slot from whichever skill sourced it. A host that cannot
+# allocate one reports through the same diagnostic as a gh call that did not
+# answer, which is the honest reading -- the lookup did not happen, and none of
+# the four points has written anything yet. The removal is guarded because a
+# caller running under `set -e` would otherwise end on a failed rm after a lookup
+# that succeeded.
+cleared_dependency_run() { # bound gh-args...
+	local bound=$1 subcommand=$2 out err rc=0
 	cleared_dependency_out=
 	cleared_dependency_err=
-	scratch=$(mktemp) || {
+	shift
+	# Validated before it reaches $((bound * 10)): bash evaluates an arithmetic
+	# operand as an expression, so a value carrying a command substitution would
+	# run it. Digits alone are not enough for that destination -- bash reads 010
+	# as octal 8, so a site would run under a bound nobody chose, and 08 is an
+	# arithmetic error. Measured on bash 3.2.57: that error lands in the bounded
+	# call's `while` condition, where `set -e` is suspended, so it does not abort
+	# -- the poll is abandoned, the function returns 0 with an empty capture, and
+	# the child it launched survives. The caller then reads a successful call that
+	# answered nothing, which is exactly the reading this convention exists to
+	# prevent, with the orphan the bound exists to reap. The length cap keeps the
+	# multiplication clear of 64-bit overflow. This is the only entry point, so
+	# one guard covers every call.
+	case $bound in
+	'' | *[!0-9]* | 0?*)
+		cleared_dependency_err='the tracker command bound is not a whole number of seconds without a leading zero'
+		return 1
+		;;
+	esac
+	if [ "${#bound}" -gt 7 ]; then
+		cleared_dependency_err='the tracker command bound is implausibly large'
+		return 1
+	fi
+	out=$(mktemp) || {
 		cleared_dependency_err='no scratch file for the tracker command'
 		return 1
 	}
-	cleared_dependency_out=$(gh "$@" 2>"$scratch") || rc=$?
-	cleared_dependency_err=$(<"$scratch")
-	rm -f -- "$scratch" ||
-		printf 'retained scratch path: %s\n' "$scratch" >&2
+	err=$(mktemp) || {
+		rm -f -- "$out" ||
+			printf 'retained scratch path: %s\n' "$out" >&2
+		cleared_dependency_err='no scratch file for the tracker command'
+		return 1
+	}
+	cleared_dependency_bounded_call "$bound" "$out" "$err" gh "$@" || rc=$?
+	if [ "$rc" -eq 124 ]; then
+		# The stdout capture is void and the stderr capture is a fragment of
+		# whatever gh had written when it was signalled. An authored diagnostic
+		# says what actually happened, and cannot accidentally carry the
+		# 'not found' substring that the blocker read treats as an answer.
+		cleared_dependency_err="gh $subcommand exceeded its ${bound}s bound and did not answer"
+	else
+		cleared_dependency_out=$(<"$out")
+		cleared_dependency_err=$(<"$err")
+	fi
+	rm -f -- "$out" "$err" ||
+		printf 'retained scratch paths: %s %s\n' "$out" "$err" >&2
 	return "$rc"
 }
 
@@ -99,8 +181,8 @@ cleared_dependency_blocker_state() { # repo blocker dependent
 		return
 	fi
 	((cleared_dependency_lookup_count += 1))
-	if cleared_dependency_run issue view "$blocker" --repo "$repo" \
-		--json state --jq .state; then
+	if cleared_dependency_run "$cleared_dependency_bound_single" issue view "$blocker" \
+		--repo "$repo" --json state --jq .state; then
 		state=$cleared_dependency_out
 	else
 		safe=$(printf '%s' "$cleared_dependency_err" | cleared_dependency_safe_text)
@@ -167,39 +249,62 @@ cleared_dependency_candidate() { # issue-json
 }
 
 ensure_cleared_dependency_label() { # repo
-	local repo=$1 err safe
-	if ! err=$(gh label create 'status:ready' --repo "$repo" --color 0e8a16 \
-		--description 'triaged, eligible for work' 2>&1); then
-		[[ $err == *'already exists'* ]] && return 0
-		safe=$(printf '%s' "$err" | cleared_dependency_safe_text)
-		printf 'cannot create status:ready: %s — grant label-write scope\n' "$safe" >&2
+	local repo=$1 rc=0 merged safe
+	cleared_dependency_run "$cleared_dependency_bound_single" label create 'status:ready' \
+		--repo "$repo" --color 0e8a16 \
+		--description 'triaged, eligible for work' || rc=$?
+	case $rc in
+	0) return 0 ;;
+	124)
+		# A bound does not make a write atomic. Report indeterminacy, never
+		# failure, and never retry.
+		printf 'creating status:ready exceeded its %ss bound; the label may or may not exist\n' \
+			"$cleared_dependency_bound_single" >&2
 		return 1
-	fi
+		;;
+	esac
+	# This call captures a diagnostic and discards it on success, so its streams
+	# are merged after the call rather than in a 2>&1 redirect.
+	merged=$cleared_dependency_out$cleared_dependency_err
+	[[ $merged == *'already exists'* ]] && return 0
+	safe=$(printf '%s' "$merged" | cleared_dependency_safe_text)
+	printf 'cannot create status:ready: %s — grant label-write scope\n' "$safe" >&2
+	return 1
 }
 
 restore_cleared_dependency_blocked() { # repo number issue-json reason
-	local repo=$1 number=$2 issue=$3 reason=$4 label err safe
+	local repo=$1 number=$2 issue=$3 reason=$4 label safe rc=0 merged
 	local -a remove_args=()
 	while IFS= read -r label; do
 		remove_args+=(--remove-label "$label")
 	done < <(jq -r '.labels[].name | select(startswith("status:"))' <<<"$issue")
-	if ! err=$(gh issue edit "$number" --repo "$repo" "${remove_args[@]}" \
-		--add-label 'status:blocked' 2>&1); then
-		safe=$(printf '%s' "$err" | cleared_dependency_safe_text)
+	cleared_dependency_run "$cleared_dependency_bound_multi" issue edit "$number" \
+		--repo "$repo" "${remove_args[@]}" --add-label 'status:blocked' || rc=$?
+	case $rc in
+	0) ;;
+	124)
+		printf 'restoring #%s to status:blocked after %s exceeded its %ss bound; its labels may or may not have been changed\n' \
+			"$number" "$reason" "$cleared_dependency_bound_multi" >&2
+		return 1
+		;;
+	*)
+		merged=$cleared_dependency_out$cleared_dependency_err
+		safe=$(printf '%s' "$merged" | cleared_dependency_safe_text)
 		printf 'cannot restore #%s to status:blocked after %s: %s\n' \
 			"$number" "$reason" "$safe" >&2
 		return 1
-	fi
+		;;
+	esac
 	printf 'restored #%s to status:blocked after %s\n' "$number" "$reason" >&2
 }
 
 apply_cleared_dependency() { # repo issue-json
 	local repo=$1 initial=$2 number current body final label status_labels
-	local initial_snapshot current_snapshot snapshot_filter err safe
+	local initial_snapshot current_snapshot snapshot_filter safe rc
 	local -a remove_args=()
 	number=$(jq -r .number <<<"$initial")
-	if ! cleared_dependency_run issue view "$number" --repo "$repo" \
-		--json number,state,body,labels; then
+	if ! cleared_dependency_run "$cleared_dependency_bound_single" issue view "$number" \
+		--repo "$repo" --json number,state,body,labels; then
 		safe=$(printf '%s' "$cleared_dependency_err" | cleared_dependency_safe_text)
 		printf 'unreadable dependent #%s: %s; kept blocked\n' "$number" "$safe" >&2
 		return 1
@@ -231,15 +336,26 @@ apply_cleared_dependency() { # repo issue-json
 		remove_args+=(--remove-label "$label")
 	done < <(jq -r '.labels[].name | select(startswith("status:"))' <<<"$current")
 	ensure_cleared_dependency_label "$repo" || return 1
-	if ! err=$(gh issue edit "$number" --repo "$repo" "${remove_args[@]}" \
-		--add-label 'status:ready' 2>&1); then
-		safe=$(printf '%s' "$err" | cleared_dependency_safe_text)
+	rc=0
+	cleared_dependency_run "$cleared_dependency_bound_multi" issue edit "$number" \
+		--repo "$repo" "${remove_args[@]}" --add-label 'status:ready' || rc=$?
+	case $rc in
+	0) ;;
+	124)
+		printf 'label update for #%s exceeded its %ss bound; the labels may or may not have been changed; inspect its status labels\n' \
+			"$number" "$cleared_dependency_bound_multi" >&2
+		return 1
+		;;
+	*)
+		safe=$(printf '%s' "$cleared_dependency_out$cleared_dependency_err" |
+			cleared_dependency_safe_text)
 		printf 'label update failed for #%s: %s; inspect its status labels\n' \
 			"$number" "$safe" >&2
 		return 1
-	fi
-	if ! cleared_dependency_run issue view "$number" --repo "$repo" \
-		--json number,state,body,labels; then
+		;;
+	esac
+	if ! cleared_dependency_run "$cleared_dependency_bound_single" issue view "$number" \
+		--repo "$repo" --json number,state,body,labels; then
 		safe=$(printf '%s' "$cleared_dependency_err" | cleared_dependency_safe_text)
 		printf 'verification unreadable for #%s: %s; inspect its status labels\n' \
 			"$number" "$safe" >&2
@@ -284,7 +400,10 @@ reconcile_cleared_dependencies() { # plan|apply owner/name
 		printf 'usage: reconcile_cleared_dependencies plan|apply owner/name\n' >&2
 		return 2
 	}
-	cleared_dependency_run api --paginate --slurp -X GET \
+	# 120 s bounds the whole paginated call rather than each request: gh exposes
+	# no per-request timeout, so the effective per-page allowance shrinks as the
+	# repository's open-issue count grows.
+	cleared_dependency_run "$cleared_dependency_bound_multi" api --paginate --slurp -X GET \
 		"repos/$repo/issues?state=open&per_page=100" || {
 		safe=$(printf '%s' "$cleared_dependency_err" | cleared_dependency_safe_text)
 		printf 'cannot list open dependents: %s; no labels changed\n' "$safe" >&2

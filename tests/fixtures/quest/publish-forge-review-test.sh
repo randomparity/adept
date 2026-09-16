@@ -62,6 +62,7 @@ pr)
 	printf '%s\n' "$comment_repo" >"$state/comment-repo"
 	printf 'comment-invocation\n' >>"$state/events"
 	case ${GH_MODE:-success} in
+	comment-hang) printf '%s\n' $$ >"$state/hang-pid"; exec sleep 30 ;;
 	comment-fail) exit 1 ;;
 	esac
 	printf 'post\n' >>"$state/events"
@@ -93,6 +94,7 @@ api)
 	printf '%s\n' "$endpoint" >"$state/api-path"
 	printf '%s\n' "$host" >"$state/api-host"
 	case ${GH_MODE:-success} in
+	read-hang) printf '%s\n' $$ >"$state/hang-pid"; exec sleep 30 ;;
 	read-fail) exit 1 ;;
 	read-mismatch) jq -n --arg body mismatch '{body: $body}' ;;
 	*) jq -n --rawfile body "$state/comment-body" '{body: $body}' ;;
@@ -482,7 +484,79 @@ case_readback_rejects_unverified_comments() {
 			fail "$name" 'claimed verified publication after a bad readback'
 			return
 		fi
+		# Every readback that does not verify names the comment it could not vouch
+		# for -- one that never answered and one that answered with the wrong body
+		# alike. The comment is on the pull request either way, and withholding its
+		# URL is what makes a re-run post a second one looking for the first.
+		if ! grep -qF 'posted but unverified comment: https://github.com/acme/widgets/pull/42#issuecomment-73' \
+			"$REPO/error"; then
+			fail "$name" "did not name the posted comment after a $mode readback"
+			return
+		fi
 	done
+	ok "$name"
+}
+
+case_comment_bound_reports_indeterminacy() {
+	local name='PFR-22 an exceeded comment bound reports indeterminacy' hang_pid
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=comment-hang PUBLISH_FORGE_REVIEW_BOUND_MULTI=2 PUBLISH_FORGE_REVIEW_BOUND_SINGLE=1
+	if [ "$STATUS" -ne 1 ]; then
+		fail "$name" "exited $STATUS, wanted 1"
+		return
+	fi
+	if ! grep -q 'exceeded its 2s bound' "$REPO/error" ||
+		! grep -q 'may or may not have been created' "$REPO/error"; then
+		fail "$name" 'did not report the exceeded write bound as indeterminate'
+		return
+	fi
+	if [ "$(comment_invocation_count)" != 1 ] || [ "$(post_count)" != 0 ]; then
+		fail "$name" 'retried the comment or recorded a completed write'
+		return
+	fi
+	assert_retained "$name" || return
+	if grep -q '^review-publication-verified:' "$LEDGER"; then
+		fail "$name" 'claimed a verified publication after an exceeded bound'
+		return
+	fi
+	hang_pid=$(cat "$STATE/hang-pid") || hang_pid=''
+	if [ -z "$hang_pid" ]; then
+		fail "$name" 'the fake recorded no bounded-child pid'
+		return
+	fi
+	if kill -0 "$hang_pid" 2>/dev/null; then
+		fail "$name" 'left the bounded child running'
+		return
+	fi
+	ok "$name"
+}
+
+case_readback_bound_stops_verification() {
+	local name='PFR-23 an exceeded readback bound is reported, never verified'
+	new_case
+	run_helper required "$REVIEW" env GH_MODE=read-hang PUBLISH_FORGE_REVIEW_BOUND_MULTI=2 PUBLISH_FORGE_REVIEW_BOUND_SINGLE=1
+	if [ "$STATUS" -ne 1 ]; then
+		fail "$name" "exited $STATUS, wanted 1"
+		return
+	fi
+	if ! grep -q 'readback exceeded its 1s bound' "$REPO/error"; then
+		fail "$name" 'did not report the exceeded readback bound'
+		return
+	fi
+	if ! grep -qF 'posted but unverified comment: https://github.com/acme/widgets/pull/42#issuecomment-73' \
+		"$REPO/error"; then
+		fail "$name" 'did not name the posted comment it could not verify'
+		return
+	fi
+	if [ "$(post_count)" != 1 ]; then
+		fail "$name" 'did not leave the single posted comment recorded'
+		return
+	fi
+	assert_retained "$name" || return
+	if grep -q '^review-publication-verified:' "$LEDGER"; then
+		fail "$name" 'claimed a verified publication after an exceeded bound'
+		return
+	fi
 	ok "$name"
 }
 
@@ -1026,6 +1100,8 @@ case_compose_source_failure_stops_publication
 case_publication_modes
 case_comment_failures_never_retry
 case_readback_rejects_unverified_comments
+case_comment_bound_reports_indeterminacy
+case_readback_bound_stops_verification
 case_ledger_and_disposal_failures_retain_paths
 case_total_disposal_failure_completes_publication
 case_partition_follows_the_filesystem
