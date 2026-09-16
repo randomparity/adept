@@ -96,10 +96,11 @@ recovery, "a reader recovers from by opening the issue".
   sweep re-labels that issue as in flight, and a sentinel-less note is then the only record and
   unreadable. That window is real and unbounded, and it is the residual's true shape. 0066 named a
   recovery weaker than the bounded case and no recovery at all for this one.
-- **Whether the residual closes depends on which fix #390 lands.** Its acceptance admits either or
-  both directions. Write-time verification of both markers closes this exposure for the park along
-  with every other hand-written type; a worked-example fix alone narrows it without closing it, and
-  leaves the interrupted-park window above. The second outcome is what would reopen this question.
+- **Whether the residual closes depends on which fix #390 lands.** Its *Fix directions* offer either
+  or both; its *Acceptance* requires both, including write-time detection. Meeting that acceptance
+  closes this exposure for the park along with every other hand-written type; a worked-example fix
+  alone narrows it, leaving the interrupted-park window. #390 shipping short of its own acceptance is
+  what reopens this question, and #380 — which filed this residual — stays its record until then.
 - Issue #390 owns the defect and covers the park call site along with every other hand-written
   surface. This record and #390 are not in conflict: #390 fixes the instruction shape whatever
   verdict this record reaches, and this record is why no park composer is filed beside it.
