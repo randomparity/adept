@@ -51,35 +51,6 @@ cleared_dependency_safe_text() {
 	LC_ALL=C tr -cd '[:print:]' | cut -c1-200
 }
 
-# Four calls in this file read a value out of gh's stdout: a blocker's state
-# word, two issue payloads, and the open-issue page set. gh writes non-fatal
-# material to stderr while exiting 0 -- a release-update notice is the common
-# one -- so capturing those with the streams merged made that line part of the
-# value, and the recipe then decided labels from it. A closed blocker read as
-# open and the reason reported was false; worse, the blocker cache kept the
-# corrupted word, so one notice retained every dependent of that blocker for the
-# rest of the run. The payload captures fed the notice to jq, which then blamed
-# a race that had not happened.
-#
-# Stderr goes to a scratch file instead, and is read only to build the failure
-# diagnostic, so `unreadable blocker`, `unreadable dependent` and `cannot list
-# open dependents` keep naming a real reason. The merges on the `gh label
-# create` and `gh issue edit` calls below are a different thing and stay: those
-# capture a diagnostic and discard it on success.
-#
-# The value comes back in a variable rather than on stdout because a caller
-# capturing stdout would run this function in a subshell, and the stderr it
-# recorded would be discarded along with it.
-#
-# The two scratch files are allocated and removed per call rather than held
-# across the run by an EXIT trap: this file is sourced, so a trap installed here
-# would take the slot from whichever skill sourced it. A host that cannot
-# allocate one reports through the same diagnostic as a gh call that did not
-# answer, which is the honest reading -- the lookup did not happen, and none of
-# the four points has written anything yet. The removal is guarded because a
-# caller running under `set -e` would otherwise end on a failed rm after a lookup
-# that succeeded.
-
 # Run a command under a bound. Returns the command's own status, or 124 when the
 # bound was exceeded. Trap-free: this file is sourced, so it cannot take the EXIT
 # trap slot from whichever skill sourced it, and the mechanism needs none.
@@ -116,6 +87,34 @@ cleared_dependency_bounded_call() { # seconds out-file err-file command...
 	return "$rc"
 }
 
+# Four calls in this file read a value out of gh's stdout: a blocker's state
+# word, two issue payloads, and the open-issue page set. gh writes non-fatal
+# material to stderr while exiting 0 -- a release-update notice is the common
+# one -- so capturing those with the streams merged made that line part of the
+# value, and the recipe then decided labels from it. A closed blocker read as
+# open and the reason reported was false; worse, the blocker cache kept the
+# corrupted word, so one notice retained every dependent of that blocker for the
+# rest of the run. The payload captures fed the notice to jq, which then blamed
+# a race that had not happened.
+#
+# Stderr goes to a scratch file instead, and is read only to build the failure
+# diagnostic, so `unreadable blocker`, `unreadable dependent` and `cannot list
+# open dependents` keep naming a real reason. The merges on the `gh label
+# create` and `gh issue edit` calls below are a different thing and stay: those
+# capture a diagnostic and discard it on success.
+#
+# The value comes back in a variable rather than on stdout because a caller
+# capturing stdout would run this function in a subshell, and the stderr it
+# recorded would be discarded along with it.
+#
+# The two scratch files are allocated and removed per call rather than held
+# across the run by an EXIT trap: this file is sourced, so a trap installed here
+# would take the slot from whichever skill sourced it. A host that cannot
+# allocate one reports through the same diagnostic as a gh call that did not
+# answer, which is the honest reading -- the lookup did not happen, and none of
+# the four points has written anything yet. The removal is guarded because a
+# caller running under `set -e` would otherwise end on a failed rm after a lookup
+# that succeeded.
 cleared_dependency_run() { # bound gh-args...
 	local bound=$1 subcommand=$2 out err rc=0
 	cleared_dependency_out=
