@@ -90,6 +90,11 @@ nothing with these.
 - **Contract: the two bound constants carry 120 and 30.** Mode: task-test-not-applicable — the
   values are constants the suite deliberately overrides to reach the timeout path at all; no
   executable observation distinguishes them without waiting the difference between them.
+- **Contract: `preflight()` refuses a non-numeric bound override before the arithmetic evaluates
+  it.** Mode: task-test-not-applicable — observing the guard means committing a `$(…)` payload to
+  a fixture for a guard whose whole job is that the payload never runs. The behaviour was measured
+  on `/bin/bash` 3.2.57 instead and is recorded in Global Constraints. This entry mirrors Task 2's
+  for the same contract in the other file.
 
 ### Steps
 
