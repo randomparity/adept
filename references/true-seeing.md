@@ -68,6 +68,31 @@ Evidence for one claim is not evidence for a different one:
 The subagent row is the one that costs most. A subagent reporting success is
 describing its intent; the diff is what it did. Read the diff.
 
+## A patch stream is not the file
+
+"Read the diff" assumes the diff shows the file as it exists at the head commit.
+`gh pr diff` without `--patch` does: it requests GitHub's `diff` media type, a single
+net diff between the merge base and the head. `--patch` requests a different media
+type instead — a format-patch-style series, one patch per commit — and a file touched
+by more than one commit appears once per commit that touched it, each hunk showing
+only that commit's own incremental change, not the cumulative state at head. A
+reviewer reading the series can land on a hunk a later commit superseded and conclude
+the branch still carries that content, when the file at head never did. A filename
+repeated across the `--patch` output is the tell. Base merges make this worse without
+being the cause: they lengthen the commit series, so repeats multiply and the
+earliest hunks drift further from what is actually at head.
+
+The plain diff is the fix, and it costs one flag: drop `--patch`. `gh pr diff <N>`
+requests the net comparison and is correct for reading content, on any branch however
+many merges it carries. Reach for the file's content at the head commit instead only
+when you need one file's exact state at a known commit, not a reviewable diff:
+
+`gh api repos/<owner>/<repo>/contents/<path>?ref=<head-sha>`
+
+Take the head SHA the same way [the commit-bound merge gate](merge-gate.md) does —
+from `git ls-remote` or `headRefOid` read at that moment, never from a patch's own
+commit metadata.
+
 ## Flaky tests
 
 A test that fails and then passes with nothing changed in between has told you
