@@ -107,7 +107,15 @@ Capture files are private and unguessable.
 - The bound is approximate. Poll overhead accumulates, so a 30-second bound fires near 32.
 - PID reuse inside one poll interval, same-uid, as `references/network-bounds.md` records.
 - An indeterminate write leaves an artifact this script cannot verify. Reported, not resolved.
-- A per-call bound does not bound a run; neither file gains an aggregate budget.
+- A per-call bound does not bound a run; neither file gains an aggregate budget. An `apply`
+  sweep against a dead remote can still run for a long time: up to
+  `cleared_dependency_max_lookups` blocker reads at 30 s apiece, plus the per-candidate calls.
+- A run killed by a signal mid-call leaves its mode-0600 capture files in `TMPDIR`. Both files
+  are removed on every path the script itself takes, including `fail`, but neither is reachable
+  from a signal handler: `cleared-dependencies.sh` deliberately installs no trap, and
+  `publish-forge-review`'s existing EXIT trap does not fire inside the command-substitution
+  subshell that runs its comment write. Two empty private files, in the same class as the orphan
+  process below.
 - Bash's `Terminated: 15` job notice reaches each file's own stderr, which is prose in both. Only
   `profiles/github.sh` parses its stderr, and that file is out of scope.
 
@@ -196,8 +204,14 @@ the orphan a caller killed mid-call leaves, which is today's exposure unchanged.
   at `:54`. Green: `apply_cleared_dependency` returns 1, stderr carries both the conflict report
   and `restoring #101 to status:blocked ... may or may not have been changed`, and `$gh_log`
   records exactly one edit, the `status:ready` one that succeeded.
-- **Bound assignment per site.** Mode: task-test-not-applicable — the number a site passes is a
-  constant read at the call; no executable observation distinguishes 30 from 120 without waiting
-  the difference, and the suites deliberately override both. The table above and the site comments
-  are the record; the review reads them against it.
+- **Bound assignment per site in `cleared-dependencies.sh`.** Mode: focused-test — the file's two
+  bound globals are independently settable, so the suite sets them to *different* values (1 and 2)
+  and every one of the seven bound-exceeded cases asserts which number reached its diagnostic.
+  A site passing the single-request bound where the table above requires the multi-request one, or
+  the reverse, turns the suite red. Green: `just test cleared-dependencies`.
+- **Bound assignment per site in `publish-forge-review`.** Mode: task-test-not-applicable — its
+  one override, `PUBLISH_FORGE_REVIEW_BOUND`, feeds both constants, so no injected value can
+  separate them and no executable observation distinguishes 30 from 120 without waiting the
+  difference. The table above and the site comments are the record; the review reads them against
+  it. Converging on the two-global shape is a campaign follow-up, not this change's.
 - **`.claude-plugin/plugin.json` version.** Mode: focused-test — `just version-check`.

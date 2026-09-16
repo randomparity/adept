@@ -271,10 +271,17 @@ reset_cleared_dependency_cache
 # --- a call that did not answer is not an answer -----------------------------
 # Every gh call this recipe makes runs under a bound; a bound exceeded is never
 # reported as a missing record, an empty listing, or a failed write. The bounds
-# drop to a second around each case so the suite waits a second rather than
-# thirty, and are restored afterwards -- the fake blocks for thirty either way.
+# drop to one and two seconds around each case so the suite waits a second or two
+# rather than thirty, and are restored afterwards -- the fake blocks for thirty
+# either way.
+#
+# The two are deliberately set to *different* values, and every case below asserts
+# which number reached its diagnostic. Setting both to one would leave a site that
+# passed the single-request bound where the design's table requires the
+# multi-request one, or the reverse, indistinguishable: each case would still pass.
+# The distinction costs one extra second across the whole block.
 fake_mode=hang-blocker
-cleared_dependency_bound_single=1 cleared_dependency_bound_multi=1
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
 if cleared_dependency_body_verdict owner/repo 10 'Blocked by #1'; then
 	fail 'a blocker read that did not answer cleared a dependent'
 fi
@@ -283,6 +290,8 @@ cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
 	fail "an unanswered blocker read was not unreadable: $cleared_dependency_reason"
 [[ $cleared_dependency_reason == *'did not answer'* ]] ||
 	fail "an unanswered blocker read did not say so: $cleared_dependency_reason"
+[[ $cleared_dependency_reason == *'its 1s bound'* ]] ||
+	fail "a blocker read did not run under the single-request bound: $cleared_dependency_reason"
 [[ $cleared_dependency_reason != *'missing blocker'* ]] ||
 	fail "an unanswered blocker read was reported missing: $cleared_dependency_reason"
 [[ $cleared_dependency_reason != *CLOSED* ]] ||
@@ -292,7 +301,7 @@ reset_cleared_dependency_cache
 
 : >"$gh_log"
 fake_mode=hang-api
-cleared_dependency_bound_single=1 cleared_dependency_bound_multi=1
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
 set +e
 reconcile_cleared_dependencies plan owner/repo >/dev/null 2>"$SCRATCH/hang-api"
 hang_api_status=$?
@@ -304,6 +313,8 @@ rg -q --no-config 'cannot list open dependents' "$SCRATCH/hang-api" ||
 	fail 'an unanswered issue listing was not named'
 rg -q --no-config 'did not answer' "$SCRATCH/hang-api" ||
 	fail 'an unanswered issue listing did not say so'
+rg -q --no-config 'its 2s bound' "$SCRATCH/hang-api" ||
+	fail 'the paginated listing did not run under the multi-request bound'
 rg -q --no-config 'no labels changed' "$SCRATCH/hang-api" ||
 	fail 'an unanswered issue listing did not say no labels changed'
 [[ ! -s $gh_log ]] || fail 'an unanswered issue listing changed labels'
@@ -312,7 +323,7 @@ reset_cleared_dependency_cache
 rm -f "$ready_state"
 : >"$gh_log"
 fake_mode=hang-label
-cleared_dependency_bound_single=1 cleared_dependency_bound_multi=1
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
 if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-label"; then
 	fail 'an unanswered label create must fail closed'
 fi
@@ -320,13 +331,15 @@ cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
 fake_mode=normal
 rg -q --no-config 'may or may not exist' "$SCRATCH/hang-label" ||
 	fail 'an unanswered label create was reported as a failure, not as indeterminate'
+rg -q --no-config 'its 1s bound' "$SCRATCH/hang-label" ||
+	fail 'the label create did not run under the single-request bound'
 [[ ! -s $gh_log ]] || fail 'an unanswered label create still attempted an edit'
 reset_cleared_dependency_cache
 
 rm -f "$ready_state"
 : >"$gh_log"
 fake_mode=hang-edit
-cleared_dependency_bound_single=1 cleared_dependency_bound_multi=1
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
 if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-edit"; then
 	fail 'an unanswered label write must fail closed'
 fi
@@ -334,6 +347,8 @@ cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
 fake_mode=normal
 rg -q --no-config 'may or may not have been changed' "$SCRATCH/hang-edit" ||
 	fail 'an unanswered label write was reported as a failure, not as indeterminate'
+rg -q --no-config 'its 2s bound' "$SCRATCH/hang-edit" ||
+	fail 'the label write did not run under the multi-request bound'
 if rg -q --no-config -- '--add-label status:blocked' "$gh_log"; then
 	fail 'an unanswered label write was followed by a restore'
 fi
@@ -342,7 +357,7 @@ reset_cleared_dependency_cache
 rm -f "$ready_state"
 : >"$gh_log"
 fake_mode=hang-dependent
-cleared_dependency_bound_single=1 cleared_dependency_bound_multi=1
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
 if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-dependent"; then
 	fail 'an unanswered dependent read must fail closed'
 fi
@@ -352,12 +367,14 @@ rg -q --no-config 'unreadable dependent #101' "$SCRATCH/hang-dependent" ||
 	fail 'an unanswered dependent read was not unreadable'
 rg -q --no-config 'did not answer' "$SCRATCH/hang-dependent" ||
 	fail 'an unanswered dependent read did not say so'
+rg -q --no-config 'its 1s bound' "$SCRATCH/hang-dependent" ||
+	fail 'the dependent read did not run under the single-request bound'
 reset_cleared_dependency_cache
 
 rm -f "$ready_state"
 : >"$gh_log"
 fake_mode=hang-verify
-cleared_dependency_bound_single=1 cleared_dependency_bound_multi=1
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
 if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-verify"; then
 	fail 'an unanswered verification read must fail closed'
 fi
@@ -367,6 +384,8 @@ rg -q --no-config 'verification unreadable for #101' "$SCRATCH/hang-verify" ||
 	fail 'an unanswered verification read was not unreadable'
 rg -q --no-config 'did not answer' "$SCRATCH/hang-verify" ||
 	fail 'an unanswered verification read did not say so'
+rg -q --no-config 'its 1s bound' "$SCRATCH/hang-verify" ||
+	fail 'the verification read did not run under the single-request bound'
 # A call that did not answer is not evidence the write went wrong.
 if rg -q --no-config -- '--add-label status:blocked' "$gh_log"; then
 	fail 'an unanswered verification read triggered a restore'
@@ -376,7 +395,7 @@ reset_cleared_dependency_cache
 rm -f "$ready_state"
 : >"$gh_log"
 fake_mode=hang-restore
-cleared_dependency_bound_single=1 cleared_dependency_bound_multi=1
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
 if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-restore"; then
 	fail 'a conflicting write whose restore did not answer must fail closed'
 fi
@@ -391,6 +410,8 @@ rg -q --no-config 'restoring #101 to status:blocked' "$SCRATCH/hang-restore" ||
 	fail 'an unanswered restore did not name the call'
 rg -q --no-config 'may or may not have been changed' "$SCRATCH/hang-restore" ||
 	fail 'an unanswered restore was reported as a failure, not as indeterminate'
+rg -q --no-config 'its 2s bound' "$SCRATCH/hang-restore" ||
+	fail 'the restore did not run under the multi-request bound'
 [[ $(wc -l <"$gh_log") -eq 1 ]] ||
 	fail 'an unanswered restore wrote more than the readying edit'
 reset_cleared_dependency_cache
