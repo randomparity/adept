@@ -74,10 +74,14 @@ may or may not have landed, and none is retried.
 
 ### Test determinism
 
-The bound is injectable, which issue #386 offers as one of two acceptable designs. The suites set
-it to 1 second and the fake `gh` blocks for 30 with `exec sleep 30`, so TERM reaches the blocking
-process directly and the case costs about 1.1 s with a 30× margin on either side of the bound.
-`publish-forge-review` reads `PUBLISH_FORGE_REVIEW_BOUND`; `cleared-dependencies.sh` uses
+The bounds are injectable, which issue #386 offers as one of two acceptable designs. Each suite
+sets the single-request bound to 1 second and the multi-request bound to 2 — deliberately
+different, so every case can assert which number reached its diagnostic and a transposed site
+turns the suite red — while the fake `gh` blocks for 30 with `exec sleep 30`, so TERM reaches the
+blocking process directly. A case costs one or two seconds against a 30-second block, a margin
+wide enough either way that process startup cannot race it.
+`publish-forge-review` reads `PUBLISH_FORGE_REVIEW_BOUND_MULTI` and
+`PUBLISH_FORGE_REVIEW_BOUND_SINGLE`; `cleared-dependencies.sh` uses
 `cleared_dependency_bound_single` and `cleared_dependency_bound_multi`. Those two are assigned
 with `:=` rather than `=` for one reason: the suite's direct-execution leg exports them into a
 subprocess, and an unconditional `=` at the top of a sourced-or-executed file would overwrite the
@@ -127,8 +131,9 @@ unassigned `github.sh` gap ADR 0068 records); retry, backoff, and the required-c
 
 ## Threat model
 
-**Boundary inventory.** Widened: three environment variables newly read
-(`PUBLISH_FORGE_REVIEW_BOUND`, `cleared_dependency_bound_single`, `cleared_dependency_bound_multi`).
+**Boundary inventory.** Widened: four environment variables newly read
+(`PUBLISH_FORGE_REVIEW_BOUND_MULTI`, `PUBLISH_FORGE_REVIEW_BOUND_SINGLE`,
+`cleared_dependency_bound_single`, `cleared_dependency_bound_multi`).
 Added: four `mktemp` capture files per run at most, holding `gh` response bodies. No boundary is
 added to the network side — the same calls are made, to the same host, with the same arguments.
 
@@ -141,12 +146,15 @@ reason the captures must not be world-readable or symlink-followable.
 `preflight()`, `cleared-dependencies.sh` at the top of `cleared_dependency_run`, each the sole
 entry point to its arithmetic. The guard admits digits only, with no leading zero, up to seven of
 them. All three clauses earn their place, measured on `/bin/bash` 3.2.57: `$((bound * 10))` on
-`x[$(echo PWNED >&2)]` runs the substitution; `08` and `09` are arithmetic errors that abort the
-shell *after* `bounded_call` has launched its child, orphaning the process the bound exists to
-reap; `010` is silently read as octal 8, so the site would run under a bound it never chose; and
-a twenty-digit value silently overflows 64 bits. `publish-forge-review` validates its two
-constants separately rather than their concatenation, in which a leading zero on the second value
-would be invisible. A merely non-numeric value would otherwise evaluate to 0 and return 124 on
+`x[$(echo PWNED >&2)]` runs the substitution; `010` is silently read as octal 8, so the site would
+run under a bound it never chose; a twenty-digit value silently overflows 64 bits; and `08` or
+`09` is an arithmetic error whose consequence is worse than an abort. That error lands in
+`bounded_call`'s `while` condition, where `set -e` is suspended, so nothing stops: the poll is
+abandoned, the function **returns 0 with an empty capture**, and the child it launched survives.
+The caller reads a successful call that answered nothing — the precise reading this convention
+exists to prevent — while the process the bound exists to reap runs on. `publish-forge-review`
+validates its two constants separately rather than their concatenation, in which a leading zero on
+the second value would be invisible. A merely non-numeric value would otherwise evaluate to 0 and return 124 on
 every call, which is a denial an actor with environment control already has by other means.
 Capture files
 are allocated by `mktemp` at mode 0600 with unguessable names, never a `$$`-derived path in a
@@ -215,14 +223,13 @@ the orphan a caller killed mid-call leaves, which is today's exposure unchanged.
   at `:54`. Green: `apply_cleared_dependency` returns 1, stderr carries both the conflict report
   and `restoring #101 to status:blocked ... may or may not have been changed`, and `$gh_log`
   records exactly one edit, the `status:ready` one that succeeded.
-- **Bound assignment per site in `cleared-dependencies.sh`.** Mode: focused-test — the file's two
-  bound globals are independently settable, so the suite sets them to *different* values (1 and 2)
-  and every one of the seven bound-exceeded cases asserts which number reached its diagnostic.
-  A site passing the single-request bound where the table above requires the multi-request one, or
-  the reverse, turns the suite red. Green: `just test cleared-dependencies`.
-- **Bound assignment per site in `publish-forge-review`.** Mode: task-test-not-applicable — its
-  one override, `PUBLISH_FORGE_REVIEW_BOUND`, feeds both constants, so no injected value can
-  separate them and no executable observation distinguishes 30 from 120 without waiting the
-  difference. The table above and the site comments are the record; the review reads them against
-  it. Converging on the two-global shape is a campaign follow-up, not this change's.
+- **Bound assignment per site.** Mode: focused-test — both files take two independently settable
+  bounds, so both suites set them to *different* values (1 and 2) and every bound-exceeded case
+  asserts which number reached its diagnostic. A site passing the single-request bound where the
+  table above requires the multi-request one, or the reverse, turns the suite red. Green:
+  `just test publish-forge-review cleared-dependencies`. `publish-forge-review` originally took
+  one override feeding both constants, which made the distinction structurally unobservable; that
+  was a shape choice rather than a necessity, so it was split into
+  `PUBLISH_FORGE_REVIEW_BOUND_MULTI` and `PUBLISH_FORGE_REVIEW_BOUND_SINGLE` to match the sibling
+  rather than deferred to the campaign.
 - **`.claude-plugin/plugin.json` version.** Mode: focused-test — `just version-check`.

@@ -508,12 +508,12 @@ case_readback_rejects_unverified_comments() {
 case_comment_bound_reports_indeterminacy() {
 	local name='PFR-22 an exceeded comment bound reports indeterminacy' hang_pid
 	new_case
-	run_helper required "$REVIEW" env GH_MODE=comment-hang PUBLISH_FORGE_REVIEW_BOUND=1
+	run_helper required "$REVIEW" env GH_MODE=comment-hang PUBLISH_FORGE_REVIEW_BOUND_MULTI=2 PUBLISH_FORGE_REVIEW_BOUND_SINGLE=1
 	if [ "$STATUS" -ne 1 ]; then
 		fail "$name" "exited $STATUS, wanted 1"
 		return
 	fi
-	if ! grep -q 'exceeded its 1s bound' "$REPO/error" ||
+	if ! grep -q 'exceeded its 2s bound' "$REPO/error" ||
 		! grep -q 'may or may not have been created' "$REPO/error"; then
 		fail "$name" 'did not report the exceeded write bound as indeterminate'
 		return
@@ -542,7 +542,7 @@ case_comment_bound_reports_indeterminacy() {
 case_readback_bound_stops_verification() {
 	local name='PFR-23 an exceeded readback bound is reported, never verified'
 	new_case
-	run_helper required "$REVIEW" env GH_MODE=read-hang PUBLISH_FORGE_REVIEW_BOUND=1
+	run_helper required "$REVIEW" env GH_MODE=read-hang PUBLISH_FORGE_REVIEW_BOUND_MULTI=2 PUBLISH_FORGE_REVIEW_BOUND_SINGLE=1
 	if [ "$STATUS" -ne 1 ]; then
 		fail "$name" "exited $STATUS, wanted 1"
 		return

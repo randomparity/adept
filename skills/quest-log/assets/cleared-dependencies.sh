@@ -129,11 +129,15 @@ cleared_dependency_run() { # bound gh-args...
 	# Validated before it reaches $((bound * 10)): bash evaluates an arithmetic
 	# operand as an expression, so a value carrying a command substitution would
 	# run it. Digits alone are not enough for that destination -- bash reads 010
-	# as octal 8 and rejects 08 outright, and an arithmetic error there would
-	# abort a caller running under `set -e` after the child was launched,
-	# orphaning the very process the bound exists to reap. The length cap keeps
-	# the multiplication clear of 64-bit overflow. This is the only entry point,
-	# so one guard covers every call.
+	# as octal 8, so a site would run under a bound nobody chose, and 08 is an
+	# arithmetic error. Measured on bash 3.2.57: that error lands in the bounded
+	# call's `while` condition, where `set -e` is suspended, so it does not abort
+	# -- the poll is abandoned, the function returns 0 with an empty capture, and
+	# the child it launched survives. The caller then reads a successful call that
+	# answered nothing, which is exactly the reading this convention exists to
+	# prevent, with the orphan the bound exists to reap. The length cap keeps the
+	# multiplication clear of 64-bit overflow. This is the only entry point, so
+	# one guard covers every call.
 	case $bound in
 	'' | *[!0-9]* | 0?*)
 		cleared_dependency_err='the tracker command bound is not a whole number of seconds without a leading zero'

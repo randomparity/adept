@@ -301,11 +301,14 @@ reset_cleared_dependency_cache
 
 # A bound the arithmetic destination would reject is refused before the call, not
 # after it. `08` is the reachable half of that guard and costs nothing to commit:
-# bash reads a leading zero as octal, so `$((08 * 10))` is an arithmetic error,
-# and under a caller's `set -e` it would abort the shell after the child had been
-# launched -- orphaning the process the bound exists to reap. The unreachable half
-# is a bound carrying a command substitution, which stays untested because
-# observing it means committing the payload.
+# bash reads a leading zero as octal, so `$((08 * 10))` is an arithmetic error.
+# Measured on bash 3.2.57, that error lands in the bounded call's `while`
+# condition, where `set -e` is suspended -- so it does not abort. The poll is
+# abandoned, the bounded call returns 0 with an empty capture, and its child
+# survives: a call that answered nothing read as one that succeeded, plus the
+# orphan the bound exists to reap. The unreachable half is a bound carrying a
+# command substitution, which stays untested because observing it means
+# committing the payload.
 fake_mode=hang-blocker
 cleared_dependency_bound_single=08
 if cleared_dependency_body_verdict owner/repo 10 'Blocked by #1'; then

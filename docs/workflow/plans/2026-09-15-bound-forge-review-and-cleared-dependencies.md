@@ -39,9 +39,11 @@ a one-line manifest bump.
 - No retry and no backoff anywhere. `references/network-bounds.md` line 6.
 - The seven non-adaptable properties at `references/network-bounds.md:71-107` are not negotiable.
   Read them there before changing any transcribed line.
-- Bash evaluates an arithmetic operand as an expression, so any value reaching `$((bound * 10))`
-  is validated as digits first. Measured on `/bin/bash` 3.2.57: a bound of `x[$(echo PWNED >&2)]`
-  executes the substitution.
+- Every value reaching `$((bound * 10))` is validated first: digits only, no leading zero, at most
+  seven of them. Measured on `/bin/bash` 3.2.57 — a bound of `x[$(echo PWNED >&2)]` executes the
+  substitution; `010` is read as octal 8; a twenty-digit value overflows 64 bits; and `08` is an
+  arithmetic error inside the poll condition, where `set -e` is suspended, so the bounded call
+  returns 0 with an empty capture and leaves its child running.
 - `124` is internal. It may pass between two functions inside a file; it is never either script's
   exit status.
 - Bounds: **30 s** for a call that issues one request, **120 s** for one that may issue more.
@@ -69,9 +71,9 @@ Tests: `tests/fixtures/quest/publish-forge-review-test.sh`.
 **Interfaces.** Consumes nothing from earlier tasks. Defines, for this file only:
 `bounded_call <seconds> <out-file> <err-file> <command…>` returning the command's status or 124;
 `run_gh <seconds> <gh-args…>` returning the same and leaving the call's stdout at the path in the
-global `gh_capture`. Constants `BOUND_MULTI` (120) and `BOUND_SINGLE` (30), both overridden by
-`PUBLISH_FORGE_REVIEW_BOUND`. Task 2 defines its own copies under different names and shares
-nothing with these.
+global `gh_capture`. Constants `BOUND_MULTI` (120) and `BOUND_SINGLE` (30), overridden separately
+by `PUBLISH_FORGE_REVIEW_BOUND_MULTI` and `PUBLISH_FORGE_REVIEW_BOUND_SINGLE`. Task 2 defines its
+own copies under different names and shares nothing with these.
 
 ### Verification
 
@@ -87,14 +89,16 @@ nothing with these.
 - **Contract: the bounded child is reaped rather than left running.** Mode: focused-test. `PFR-22`
   asserts `kill -0` fails against the pid the fake recorded. Expected red: the pid is still alive
   because no wrapper signalled or reaped it. Green: the same command.
-- **Contract: the two bound constants carry 120 and 30.** Mode: task-test-not-applicable — the
-  values are constants the suite deliberately overrides to reach the timeout path at all; no
-  executable observation distinguishes them without waiting the difference between them.
-- **Contract: `preflight()` refuses a non-numeric bound override before the arithmetic evaluates
-  it.** Mode: task-test-not-applicable — observing the guard means committing a `$(…)` payload to
-  a fixture for a guard whose whole job is that the payload never runs. The behaviour was measured
-  on `/bin/bash` 3.2.57 instead and is recorded in Global Constraints. This entry mirrors Task 2's
-  for the same contract in the other file.
+- **Contract: each bound constant reaches the site the table assigns it to.** Mode: focused-test —
+  the two overrides are settable apart, so `PFR-22` and `PFR-23` set them to 2 and 1 and assert
+  `exceeded its 2s bound` and `readback exceeded its 1s bound` respectively. Transposing them at
+  either call site turns the suite red. Green: `just test publish-forge-review`.
+- **Contract: `preflight()` refuses a bound the arithmetic destination would not accept.** Mode:
+  task-test-not-applicable — the guard is reached before `validate_content`, so a refusing case
+  here would assert only that `preflight` ran, which `PFR-11` already covers. Its reachable half
+  is exercised against the identical guard in the sibling file, where the wrapper is callable
+  directly; the command-substitution half stays untested in both because observing it means
+  committing the payload.
 
 ### Steps
 
@@ -104,10 +108,11 @@ nothing with these.
    ```bash
    # Seconds. gh pr comment issues a lookup and a mutation; gh api issues one
    # request. references/network-bounds.md carries the rule, ADR 0068 the record.
-   # The override exists so the behaviour suite can reach the bound without a real
-   # wait; no caller sets it.
-   BOUND_MULTI=${PUBLISH_FORGE_REVIEW_BOUND:-120}
-   BOUND_SINGLE=${PUBLISH_FORGE_REVIEW_BOUND:-30}
+   # The two overrides exist so the behaviour suite can reach each bound without a
+   # real wait, and set them apart so a transposition is observable; no caller sets
+   # them.
+   BOUND_MULTI=${PUBLISH_FORGE_REVIEW_BOUND_MULTI:-120}
+   BOUND_SINGLE=${PUBLISH_FORGE_REVIEW_BOUND_SINGLE:-30}
    ```
 
 3. Replace `fail()` at `:41-44` with the form that also clears the capture, since every fatal path
@@ -166,26 +171,45 @@ nothing with these.
    # and remove; its stderr is forwarded to this script's own, which is where gh's
    # stderr went before either call was captured at all.
    run_gh() { # seconds gh-args...
-   	local bound=$1 err rc=0
+   	local bound=$1 err rc=0 forward_status=0
    	shift
    	gh_capture=$(mktemp) || fail 'cannot create a gh stdout capture'
    	err=$(mktemp) || fail 'cannot create a gh stderr capture'
    	bounded_call "$bound" "$gh_capture" "$err" gh "$@" || rc=$?
    	if [ -s "$err" ]; then
-   		cat "$err" >&2 || fail 'cannot read a gh stderr capture'
+   		cat "$err" >&2 || forward_status=$?
    	fi
+   	# Removal precedes the forwarding verdict so a failed read still frees the
+   	# capture: fail() reaches gh_capture, and this file is local to run_gh.
    	rm -f -- "$err" ||
-   		printf 'publish-forge-review: retained gh capture: %s\n' "$err" >&2
+   		printf 'publish-forge-review: retained gh stderr capture: %s\n' "$err" >&2
+   	[ "$forward_status" -eq 0 ] || fail 'cannot read a gh stderr capture'
    	return "$rc"
-   }
+   ^}
    ```
 
 5. In `preflight()`, after the `disposer` checks and before the bundled-scanner check, add:
 
    ```bash
-   	case $BOUND_MULTI$BOUND_SINGLE in
-   	'' | *[!0-9]*) fail 'network bound override must be a whole number of seconds' ;;
-   	esac
+   	# Each bound separately, never the concatenation: a leading zero on the second
+   	# value disappears inside it. Digits alone are not enough for the arithmetic
+   	# destination -- bash reads 010 as octal 8, so a site would run under a bound
+   	# nobody chose, and 08 is an arithmetic error. Measured on bash 3.2.57: that
+   	# error lands in bounded_call's `while` condition, where `set -e` is suspended,
+   	# so it does not abort -- the poll is abandoned, the function returns 0 with an
+   	# empty capture, and the child it launched survives. The caller then reads a
+   	# successful call that answered nothing, which is exactly the reading this
+   	# convention exists to prevent, with the orphan the bound exists to reap. The
+   	# length cap keeps the multiplication clear of 64-bit overflow.
+   	for bound in "$BOUND_MULTI" "$BOUND_SINGLE"; do
+   		case $bound in
+   		'' | *[!0-9]* | 0?*)
+   			fail 'network bound override must be a whole number of seconds with no leading zero'
+   			;;
+   		esac
+   		[ "${#bound}" -le 7 ] ||
+   			fail 'network bound override is implausibly large; give a whole number of seconds'
+   	done
    ```
 
 6. Replace the body of `post_comment()` at `:240-249` with the following. Note that
@@ -250,13 +274,15 @@ nothing with these.
    add a `read-hang` arm doing the same. `exec` is what makes TERM reach the blocking process
    rather than a shell that spawned it.
 9. Add case `PFR-22`: `new_case`, then
-   `run_helper required "$REVIEW" env GH_MODE=comment-hang PUBLISH_FORGE_REVIEW_BOUND=1`. Assert
-   `STATUS` is 1; that `$REPO/error` matches `exceeded its 1s bound` and `may or may not have been
+   `run_helper required "$REVIEW" env GH_MODE=comment-hang PUBLISH_FORGE_REVIEW_BOUND_MULTI=2
+    PUBLISH_FORGE_REVIEW_BOUND_SINGLE=1`. Assert
+   `STATUS` is 1; that `$REPO/error` matches `exceeded its 2s bound` and `may or may not have been
    created`; that `comment_invocation_count` is 1, proving no retry; that `post_count` is 0; that
    `assert_retained` passes; that the ledger carries no `review-publication-verified:` line; and
    that `kill -0 "$(cat "$STATE/hang-pid")"` fails, proving the child was reaped.
 10. Add case `PFR-23`: `new_case`, then
-    `run_helper required "$REVIEW" env GH_MODE=read-hang PUBLISH_FORGE_REVIEW_BOUND=1`. Assert
+    `run_helper required "$REVIEW" env GH_MODE=read-hang PUBLISH_FORGE_REVIEW_BOUND_MULTI=2
+    PUBLISH_FORGE_REVIEW_BOUND_SINGLE=1`. Assert
     `STATUS` is 1; that `$REPO/error` matches `readback exceeded its 1s bound`; that `post_count`
     is 1; that `assert_retained` passes; and that the ledger carries no
     `review-publication-verified:` line.

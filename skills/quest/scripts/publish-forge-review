@@ -16,8 +16,8 @@ gh_capture=''
 # request. references/network-bounds.md carries the rule, ADR 0068 the record.
 # The override exists so the behaviour suite can reach the bound without a real
 # wait; no caller sets it.
-BOUND_MULTI=${PUBLISH_FORGE_REVIEW_BOUND:-120}
-BOUND_SINGLE=${PUBLISH_FORGE_REVIEW_BOUND:-30}
+BOUND_MULTI=${PUBLISH_FORGE_REVIEW_BOUND_MULTI:-120}
+BOUND_SINGLE=${PUBLISH_FORGE_REVIEW_BOUND_SINGLE:-30}
 disposer=''
 repo=''
 pr=''
@@ -128,9 +128,13 @@ preflight() {
 		fail "recoverable-delete command is unavailable: $disposer; install it or expose it in PATH"
 	# Each bound separately, never the concatenation: a leading zero on the second
 	# value disappears inside it. Digits alone are not enough for the arithmetic
-	# destination -- bash reads 010 as octal 8 and rejects 08 outright, and an
-	# arithmetic error inside bounded_call would abort the script after the child
-	# was launched, orphaning the very process the bound exists to reap. The
+	# destination -- bash reads 010 as octal 8, so a site would run under a bound
+	# nobody chose, and 08 is an arithmetic error. Measured on bash 3.2.57: that
+	# error lands in bounded_call's `while` condition, where `set -e` is suspended,
+	# so it does not abort -- the poll is abandoned, the function returns 0 with an
+	# empty capture, and the child it launched survives. The caller then reads a
+	# successful call that answered nothing, which is exactly the reading this
+	# convention exists to prevent, with the orphan the bound exists to reap. The
 	# length cap keeps the multiplication clear of 64-bit overflow.
 	for bound in "$BOUND_MULTI" "$BOUND_SINGLE"; do
 		case $bound in
