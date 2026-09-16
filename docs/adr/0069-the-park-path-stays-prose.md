@@ -32,42 +32,38 @@ composition unit inside `skills/return-to-town/scripts/publish-handoff` with a s
 
 **Rule 2, re-argued.** The bar is that a script does something a model cannot do reliably inline.
 #390 settles that half against prose: a model cannot reliably emit a closing sentinel, and the one
-well-formed block in the audit is the one a program emitted. What it does not establish is that a
-*park* composer clears the bar, and the audit is where that shows. Its five blocks are five blocks
-on one issue, not five annotation types, and the `WORK:TRAJECTORY` among them was a hand-off, not a
-park. A park composer would have corrected none of them. The measured instances are spread across
-whatever types a worker hand-writes, so the change that reaches them is at the hand-write path
-those types share, and CLAUDE.md's *Cut before adding* puts extending that existing surface ahead
-of a new executable.
+well-formed block in its audit is the one a program emitted. What it does not establish is that a
+*park* composer clears the bar. The audited five are five blocks on one issue — of whatever types
+that worker hand-wrote — and the `WORK:TRAJECTORY` among them was a hand-off, not a park, so a park
+composer would have corrected none of them. The defect tracks hand composition rather than any one
+type, so the change that reaches it is at the hand-write path those types share, and CLAUDE.md's
+*Cut before adding* puts extending that existing surface ahead of a new executable.
 
-The audit carries a second fact that decides it. Those hand-off blocks were hand-written **after**
-`publish-handoff` shipped — a composer existed for exactly that block and the workers composed by
-hand anyway. Shipping a composer therefore does not by itself stop hand composition; what governs
-whether one is reached for is the instruction shape, which is #390's to fix. A park composer would
-be bypassed the same way, on a path with fewer instances to begin with. Rule 2's second limb is
-available and a park composer still fails rule 2 — not for want of evidence, but because it is not
-the shape the evidence indicts.
+So rule 2's second limb is available and a park composer still fails rule 2 — not for want of
+evidence, but because it is not the shape the evidence indicts.
 
-**Question 1, shape.** 0066's rejection of a `--kind` flag does not by itself foreclose a shared
-unit with separate entry points: its ground was the flag as a call-site confusion surface, and two
-entry points remove the flag. The shape fails on what would be left to share. A park entry point
-could reuse the two marker constants, the narrative validation, and the post-and-readback;
-`resolve_destination` and `resolve_head` — the closing-reference corroboration and the remote-tip
-agreement — are inapplicable to a park, which may have no pull request and no branch at all. A
-shared unit whose shared part is two constants and a readback is not worth the coupling.
+**Question 1, shape.** 0066's rejection of a `--kind` flag does not foreclose a shared unit with
+separate entry points: its ground was the flag as a call-site confusion surface, and two entry
+points remove the flag. Nor does the shared surface argue against it. `resolve_destination` and
+`resolve_head` are 132 of 646 lines; the narrative validation, the bounded network calls ADR 0068
+requires of every caller, the public-safety scan, and the whole-line assertions against the stored
+body are all park-applicable. **If a composer were warranted, the shared unit is the shape** —
+which is precisely why no shape question decides this record. Rule 2 does.
 
-**Question 2, the absent handshake.** This question does not discriminate between the shapes, and
-saying so is more useful than forcing it to. A park entry point that never calls the hand-off's
-compose step cannot emit a handshake, which is a control-flow property rather than caller
-discipline; a separate executable containing no handshake bytes satisfies it too; and a validator
-that composes nothing carries no handshake to begin with. All three meet #381's requirement.
-Question 1 is what eliminates the shared unit, and the bullets below eliminate the rest.
+**Question 2, the absent handshake.** This question does not discriminate between the composer
+shapes: an entry point that never calls the hand-off's compose step cannot emit a handshake, a
+separate executable containing no handshake bytes satisfies it too, and a validator that composes
+nothing carries none to begin with. What must be said plainly is that **prose, the shape adopted
+here, is the one shape that does not satisfy it.** Under prose the absent handshake is held by
+instruction, which is the caller discipline #381 rules out. Two things bound that, and neither
+makes it disappear: the merge gate's part-4 selection requires a `MERGE-READY` line for `HEAD_SHA`,
+so a park note lacking one cannot authorize a merge, and a park note acquiring one would have to be
+composed deliberately rather than omitted by accident — the opposite of the only failure direction
+#390 measures. That is a bound, not the guarantee #381 asked for, and the gap is recorded below.
 
-**Question 3, the relaxed refusal.** The refusal is wrong for a park: a moved branch is a thing you
-might be parking about. But removing it, together with the closing-reference corroboration a
-pull-request-less park cannot satisfy, leaves markers around a narrative plus a readback — the
-shape 0066 rejected for a general `post-annotation` helper as two `printf` calls per call site,
-here covering one call site rather than every one.
+**Question 3, the relaxed refusal.** The refusal is wrong for a park and would have to go: a moved
+branch is a thing you might be parking about, and a park may have no branch at all. That is a
+change to make if a composer is ever built, not a reason to build one.
 
 **Question 4, label ownership.** The caller keeps both steps, note then label, in that order. The
 note-posted/label-unwritten window is not something a composer creates or removes: the prose path
@@ -86,9 +82,8 @@ recovery, "a reader recovers from by opening the issue".
 
 ## Consequences
 
-- The park path keeps the sentinel-omission exposure. That is the cost of this decision, stated
-  plainly.
-- **The exposure has two shapes and only one is bounded.** In an ordinary park the label bounds it:
+- **The park path keeps the sentinel-omission exposure, and only half of it is bounded.** That is
+  the cost of this decision, stated plainly. In an ordinary park the label bounds it:
   `$resurrection` step 4 lists parked work by `status:blocked`/`status:needs-human` and reads
   `WORK:TRAJECTORY` only for the parked-phase note, so a sentinel-less note loses the phase detail
   while the parked state survives in a signal a sweep already reads. In an interrupted park — note
@@ -106,21 +101,26 @@ recovery, "a reader recovers from by opening the issue".
   verdict this record reaches, and this record is why no park composer is filed beside it.
 - Issue #380's two remaining children — the composer's build and its behaviour suite — are not
   built. Closing them as not planned against this record is the campaign orchestrator's action.
-- **Extending rather than superseding leaves no forward pointer on 0066.** The adr profile accepts
-  only a `Superseded by` banner in a merged record's Status, so the sentence corrected here stays
-  uncorrected in place and a reader reaching 0066 first is not sent on. Accepted: the banner would
-  falsely claim 0066's hand-off decision no longer governs.
+- **#381's question 2 is answered "no" for the adopted shape, and that is a real gap.** Prose holds
+  the absent handshake by instruction, not by construction — the one requirement this record
+  declines rather than meets, bounded only as the Decision describes. It is the strongest argument
+  against this verdict, and a reader weighing a future park composer should start here.
+- **Extending rather than superseding leaves no forward pointer on 0066.** This repository's ADR
+  convention makes a `Superseded by` banner the only edit a merged record permits — a convention,
+  not a gate rule, since `check-records.sh` excludes `## Status` from its append-only comparison. So
+  the corrected sentence stays in place and a reader reaching 0066 first is not sent on. Accepted:
+  the banner would falsely claim 0066's decision no longer governs.
 - No executable ships, so anatomy rules 1 through 3 are untouched by this change.
 
 ## Considered & rejected
 
 - **A sibling executable beside `publish-handoff`.** verified: `publish-handoff` is 646 lines
-  (`wc -l`, at commit `66617c4`), and its two largest functions — `resolve_destination`'s
-  closing-reference corroboration and `resolve_head`'s remote-tip agreement — are both inapplicable
-  to a park with no pull request and no branch. What survives is markers around a narrative and a
-  readback, for one call site.
-- **A shared composition unit with hand-off and park entry points.** judgment: question 1's
-  remainder is the whole objection — two constants and a readback do not earn a shared unit.
+  (`wc -l`, at commit `66617c4`) of which `resolve_destination` and `resolve_head` are 132, so a
+  sibling would duplicate the ~350 park-applicable lines a shared unit would reuse — the worse of
+  the two composer shapes, on a decision that declines both.
+- **A shared composition unit with hand-off and park entry points.** judgment: the better composer
+  shape, rejected only because rule 2 does not warrant a composer at all. Nothing about the shape
+  itself sinks it, and a future record reversing this one should start from it.
 - **A park-side validator the caller runs against a body it composed.** judgment: it is #390's own
   second fix direction scoped to one call site, and #390 can apply the same check at the shared
   hand-write path for every type at no greater cost. 0066 rejected a validator on
