@@ -590,4 +590,28 @@ if command -v zsh >/dev/null; then
 else
 	printf 'cleared-dependencies-test: zsh not installed; interpreter-guard case skipped\n'
 fi
+# --- the killed writer's capture is void ------------------------------------
+# One of the convention's seven non-adaptable properties: on a bound exceeded the
+# stdout capture is emptied, so a half-written page cannot be parsed as a
+# complete short one. Neither file's call sites can observe it -- both refuse to
+# parse before reading on the 124 path -- so it is asserted against the function
+# directly, and the writer must write *before* it blocks or the capture would be
+# empty either way and deleting the rule would leave this green.
+bounded_out=$SCRATCH/bounded.out
+bounded_err=$SCRATCH/bounded.err
+partial_writer=$SCRATCH/partial-writer.sh
+cat >"$partial_writer" <<'WRITER'
+#!/usr/bin/env bash
+printf '%s' '[{"number":101,"stat'
+exec sleep 30
+WRITER
+chmod +x "$partial_writer"
+bounded_rc=0
+cleared_dependency_bounded_call 1 "$bounded_out" "$bounded_err" "$partial_writer" || bounded_rc=$?
+[[ $bounded_rc -eq 1 ]] && fail 'the bounded call refused its own bound'
+[[ $bounded_rc -eq 124 ]] ||
+	fail "a blocked writer was not reported as a bound exceeded: rc=$bounded_rc"
+[[ ! -s $bounded_out ]] ||
+	fail "the killed writer's partial capture survived: $(cat "$bounded_out")"
+
 printf 'cleared-dependencies-test: pass\n'
