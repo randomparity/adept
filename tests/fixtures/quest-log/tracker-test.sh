@@ -1092,6 +1092,109 @@ PATH="$sandbox/bin:$PATH" "$tracker" view --profile '' --target example/repo 101
 assert_exit 1 "$status" 'view with an empty profile name'
 assert_error "$sandbox/err" usage 'empty profile name'
 
+# --- network bounds ----------------------------------------------------------
+# github_run's gh call now runs under references/network-bounds.md's bound
+# instead of blocking indefinitely. This fake gh hangs on demand: when its
+# subcommand matches FAKE_GH_HANG it optionally emits FAKE_GH_PARTIAL, flushed
+# through a subshell before exec replaces the image, then execs into a sleep
+# far longer than any bound this suite uses -- exec so the bound's TERM reaches
+# the hung process directly and leaves no orphan, per
+# collect-telemetry-test.sh's identical shim and its own comment on why.
+mkdir -p "$sandbox/hang-bin"
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
+	if [[ -n ${FAKE_GH_PARTIAL:-} ]]; then
+		(printf '%s' "$FAKE_GH_PARTIAL")
+	fi
+	exec sleep 300
+fi
+if [[ $1 == issue && $2 == create ]]; then
+	printf 'Creating issue in example/repo\n'
+	printf 'https://github.com/example/repo/issues/101\n'
+	exit 0
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+
+# A read that exceeds its bound reports EXIT_TRANSPORT (4) -- the class that
+# already means "the call did not answer" -- and the diagnostic names the call
+# and the bound, never "not found" or "authentication" text that would
+# misclassify it. github_bound_single overridden to 1s so the case does not
+# wait a field value out.
+status=0
+FAKE_GH_HANG='issue view' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" view --profile github --target example/repo 101 \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'a read that exceeds its network bound'
+assert_error "$sandbox/err" transport 'a read that exceeds its network bound'
+assert_contains 'exceeded its 1s network bound' "$sandbox/err"
+
+# The bash job-terminated notice bounded_call's kill leaves on this shell's own
+# stderr must never join the single JSON error object tracker.sh's callers
+# parse: a run that times out still emits exactly one JSON value and no bare
+# line beside it.
+[[ $(jq -s 'length' <"$sandbox/err" 2>/dev/null) == 1 ]] ||
+	fail 'a timed-out read left more than one JSON value on stderr'
+rg -qF 'Terminated' "$sandbox/err" &&
+	fail 'the bash job-terminated notice reached the parsed-JSON stderr channel'
+status=0
+
+# The two multi-request call sites -- label-history's --paginate --slurp and
+# claim-list's --paginate over per_page=100 -- take the 120-second bound;
+# every other site takes 30. Both overridden here to different small values so
+# the diagnostic's own bound number, not a timing race, proves which constant
+# reached which call.
+status=0
+FAKE_GH_HANG='repo view' github_bound_single=1 github_bound_multi=2 \
+	PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" target-url --profile github --target example/repo \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'a single-request site exceeding its bound'
+assert_contains 'exceeded its 1s network bound' "$sandbox/err"
+
+status=0
+FAKE_GH_HANG='api' github_bound_single=1 github_bound_multi=2 \
+	PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" label-history --profile github --target example/repo 101 status:ready \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'label-history exceeding its bound'
+assert_contains 'exceeded its 2s network bound' "$sandbox/err"
+
+status=0
+FAKE_GH_HANG='api' github_bound_single=1 github_bound_multi=2 \
+	PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" claim-list --profile github --target example/repo \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'claim-list exceeding its bound'
+assert_contains 'exceeded its 2s network bound' "$sandbox/err"
+
+# A write killed mid-flight reports indeterminate, never a failure, and never
+# by parsing whatever fragment gh had written before it was signalled: the
+# capture is void on a bound breach, so a create that had written most of a
+# URL before being killed must not read as though the write completed.
+status=0
+FAKE_GH_HANG='issue create' FAKE_GH_PARTIAL='https://github.com/example/repo/issues/1' \
+	github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" create --profile github --target example/repo \
+	--title T --body-file "$sandbox/body.md" \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a create that exceeds its network bound'
+jq -e '.error == "partial" and .partial.url == ""' >/dev/null <"$sandbox/err" ||
+	fail "a timed-out create read its voided capture as a landed write: $(cat "$sandbox/err")"
+
+# A bound override that is not a whole number of seconds never reaches the
+# arithmetic destination bounded_call multiplies it against -- caught here,
+# not by whatever $((...)) does with the value.
+status=0
+github_bound_single=01 PATH="$sandbox/bin:$PATH" \
+	"$tracker" target-url --profile github --target example/repo \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'a bound override with a leading zero'
+assert_error "$sandbox/err" usage 'a bound override with a leading zero'
+
 # --- a CRLF declaration is valid, not malformed -----------------------------
 mkdir -p "$sandbox/crlf"
 git -C "$sandbox/crlf" init -q
