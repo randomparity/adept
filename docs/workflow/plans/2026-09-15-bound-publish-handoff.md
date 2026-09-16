@@ -15,11 +15,16 @@ shim for the one `git` site.
 **Tech stack.** Bash, run under `/bin/bash` 3.2.57 on macOS and under whatever `env bash` resolves
 on CI Linux. `gh`, `jq`, `git`, `rg`, `shellcheck`, `shfmt`, `just`.
 
-Expected implementation size: 250–300 changed lines (M) — counted from this plan's own blocks:
+Expected implementation size: 250–310 changed lines (M) — counted from this plan's own blocks:
 ~115 in the executable (36-line transcribed `bounded_call`, ~25 of wrappers, ~11 of constant and
 header comment, ~43 across the five restructured sites), ~12 in `SKILL.md`, ~144 in the fixture,
 and one manifest value. That sits just above the frozen 250-line M denominator, which bounds the
 *design* against the change it governs and is neither an implementation budget nor resized here.
+
+The built diff came to 304 insertions and 32 deletions, four lines past the original 250–300 top.
+The range is corrected to match rather than the code trimmed to fit it: every line maps to a step
+here, and the shortfall was in the estimate — the two wrappers and the two fixture helpers each
+carry more explanatory comment than the per-block counts above allowed for.
 
 ## Global Constraints
 
