@@ -484,23 +484,15 @@ case_readback_rejects_unverified_comments() {
 			fail "$name" 'claimed verified publication after a bad readback'
 			return
 		fi
-		# A readback that did not answer names the comment it could not verify; a
-		# readback that answered with the wrong body is not that failure.
-		case $mode in
-		read-fail)
-			if ! grep -qF 'posted but unverified comment: https://github.com/acme/widgets/pull/42#issuecomment-73' \
-				"$REPO/error"; then
-				fail "$name" 'did not name the posted comment after an unanswered readback'
-				return
-			fi
-			;;
-		read-mismatch)
-			if grep -q 'posted but unverified comment:' "$REPO/error"; then
-				fail "$name" 'named a comment unverified when the readback answered'
-				return
-			fi
-			;;
-		esac
+		# Every readback that does not verify names the comment it could not vouch
+		# for -- one that never answered and one that answered with the wrong body
+		# alike. The comment is on the pull request either way, and withholding its
+		# URL is what makes a re-run post a second one looking for the first.
+		if ! grep -qF 'posted but unverified comment: https://github.com/acme/widgets/pull/42#issuecomment-73' \
+			"$REPO/error"; then
+			fail "$name" "did not name the posted comment after a $mode readback"
+			return
+		fi
 	done
 	ok "$name"
 }

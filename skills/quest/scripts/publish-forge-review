@@ -102,7 +102,7 @@ run_gh() { # seconds gh-args...
 	err=$(mktemp) || fail 'cannot create a gh stderr capture'
 	bounded_call "$bound" "$gh_capture" "$err" gh "$@" || rc=$?
 	if [ -s "$err" ]; then
-		cat "$err" >&2 || forward_status=$?
+		cat -- "$err" >&2 || forward_status=$?
 	fi
 	# Removal precedes the forwarding verdict so a failed read still frees the
 	# capture: fail() reaches gh_capture, and this file is local to run_gh.
@@ -338,8 +338,11 @@ post_comment() {
 		;;
 	*) fail 'comment creation did not complete' ;;
 	esac
+	# Through a redirect, not as an operand: awk reads an operand of the form
+	# name=value as an assignment rather than a file, and this matches the shape
+	# the sibling applier already merged.
 	candidate=$(awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }' \
-		"$gh_capture") || fail 'comment creation returned no readable identity'
+		<"$gh_capture") || fail 'comment creation returned no readable identity'
 	rm -f -- "$gh_capture" ||
 		printf 'publish-forge-review: retained gh capture: %s\n' "$gh_capture" >&2
 	gh_capture=''
@@ -368,8 +371,12 @@ read_comment() {
 		*) fail 'comment readback failed' ;;
 		esac
 	fi
-	jq -e --rawfile expected "$body" '.body == $expected' "$gh_capture" >/dev/null ||
+	if ! jq -e --rawfile expected "$body" '.body == $expected' <"$gh_capture" >/dev/null; then
+		# Same exposure as a readback that never answered: the comment is on the
+		# pull request and this run cannot vouch for it.
+		printf 'publish-forge-review: posted but unverified comment: %s\n' "$comment_url" >&2
 		fail 'comment readback did not match the checked body'
+	fi
 	rm -f -- "$gh_capture" ||
 		printf 'publish-forge-review: retained gh capture: %s\n' "$gh_capture" >&2
 	gh_capture=''
