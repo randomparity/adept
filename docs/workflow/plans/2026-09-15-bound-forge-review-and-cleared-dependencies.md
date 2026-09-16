@@ -7,7 +7,7 @@ something that did not answer.
 Architecture: each file gains one transcription of the reference's `bounded_call` — background,
 poll, TERM, grace, KILL, reap, return 124 — and one thin local wrapper that owns capture-file
 allocation and cleanup. Call sites classify 124 themselves, because each one's diagnostic differs
-and three of them are writes that must report indeterminacy. Nothing is extracted across the two
+and four of them are writes that must report indeterminacy. Nothing is extracted across the two
 files: ADR 0068 leaves a shared helper to the applier that reaches the third repetition, and this
 change is the second of four.
 
@@ -29,15 +29,19 @@ a one-line manifest bump.
   one.
 - `rg` invocations in gate scripts pass `--no-config`.
 - Capture a scan's exit status explicitly rather than trailing `|| true`.
-- Every status-discard idiom (`|| :`, `|| true`) in a shell source needs a
-  `# scan-fault: deliberate — <reason>` pragma or `just scan-fault-check` fails.
+- A status-discard idiom (`|| :`, `|| true`) in a shell source needs a
+  `# scan-fault: deliberate — <reason>` pragma or `just scan-fault-check` fails — **except** on a
+  pure builtin, and `scripts/check-scan-fault-discards.sh:45` lists `kill` and `wait` among them.
+  The transcribed `kill … || :` and `wait … || :` lines therefore take no pragma, which keeps both
+  copies byte-comparable against the reference.
 - macOS ships no `timeout(1)`. Do not add `timeout` or `gtimeout` to any required-command list;
   ADR 0068 forbids it and issue #382 owns that list.
 - No retry and no backoff anywhere. `references/network-bounds.md` line 6.
-- The seven non-adaptable properties in `references/network-bounds.md:71-107` are not negotiable:
-  private capture allocation, files rather than command substitution, streams kept apart where a
-  value is captured, stdout discarded on 124, TERM before KILL, reap before returning, and the
-  status captured at the call site with `|| rc=$?`.
+- The seven non-adaptable properties at `references/network-bounds.md:71-107` are not negotiable.
+  Read them there before changing any transcribed line.
+- Bash evaluates an arithmetic operand as an expression, so any value reaching `$((bound * 10))`
+  is validated as digits first. Measured on `/bin/bash` 3.2.57: a bound of `x[$(echo PWNED >&2)]`
+  executes the substitution.
 - `124` is internal. It may pass between two functions inside a file; it is never either script's
   exit status.
 - Bounds: **30 s** for a call that issues one request, **120 s** for one that may issue more.
@@ -50,8 +54,8 @@ a one-line manifest bump.
 |---|---|---|
 | `skills/quest/scripts/publish-forge-review` | Composes, posts, verifies and disposes one `WORK:REVIEW` annotation; two unbounded `gh` calls | The same, with both calls bounded and a `bounded_call` + `run_gh` pair |
 | `skills/quest-log/assets/cleared-dependencies.sh` | The cleared-dependency recipe; one reading wrapper over `gh` plus three direct label writes, all unbounded | The same, with the wrapper bounded and taking a bound argument, and the three writes routed through it |
-| `tests/fixtures/quest/publish-forge-review-test.sh` | 23 behaviour cases | 25 — two timeout cases added |
-| `tests/fixtures/quest-log/cleared-dependencies-test.sh` | Sourced and direct-execution behaviour coverage | The same plus five timeout assertions |
+| `tests/fixtures/quest/publish-forge-review-test.sh` | 22 registered cases | 24 — two timeout cases added |
+| `tests/fixtures/quest-log/cleared-dependencies-test.sh` | Sourced and direct-execution behaviour coverage | The same plus seven timeout assertions |
 | `.claude-plugin/plugin.json` | `version: 5.10.0` | `version: 5.10.2`, reserved by the campaign |
 
 No file moves, no owner changes, no obsolete path to remove, no compatibility path retained.
@@ -136,13 +140,13 @@ nothing with these.
    	done
    	if kill -0 "$pid" 2>/dev/null; then
    		# TERM, then KILL only if TERM does not land. Never a bare KILL.
-   		kill -TERM "$pid" 2>/dev/null || : # scan-fault: deliberate — the child may exit between the poll and the signal
+   		kill -TERM "$pid" 2>/dev/null || :
    		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
    			sleep 0.1
    			grace=$((grace + 1))
    		done
-   		kill -KILL "$pid" 2>/dev/null || : # scan-fault: deliberate — escalation for a child that ignored TERM; already gone is the normal case
-   		wait "$pid" 2>/dev/null || : # scan-fault: deliberate — reaping a signalled child; its status is not the answer
+   		kill -KILL "$pid" 2>/dev/null || :
+   		wait "$pid" 2>/dev/null || :
    		# The writer was killed mid-stream, so the capture is void. Emptying it
    		# here makes that structural: a site that parses it anyway gets nothing,
    		# not a truncated page that reads as a complete short one.
@@ -179,7 +183,12 @@ nothing with these.
    	esac
    ```
 
-6. Replace the body of `post_comment()` at `:240-249` with:
+6. Replace the body of `post_comment()` at `:240-249` with the following. Note that
+   `post_comment` is itself still called as `comment_url=$(post_comment)` at `:328`, and stays
+   that way: that command substitution captures the *function's* stdout, not `gh`'s, so it bounds
+   nothing and blocks nothing. What it does mean is that `gh_capture` and `fail()`'s removal of it
+   are subshell-local on this path — which is correct, because the subshell is where the capture
+   was created, and the parent's `gh_capture` stays empty throughout.
 
    ```bash
    post_comment() {
@@ -248,8 +257,10 @@ nothing with these.
     `review-publication-verified:` line.
 11. Register both cases in the runner list at the foot of the file, beside the existing
     `case_*` entries.
-12. Run `just test publish-forge-review`. Expect `publish-forge-review-test: pass` with the two
-    new cases in the `ok` lines and a non-zero total of passed cases with zero failures.
+12. Run `just test publish-forge-review`. The quiet default prints only
+    `ok   tests/fixtures/quest/publish-forge-review-test.sh` and `test: 1 suites passed`; run
+    `just test -v publish-forge-review` to see the per-case `ok   PFR-22 …` and `ok   PFR-23 …`
+    lines and confirm the failure count is zero.
 13. Run `just lint format-check scan-fault-check`. Expect each to exit 0 with no findings; a
     missing `scan-fault` pragma on any `kill … || :` line fails the third.
 14. Commit: `fix(quest): bound the gh calls in publish-forge-review`.
@@ -293,12 +304,25 @@ returning 124 on a bound exceeded. Globals `cleared_dependency_bound_single` (30
   `apply_cleared_dependency` returns 1, its stderr matches `may or may not have been changed`, and
   `$gh_log` records no `--add-label status:blocked` restore. Expected red: the same hang. Green:
   the same command.
+- **Contract: a bound exceeded on the pre-write dependent read at `:201` reports it unreadable.**
+  Mode: focused-test — `apply_cleared_dependency` returns 1 and its stderr matches
+  `unreadable dependent #101` and `did not answer`. Expected red: the same hang. Green: the same
+  command.
+- **Contract: a bound exceeded on the post-write verification read at `:241` reports it
+  unreadable and does not restore.** Mode: focused-test — `apply_cleared_dependency` returns 1,
+  its stderr matches `verification unreadable for #101` and `did not answer`, and `$gh_log`
+  records no restoring `--add-label status:blocked`: a call that did not answer is not evidence
+  the write went wrong. Expected red: the same hang. Green: the same command.
 - **Contract: the manifest version is strictly greater than the base ref's.** Mode: focused-test —
   `just version-check`, expected to exit 0.
+- **Contract: a non-numeric bound is refused before the arithmetic evaluates it.** Mode:
+  task-test-not-applicable — observing the guard means committing a `$(…)` payload to a fixture
+  for a guard whose whole job is that the payload never runs. The behaviour was measured on
+  `/bin/bash` 3.2.57 instead and is recorded in Global Constraints.
 - **Contract: `cleared_dependency_run`'s new leading argument.** Mode: task-test-not-applicable —
-  a wrong bound argument is a call-site error the shell reports by passing `gh` a numeric first
-  argument, which every existing case in the suite already fails on; there is no separate
-  observation to add.
+  a call site that forgets the bound passes its first `gh` word to the guard above, which refuses
+  it, so every one of the suite's existing cases fails loudly; there is no separate observation to
+  add.
 
 ### Steps
 
@@ -307,47 +331,30 @@ returning 124 on a bound exceeded. Globals `cleared_dependency_bound_single` (30
    ```bash
    # Seconds. 30 for a call that issues one request, 120 for one that may issue
    # more; references/network-bounds.md carries the rule and ADR 0068 the record.
-   # `:=` so the behaviour suite can set these as shell variables where it sources
-   # this file and export them where it executes it, the way it already drives
-   # cleared_dependency_max_lookups.
+   # `:=` rather than `=` because the behaviour suite's direct-execution leg exports
+   # these into a subprocess, and an unconditional assignment here would overwrite
+   # the exported value before any call read it.
    : "${cleared_dependency_bound_single:=30}"
    : "${cleared_dependency_bound_multi:=120}"
    ```
 
-2. Immediately before `cleared_dependency_run` at `:74`, add the transcribed mechanism under this
-   file's prefix — sourcing publishes the name, so it carries the same prefix every other function
-   here does. The body is byte-identical to Task 1 step 4's `bounded_call` apart from the name and
-   the diagnostic-free comments, including all three `# scan-fault: deliberate — …` pragmas.
+2. Immediately before `cleared_dependency_run` at `:74`, add the mechanism, transcribed verbatim
+   from `references/network-bounds.md:26-56` with exactly two changes: rename the function to
+   `cleared_dependency_bounded_call`, because sourcing publishes the name and every other function
+   in this file carries that prefix, and replace the reference's leading comment with:
 
    ```bash
    # Run a command under a bound. Returns the command's own status, or 124 when the
    # bound was exceeded. Trap-free: this file is sourced, so it cannot take the EXIT
    # trap slot from whichever skill sourced it, and the mechanism needs none.
    # Transcribed from references/network-bounds.md; ADR 0068 carries the reasoning.
-   cleared_dependency_bounded_call() { # seconds out-file err-file command...
-   	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
-   	shift 3
-   	"$@" >"$out" 2>"$err" &
-   	pid=$!
-   	while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$((bound * 10))" ]; do
-   		sleep 0.1
-   		waited=$((waited + 1))
-   	done
-   	if kill -0 "$pid" 2>/dev/null; then
-   		kill -TERM "$pid" 2>/dev/null || : # scan-fault: deliberate — the child may exit between the poll and the signal
-   		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
-   			sleep 0.1
-   			grace=$((grace + 1))
-   		done
-   		kill -KILL "$pid" 2>/dev/null || : # scan-fault: deliberate — escalation for a child that ignored TERM; already gone is the normal case
-   		wait "$pid" 2>/dev/null || : # scan-fault: deliberate — reaping a signalled child; its status is not the answer
-   		: >"$out"
-   		return 124
-   	fi
-   	wait "$pid" || rc=$?
-   	return "$rc"
-   }
    ```
+
+   Take no other liberty. The reference's own inline comments, its `rc`-not-`status` local, its
+   tenth-second poll, its two-second grace window, its `: >"$out"` void, and its `|| rc=$?` all
+   come across unchanged, and no `# scan-fault: deliberate — …` pragma is added — see Global
+   Constraints. Keeping it byte-comparable against that line range is what makes the drift ADR
+   0068 predicts detectable later.
 
 3. Rewrite `cleared_dependency_run` at `:74-87`. Keep the whole comment block at `:46-73`,
    amending only its scratch-file paragraph to say two files rather than one, and add a sentence
@@ -359,6 +366,15 @@ returning 124 on a bound exceeded. Globals `cleared_dependency_bound_single` (30
    	cleared_dependency_out=
    	cleared_dependency_err=
    	shift
+   	# Validated before it reaches $((bound * 10)): bash evaluates an arithmetic
+   	# operand as an expression, so a value carrying a command substitution would
+   	# run it. This is the only entry point, so one guard covers every call.
+   	case $bound in
+   	'' | *[!0-9]*)
+   		cleared_dependency_err='the tracker command bound is not a whole number of seconds'
+   		return 1
+   		;;
+   	esac
    	out=$(mktemp) || {
    		cleared_dependency_err='no scratch file for the tracker command'
    		return 1
@@ -475,18 +491,27 @@ returning 124 on a bound exceeded. Globals `cleared_dependency_bound_single` (30
    	esac
    ```
 
-9. In `tests/fixtures/quest-log/cleared-dependencies-test.sh`, add four hang arms to the fake `gh`
-   function, each `printf '%s\n' $$ >"$SCRATCH/hang-pid"` then `exec sleep 30`: `hang-api` in the
-   `api` branch, `hang-label` in the `label create` branch, `hang-edit` in the `issue edit`
-   branch, and `hang-blocker` in the `issue view` branch's `1)` arm.
-10. Add the five assertions the Verification inventory names, each preceded by
+9. In `tests/fixtures/quest-log/cleared-dependencies-test.sh`, add six hang arms to the fake `gh`
+   function, each a bare `exec sleep 30`: `hang-api` in the `api` branch, `hang-label` in the
+   `label create` branch, `hang-edit` in the `issue edit` branch, `hang-blocker` in the
+   `issue view` branch's `1)` arm, and, in that branch's `101)` arm, `hang-dependent` when
+   `$ready_state` does not exist and `hang-verify` when it does — which is how that arm already
+   distinguishes the pre-write read at `:201` from the post-write read at `:241`. Record no pid
+   here: this fake is a shell function, so `$$` inside it is the *test's* pid, not the backgrounded
+   subshell's. Only `publish-forge-review-test.sh`, whose fake is an executable script, can record
+   its own pid meaningfully.
+10. Add the six sourced assertions the Verification inventory names, each preceded by
     `cleared_dependency_bound_single=1 cleared_dependency_bound_multi=1` and followed by a restore
     to 30 and 120, and each resetting `fake_mode=normal` afterwards. Place them after the existing
     scratch-file case, which is their nearest neighbour in subject.
-11. For the direct-execution leg, add a case beside the existing ones that runs the file with
-    `cleared_dependency_bound_multi=1` exported and `fake_mode=hang-api`, asserting exit 1 and
-    that stderr carries `cannot list open dependents`.
-12. Run `just test cleared-dependencies`. Expect `cleared-dependencies-test: pass`.
+11. For the direct-execution leg, add a case after the usage case at `:337-346` that runs the file
+    with `cleared_dependency_bound_multi=1` exported and `fake_mode=hang-api`, asserting exit 1
+    and that stderr carries `cannot list open dependents`. `fake_mode` is already in the `export`
+    list at `:307`, so setting it before the run reaches the subprocess. Reset `fake_mode=normal`
+    afterwards so the zsh probe that follows is unaffected.
+12. Run `just test cleared-dependencies`. The quiet default prints only
+    `ok   tests/fixtures/quest-log/cleared-dependencies-test.sh` and `test: 1 suites passed`; the
+    suite's own `cleared-dependencies-test: pass` line is visible under `just test -v`.
 13. Set `.claude-plugin/plugin.json`'s `version` to exactly `5.10.2`, the value the campaign
     dispatch reserved for this row's place in the merge order; do not renumber it if a sibling's
     version lands first. Never write that literal at the end of a sentence in a Markdown file:

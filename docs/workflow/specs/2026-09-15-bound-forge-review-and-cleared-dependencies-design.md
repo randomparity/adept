@@ -38,12 +38,13 @@ anywhere, bounding non-network subprocesses, and adding any binary to
 
 `bounded_call` is transcribed from the reference, keeping its signature
 (`seconds out-file err-file command…`), its seven non-adaptable properties, and its 124 return.
-Two adaptations, neither among the seven:
-
-- **Name.** In the sourced recipe it is `cleared_dependency_bounded_call`, matching that file's
-  prefix convention, because sourcing it into a caller's shell publishes the name.
-- **A `# scan-fault: deliberate — …` pragma** on each `kill … || :`, which
-  `scripts/check-scan-fault-discards.sh` requires of every status discard in a shell source.
+One adaptation, not among the seven: in the sourced recipe it is
+`cleared_dependency_bounded_call`, matching that file's prefix convention, because sourcing it
+into a caller's shell publishes the name. Nothing else differs, so both copies stay
+byte-comparable against `references/network-bounds.md:26-56`, which is what ADR 0068 leaves as
+the drift check. No `# scan-fault: deliberate — …` pragma is added:
+`scripts/check-scan-fault-discards.sh:45` exempts `kill` and `wait` as pure builtins, confirmed
+by running the gate over an un-pragma'd transcription.
 
 Each file wraps it once more for its own capture-lifecycle discipline, rather than repeating
 allocation at six sites:
@@ -77,9 +78,11 @@ The bound is injectable, which issue #386 offers as one of two acceptable design
 it to 1 second and the fake `gh` blocks for 30 with `exec sleep 30`, so TERM reaches the blocking
 process directly and the case costs about 1.1 s with a 30× margin on either side of the bound.
 `publish-forge-review` reads `PUBLISH_FORGE_REVIEW_BOUND`; `cleared-dependencies.sh` uses
-`cleared_dependency_bound_single` and `cleared_dependency_bound_multi`, assigned with `:=` so the
-sourced suite can set them as shell variables and the direct-execution leg can export them —
-exactly how the suite already drives `cleared_dependency_max_lookups`.
+`cleared_dependency_bound_single` and `cleared_dependency_bound_multi`. Those two are assigned
+with `:=` rather than `=` for one reason: the suite's direct-execution leg exports them into a
+subprocess, and an unconditional `=` at the top of a sourced-or-executed file would overwrite the
+exported value before any call read it. In sourced mode the suite reassigns them after sourcing,
+which `=` would also have supported.
 
 ## Failure model
 
@@ -120,9 +123,13 @@ already control `PATH` and therefore which `gh` runs. Untrusted: GitHub's respon
 reach `jq` and `awk` as they do today, and any other local user on a shared host, who is the
 reason the captures must not be world-readable or symlink-followable.
 
-**Control per boundary.** The bound variables are read into an integer arithmetic context
-(`bound * 10`); a hostile value degrades that run into immediate timeouts, which is a denial an
-actor with environment control already has by other means, and never an escalation. Capture files
+**Control per boundary.** Each bound is validated as a whole number of digits before any use —
+`publish-forge-review` in `preflight()`, `cleared-dependencies.sh` at the top of
+`cleared_dependency_run`. That guard is not cosmetic: bash evaluates an arithmetic operand as an
+expression, so `$((bound * 10))` on a value of `x[$(echo PWNED >&2)]` runs the substitution, as
+measured on `/bin/bash` 3.2.57. The guard turns that into a refusal instead; a merely
+non-numeric value would otherwise evaluate to 0 and return 124 on every call, which is a denial
+an actor with environment control already has by other means. Capture files
 are allocated by `mktemp` at mode 0600 with unguessable names, never a `$$`-derived path in a
 shared directory — the reference's first non-adaptable property, which exists precisely to keep
 the `>` redirect from following a pre-created symlink. Response bodies are unchanged in handling:
@@ -137,7 +144,7 @@ the orphan a caller killed mid-call leaves, which is today's exposure unchanged.
 ## Success
 
 1. Each of the six invocation points runs under `bounded_call` at the bound its row above states,
-   and no `gh` call in either file remains in a command substitution.
+   and no `gh` invocation expression in either file is captured by a command substitution.
 2. `publish-forge-review` exits 1 on a bound exceeded at either site, with a diagnostic naming the
    call and the bound; the `:242` write additionally reports the comment may or may not exist.
 3. `cleared-dependencies.sh` reports a bound exceeded through `unreadable blocker`,
@@ -165,12 +172,23 @@ the orphan a caller killed mid-call leaves, which is today's exposure unchanged.
   `tests/fixtures/quest-log/cleared-dependencies-test.sh`. Green: `just test cleared-dependencies`
   — `cleared_dependency_body_verdict` returns 1, reason contains `unreadable blocker #1` and the
   bound, and contains neither `missing blocker` nor `CLOSED`.
+- **`cleared-dependencies.sh` read bounds at `:201` and `:241`.** Mode: focused-test — same file,
+  one case each, because the two produce different diagnostics and `:241` runs *after* the label
+  write, where reading a timeout as a failed write would be the costliest confusion. Green:
+  `apply_cleared_dependency` returns 1; stderr carries `unreadable dependent #101` for the first
+  and `verification unreadable for #101` for the second; and in the `:241` case `$gh_log` records
+  no restoring `--add-label status:blocked`, because a call that did not answer is not evidence
+  the write went wrong.
 - **`cleared-dependencies.sh` paginated bound at `:287`.** Mode: focused-test — same file, sourced
   and again through direct execution. Green: exit 1, stderr carries `cannot list open dependents`,
   the bound, and `no labels changed`.
 - **`cleared-dependencies.sh` write indeterminacy at `:171` and `:234`.** Mode: focused-test —
   same file. Green: `apply_cleared_dependency` returns 1, stderr says the label may or may not
   exist / the labels may or may not have been changed, and no further `gh issue edit` is logged.
+- **`cleared-dependencies.sh` write indeterminacy at `:186`.** Mode: task-test-not-applicable —
+  the best-effort restore is reached only from the conflict and race paths, whose fakes must drive
+  the `:234` write to succeed to reach it, so a hang arm firing on `issue edit` could not say
+  which of the two writes it bounded.
 - **Bound assignment per site.** Mode: task-test-not-applicable — the number a site passes is a
   constant read at the call; no executable observation distinguishes 30 from 120 without waiting
   the difference, and the suites deliberately override both. The table above and the site comments
