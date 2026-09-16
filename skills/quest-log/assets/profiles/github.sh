@@ -608,7 +608,7 @@ profile_state_set() {
 profile_link_parent() {
 	github_require_target
 	(($# >= 2)) || die "$EXIT_USAGE" usage 'link-parent needs a child and a parent id'
-	local child=$1 parent=$2 out child_db_id
+	local child=$1 parent=$2 rc=0 out child_db_id
 	github_require_id "$child" 'child id'
 	github_require_id "$parent" 'parent id'
 	github_run_checked "$github_bound_single" api "repos/$TRACKER_TARGET/issues/$child" --jq .id
@@ -616,9 +616,18 @@ profile_link_parent() {
 	[[ $child_db_id =~ ^[0-9]+$ ]] ||
 		die "$EXIT_TRANSPORT" transport \
 			"could not resolve a database id for issue $child"
-	github_run_checked "$github_bound_single" api "repos/$TRACKER_TARGET/issues/$parent/sub_issues" \
-		-F "sub_issue_id=$child_db_id"
+	# The sub_issues call is a write -- it creates the parent/child link on
+	# GitHub -- so it takes the direct github_run idiom every other write in
+	# this file uses, not github_run_checked's read-style die-on-any-failure.
+	# A bound breach here is indeterminate, not a plain failure, and is now
+	# reachable for the first time; reported through EXIT_PARTIAL per
+	# completion criterion 5, before the classified die below that answers
+	# only a genuine, non-timeout failure.
+	github_run "$github_bound_single" api "repos/$TRACKER_TARGET/issues/$parent/sub_issues" \
+		-F "sub_issue_id=$child_db_id" || rc=$?
 	out=$GH_OUT
+	((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
+	((rc == 0)) || github_die "$GH_ERR"
 	printf '{}\n'
 }
 

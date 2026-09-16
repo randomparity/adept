@@ -1305,6 +1305,35 @@ FAKE_GH_HANG='label create' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH"
 assert_exit 4 "$status" 'a claim-acquire create timeout whose producer collides with a classify keyword'
 assert_error "$sandbox/err" transport 'a claim-acquire create timeout whose producer collides with a classify keyword'
 
+# link-parent's second call -- the sub_issues POST -- is a write. Its own
+# timeout must report indeterminate, not the read-style classified failure its
+# sibling lookup call correctly still uses. The first call (the child's
+# database id) answers normally so the write is actually reached.
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $1 == api ]]; then
+	case " $* " in
+	*'/sub_issues'*)
+		if [[ ${FAKE_GH_HANG:-} == sub_issues ]]; then
+			exec sleep 300
+		fi
+		printf '{}\n'
+		;;
+	*) printf '5039780970\n' ;;
+	esac
+	exit 0
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+status=0
+FAKE_GH_HANG=sub_issues github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" link-parent --profile github --target example/repo 100 101 \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a link-parent sub_issues write timeout'
+assert_error "$sandbox/err" partial 'a link-parent sub_issues write timeout'
+
 # --- a CRLF declaration is valid, not malformed -----------------------------
 mkdir -p "$sandbox/crlf"
 git -C "$sandbox/crlf" init -q
