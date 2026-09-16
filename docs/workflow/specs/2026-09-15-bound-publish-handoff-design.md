@@ -24,12 +24,15 @@ reasons about: the script does not know whether the comment exists at all.
 `tests/fixtures/return-to-town/publish-handoff-test.sh`, `.claude-plugin/plugin.json` (5.10.1),
 and this design set — this file and `docs/workflow/plans/2026-09-15-bound-publish-handoff.md`.
 
-**Design.** Add the reference's `bounded_call` verbatim in shape, with its seven non-adaptable
+**Design.** Transcribe the reference's `bounded_call` unchanged, with its seven non-adaptable
 properties intact, plus two thin local wrappers: `bounded_network_call`, which names a capture
-slot inside the existing `mktemp -d` workspace and passes an ordinary failure's captured stderr
-through to the terminal as it reached it before; and `timed_out`, which turns an exceeded bound
+slot inside the existing `mktemp -d` workspace; and `timed_out`, which turns an exceeded bound
 into this script's own `fault` — exit 2, its "could not run" class, the row the reference's
 classification table assigns this caller. `124` stays internal.
+
+Capturing stderr to a file would otherwise stop it reaching the terminal, on the success path as
+much as the failure path, so `bounded_network_call` passes it through on every status but 124 —
+where the writer was killed mid-stream and a partial diagnostic reads as an answer.
 
 All five calls issue exactly one request, so all five take the 30-second bound. The bound is a
 single script-level constant, documented as approximate.
@@ -47,8 +50,8 @@ unverified — more precise than treating the two post-write sites alike, and ho
 directions. None is retried, and the diagnostic says why re-running is not the remedy.
 
 **No shared helper.** ADR 0068 leaves extraction to whichever applier reaches the third
-repetition. Three appliers run in parallel and none can observe that count, so the idiom stays
-local; the reference is what they are checked against.
+repetition; three run in parallel and none can observe that count, so the idiom stays local and
+the reference is what they are checked against.
 
 **Out.** No retry or backoff. No bound on `git rev-parse --local-env-vars` at `:260`, which reaches
 no network. No change to `require_commands` or `scripts/setup.sh`. No other applier's executable.
@@ -69,9 +72,13 @@ behaviour suite under `just verify` and CI.
 
 **Accepted failure classes.**
 
-- `sleep` is not on `require_commands` and this charter excludes changing that list (owner: #382).
-  A host without `sleep` but with `cat`, `rm`, `od` and `awk` is not a deployment this repository
-  targets; the cost is a bare non-zero exit rather than a named one.
+- `sleep` is not on `require_commands`, and this charter excludes changing that list (owner:
+  #382). The cost is worse than a missing-binary exit, so it is stated: every site calls the
+  wrapper in a `|| rc=$?` list, which suppresses `set -e` inside it, so a failing `sleep 0.1`
+  spins the poll loop instead of aborting and reports a **false 124** on a call that was answering
+  — the defect this convention exists to prevent. Reachable only on a host carrying `iconv`, `od`,
+  `awk` and `mktemp` but not `sleep`, which this repository does not target. Reported to #382's
+  owner as a mechanism/exclusion interaction rather than patched around here.
 - The bound is not a deadline. Poll overhead accumulates and a 30-second bound fires at roughly 32.
 - PID reuse inside one poll interval, same-uid: the reference records it and no idiom on a Bash 3.2
   floor closes it.
@@ -89,21 +96,19 @@ behaviour suite under `just verify` and CI.
 
 ## Threat model
 
-**Boundary inventory.** Widened, not added: the two capture files per call are new filesystem
-objects holding a GitHub response. No new entry point, argument, or environment key.
+**Boundary inventory.** Widened, not added: two capture files per call, holding a GitHub
+response. No new entry point, argument, or environment key.
 
-**Actor model.** A local unprivileged user on a shared host is the untrusted party; GitHub is
-trusted to the same degree it already is. The operator running the script is trusted.
+**Actor model.** A local unprivileged user on a shared host is the untrusted party. GitHub and the
+operator running the script are trusted exactly as much as they already are.
 
 **Control per boundary.** Captures are created by `>` inside `$workspace`, which `make_workspace`
-already allocates with `mktemp -d` at mode 0700 and the existing EXIT trap already removes — so no
-`$$`-derived name in a shared directory and no pre-created symlink to follow. This is the
-reference's first non-adaptable property, satisfied by an existing control rather than a new one.
-A capture from a call that hit its bound is emptied by `bounded_call` before it returns, so no site
-can parse a truncated response as a complete short one.
+already allocates with `mktemp -d` at 0700 and the EXIT trap already removes — so no `$$`-derived
+name in a shared directory and no pre-created symlink to follow. That is the reference's first
+non-adaptable property, met by an existing control rather than a new one.
 
 **Explicitly out of scope.** Signal delivery to a PID reused within one poll interval (accepted
-above). Anything reachable only by an actor who can already write inside the 0700 workspace.
+above), and anything reachable only by an actor who can already write inside the 0700 workspace.
 
 ## Success
 
@@ -113,21 +118,30 @@ above). Anything reachable only by an actor who can already write inside the 070
 3. The `gh issue comment` site reports the write as indeterminate, and the readback site reports
    the comment as created-but-unverified with its URL. Neither retries.
 4. `skills/return-to-town/SKILL.md` states that a timeout is not a re-run condition and what the
-   reader does instead.
+   reader does instead — including at the "Re-run it once" sentence itself, which is the line the
+   completion criterion names and the one a reader reaches first.
 5. `require_commands`, `scripts/setup.sh`, and every file outside the Scope list are unchanged.
 6. `just verify` exits 0.
 
 ## Validation
 
-- **`bounded_call` returns 124 on an exceeded bound, and no site uses what the hung call wrote.**
-  Mode: `focused-test` — `tests/fixtures/return-to-town/publish-handoff-test.sh`,
-  `case_pr_view_times_out`. The fake `gh` emits a partial JSON object and then `exec sleep 300`;
-  the case asserts the helper reports the bound rather than a parse error. Red is observed by
-  running the case before the constant exists, where the fixture's bound rewrite finds nothing and
-  fails the case by name. Green: `just test publish-handoff`.
+- **`bounded_call` returns 124 on an exceeded bound.** Mode: `focused-test` —
+  `tests/fixtures/return-to-town/publish-handoff-test.sh`, `case_pr_view_times_out`. The fake `gh`
+  emits a partial JSON object and then `exec sleep 30`; the case asserts the helper reports the
+  bound rather than a parse error. Red is observed by adding the case before the bound exists,
+  where the fixture's bound rewrite finds nothing and fails the case by name. Green:
+  `just test publish-handoff`.
   The `: >"$out"` discard itself is not separately observable in this caller: every site faults on
   124 before it would parse anything, so the line is structural insurance against a later site
-  that does not, which is why the reference requires it be kept rather than reasoned away.
+  that does not, which is why the reference requires it be kept rather than reasoned away. The
+  partial object is in the fake for that later site's benefit, not as evidence here.
+
+- **The timeout cases are deterministic rather than timing-dependent.** Mode: `focused-test` —
+  the five cases below, with both margins stated because a margin nobody wrote down is a flake
+  nobody predicted. Each runs a copy of the helper whose single bound constant is rewritten to 2
+  seconds against a call that sleeps 30 — **15x** on the bound firing — and that same rewritten
+  constant governs the calls which must *succeed* in the case, four of them in the readback case
+  at roughly 30 ms each — **60x** on the other side. A later case is counted against both.
 - **Each of the five sites classifies a timeout as exit 2 naming the call.** Mode: `focused-test` —
   `case_pr_view_times_out`, `case_issue_read_times_out`, `case_ls_remote_times_out`,
   `case_comment_write_times_out`, `case_readback_times_out`, each asserting exit 2 and the
@@ -138,8 +152,9 @@ above). Anything reachable only by an actor who can already write inside the 070
   that stderr says the write may or may not have landed.
 - **A timed-out readback names the created comment.** Mode: `focused-test` —
   `case_readback_times_out` asserts exit 2 and that stderr carries the comment URL.
-- **The re-run rule prose.** Mode: `task-test-not-applicable` — the changed surface is instruction
-  prose in `SKILL.md`, and CLAUDE.md anatomy rule 4 forbids a gate asserting on a sentence.
+- **The re-run rule prose, at both the "Re-run it once" sentence and the paragraph below it.**
+  Mode: `task-test-not-applicable` — the changed surface is instruction prose in `SKILL.md`, and
+  CLAUDE.md anatomy rule 4 forbids a gate asserting on a sentence.
 - **`.claude-plugin/plugin.json` declares version 5.10.1 exactly.** Mode: `focused-test` —
   `just version-check`
   (`scripts/check-plugin-version.sh`), which checks shape locally and strict-greater-than-base in
