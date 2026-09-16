@@ -201,6 +201,30 @@ If authentication is missing, stop with the exact command the user should run.
 
 ## 7. Detect parallel-run context
 
+Run one unconditional probe here, whether or not you were told you are one of several
+agents: `git worktree list`, and step 4's already-captured
+`git status --short --untracked-files=all` result (no second status call). Record a new
+one-sided line in step 2's `KEY<TAB>VALUE` shape:
+
+- `SHARED_TREE` — raw counts, not a judged verdict: `siblings: <n> (<branch names, or
+  none>); pre-existing dirty or staged paths: <yes|no>`. `git worktree list` always
+  includes this session's own working tree; exclude the row whose path equals your own
+  working directory (`pwd -P`) before counting `n`, since it is not a sibling. A row with
+  no branch (e.g. `(detached HEAD)`) still counts toward `n` and is listed as
+  `(detached HEAD)`. The dirty/staged half reflects step 4's read time, not step 7's —
+  it may be stale by however long steps 4-6 took. If either half cannot be determined,
+  that half alone reads `unknown` (e.g. `siblings: 2 (...); pre-existing dirty or staged
+  paths: unknown`); record the whole line as `unknown` only when the probe itself cannot
+  run (e.g. `git worktree list` errors). Fails open like step 2's records — `unknown`
+  never blocks attunement. The counts cannot attribute a sibling worktree or dirty state
+  to a cause — this session's own resumed work, another agent, a stale worktree — so the
+  record states the observation only, leaving attribution to the downstream reader.
+
+No policy attaches to this record: the disclosed-case bullets below are unchanged, byte
+for byte. What the counts imply in the undisclosed case is `$quest`'s and `$forge`'s own
+future work, the same as "Attunement records; skills branch" above (SKILL.md:69) already
+argues for step 2's records.
+
 If you were dispatched as one of several agents working sibling issues
 concurrently, honor what the orchestrator handed you:
 
