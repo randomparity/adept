@@ -324,7 +324,11 @@ returning 124 on a bound exceeded. Globals `cleared_dependency_bound_single` (30
   `restoring #101 to status:blocked ... may or may not have been changed`, and `$gh_log` holds
   exactly one edit line. Expected red: the same hang. Green: the same command.
 - **Contract: the manifest version is strictly greater than the base ref's.** Mode: focused-test —
-  `just version-check`, expected to exit 0.
+  `bash -c 'BASE_SHA=$(git merge-base HEAD main) just version-check'`, expected to exit 0. A bare
+  `just version-check` cannot observe this contract on a workstation: `BASE_SHA` is unset there, so
+  the gate checks only that the field exists and parses, and the base ref's own version would
+  satisfy it. Supplying the fork point is what makes the strictly-greater rule run locally, and it
+  is the same rule CI hard-gates.
 - **Contract: a non-numeric bound is refused before the arithmetic evaluates it.** Mode:
   task-test-not-applicable — observing the guard means committing a `$(…)` payload to a fixture
   for a guard whose whole job is that the payload never runs. The behaviour was measured on
