@@ -68,6 +68,12 @@ set -euo pipefail
 #   do not interleave in one function, so a later migration of the issue-side
 #   group onto the quest-log tracker contract swaps one group.
 #
+# - Every gh read runs under the bound recorded in references/network-bounds.md:
+#   30 seconds for a call that issues one request, 120 for one that may issue
+#   more. A read killed at its bound answered nothing, so it is a failed read --
+#   "error" at every metric position it feeds, never "unknown(...)", never a
+#   zero. The document's shape is unchanged, so schema_version stays 1.6.
+#
 # Every gh invocation is a read enumerated by the skill's read-only contract;
 # every scan captures its exit status explicitly rather than collapsing it.
 # Bash 3.2 floor: indexed arrays only, no mapfile, no associative arrays.
@@ -98,6 +104,35 @@ for tool in gh jq; do
 	command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not installed"
 done
 
+# All three clauses of the check are load-bearing, each measured on bash 3.2.57
+# rather than assumed. Non-digits: $(( )) evaluates a variable's contents
+# recursively, so a crafted array subscript there runs a command substitution.
+# A leading zero: $(( )) errors on 08 and reads 010 as 8 -- a bound changed
+# silently rather than refused. More than five digits: a bound above 99999
+# seconds is not a bound, and the cap is also what keeps the wrap out of reach,
+# since at nineteen digits bound * 10 returns -8446744073709551616, the poll
+# loop never runs and the bound collapses to zero. ${#2} is a string length, so
+# the length test never evaluates the value.
+check_bound() { # variable-name value
+	local digits=0
+	case $2 in
+	'' | 0* | *[!0-9]*) digits=0 ;;
+	*) digits=1 ;;
+	esac
+	if ((digits)) && ((${#2} <= 5)); then
+		return 0
+	fi
+	die "$1 must be 1 to 99999 whole seconds, not '$2'"
+}
+
+# Network bounds, per references/network-bounds.md: 30 seconds for a call that
+# issues one request, 120 for one that may issue more. Overridable so the
+# behaviour suite reaches the timeout path without waiting a field value out.
+BOUND_ONE_REQUEST=${COLLECT_TELEMETRY_BOUND_ONE_REQUEST:-30}
+BOUND_MANY_REQUESTS=${COLLECT_TELEMETRY_BOUND_MANY_REQUESTS:-120}
+check_bound COLLECT_TELEMETRY_BOUND_ONE_REQUEST "$BOUND_ONE_REQUEST"
+check_bound COLLECT_TELEMETRY_BOUND_MANY_REQUESTS "$BOUND_MANY_REQUESTS"
+
 work=$(mktemp -d "${TMPDIR:-/tmp}/collect-telemetry.XXXXXX") || {
 	die 'could not create a scratch directory'
 }
@@ -109,6 +144,10 @@ cleanup() {
 	exit "$status"
 }
 trap cleanup EXIT
+
+# One stderr capture, reused: the reads are serial, bounded_call truncates it per
+# call, and $work is the mode-0700 root the trap above removes.
+fetch_err="$work/fetch.err"
 
 # Elapsed wall-clock hours between two ISO 8601 timestamps, to one decimal:
 # seconds divided by 360 is hours-times-ten, so the rounding lands on the
@@ -133,13 +172,74 @@ metric_json() { # value
 	esac
 }
 
+# --- network bounds -------------------------------------------------------------
+
+# Run a command under a bound. Returns the command's own status, or 124 when the
+# bound was exceeded. stdout and stderr land in separate caller-owned files.
+# Verbatim from references/network-bounds.md; all seven of its non-adaptable
+# properties hold here unchanged.
+bounded_call() { # seconds out-file err-file command...
+	# rc, not status: under zsh `status` is a read-only special parameter.
+	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
+	shift 3
+	"$@" >"$out" 2>"$err" &
+	pid=$!
+	# Tenths, so the counter stays integer arithmetic on a Bash 3.2 floor.
+	while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$((bound * 10))" ]; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+	if kill -0 "$pid" 2>/dev/null; then
+		# TERM, then KILL only if TERM does not land. Never a bare KILL.
+		kill -TERM "$pid" 2>/dev/null || :
+		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
+			sleep 0.1
+			grace=$((grace + 1))
+		done
+		kill -KILL "$pid" 2>/dev/null || :
+		wait "$pid" 2>/dev/null || :
+		# The writer was killed mid-stream, so the capture is void. Emptying it
+		# here makes that structural: a site that parses it anyway gets nothing,
+		# not a truncated page that reads as a complete short one.
+		: >"$out"
+		return 124
+	fi
+	wait "$pid" || rc=$?
+	return "$rc"
+}
+
+# One bounded gh read into DESTINATION, setting the pair every caller of the six
+# fetch functions below reads. fetch_failed carries the call's own status -- gh's
+# exit code, or 124 for a bound exceeded -- so the two hard stops can print a
+# true number instead of a constant; fetch_timed_out says which of the two it
+# was, because 124 is bounded_call's internal signal and never a gh exit.
+#
+# gh's stderr reached this script's stderr before the bound and still does. That
+# channel is prose, so the braced redirect suppresses only the job notice bash
+# prints for a signalled background job, which would otherwise interleave with
+# the relay. The 124 line is the convention's standing obligation: a call that
+# exceeded its bound reported nothing, and for a per-issue read this line is the
+# operator's only account of why the metric says error.
+bounded_read() { # seconds destination command...
+	local bound=$1 destination=$2
+	shift 2
+	fetch_failed=0
+	fetch_timed_out=0
+	{ bounded_call "$bound" "$destination" "$fetch_err" "$@" || fetch_failed=$?; } 2>/dev/null
+	if [[ -s $fetch_err ]]; then
+		cat -- "$fetch_err" >&2
+	fi
+	if ((fetch_failed == 124)); then
+		fetch_timed_out=1
+		printf '%s: %s exceeded its %ss network bound and did not answer\n' \
+			"${0##*/}" "$*" "$bound" >&2
+	fi
+}
+
 # --- issue-side reads -----------------------------------------------------------
 
 issue_side_repo() { # destination
-	fetch_failed=0
-	if ! gh repo view --json nameWithOwner >"$1"; then
-		fetch_failed=1
-	fi
+	bounded_read "$BOUND_ONE_REQUEST" "$1" gh repo view --json nameWithOwner
 }
 
 # Selection: date-range selectors carry ".." and select issues closed in the
@@ -147,46 +247,42 @@ issue_side_repo() { # destination
 # labels. Both go through gh search: it percent-encodes colon labels correctly,
 # where `gh issue list --label` silently matches nothing.
 issue_side_search() { # query destination
-	fetch_failed=0
-	if ! gh search issues --repo "$repo" "$1" \
-		--json number,state,closedAt,createdAt,labels --limit "$SEARCH_LIMIT" >"$2"; then
-		fetch_failed=1
-	fi
+	# 120 seconds, not 30: --limit 200 is served by repeated requests even with
+	# no --paginate flag, so this number bounds the whole call and never one
+	# request -- the per-page allowance shrinks as the page count grows.
+	bounded_read "$BOUND_MANY_REQUESTS" "$2" \
+		gh search issues --repo "$repo" "$1" \
+		--json number,state,closedAt,createdAt,labels --limit "$SEARCH_LIMIT"
 }
 
 # Ordered labeled/closed/commented event stream for one issue, one event object
 # per line so --paginate stays a clean JSONL stream.
 issue_side_timeline() { # number destination
-	fetch_failed=0
-	if ! gh api "repos/${owner}/${name}/issues/$1/timeline" --paginate --jq '.[]' >"$2"; then
-		fetch_failed=1
-	fi
+	# 120 seconds, not 30: --paginate issues an unbounded number of requests
+	# under one invocation, so this number bounds the whole call and never one
+	# request -- the per-page allowance shrinks as the page count grows.
+	bounded_read "$BOUND_MANY_REQUESTS" "$2" \
+		gh api "repos/${owner}/${name}/issues/$1/timeline" --paginate --jq '.[]'
 }
 
 # Issue comments: the source of WORK:SCOPE.
 issue_side_comments() { # number destination
-	fetch_failed=0
-	if ! gh issue view "$1" --repo "$repo" --json comments >"$2"; then
-		fetch_failed=1
-	fi
+	bounded_read "$BOUND_ONE_REQUEST" "$2" \
+		gh issue view "$1" --repo "$repo" --json comments
 }
 
 # --- PR-side reads --------------------------------------------------------------
 
 pr_side_candidates() { # number destination
-	fetch_failed=0
-	if ! gh pr list --repo "$repo" --search "$1 in:body" --state merged \
-		--json number,body >"$2"; then
-		fetch_failed=1
-	fi
+	bounded_read "$BOUND_ONE_REQUEST" "$2" \
+		gh pr list --repo "$repo" --search "$1 in:body" --state merged \
+		--json number,body
 }
 
 pr_side_view() { # pr-number destination
-	fetch_failed=0
-	if ! gh pr view "$1" --repo "$repo" \
-		--json comments,additions,deletions,changedFiles,createdAt,mergedAt,commits,statusCheckRollup >"$2"; then
-		fetch_failed=1
-	fi
+	bounded_read "$BOUND_ONE_REQUEST" "$2" \
+		gh pr view "$1" --repo "$repo" \
+		--json comments,additions,deletions,changedFiles,createdAt,mergedAt,commits,statusCheckRollup
 }
 
 # --- extraction helpers ---------------------------------------------------------
@@ -808,7 +904,11 @@ collect_issue() { # number state created closed risk-band
 # --- selection ------------------------------------------------------------------
 
 issue_side_repo "$work/repo.json"
-((fetch_failed == 0)) || die "repository could not be resolved (gh exit $fetch_failed)"
+if ((fetch_timed_out)); then
+	die 'repository could not be resolved: the call exceeded its network bound'
+elif ((fetch_failed)); then
+	die "repository could not be resolved (gh exit $fetch_failed)"
+fi
 repo=$(jq -r '.nameWithOwner' "$work/repo.json")
 owner=${repo%/*}
 name=${repo#*/}
@@ -830,7 +930,11 @@ else
 fi
 
 issue_side_search "$query" "$work/search.json"
-((fetch_failed == 0)) || die "selection read failed (gh exit $fetch_failed)"
+if ((fetch_timed_out)); then
+	die 'selection read failed: the call exceeded its network bound'
+elif ((fetch_failed)); then
+	die "selection read failed (gh exit $fetch_failed)"
+fi
 search_json=$(cat "$work/search.json")
 
 # Epic-labelled issues sit outside the status state machine and are excluded
