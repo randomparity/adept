@@ -338,13 +338,17 @@ read_comment() {
 	case $comment_id in '' | *[!0-9]*) fail 'comment creation returned an invalid identity' ;; esac
 	endpoint="/repos/$repo/issues/comments/$comment_id"
 	run_gh "$BOUND_SINGLE" api --hostname github.com "$endpoint" || api_status=$?
-	case $api_status in
-	0) ;;
-	124)
-		fail "comment readback exceeded its ${BOUND_SINGLE}s bound; the annotation was posted but could not be verified"
-		;;
-	*) fail 'comment readback failed' ;;
-	esac
+	if [ "$api_status" -ne 0 ]; then
+		# The comment exists and this run cannot prove it does; naming it is what
+		# keeps the operator from posting a second one looking for the first.
+		printf 'publish-forge-review: posted but unverified comment: %s\n' "$comment_url" >&2
+		case $api_status in
+		124)
+			fail "comment readback exceeded its ${BOUND_SINGLE}s bound; the annotation was posted but could not be verified"
+			;;
+		*) fail 'comment readback failed' ;;
+		esac
+	fi
 	jq -e --rawfile expected "$body" '.body == $expected' "$gh_capture" >/dev/null ||
 		fail 'comment readback did not match the checked body'
 	rm -f -- "$gh_capture" ||

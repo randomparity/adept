@@ -484,6 +484,23 @@ case_readback_rejects_unverified_comments() {
 			fail "$name" 'claimed verified publication after a bad readback'
 			return
 		fi
+		# A readback that did not answer names the comment it could not verify; a
+		# readback that answered with the wrong body is not that failure.
+		case $mode in
+		read-fail)
+			if ! grep -qF 'posted but unverified comment: https://github.com/acme/widgets/pull/42#issuecomment-73' \
+				"$REPO/error"; then
+				fail "$name" 'did not name the posted comment after an unanswered readback'
+				return
+			fi
+			;;
+		read-mismatch)
+			if grep -q 'posted but unverified comment:' "$REPO/error"; then
+				fail "$name" 'named a comment unverified when the readback answered'
+				return
+			fi
+			;;
+		esac
 	done
 	ok "$name"
 }
@@ -532,6 +549,11 @@ case_readback_bound_stops_verification() {
 	fi
 	if ! grep -q 'readback exceeded its 1s bound' "$REPO/error"; then
 		fail "$name" 'did not report the exceeded readback bound'
+		return
+	fi
+	if ! grep -qF 'posted but unverified comment: https://github.com/acme/widgets/pull/42#issuecomment-73' \
+		"$REPO/error"; then
+		fail "$name" 'did not name the posted comment it could not verify'
 		return
 	fi
 	if [ "$(post_count)" != 1 ]; then
