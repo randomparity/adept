@@ -9,14 +9,13 @@ mechanism, the bound, the write rule, and this caller's classification are all a
 
 `skills/return-to-town/scripts/publish-handoff` makes five network calls — `gh pr view`,
 `gh api /repos/<owner/name>/issues/<n>`, `git ls-remote origin`, `gh issue comment`, and
-`gh api /repos/<owner/name>/issues/comments/<id>` — and none carries a bound. Against an
-unreachable or black-holing remote any of them blocks forever, which hangs an unattended worker
-on the one command a hand-off is supposed to need.
+`gh api /repos/<owner/name>/issues/comments/<id>` — and none carries a bound, so an unreachable
+or black-holing remote hangs an unattended worker on the one command a hand-off is meant to need.
 
 Two of the five sit after the write. A call killed once `gh issue comment` created the comment but
-before its URL came back leaves a published block the script cannot see, which is a new and
-strictly weaker member of the post-write exit class `skills/return-to-town/SKILL.md` already
-reasons about: the script does not know whether the comment exists at all.
+before its URL came back leaves a published block the script cannot see: a new and strictly weaker
+member of the post-write exit class `skills/return-to-town/SKILL.md` already reasons about, where
+the script does not know whether the comment exists at all.
 
 ## Scope
 
@@ -42,6 +41,16 @@ than wrapper swaps: each reads its value back out of the stdout capture file. `j
 as an operand in place of a here-string; `git ls-remote`'s single line is re-read with `cat`; the
 readback response becomes a path (`response_file`) that `assert_stored_body` reads with
 `--rawfile` unchanged.
+
+**Test mechanism.** #384 names two ways to reach the bound without waiting 30 seconds — a FIFO
+the test blocks on, or an injectable bound — and asks for the choice to be stated. This takes a
+third: `sed` rewrites the one bound constant in a *copy* of the script, run through the fixture's
+existing `HELPER_PATH`. A FIFO is a file each case must create, open and tear down, and leaves a
+blocked writer to reason about when a case aborts. An injectable bound puts a permanent
+environment key in a shipped executable for a test's benefit, which an operator could set and
+collect false timeouts from. The copy adds no shipped surface and fails the case by name if the
+constant is renamed; its cost is that five cases exercise a copy whose only difference is the
+bound.
 
 **Classification.** Every timed-out call exits 2 and names itself. A timeout before the write adds
 "nothing was posted". A timeout on the write reports that it may or may not have landed. A timeout
@@ -77,8 +86,9 @@ behaviour suite under `just verify` and CI.
   wrapper in a `|| rc=$?` list, which suppresses `set -e` inside it, so a failing `sleep 0.1`
   spins the poll loop instead of aborting and reports a **false 124** on a call that was answering
   — the defect this convention exists to prevent. Reachable only on a host carrying `iconv`, `od`,
-  `awk` and `mktemp` but not `sleep`, which this repository does not target. Reported to #382's
-  owner as a mechanism/exclusion interaction rather than patched around here.
+  `awk` and `mktemp` but not `sleep`, which this repository does not target. Reported to the campaign
+  orchestrator as a mechanism/exclusion interaction — #382 is closed, so it has no live owner —
+  rather than patched around here.
 - The bound is not a deadline. Poll overhead accumulates and a 30-second bound fires at roughly 32.
 - PID reuse inside one poll interval, same-uid: the reference records it and no idiom on a Bash 3.2
   floor closes it.
@@ -121,7 +131,8 @@ above), and anything reachable only by an actor who can already write inside the
    reader does instead — including at the "Re-run it once" sentence itself, which is the line the
    completion criterion names and the one a reader reaches first.
 5. `require_commands`, `scripts/setup.sh`, and every file outside the Scope list are unchanged.
-6. `just verify` exits 0.
+6. `just verify` exits 0. The manifest bump is PATCH because no invocation's contract changes:
+   #384 offers only PATCH or MAJOR, and exit 2 gains a cause rather than a class.
 
 ## Validation
 
@@ -136,7 +147,7 @@ above), and anything reachable only by an actor who can already write inside the
   that does not, which is why the reference requires it be kept rather than reasoned away. The
   partial object is in the fake for that later site's benefit, not as evidence here.
 
-- **The timeout cases are deterministic rather than timing-dependent.** Mode: `focused-test` —
+- **The timeout cases are margin-bounded rather than timing-dependent.** Mode: `focused-test` —
   the five cases below, with both margins stated because a margin nobody wrote down is a flake
   nobody predicted. Each runs a copy of the helper whose single bound constant is rewritten to 2
   seconds against a call that sleeps 30 — **15x** on the bound firing — and that same rewritten

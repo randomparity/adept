@@ -1,16 +1,16 @@
 # Bound publish-handoff's five network calls — implementation plan
 
 **Goal.** Bound every network call `skills/return-to-town/scripts/publish-handoff` makes, so an
-unreachable remote produces a named exit 2 instead of an indefinite block, and so the two calls
-that sit after the write report honestly that a comment may exist.
+unreachable remote produces a named exit 2 rather than an indefinite block, and so the calls after
+the write report honestly what they could not verify.
 
 **Architecture.** One shipped Bash executable gains the `bounded_call` idiom recorded in
-`references/network-bounds.md` plus two thin local wrappers: `bounded_network_call` (capture slot
-in the existing scratch workspace; passes captured stderr through on every status but 124) and
+`references/network-bounds.md` plus two thin wrappers: `bounded_network_call` (capture slot in the
+existing scratch workspace; passes captured stderr through on every status but 124) and
 `timed_out` (an exceeded bound becomes the script's existing `fault`, exit 2). Each of the five
 sites stops capturing into a command substitution and reads its value back out of the stdout
-capture file. The suite gains five timeout cases over a fake `gh` that hangs, plus an opt-in
-`git` shim for the one `git` site.
+capture file. The suite gains five timeout cases over a fake `gh` that hangs, plus an opt-in `git`
+shim for the one `git` site.
 
 **Tech stack.** Bash, run under `/bin/bash` 3.2.57 on macOS and under whatever `env bash` resolves
 on CI Linux. `gh`, `jq`, `git`, `rg`, `shellcheck`, `shfmt`, `just`.
@@ -57,9 +57,8 @@ Transcribed from `CLAUDE.md` and the frozen scope record, values and all.
 | `tests/fixtures/return-to-town/publish-handoff-test.sh` | 40 behaviour cases over a fake `gh` and a real `git` | the same, plus two fixture helpers, four `gh` hang modes and five timeout cases |
 | `.claude-plugin/plugin.json` | `5.10.0` | `5.10.1` |
 
-No ownership transition. The idiom stays inside the one executable that uses it: ADR 0068 leaves
-extraction to whichever applier reaches the third repetition, and this applier is one of three
-running in parallel and cannot observe that count.
+No ownership transition: ADR 0068 leaves extraction to whichever applier reaches the third
+repetition, and this one is among three running in parallel that cannot observe that count.
 
 **Fixture margins, fixed for both tasks.** Every timeout case runs a copy of the helper whose one
 bound constant is rewritten to **2 seconds** against a fake that hangs for **30**: 15x on the
@@ -133,13 +132,12 @@ Steps 1–7 build the failing cases; step 8 onward implements against them.
    ```bash
    # The shipped bound is 30 seconds, which no test can wait for, so a case that has
    # to reach it runs a copy of the script with that one assignment rewritten to 2.
-   # The root gets a stub public-safety gate, not a symlink to the real one:
-   # scripts/check-public-safety.sh is a shim that execs
-   # $ROOT/skills/quest/scripts/check-public-safety computed from its own location,
-   # so a symlinked scripts/ resolves back here and finds no skills/quest --
-   # case_cdpath_does_not_steer_resolution stubs it for the same reason. The grep is
-   # the point: a renamed constant fails loudly here rather than silently restoring a
-   # 30-second wait nothing would ever hit.
+   # The root gets a stub public-safety gate, not a symlink: check-public-safety.sh
+   # is itself a shim execing $ROOT/skills/quest/scripts/check-public-safety computed
+   # from its own location, so a symlinked scripts/ resolves back here and finds no
+   # skills/quest -- case_cdpath_does_not_steer_resolution stubs it for that reason.
+   # The grep is the point: a renamed constant fails loudly here rather than silently
+   # restoring a 30-second wait nothing would ever hit.
    short_bound_helper() { # -- sets HELPER_PATH
    	local root copy
    	root="$CASE/bounded-root"
@@ -391,10 +389,9 @@ Defines the global `response_file`, read only within this task.
 
 Both cases take `Mode: focused-test` and go green under `just test publish-handoff`. Run after
 step 3 and before step 4, each waits out the fake's full 30-second sleep because the site is still
-unbounded, then fails: the write case at `expected exit 2, got 0` (the unbounded call eventually
-succeeds) and the readback case at `expected exit 2, got 1` (an empty stored body fails the gate
-assertions). A bare status is ambiguous, so both cases also assert stderr substrings no other
-failure produces.
+unbounded, then fails: the write case at `expected exit 2, got 0`, the readback case at
+`expected exit 2, got 1` (an empty stored body fails the gate assertions). A bare status is
+ambiguous, so both also assert stderr substrings no other failure produces.
 
 - Contract: *an exceeded bound on `gh issue comment` exits 2, reports the write as indeterminate,
   and prints no URL.* Case `case_comment_write_times_out`.
@@ -550,11 +547,11 @@ Steps 1–3 build the failing cases; step 4 onward implements against them.
     Every network call it makes is bounded per
     [network bounds](../../references/network-bounds.md), and a call that exceeds its bound exits 2
     naming itself. **A timeout is not a re-run condition.** The instruction above covers conditions
-    the helper checked and found false; a timeout checked nothing, and two of the bounded calls sit
-    after the comment is created — so a timed-out run may have published a complete block, may have
-    published nothing, and its diagnostic says which of the two it cannot rule out. Inspect the
-    issue. If a complete block is there the hand-off is published: proceed from it. If there is
-    none, re-run once. Never re-run on the timeout alone.
+    the helper checked and found false; a timeout checked nothing. Read which call the diagnostic
+    names: the three before the write report that nothing was posted, the readback names the
+    comment it created and could not verify, and only the write itself may or may not have landed.
+    Inspect the issue in every case. If a complete block is there the hand-off is published:
+    proceed from it. If there is none, re-run once. Never re-run on the timeout alone.
     ```
 
 11. Set `"version": "5.10.1"` in `.claude-plugin/plugin.json`.
