@@ -74,17 +74,18 @@ Adapt it to the call site. Seven properties are not adaptable.
   `mktemp -d` root (0700), removed on the caller's existing EXIT trap — never a `$$`-derived
   name in a shared temporary directory, where the capture is world-readable at the default
   umask and the `>` redirect will follow a pre-created symlink. This pins what all five callers
-  already do: `github.sh:73`, `cleared-dependencies.sh:78`, `collect-telemetry:101`,
-  `publish-handoff:169`, `publish-forge-review:203`.
+  already do: `github.sh`, `cleared-dependencies.sh`, `collect-telemetry`, `publish-handoff` and
+  `publish-forge-review` each allocate through `mktemp`. Named without line numbers, because
+  applying this convention moved every one of them.
 - **Capture to files, not to a command substitution.** `value=$(gh ...)` blocks in the parent
   and bounds nothing. A site that captures a value today reads it back out of the stdout file
-  instead. That is a restructuring, not a wrapper swap, and it is most of the work: twelve of
-  the eighteen invocations capture into a command substitution — `cleared-dependencies.sh:82`
-  and `github.sh:78` among them, and all five of `publish-handoff`'s. Only
-  `collect-telemetry`'s six already redirect to a file and are genuine wrapper swaps.
+  instead. That is a restructuring, not a wrapper swap, and it was most of the work: twelve of
+  the eighteen invocations captured into a command substitution, and only `collect-telemetry`'s
+  six already redirected to a file. Four callers have since been restructured. `github_run` in
+  `github.sh` is the last one that still captures into a substitution, and #394 tracks it.
 - **Keep the streams the site already keeps apart, apart.** `gh` writes non-fatal material to
   stderr while exiting 0, and two files where a site merged them once is what this preserves.
-  A site that deliberately merges a diagnostic it discards on success — `cleared-dependencies.sh:56-60`
+  A site that deliberately merges a diagnostic it discards on success — `cleared-dependencies.sh:102-104`
   records two — keeps doing that; the rule protects a captured *value*, not every stream.
 - **Discard the stdout capture on 124.** The writer was killed mid-stream, so a truncated
   capture is indistinguishable from a complete short one. A half-written JSONL page parses
@@ -114,7 +115,7 @@ script's exit status.
 - **30 seconds** for a call that issues one request.
 - **120 seconds** for a call that may issue more than one.
 
-The trigger is the request count, not the literal `--paginate` flag: `collect-telemetry:151`
+The trigger is the request count, not the literal `--paginate` flag: `collect-telemetry:257`
 reaches `--limit 200` through repeated requests without it. There is no per-request `gh` timeout,
 so such a call can only be bounded entire, and its effective per-page allowance shrinks as pages
 grow. Say so in a comment at the site, so the next reader does not read the number as per-request.
@@ -141,8 +142,10 @@ script that does not have one, and do not take a number that script already spen
 else; the point is that a timeout is distinguishable from an answer, not that every caller grows
 the same number.
 
-The table below is what each caller **is to adopt**, not what it does today: no executable is
-bounded yet, and until its applier lands, every call in it still blocks indefinitely.
+Four of the five callers below now do this. `publish-handoff` was bounded in #384,
+`publish-forge-review` and `cleared-dependencies.sh` in #386, `collect-telemetry` in #387.
+`github.sh` is not bounded yet, so every call through `github_run` still blocks indefinitely
+until #394 lands.
 
 | Caller | A timeout reports as |
 |---|---|
