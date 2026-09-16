@@ -473,7 +473,7 @@ resolve_head() {
 		timed_out "reading refs/heads/$head_branch from origin" 'nothing was posted'
 	[ "$rc" -eq 0 ] ||
 		fault "git ls-remote could not read refs/heads/$head_branch from origin; run this from the checkout whose origin is $repo"
-	ls_output=$(cat "$call_out") ||
+	ls_output=$(cat -- "$call_out") ||
 		fault 'the refs origin reported could not be read'
 	[ -n "$ls_output" ] ||
 		fail "origin has no refs/heads/$head_branch, which is the pull request's head branch"
@@ -552,7 +552,14 @@ post_comment() {
 		fail "the hand-off comment was not created on $repo#$issue"
 	# A scan that could not run is a fault, not a finding: the empty-candidate
 	# check below is the condition, and awk failing is not that condition.
-	candidate=$(awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }' "$call_out") ||
+	#
+	# Redirected rather than passed as an operand, which is still reading the value
+	# back out of the capture file and not a return to a command substitution. POSIX
+	# awk reads an operand shaped `name=value` as a variable assignment and takes
+	# stdin instead, so a relative TMPDIR whose first component is an identifier
+	# followed by `=` would silently scan this script's own stdin for the URL --
+	# a scan that could not run reporting as one that found nothing.
+	candidate=$(awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }' <"$call_out") ||
 		fault 'the comment-creation response could not be scanned for a URL'
 	[ -n "$candidate" ] ||
 		fail 'creating the hand-off comment returned no usable comment URL'

@@ -113,7 +113,11 @@ behaviour suite under `just verify` and CI.
 ## Threat model
 
 **Boundary inventory.** Widened, not added: two capture files per call, holding a GitHub
-response. No new entry point, argument, or environment key.
+response. No new entry point, argument, or environment key — but the captures also reach `jq` and
+`cat` as **operands**, so `TMPDIR` now shapes argv positions it did not before. That is the half a
+later applier would otherwise inherit unstated. `cat` takes `--`; `jq` errors into a fault on an
+option-shaped path; the one site where a bad operand fails *silently* is `awk`, which reads a
+`name=value` operand as a variable assignment and takes stdin instead, so that site redirects.
 
 **Actor model.** A local unprivileged user on a shared host is the untrusted party. GitHub and the
 operator running the script are trusted exactly as much as they already are.
