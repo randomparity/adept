@@ -55,7 +55,7 @@ a one-line manifest bump.
 | `skills/quest/scripts/publish-forge-review` | Composes, posts, verifies and disposes one `WORK:REVIEW` annotation; two unbounded `gh` calls | The same, with both calls bounded and a `bounded_call` + `run_gh` pair |
 | `skills/quest-log/assets/cleared-dependencies.sh` | The cleared-dependency recipe; one reading wrapper over `gh` plus three direct label writes, all unbounded | The same, with the wrapper bounded and taking a bound argument, and the three writes routed through it |
 | `tests/fixtures/quest/publish-forge-review-test.sh` | 22 registered cases | 24 — two timeout cases added |
-| `tests/fixtures/quest-log/cleared-dependencies-test.sh` | Sourced and direct-execution behaviour coverage | The same plus seven timeout assertions |
+| `tests/fixtures/quest-log/cleared-dependencies-test.sh` | Sourced and direct-execution behaviour coverage | The same plus eight timeout assertions |
 | `.claude-plugin/plugin.json` | `version: 5.10.0` | `version: 5.10.2`, reserved by the campaign |
 
 No file moves, no owner changes, no obsolete path to remove, no compatibility path retained.
@@ -313,6 +313,11 @@ returning 124 on a bound exceeded. Globals `cleared_dependency_bound_single` (30
   its stderr matches `verification unreadable for #101` and `did not answer`, and `$gh_log`
   records no restoring `--add-label status:blocked`: a call that did not answer is not evidence
   the write went wrong. Expected red: the same hang. Green: the same command.
+- **Contract: a bound exceeded on the best-effort restore at `:186` reports indeterminacy without
+  masking the primary error.** Mode: focused-test — `apply_cleared_dependency` returns 1, stderr
+  carries both `conflicting status write` and
+  `restoring #101 to status:blocked ... may or may not have been changed`, and `$gh_log` holds
+  exactly one edit line. Expected red: the same hang. Green: the same command.
 - **Contract: the manifest version is strictly greater than the base ref's.** Mode: focused-test —
   `just version-check`, expected to exit 0.
 - **Contract: a non-numeric bound is refused before the arithmetic evaluates it.** Mode:
@@ -491,16 +496,19 @@ returning 124 on a bound exceeded. Globals `cleared_dependency_bound_single` (30
    	esac
    ```
 
-9. In `tests/fixtures/quest-log/cleared-dependencies-test.sh`, add six hang arms to the fake `gh`
+9. In `tests/fixtures/quest-log/cleared-dependencies-test.sh`, add seven hang arms to the fake `gh`
    function, each a bare `exec sleep 30`: `hang-api` in the `api` branch, `hang-label` in the
    `label create` branch, `hang-edit` in the `issue edit` branch, `hang-blocker` in the
    `issue view` branch's `1)` arm, and, in that branch's `101)` arm, `hang-dependent` when
    `$ready_state` does not exist and `hang-verify` when it does — which is how that arm already
-   distinguishes the pre-write read at `:201` from the post-write read at `:241`. Record no pid
-   here: this fake is a shell function, so `$$` inside it is the *test's* pid, not the backgrounded
-   subshell's. Only `publish-forge-review-test.sh`, whose fake is an executable script, can record
-   its own pid meaningfully.
-10. Add the six sourced assertions the Verification inventory names, each preceded by
+   distinguishes the pre-write read at `:201` from the post-write read at `:241`. The seventh,
+   `hang-restore`, behaves as `conflict` everywhere except the `issue edit` branch, where it hangs
+   only when `$* == *'--add-label status:blocked'*`: that label is carried by `:186` and not by
+   `:234`, and the fake already discriminates on it at `:54`. Record no pid here: this fake is a
+   shell function, so `$$` inside it is the *test's* pid, not the backgrounded subshell's. Only
+   `publish-forge-review-test.sh`, whose fake is an executable script, can record its own pid
+   meaningfully.
+10. Add the seven sourced assertions the Verification inventory names, each preceded by
     `cleared_dependency_bound_single=1 cleared_dependency_bound_multi=1` and followed by a restore
     to 30 and 120, and each resetting `fake_mode=normal` afterwards. Place them after the existing
     scratch-file case, which is their nearest neighbour in subject.

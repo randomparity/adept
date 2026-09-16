@@ -99,7 +99,11 @@ Capture files are private and unguessable.
 **Accepted failure classes.**
 - `sleep` is not on `publish-forge-review:48`'s required-command list — adding it is #382's, per
   the frozen exclusions. It is POSIX-mandated and present wherever `gh` is; the list exists for
-  commands that are genuinely absent on a stock host, which is why ADR 0068 refuses `timeout`.
+  commands that are genuinely absent on a stock host, which is why ADR 0068 refuses `timeout`. The
+  shape if it were ever absent is worth naming: every site calls the wrapper as `… || rc=$?`, so
+  `set -e` is suspended inside the function body and a failing `sleep` does not abort the call —
+  the poll spins to its iteration limit and returns an immediate false 124, reported as a bound
+  exceeded on a call that never ran long.
 - The bound is approximate. Poll overhead accumulates, so a 30-second bound fires near 32.
 - PID reuse inside one poll interval, same-uid, as `references/network-bounds.md` records.
 - An indeterminate write leaves an artifact this script cannot verify. Reported, not resolved.
@@ -185,10 +189,13 @@ the orphan a caller killed mid-call leaves, which is today's exposure unchanged.
 - **`cleared-dependencies.sh` write indeterminacy at `:171` and `:234`.** Mode: focused-test —
   same file. Green: `apply_cleared_dependency` returns 1, stderr says the label may or may not
   exist / the labels may or may not have been changed, and no further `gh issue edit` is logged.
-- **`cleared-dependencies.sh` write indeterminacy at `:186`.** Mode: task-test-not-applicable —
-  the best-effort restore is reached only from the conflict and race paths, whose fakes must drive
-  the `:234` write to succeed to reach it, so a hang arm firing on `issue edit` could not say
-  which of the two writes it bounded.
+- **`cleared-dependencies.sh` write indeterminacy at `:186`.** Mode: focused-test — same file. The
+  best-effort restore is reached only from the conflict and race paths, which need the `:234`
+  write to succeed first, so the hang arm keys on `--add-label status:blocked` rather than on the
+  subcommand: that is the label only the restore carries, and the fake already discriminates on it
+  at `:54`. Green: `apply_cleared_dependency` returns 1, stderr carries both the conflict report
+  and `restoring #101 to status:blocked ... may or may not have been changed`, and `$gh_log`
+  records exactly one edit, the `status:ready` one that succeeded.
 - **Bound assignment per site.** Mode: task-test-not-applicable — the number a site passes is a
   constant read at the call; no executable observation distinguishes 30 from 120 without waiting
   the difference, and the suites deliberately override both. The table above and the site comments
