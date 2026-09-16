@@ -782,7 +782,19 @@ while kill -0 "$fifo_pid" 2>/dev/null && [ "$waited" -lt 30 ]; do
 	waited=$((waited + 1))
 done
 if kill -0 "$fifo_pid" 2>/dev/null; then
-	kill -9 "$fifo_pid" 2>/dev/null || :
+	# TERM before KILL, escalating only if TERM does not land. This teardown is
+	# the in-repo precedent ADR 0068 cites for the bound idiom, and that record
+	# forbids a bare kill -9 for a bounded network call, where KILL orphans the
+	# transport child TERM would have reaped. What blocks here is a scan rather
+	# than a transport, so the escalation reaps nothing extra; it keeps the
+	# precedent and the record the same shape.
+	kill -TERM "$fifo_pid" 2>/dev/null || :
+	grace=0
+	while kill -0 "$fifo_pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
+		sleep 0.1
+		grace=$((grace + 1))
+	done
+	kill -KILL "$fifo_pid" 2>/dev/null || :
 	wait "$fifo_pid" 2>/dev/null || :
 	printf 'public-safety-test: a FIFO scan target blocked the gate\n' >&2
 	exit 1
