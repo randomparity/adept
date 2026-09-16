@@ -50,32 +50,51 @@ call and not each request, as the reference requires.
 
 Both bounds are overridable by environment variable so the behaviour suite can exercise the
 timeout path without waiting a field value out; the issue names that as an accepted way to make
-the hang deterministic. Each value is validated as bare digits before it reaches any arithmetic,
-because bash evaluates a variable's contents recursively inside `$(( ))`, where a crafted array
-subscript executes commands.
+the hang deterministic. Each value is refused unless it is one to five bare decimal digits with
+no leading zero, checked before it reaches any arithmetic. All three clauses are load-bearing, as
+measured on bash 3.2.57: a leading zero makes `$(( ))` read `08` as octal and error, or `010` as
+8; six or more digits overflow when multiplied by ten and collapse the bound to zero, firing the
+kill immediately; and bash evaluates a variable's contents recursively inside `$(( ))`, where a
+crafted array subscript runs a command substitution. A refused value is a `die`.
 
 ### Where a timeout lands
 
 Nowhere new. A timed-out read sets `fetch_failed` non-zero exactly as a failed `gh` does, so the
-existing branches already carry `error` into every position the read feeds, and the emptied
-stdout capture means no `[[ -s $file ]]` branch can read a truncated capture as a present one.
-The two hard stops gain a distinct diagnostic naming the bound.
+existing branches already carry `error` into every tri-state metric position the read feeds, and
+the emptied stdout capture means no `[[ -s $file ]]` branch can read a truncated capture as a
+present one. The two hard stops gain a distinct diagnostic naming the bound.
+
+The bounded set is the positions rendered through `metric_json`. `cycle_in_flight` is outside it
+by the collector's existing design: it is a raw boolean companion to `cycle_hours`, not a
+tri-state position, and it already reports `false` beside `cycle_hours: "error"` at `main` for
+any failed `gh` timeline read. This change neither creates that nor alters it.
 
 ### Two delegated questions
 
-**No aggregate budget.** `RATE_LIMIT_STOP=5` already bounds the dead-remote case: five
-consecutive issues with a failed read stop processing, so the worst case before the stop is the
-selection reads plus five issues of bounded reads — minutes, not forever. Against a *healthy*
-remote a 200-issue run takes as long as it takes, which is not the hang this convention exists
-to end. A second budget would add a marker, a name and an envelope field for a case the existing
-circuit already covers.
+**No aggregate budget.** The honest worst case first, since `RATE_LIMIT_STOP` does not supply
+one: `consecutive_errors` resets at `:883` on any clean issue, so it bounds a *uniformly* failing
+remote and not an intermittently failing one. A 200-issue selection where four issues in five
+carry a hanging read can spend roughly 160 × (120 + 30 + 30) seconds ≈ 9 hours purely waiting out
+bounds. That is the measured answer to ADR 0068's delegated question, and it is not "minutes".
+
+The decision is still no aggregate budget, for a reason that does not depend on the circuit:
+this convention exists to convert an unbounded hang into a finite, progress-making run, and it
+does. Nine hours is bad; forever is a different category, and it is the one #379 is about. A run
+budget is not a smaller version of this change — it needs a new envelope marker (the issue is
+explicit that it cannot be called `rate_limited`), a minor bump under ADR 0030, and a renderer
+change in `skills/bards-tale/SKILL.md`, which is outside this run's permitted surface. It is
+reported as a follow-up candidate carrying the number above, not folded in here.
 
 **No `schema_version` bump.** ADR 0030 bumps minor for an addition and major for a removal,
 rename, re-type, re-nest, or a change to an existing sentinel's or envelope field's meaning.
 Nothing is added and no sentinel changes meaning: ADR 0030 already defines `error` as "a `gh`
 read failed (rate limit, 5xx, network — a fetch failure)", and a read that did not answer within
-its bound is a network fetch failure under that existing definition. `SCHEMA_VERSION` stays
-`1.6`.
+its bound is a network fetch failure under that existing definition. `rate_limited` is the one
+envelope field whose *occurrence* changes, and its meaning does not: it marks fetch errors
+stacked to `RATE_LIMIT_STOP`, a timeout is a fetch error, and before this change the same
+condition produced no document at all rather than a document with a different marker. A field
+that appears in runs that previously never finished is not a re-typed or re-meant field.
+`SCHEMA_VERSION` stays `1.6`.
 
 ### Not in this change
 
@@ -108,10 +127,11 @@ unbounded.
   recorded by ADR 0068; nothing here reads it as a deadline.
 - PID reuse inside one poll interval, same-uid. Accepted: `kill -0` is the only Bash 3.2 idiom
   available, and the reference records the window.
-- A whole run can still exceed any single bound. Accepted: bounded by `RATE_LIMIT_STOP` in the
-  failing case, and unbounded by design in the healthy case.
-- An operator who sets a bound override to a huge value weakens their own bound. Accepted: that
-  actor already controls `PATH` and argv.
+- A whole run can still take hours against an intermittently failing remote. Accepted with the
+  measured figure and the reasoning in "Two delegated questions" above; finite is the property
+  this change buys, and a run budget is a separate change reported as a follow-up candidate.
+- `cycle_in_flight` stays a raw `false` beside a `cycle_hours` of `"error"`. Accepted: it is not
+  a tri-state position, and this is `main`'s existing behaviour for any failed timeline read.
 - A call killed by the operator mid-run orphans what was running, exactly as today. Accepted and
   named by the reference as outside the convention.
 
@@ -131,10 +151,11 @@ The change adds one environment-variable entry point, which is the security trig
 - **Actor model.** Whoever sets these variables is the same actor who supplies argv and `PATH`
   and who can already replace `gh` outright; the script trusts that actor completely and always
   has. `gh`'s responses remain untrusted input.
-- **Control per boundary.** Each bound is rejected unless it is one or more bare decimal digits,
-  before it reaches `$(( ))` — the check that stops bash's recursive arithmetic evaluation from
-  running a command substitution hidden in an array subscript. On rejection the script `die`s,
-  naming the variable and the value it refused.
+- **Control per boundary.** Each bound is rejected unless it is one to five bare decimal digits
+  with no leading zero, before it reaches `$(( ))`. The digit rule stops bash's recursive
+  arithmetic evaluation from running a command substitution hidden in an array subscript; the
+  other two stop an octal reading and an overflow that would each silently change the bound
+  rather than refuse it. On rejection the script `die`s, naming the variable and the value.
 - **Explicitly out of scope.** Privilege escalation through these variables: not reachable, per
   the actor model. The content of `gh`'s captured stderr, relayed verbatim as before.
 
@@ -142,13 +163,17 @@ The change adds one environment-variable entry point, which is the security trig
 
 1. All six reads run under `bounded_call`; no `gh` invocation in the file is unbounded.
 2. The two multi-request sites carry the bound-is-not-per-request comment.
-3. A read killed at its bound lands as `error` in each metric position it feeds — never
-   `unknown(...)`, never a zero, never null — proved by a suite case.
-4. The two hard stops say the bound was exceeded, distinguishably from a `gh` nonzero exit.
-5. A non-numeric bound override is refused before any arithmetic.
-6. The emitted document is byte-comparable in shape to today's for every existing suite case,
-   and `schema_version` stays `1.6`.
+3. A read killed at its bound lands as `error` in each tri-state metric position it feeds — the
+   positions rendered through `metric_json`, never `unknown(...)`, never a zero, never null —
+   proved by a suite case naming those positions explicitly.
+4. The two hard stops say the bound was exceeded, and a `gh` nonzero exit says `gh exit <n>`
+   instead; a suite case proves each form excludes the other.
+5. A bound override that is not one to five digits without a leading zero is refused before any
+   arithmetic.
+6. Every assertion in the existing suite passes unmodified, and `schema_version` stays `1.6`.
 7. `.claude-plugin/plugin.json` is at `5.10.3`.
+8. The PR body states the aggregate-budget decision and the worst case it rests on, which is
+   where issue #387 asks for it.
 
 ## Validation
 

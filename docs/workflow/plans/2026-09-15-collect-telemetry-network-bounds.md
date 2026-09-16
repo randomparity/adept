@@ -15,9 +15,10 @@ branches on, so no metric-position logic changes.
 Design: `docs/workflow/specs/2026-09-15-collect-telemetry-network-bounds-design.md`.
 Failure model: that spec's `## Failure model`.
 
-Expected implementation size: 180–230 changed lines (M) — from the file map below: one fetch
-mechanism plus six wrapper swaps and two hard-stop diagnostics in the collector, four new
-scenarios in its suite, and one version field.
+Expected implementation size: 200–250 changed lines (M) — from the file map below: a bound
+validator, `bounded_call` and `bounded_read`, six wrapper swaps and two hard-stop diagnostics in
+the collector; three hang scenarios, three refusal cases and one mutual-exclusion assertion in
+its suite; and one version field.
 
 ## Global Constraints
 
@@ -59,6 +60,7 @@ Creates: nothing. Modifies: the three files above. Tests:
   own status: `gh`'s exit code, or `124`) and `fetch_timed_out` (`1` only for `124`).
 - `BOUND_ONE_REQUEST` / `BOUND_MANY_REQUESTS` — validated integers, defaulting to 30 and 120,
   overridable by `COLLECT_TELEMETRY_BOUND_ONE_REQUEST` / `COLLECT_TELEMETRY_BOUND_MANY_REQUESTS`.
+- `check_bound <variable-name> <value>` → returns 0, or `die`s naming the variable and value.
 - `fetch_err` — the one reused stderr capture path inside the existing `$work` root.
 
 Consumed from the existing file, each confirmed present at `main` `1c40c98`: `die()` at `:88`,
@@ -70,8 +72,9 @@ Consumed from the existing file, each confirmed present at `main` `1c40c98`: `di
 | Contract | Mode |
 |---|---|
 | A hung hard-stop read exits 1 with a bound diagnostic | `focused-test` — `collect-telemetry-test.sh`, new "bounded reads" scenarios. Red before the change: the run hangs instead of exiting. Green: `just test collect-telemetry` |
-| A hung per-issue read lands `error`, not `unknown`, in every position it feeds | `focused-test` — same suite, `FAKE_GH_HANG=api` scenario. Red: the run hangs. Green: same command |
-| A non-numeric bound override is refused | `focused-test` — same suite. Red: the variable is unread, so the run succeeds instead of exiting non-zero. Green: same command |
+| A hung per-issue read lands `error`, not `unknown`, in every tri-state position it feeds | `focused-test` — same suite, `FAKE_GH_HANG=api` scenario. Red: the run hangs. Green: same command |
+| A bound override that is not one to five digits without a leading zero is refused | `focused-test` — same suite, three cases. Red: the variable is unread, so the run succeeds instead of exiting non-zero. Green: same command |
+| The two hard-stop forms exclude each other | `focused-test` — same suite; the existing selection-failure scenario gains an assertion that a `gh` nonzero exit prints `gh exit ` and *not* the bound clause. Red: the assertion is absent, so nothing proves the one-way substring is not the whole story. Green: same command |
 | The envelope is unchanged | `focused-test` — the suite's existing assertions, unmodified. Green: same command |
 | `version` at `5.10.3` | `task-test-not-applicable` — `scripts/check-plugin-version.sh` is the repository gate for this field; a second assertion would restate it |
 
@@ -166,31 +169,70 @@ assert_doc 'a span the timed-out read did not feed keeps its value' \
 	'([.metrics.issues[] | select(.number == 301)][0].lead_time_hours) == 5'
 assert_contains 'exceeded its 1s network bound' "$SCRATCH/stderr"
 
-PATH="$SCRATCH/bin:$PATH" FAKE_DIR="$SCRATCH/fake" CALL_LOG="$SCRATCH/calls" \
-	COLLECT_TELEMETRY_BOUND_ONE_REQUEST=abc \
-	"$collector" 'status:ready' >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
-	fail 'a non-numeric bound override must exit non-zero'
-assert_contains 'COLLECT_TELEMETRY_BOUND_ONE_REQUEST' "$SCRATCH/stderr"
+# The three refusals, each a value that would otherwise change the bound
+# silently rather than be rejected: a non-digit that $(( )) would evaluate, a
+# leading zero it would read as octal, and a six-digit value that overflows when
+# multiplied by ten and collapses the bound to zero. search.json is written back
+# first so that, before the collector reads the variable at all, this case
+# reaches a clean exit 0 -- which is the red.
+printf '%s\n' '[]' >"$SCRATCH/fake/search.json"
+for bad in abc 08 100000; do
+	PATH="$SCRATCH/bin:$PATH" FAKE_DIR="$SCRATCH/fake" CALL_LOG="$SCRATCH/calls" \
+		COLLECT_TELEMETRY_BOUND_ONE_REQUEST="$bad" \
+		"$collector" 'status:ready' >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
+		fail "a bound override of '$bad' must exit non-zero"
+	assert_contains 'COLLECT_TELEMETRY_BOUND_ONE_REQUEST' "$SCRATCH/stderr"
+done
 ```
 
-**4. Confirm red, twice, in the two shapes this change has.** The override scenario reds as an
-ordinary assertion; the three hang scenarios red as the hang that is the defect itself, so the
-red is observed rather than waited out:
+Then, in the **existing** `# --- scenario: selection failure aborts ---` block, add one line
+after the `assert_contains 'selection read failed' "$SCRATCH/stderr"` line, so the two hard-stop
+forms are proved to exclude each other rather than only to share a prefix:
+
+```bash
+assert_contains 'selection read failed (gh exit ' "$SCRATCH/stderr"
+if rg --no-config -qF 'exceeded its network bound' "$SCRATCH/stderr"; then
+	fail 'a gh nonzero exit must not be reported as a bound exceeded'
+fi
+```
+
+**4. Confirm red, in the two shapes this change has.** The two shapes need two procedures,
+because a suite that hangs and a suite that fails an assertion are not distinguishable by exit
+status alone.
+
+*The three hang contracts.* Their red is the hang itself, so it is discriminated against a
+measured baseline rather than against a guess. First measure the baseline with the scenarios
+absent — `git stash && time bash tests/fixtures/bards-tale/collect-telemetry-test.sh && git stash
+pop`; on the development host that is about 85 seconds, exit 0. Then, with the scenarios present
+and the collector unchanged:
 
 ```sh
-bash tests/fixtures/bards-tale/collect-telemetry-test.sh >/tmp/red.log 2>&1 &
+bash tests/fixtures/bards-tale/collect-telemetry-test.sh >"$TMPDIR/red.log" 2>&1 &
 suite=$!
-sleep 20
-if kill -0 "$suite" 2>/dev/null; then echo 'red: suite still running'; fi
+sleep 240
+if kill -0 "$suite" 2>/dev/null; then echo 'red: suite has outlived 3x its baseline'; fi
 kill -TERM "$suite" 2>/dev/null || :
 wait "$suite" 2>/dev/null || :
-pkill -f 'sleep 300' || :
 ```
 
-Expect `red: suite still running` — the unbounded `gh repo view` is blocked on the fake's sleep
-with nothing to end it. Then comment out the three hang scenarios, run
-`just test collect-telemetry` bare, and expect exit 1 naming
-`a non-numeric bound override must exit non-zero`. Uncomment them before step 5.
+Expect `red: suite has outlived 3x its baseline` — the unbounded `gh repo view` is blocked on the
+fake with nothing to end it. Substitute your own measured baseline if it differs; the number to
+beat is that measurement, not 240. Terminating the suite leaves up to one orphaned `sleep 300`
+per hang scenario reached, which exit on their own within five minutes; do not reach for a
+host-wide `pkill`, which would also kill an unrelated process on a shared machine.
+
+*The override contract.* Temporarily delete the three hang scenarios — everything from the
+`# --- scenario: bounded reads ---` banner down to the
+`printf '%s\n' '[]' >"$SCRATCH/fake/search.json"` line that opens the refusal loop — and run
+`just test collect-telemetry` bare. Expect exit 1 naming `a bound override of 'abc' must exit
+non-zero`: the collector does not read the variable yet, so it succeeds. Restore the scenarios
+before step 5.
+
+*The mutual-exclusion guard.* This one has no pre-implementation red, because it guards the
+message that already exists at `main` against the branch this change adds. Bite it with a
+controlled fault after step 9 instead: make the `elif ((fetch_failed))` arm of the selection hard
+stop print the bound wording too, run `just test collect-telemetry`, expect exit 1 naming `a gh
+nonzero exit must not be reported as a bound exceeded`, then revert the fault.
 
 **5. Declare and validate the bounds.** In `skills/bards-tale/scripts/collect-telemetry`,
 immediately after the `for tool in gh jq` loop, insert:
@@ -199,21 +241,31 @@ immediately after the `for tool in gh jq` loop, insert:
 # Network bounds, per references/network-bounds.md: 30 seconds for a call that
 # issues one request, 120 for one that may issue more. Overridable so the
 # behaviour suite reaches the timeout path without waiting a field value out.
-# Validated as bare digits before either value reaches arithmetic: bash
-# evaluates a variable's contents recursively inside $(( )), where a crafted
-# array subscript runs a command substitution.
+#
+# All three clauses of the check are load-bearing, and each was measured on
+# bash 3.2.57 rather than assumed. Non-digits: $(( )) evaluates a variable's
+# contents recursively, so a crafted array subscript there runs a command
+# substitution. A leading zero: $(( )) reads 08 as octal and errors, and 010 as
+# 8 -- a bound changed silently rather than refused. More than five digits:
+# bound * 10 overflows, the poll loop is skipped, and the bound collapses to
+# zero, killing every call immediately. ${#2} is a string length, so the length
+# test never evaluates the value.
+check_bound() { # variable-name value
+	local digits=0
+	case $2 in
+	'' | 0* | *[!0-9]*) digits=0 ;;
+	*) digits=1 ;;
+	esac
+	if ((digits)) && ((${#2} <= 5)); then
+		return 0
+	fi
+	die "$1 must be 1 to 99999 whole seconds, not '$2'"
+}
+
 BOUND_ONE_REQUEST=${COLLECT_TELEMETRY_BOUND_ONE_REQUEST:-30}
 BOUND_MANY_REQUESTS=${COLLECT_TELEMETRY_BOUND_MANY_REQUESTS:-120}
-case $BOUND_ONE_REQUEST in
-'' | *[!0-9]*)
-	die "COLLECT_TELEMETRY_BOUND_ONE_REQUEST must be whole seconds, not '$BOUND_ONE_REQUEST'"
-	;;
-esac
-case $BOUND_MANY_REQUESTS in
-'' | *[!0-9]*)
-	die "COLLECT_TELEMETRY_BOUND_MANY_REQUESTS must be whole seconds, not '$BOUND_MANY_REQUESTS'"
-	;;
-esac
+check_bound COLLECT_TELEMETRY_BOUND_ONE_REQUEST "$BOUND_ONE_REQUEST"
+check_bound COLLECT_TELEMETRY_BOUND_MANY_REQUESTS "$BOUND_MANY_REQUESTS"
 ```
 
 **6. Allocate the stderr capture.** Immediately after the `trap cleanup EXIT` line, insert:
@@ -370,7 +422,16 @@ fi
 
 **11. Bump the plugin version.** Set `.claude-plugin/plugin.json`'s `version` to `5.10.3`.
 
-**12. Confirm green.** Run, bare and in order:
+**12. State the aggregate-budget decision in the PR body.** Issue #387 asks for this answer in
+the PR, not only in a design file, so it is a deliverable of this task rather than shipping
+prose. The PR body must carry, in its own short section: that there is no aggregate budget; that
+`RATE_LIMIT_STOP` bounds only a uniformly failing remote because `consecutive_errors` resets at
+`collect-telemetry:883`; the resulting worst case of roughly 9 hours for a 200-issue selection
+with four issues in five carrying a hanging read; and that a run budget is reported as a
+follow-up candidate because it needs a new envelope marker, a minor bump under ADR 0030, and a
+renderer change in `skills/bards-tale/SKILL.md`, which this run may not touch.
+
+**13. Confirm green.** Run, bare and in order:
 
 - `just test collect-telemetry` — expect `ok tests/fixtures/bards-tale/collect-telemetry-test.sh`
   and `test: 1 suites passed`, exit 0.
@@ -381,12 +442,14 @@ fi
 
 ### Acceptance criteria
 
-- `rg --no-config -n '\bgh ' skills/bards-tale/scripts/collect-telemetry` returns exactly the six
-  `bounded_read` invocations, the `for tool in gh jq` preflight, and comment lines — no bare `gh`
-  call remains.
+- `rg --no-config -c 'if ! gh ' skills/bards-tale/scripts/collect-telemetry` exits 1 with no
+  match: that idiom is exactly the six old unbounded forms, and nothing else in the file uses it.
+- `rg --no-config -c 'bounded_read "' skills/bards-tale/scripts/collect-telemetry` reports 6 —
+  one call site per fetch function.
 - `issue_side_search` and `issue_side_timeline` each carry the "bounds the whole call and never
   one request" comment.
 - The suite's existing envelope assertion still requires `schema_version == "1.6"` and passes.
+- The PR body carries the aggregate-budget section step 12 specifies.
 - `just verify` exits 0.
 
 ### Rollback
