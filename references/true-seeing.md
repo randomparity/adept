@@ -87,7 +87,10 @@ requests the net comparison and is correct for reading content, on any branch ho
 many merges it carries. Reach for the file's content at the head commit instead only
 when you need one file's exact state at a known commit, not a reviewable diff:
 
-`gh api repos/<owner>/<repo>/contents/<path>?ref=<head-sha>`
+`gh api repos/<owner>/<repo>/contents/<path>?ref=<head-sha> -H "Accept: application/vnd.github.raw"`
+
+The `raw` accept header matters: without it the endpoint returns a JSON metadata envelope with
+the content base64-encoded inside it, not the file text the sentence above promises.
 
 Take the head SHA the same way [the commit-bound merge gate](merge-gate.md) does —
 from `git ls-remote` or `headRefOid` read at that moment, never from a patch's own
