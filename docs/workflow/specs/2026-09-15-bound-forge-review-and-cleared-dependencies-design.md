@@ -162,12 +162,12 @@ abandoned, the function **returns 0 with an empty capture**, and the child it la
 The caller reads a successful call that answered nothing — the precise reading this convention
 exists to prevent — while the process the bound exists to reap runs on. `publish-forge-review`
 validates its two constants separately rather than their concatenation, in which a leading zero on
-the second value would be invisible. A merely non-numeric value would otherwise evaluate to 0 and return 124 on
-every call, which is a denial an actor with environment control already has by other means.
-Capture files
-are allocated by `mktemp` at mode 0600 with unguessable names, never a `$$`-derived path in a
-shared directory — the reference's first non-adaptable property, which exists precisely to keep
-the `>` redirect from following a pre-created symlink. Response bodies are unchanged in handling:
+the second value would be invisible. A merely non-numeric value would otherwise evaluate to 0 and
+return 124 on every call, which is a denial an actor with environment control already has by other
+means. Capture files are allocated by `mktemp` at mode 0600 with unguessable names, never a
+`$$`-derived path in a shared directory — the reference's first non-adaptable property, which
+exists precisely to keep the `>` redirect from following a pre-created symlink. Response bodies
+are unchanged in handling:
 `publish-forge-review` still compares them with `jq -e`, and `cleared-dependencies.sh` still runs
 them through `cleared_dependency_safe_text` before any diagnostic is printed. On 124 the stdout
 capture is emptied by the mechanism, so no half-written page is parsed.
@@ -231,13 +231,7 @@ the orphan a caller killed mid-call leaves, which is today's exposure unchanged.
   at `:54`. Green: `apply_cleared_dependency` returns 1, stderr carries both the conflict report
   and `restoring #101 to status:blocked ... may or may not have been changed`, and `$gh_log`
   records exactly one edit, the `status:ready` one that succeeded.
-- **Bound assignment per site.** Mode: focused-test — both files take two independently settable
-  bounds, so both suites set them to *different* values (1 and 2) and every bound-exceeded case
-  asserts which number reached its diagnostic. A site passing the single-request bound where the
-  table above requires the multi-request one, or the reverse, turns the suite red. Green:
-  `just test publish-forge-review cleared-dependencies`. `publish-forge-review` originally took
-  one override feeding both constants, which made the distinction structurally unobservable; that
-  was a shape choice rather than a necessity, so it was split into
-  `PUBLISH_FORGE_REVIEW_BOUND_MULTI` and `PUBLISH_FORGE_REVIEW_BOUND_SINGLE` to match the sibling
-  rather than deferred to the campaign.
+- **Bound assignment per site.** Mode: focused-test — every bound-exceeded case above asserts
+  which of the two numbers reached its diagnostic, under the split overrides Test determinism
+  names. Green: `just test publish-forge-review cleared-dependencies`.
 - **`.claude-plugin/plugin.json` version.** Mode: focused-test — `just version-check`.
