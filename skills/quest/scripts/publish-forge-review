@@ -96,16 +96,19 @@ bounded_call() { # seconds out-file err-file command...
 # and remove; its stderr is forwarded to this script's own, which is where gh's
 # stderr went before either call was captured at all.
 run_gh() { # seconds gh-args...
-	local bound=$1 err rc=0
+	local bound=$1 err rc=0 forward_status=0
 	shift
 	gh_capture=$(mktemp) || fail 'cannot create a gh stdout capture'
 	err=$(mktemp) || fail 'cannot create a gh stderr capture'
 	bounded_call "$bound" "$gh_capture" "$err" gh "$@" || rc=$?
 	if [ -s "$err" ]; then
-		cat "$err" >&2 || fail 'cannot read a gh stderr capture'
+		cat "$err" >&2 || forward_status=$?
 	fi
+	# Removal precedes the forwarding verdict so a failed read still frees the
+	# capture: fail() reaches gh_capture, and this file is local to run_gh.
 	rm -f -- "$err" ||
-		printf 'publish-forge-review: retained gh capture: %s\n' "$err" >&2
+		printf 'publish-forge-review: retained gh stderr capture: %s\n' "$err" >&2
+	[ "$forward_status" -eq 0 ] || fail 'cannot read a gh stderr capture'
 	return "$rc"
 }
 
