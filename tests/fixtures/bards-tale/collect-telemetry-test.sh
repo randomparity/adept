@@ -52,6 +52,30 @@ printf '%s\n' '#!/usr/bin/env bash' >"$SCRATCH/bin/gh"
 cat >>"$SCRATCH/bin/gh" <<'FAKE_GH'
 set -euo pipefail
 printf 'gh %s\n' "$*" >>"${CALL_LOG:?}"
+# A read the suite wants to see bounded. Matched on the subcommand, or on the
+# first two words where one subcommand is not enough: both PR-side reads arrive
+# as `pr`, so `pr list` and `pr view` are only separable as a pair.
+#
+# FAKE_GH_PARTIAL is what makes the hang able to tell `bounded_call`'s
+# capture-emptying line from its absence. A real gh killed at its bound has
+# usually written part of a response already, and a truncated capture is
+# non-empty, so every `[[ -s $file ]]` guard downstream reads it as a present
+# answer. A hang that writes nothing leaves the capture empty either way and
+# proves nothing about that line. The prefix goes out from a subshell, which
+# flushes on exit -- `exec` replaces the image and would discard a buffered
+# write.
+#
+# `exec`, so the bound's TERM reaches this process directly and leaves no orphan
+# behind; a plain child would be reparented. The duration never costs the suite
+# anything -- the run waits for the bound, not for the sleep -- so it is set far
+# above any bound the suite uses rather than tuned close to one, which is the
+# flake in both directions.
+if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
+	if [[ -n ${FAKE_GH_PARTIAL:-} ]]; then
+		(printf '%s' "$FAKE_GH_PARTIAL")
+	fi
+	exec sleep 300
+fi
 serve() {
 	if [[ -e $1 ]]; then
 		cat "$1"
@@ -165,6 +189,10 @@ run_collector() { # selector [prior-sidecar]
 			PATH="$SCRATCH/bin:$PATH" \
 				CALL_LOG="$CALL_LOG" \
 				FAKE_DIR="$FAKE_DIR" \
+				FAKE_GH_HANG="${FAKE_GH_HANG:-}" \
+				FAKE_GH_PARTIAL="${FAKE_GH_PARTIAL:-}" \
+				COLLECT_TELEMETRY_BOUND_ONE_REQUEST="${COLLECT_TELEMETRY_BOUND_ONE_REQUEST:-}" \
+				COLLECT_TELEMETRY_BOUND_MANY_REQUESTS="${COLLECT_TELEMETRY_BOUND_MANY_REQUESTS:-}" \
 				"$collector" "$1" "$prior_args" 2>"$SCRATCH/stderr"
 		) || return 1
 	else
@@ -172,6 +200,10 @@ run_collector() { # selector [prior-sidecar]
 			PATH="$SCRATCH/bin:$PATH" \
 				CALL_LOG="$CALL_LOG" \
 				FAKE_DIR="$FAKE_DIR" \
+				FAKE_GH_HANG="${FAKE_GH_HANG:-}" \
+				FAKE_GH_PARTIAL="${FAKE_GH_PARTIAL:-}" \
+				COLLECT_TELEMETRY_BOUND_ONE_REQUEST="${COLLECT_TELEMETRY_BOUND_ONE_REQUEST:-}" \
+				COLLECT_TELEMETRY_BOUND_MANY_REQUESTS="${COLLECT_TELEMETRY_BOUND_MANY_REQUESTS:-}" \
 				"$collector" "$1" 2>"$SCRATCH/stderr"
 		) || return 1
 	fi
@@ -1007,6 +1039,166 @@ if jq -e . >/dev/null 2>&1 <"$SCRATCH/stdout"; then
 	fail 'an aborted collection emitted a parseable document'
 fi
 assert_contains 'selection read failed' "$SCRATCH/stderr"
+# One-way is not enough: the bound wording must be absent here, or the two hard
+# stops would share a prefix and prove nothing about telling them apart.
+assert_contains 'selection read failed (gh exit ' "$SCRATCH/stderr"
+if rg --no-config -qF 'exceeded its network bound' "$SCRATCH/stderr"; then
+	fail 'a gh nonzero exit must not be reported as a bound exceeded'
+fi
+
+# --- scenario: bounded reads ---------------------------------------------------
+# The overrides put the timeout path within a second, so the hang the fake
+# supplies is observed rather than waited out. The scenario above removed
+# search.json, which the first case here does not reach.
+PATH="$SCRATCH/bin:$PATH" FAKE_DIR="$SCRATCH/fake" CALL_LOG="$SCRATCH/calls" \
+	FAKE_GH_HANG=repo COLLECT_TELEMETRY_BOUND_ONE_REQUEST=1 \
+	COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=1 \
+	"$collector" 'status:ready' >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
+	fail 'a repository read that exceeded its bound must exit non-zero'
+if jq -e . >/dev/null 2>&1 <"$SCRATCH/stdout"; then
+	fail 'an aborted collection emitted a parseable document'
+fi
+assert_contains 'exceeded its 1s network bound' "$SCRATCH/stderr"
+assert_contains 'repository could not be resolved: the call exceeded its network bound' \
+	"$SCRATCH/stderr"
+
+printf '%s\n' '[]' >"$SCRATCH/fake/search.json"
+PATH="$SCRATCH/bin:$PATH" FAKE_DIR="$SCRATCH/fake" CALL_LOG="$SCRATCH/calls" \
+	FAKE_GH_HANG=search COLLECT_TELEMETRY_BOUND_ONE_REQUEST=1 \
+	COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=1 \
+	"$collector" 'status:ready' >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
+	fail 'a selection read that exceeded its bound must exit non-zero'
+assert_contains 'selection read failed: the call exceeded its network bound' "$SCRATCH/stderr"
+
+# A per-issue read that exceeded its bound answered nothing, so every position it
+# feeds is error. phase_build_hours is the sharp one: a timeline read that
+# succeeds and returns no events yields unknown(no-events) there, so "error" is
+# what separates a read that answered emptily from one that did not answer. The
+# search-derived span stays a number, proving the timeout reaches only the
+# positions the timed-out read fed.
+rm -f "$SCRATCH"/fake/tl-*.json "$SCRATCH"/fake/issue-*.json \
+	"$SCRATCH"/fake/prlist-*.json "$SCRATCH"/fake/pr-*.json
+jq -nc '[{number: 301, state: "closed", createdAt: "2026-07-01T09:00:00Z",
+	closedAt: "2026-07-01T14:00:00Z", labels: []}]' >"$SCRATCH/fake/search.json"
+printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-301.json"
+printf '%s\n' '[]' >"$SCRATCH/fake/prlist-301.json"
+FAKE_GH_HANG=api
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=1
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=1
+if ! run_collector 'status:ready'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'a per-issue read that exceeded its bound must not abort the run'
+fi
+FAKE_GH_HANG=
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=
+assert_doc 'every position a timed-out timeline read feeds is error, never unknown' \
+	'([.metrics.issues[] | select(.number == 301)][0]) |
+	[.cycle_hours, .phase_build_hours, .phase_review_hours, .reopen_count,
+	 .triage_latency_hours, .queue_wait_hours, .blocked_dwell_hours,
+	 .human_response_hours, .rework_bounces, .review_drift_hours]
+	| all(. == "error")'
+assert_doc 'a span the timed-out read did not feed keeps its value' \
+	'([.metrics.issues[] | select(.number == 301)][0].lead_time_hours) == 5'
+assert_contains 'exceeded its 1s network bound' "$SCRATCH/stderr"
+
+# A timed-out comments read reaches error by a different route, and that route
+# is the single line in bounded_call which empties the stdout capture on 124.
+# These eight positions are guarded by `[[ -s $blob ]]` and fall through to
+# unknown defaults, not to error.
+#
+# The hang therefore writes a truncated response before blocking, which is what
+# a real gh killed mid-stream leaves behind. Without the emptying line that
+# prefix stays on disk, `[[ -s $blob ]]` is true, and the collector mines a
+# partial capture -- reporting a timeout as a genuinely absent source, which is
+# the defect the convention exists to prevent. A hang that wrote nothing would
+# leave the capture empty either way and prove nothing about that line.
+#
+# The timeline read answers normally here, so cycle_hours is the control.
+rm -f "$SCRATCH"/fake/tl-*.json "$SCRATCH"/fake/issue-*.json \
+	"$SCRATCH"/fake/prlist-*.json "$SCRATCH"/fake/pr-*.json
+jq -nc '[{number: 302, state: "closed", createdAt: "2026-07-01T09:00:00Z",
+	closedAt: "2026-07-01T14:00:00Z", labels: []}]' >"$SCRATCH/fake/search.json"
+jq -nc '[{event: "labeled", label: {name: "status:in-progress"},
+	created_at: "2026-07-01T10:00:00Z"},
+	{event: "closed", created_at: "2026-07-01T14:00:00Z"}]' >"$SCRATCH/fake/tl-302.json"
+printf '%s\n' '[]' >"$SCRATCH/fake/prlist-302.json"
+FAKE_GH_HANG=issue
+FAKE_GH_PARTIAL='{"comments":[{"body":"<!-- WORK:SCOPE -->\ncomplexity: L'
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=1
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=1
+if ! run_collector 'status:ready'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'a timed-out comments read must not abort the run'
+fi
+FAKE_GH_HANG=
+FAKE_GH_PARTIAL=
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=
+assert_doc 'every position a timed-out comments read feeds is error, never unknown' \
+	'([.metrics.issues[] | select(.number == 302)][0]) |
+	[.scope_estimate, .scope_complete, .trajectory_phase, .trajectory_branch,
+	 .trajectory_pr, .trajectory_guardrails, .trajectory_surprises,
+	 .divination_complexity] | all(. == "error")'
+assert_doc 'the timeline read that did answer keeps its value' \
+	'([.metrics.issues[] | select(.number == 302)][0].cycle_hours) == 4'
+
+# The two PR-side reads. Both arrive at the fake as `pr`, so they are selected
+# as two-word hangs. Their metric positions are already covered by non-timeout
+# failures elsewhere in this suite -- what these two cases hold is the wiring:
+# without them, reverting either fetch function to its old unbounded form
+# leaves the whole suite green.
+rm -f "$SCRATCH"/fake/tl-*.json "$SCRATCH"/fake/issue-*.json \
+	"$SCRATCH"/fake/prlist-*.json "$SCRATCH"/fake/pr-*.json
+jq -nc '[{number: 303, state: "closed", createdAt: "2026-07-01T09:00:00Z",
+	closedAt: "2026-07-01T14:00:00Z", labels: []}]' >"$SCRATCH/fake/search.json"
+printf '%s\n' '[]' >"$SCRATCH/fake/tl-303.json"
+printf '%s\n' '{"comments":[]}' >"$SCRATCH/fake/issue-303.json"
+FAKE_GH_HANG='pr list'
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=1
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=1
+if ! run_collector 'status:ready'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'a timed-out PR candidate read must not abort the run'
+fi
+FAKE_GH_HANG=
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=
+assert_doc 'a timed-out PR candidate read leaves the PR-derived positions at error' \
+	'([.metrics.issues[] | select(.number == 303)][0]) |
+	[.pr, .review_iterations, .loc_actual, .pr_lifespan_hours,
+	 .ci_wall_hours] | all(. == "error")'
+assert_contains 'exceeded its 1s network bound' "$SCRATCH/stderr"
+
+printf '%s\n' '[{"number":404,"body":"closes #303"}]' >"$SCRATCH/fake/prlist-303.json"
+FAKE_GH_HANG='pr view'
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=1
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=1
+if ! run_collector 'status:ready'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'a timed-out PR metadata read must not abort the run'
+fi
+FAKE_GH_HANG=
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=
+assert_doc 'a timed-out PR metadata read resolves the PR but errors every span it feeds' \
+	'([.metrics.issues[] | select(.number == 303)][0]) |
+	.pr == 404 and ([.review_iterations, .loc_actual, .pr_lifespan_hours,
+	 .merge_lag_hours, .build_private_hours, .ci_wall_hours]
+	 | all(. == "error"))'
+assert_contains 'exceeded its 1s network bound' "$SCRATCH/stderr"
+
+# The three refusals, each a value that would otherwise change the bound
+# silently rather than be rejected: a non-digit that $(( )) would evaluate, a
+# leading zero it would read as octal, and a six-digit value above the cap.
+printf '%s\n' '[]' >"$SCRATCH/fake/search.json"
+for bad in abc 08 100000; do
+	PATH="$SCRATCH/bin:$PATH" FAKE_DIR="$SCRATCH/fake" CALL_LOG="$SCRATCH/calls" \
+		COLLECT_TELEMETRY_BOUND_ONE_REQUEST="$bad" \
+		"$collector" 'status:ready' >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
+		fail "a bound override of '$bad' must exit non-zero"
+	assert_contains 'COLLECT_TELEMETRY_BOUND_ONE_REQUEST' "$SCRATCH/stderr"
+done
 
 # --- usage ----------------------------------------------------------------------
 PATH="$SCRATCH/bin:$PATH" "$collector" >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
