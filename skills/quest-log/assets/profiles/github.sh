@@ -68,6 +68,18 @@ github_err_file=''
 github_out_file=''
 GH_OUT=''
 GH_ERR=''
+# Set by github_run alongside GH_ERR: 1 when the last call was a bound breach,
+# 0 otherwise. A timeout's GH_ERR splices in the raw gh argument list --
+# titles, search text, label names, body-file paths, all caller-supplied --
+# and github_classify below matches by substring, so an argument reading
+# "could not resolve payment gateway" or "auth token rotation" once
+# misclassified a timeout as not-found or auth instead of transport. That
+# broke completion criterion 2 for every read routed through github_die, and
+# for a write it defeated criterion 5's indeterminate-report guarantee by
+# sending the call down profile_create's die-outright branch instead of its
+# EXIT_PARTIAL one. GH_TIMED_OUT lets github_classify answer from the call's
+# own outcome instead of pattern-matching text a timeout never chose.
+GH_TIMED_OUT=0
 # shellcheck disable=SC2329 # run by the EXIT trap, not called directly
 github_cleanup() {
 	rm -f -- "$github_err_file" "$github_out_file" || : # scan-fault: deliberate — cleanup; trap reports retention
@@ -161,17 +173,22 @@ github_run() { # bound gh-args...
 	# references/network-bounds.md:62-69 carries the same requirement.
 	{ github_bounded_call "$bound" "$github_out_file" "$github_err_file" gh "$@" || rc=$?; } 2>/dev/null
 	if ((rc == 124)); then
-		# The capture is already void (github_bounded_call emptied it), and an
-		# authored diagnostic replaces whatever fragment gh had written to
-		# stderr before it was signalled -- never "not found", "http 40x" or
-		# "authentication", so github_classify's default case, transport, is
-		# what a timeout reports as. That default is also correct: a timeout
-		# has never been an answer of any other class.
+		# The capture is already void (github_bounded_call emptied it). The
+		# authored diagnostic below replaces whatever fragment gh had written
+		# to stderr before it was signalled, but it splices in "$@" -- the gh
+		# arguments a caller built from a title, search text, a label, or a
+		# body-file path -- so it is not safe for github_classify's substring
+		# match to read: an ordinary "could not resolve X" or "auth token Y"
+		# argument would misclassify the timeout as not-found or auth. Setting
+		# GH_TIMED_OUT here, not text in GH_ERR, is what keeps this call's
+		# outcome transport.
 		GH_OUT=''
 		GH_ERR="gh $* exceeded its ${bound}s network bound and did not answer"
+		GH_TIMED_OUT=1
 	else
 		GH_OUT=$(<"$github_out_file")
 		GH_ERR=$(<"$github_err_file")
+		GH_TIMED_OUT=0
 	fi
 	return "$rc"
 }
@@ -206,6 +223,16 @@ github_require_id() { # id name
 # a 401 comes to report itself as a transport failure.
 github_classify() {
 	local output=$1 lowered
+	# A timeout's own outcome, not its message text, decides this: GH_TIMED_OUT
+	# is set by github_run alongside the GH_ERR it is about to classify, and a
+	# timeout's message splices in caller-supplied gh arguments the substring
+	# match below cannot tell from a genuine "not found" or "authentication"
+	# failure. Checked before the match, not folded into a case arm, so a
+	# future arm added below cannot reintroduce the same collision.
+	if [[ $GH_TIMED_OUT == 1 ]]; then
+		printf '%s %s' "$EXIT_TRANSPORT" transport
+		return
+	fi
 	# gh emits "Not Found (HTTP 404)" from the REST paths and "Could not resolve
 	# to an issue" from the GraphQL ones. Matching case-sensitively caught only
 	# the second, so a permanently-missing object reported as retryable.
@@ -525,6 +552,14 @@ profile_label_ensure() {
 		printf '{}\n'
 		return 0
 	}
+	# A bound breach here is indeterminate the same way every other write in
+	# this file is: the label may already have landed. github_die below would
+	# classify it correctly (GH_TIMED_OUT forces transport), but this is a
+	# write, and transport is a failure class, not the indeterminate report
+	# network-bounds.md's "Writes" section requires -- so it is routed to
+	# EXIT_PARTIAL before that classification runs, matching
+	# profile_comment_add and profile_state_set.
+	((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 	# An already-existing label is the ordinary case, not a failure. gh reports
 	# it on stderr, so this reads GH_ERR; masking a no-scope failure as success
 	# is what this distinction exists to prevent.
@@ -855,6 +890,13 @@ profile_claim_release() {
 		[[ $CLAIM_TOKEN == "$TOKEN" ]] || github_claim_conflict "$issue"
 		github_run "$github_bound_single" label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
 			--yes || rc=$?
+		# A bound breach is indeterminate, same as any other write: the delete
+		# may have landed. Reported through EXIT_PARTIAL rather than the
+		# classified die below, per network-bounds.md's "Writes" section and
+		# completion criterion 5 -- a retry still reads absent and returns {}
+		# if the delete did land, so this loses no idempotency, only the
+		# wrong exit class for the ambiguous case.
+		((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 		# A delete that landed with a lost response classifies transport; the
 		# re-run reads absent and returns {}.
 		((rc == 0)) || github_die "$GH_ERR"
@@ -911,6 +953,13 @@ profile_claim_recover() {
 		fi
 		github_run "$github_bound_single" label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
 			--yes || rc=$?
+		# A bound breach here is indeterminate, not a plain delete failure: the
+		# delete may have landed, and unlike claim_release this function still
+		# has a create ahead of it, so reading "untouched" from a merely
+		# unanswered call would be worse than the pure-delete case. Reported
+		# through EXIT_PARTIAL per completion criterion 5, before the die
+		# below that answers only a genuine, non-timeout failure.
+		((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 		# Delete failed: the old claim stands untouched, and a retry matches
 		# the same guard.
 		((rc == 0)) || github_die "$GH_ERR"
@@ -921,6 +970,7 @@ profile_claim_recover() {
 		((force == 1)) || github_claim_conflict "$issue"
 		github_run "$github_bound_single" label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
 			--yes || rc=$?
+		((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
 		((rc == 0)) || github_die "$GH_ERR"
 		;;
 	absent) : ;;

@@ -1195,6 +1195,66 @@ github_bound_single=01 PATH="$sandbox/bin:$PATH" \
 assert_exit 1 "$status" 'a bound override with a leading zero'
 assert_error "$sandbox/err" usage 'a bound override with a leading zero'
 
+# A timeout's own outcome, not its message text, must decide its classification:
+# github_run's synthesized diagnostic splices in the caller's own gh arguments
+# (title, search text, label name, ...), so ordinary text a human writes into a
+# search or a title can coincidentally match github_classify's substring keys.
+# GH_TIMED_OUT is what keeps these transport/partial rather than misrouted.
+status=0
+FAKE_GH_HANG='search issues' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" search --profile github --target example/repo --text 'could not resolve conflict' \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'a search timeout whose query text collides with a classify keyword'
+assert_error "$sandbox/err" transport 'a search timeout whose query text collides with a classify keyword'
+
+status=0
+FAKE_GH_HANG='issue create' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" create --profile github --target example/repo \
+	--title 'could not resolve payment gateway' --body-file "$sandbox/body.md" \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a create timeout whose title collides with a classify keyword'
+jq -e '.error == "partial" and .partial.url == ""' >/dev/null <"$sandbox/err" ||
+	fail "a create timeout with colliding title was not reported partial: $(cat "$sandbox/err")"
+
+# label-ensure has no EXIT_PARTIAL branch of its own before this case existed:
+# any non-"already exists" failure, including a timeout now reachable for the
+# first time, must report indeterminate rather than the classified transport
+# die every other kind of label-ensure failure still uses.
+status=0
+FAKE_GH_HANG='label create' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" label-ensure --profile github --target example/repo \
+	status:probe 0e8a16 'probe label' \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a label-ensure timeout'
+assert_error "$sandbox/err" partial 'a label-ensure timeout'
+
+# claim-recover's delete is reached for the first time on a timeout too. Seed a
+# malformed claim (no --token/--producer matching needed) so --force reaches
+# the delete without going through the token-matching held path.
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
+	exec sleep 300
+fi
+if [[ $1 == api ]]; then
+	case " $* " in
+	*'/labels/quest-claim%2F'*) printf 'malformed-claim-body\n' ;;
+	*) printf '5039780970\n' ;;
+	esac
+	exit 0
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+status=0
+FAKE_GH_HANG='label delete' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" claim-recover --profile github --target example/repo 101 \
+	--force --token q101-abcdefab --producer someuser \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a claim-recover delete timeout on a malformed claim'
+assert_error "$sandbox/err" partial 'a claim-recover delete timeout on a malformed claim'
+
 # --- a CRLF declaration is valid, not malformed -----------------------------
 mkdir -p "$sandbox/crlf"
 git -C "$sandbox/crlf" init -q
