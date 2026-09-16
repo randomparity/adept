@@ -27,7 +27,7 @@ bounded_call() { # seconds out-file err-file command...
 	# rc, not status: under zsh `status` is a read-only special parameter, and a
 	# `local status=0` in a sourced body once killed a caller's whole session --
 	# cleared-dependencies.sh:5-16 carries that record.
-	local bound=$1 out=$2 err=$3 pid waited=0 rc=0
+	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
 	shift 3
 	"$@" >"$out" 2>"$err" &
 	pid=$!
@@ -37,7 +37,13 @@ bounded_call() { # seconds out-file err-file command...
 		waited=$((waited + 1))
 	done
 	if kill -0 "$pid" 2>/dev/null; then
-		kill -9 "$pid" 2>/dev/null || :
+		# TERM, then KILL only if TERM does not land. Never a bare KILL.
+		kill -TERM "$pid" 2>/dev/null || :
+		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
+			sleep 0.1
+			grace=$((grace + 1))
+		done
+		kill -KILL "$pid" 2>/dev/null || :
 		wait "$pid" 2>/dev/null || :
 		return 124
 	fi
@@ -46,7 +52,15 @@ bounded_call() { # seconds out-file err-file command...
 }
 ```
 
-Adapt it to the call site. Five properties are not adaptable.
+The grace window is two seconds: long enough for `git` to tear its transport down, short
+enough to be noise against a 30- or 120-second bound.
+
+Bash announces a signalled background job on the script's own stderr — `… Terminated: 15` —
+and the `2>/dev/null` on `wait` does not suppress it, because the notice is printed before the
+reap. It is noise beside the caller's own diagnostic rather than a second error, and a caller
+that parses a bounded script's stderr has to expect it.
+
+Adapt it to the call site. Six properties are not adaptable.
 
 - **Capture to files, not to a command substitution.** `value=$(gh ...)` blocks in the parent
   and bounds nothing. A site that captures a value today reads it back out of the stdout file
@@ -61,7 +75,14 @@ Adapt it to the call site. Five properties are not adaptable.
 - **Discard the stdout capture on 124.** The writer was killed mid-stream, so a truncated
   capture is indistinguishable from a complete short one. A half-written JSONL page parses
   cleanly and reads as a smaller result set. Report; do not parse what arrived.
-- **Reap before returning.** The `wait` after `kill -9` is what stops the process this call
+- **Escalate; never send a bare `KILL`.** `SIGKILL` cannot be handled, so a `git` severed by it
+  never tears down the `ssh` or `git-remote-https` it spawned: the transport is reparented to
+  init and holds the connection after the wrapper has returned. On `SIGTERM` `git` tears it down
+  and no child survives. Measured on macOS at 15fd217 against a black-holed address, over both
+  transports: TERM leaves no surviving child, KILL leaves one, reparented to pid 1. `KILL` stays
+  as the escalation for a process that ignores TERM, which is what `timeout(1)` spends its `-k`
+  flag on.
+- **Reap before returning.** The `wait` after the escalation is what stops the process this call
   started outliving it. Nothing here polls a *previous* invocation, keeps a PID file, or leaves
   a process for a later run to reason about.
 - **Capture the status at the call site.** Write `bounded_call <bound> "$out" "$err" <cmd> || rc=$?`,
@@ -71,18 +92,6 @@ Adapt it to the call site. Five properties are not adaptable.
 
 `124` is this function's internal signal, borrowed from `timeout(1)`'s convention. It is never a
 script's exit status.
-
-**A `git` call over SSH also sets `GIT_SSH_COMMAND`.** `kill -9` reaches `git`, not the `ssh` it
-spawned, so the transport survives the wrapper and is reparented to init. Set
-`GIT_SSH_COMMAND='ssh -o ConnectTimeout=<n> -o BatchMode=yes'` for the call — an environment
-variable for one invocation, mutating no operator configuration — and keep the wrapper as the
-outer bound. `gh` performs its own requests in process and has no such child.
-
-That covers an SSH remote only, and the one `git` site reads whatever `origin` the operator's
-checkout has. **On an HTTPS origin the variable is inert**: the wrapper still returns at the
-bound, but `git-remote-https` outlives it holding the connection until the OS gives up. That
-residual is accepted and stated rather than closed, on the same terms as the caller-killed
-orphan below.
 
 ## The bound
 

@@ -46,7 +46,7 @@ bound exits 2" from `publish-handoff:17-19`. That reading holds for one file.
 - `collect-telemetry:88-91` — `die()` = exit 1; its exit 2 is `usage()` at `:78-86`.
 - `cleared-dependencies.sh:325-332` — executed, 0/1/2, but **2 is usage**, not
   "could not run". Sourced only by its behaviour suite.
-- `tracker.sh:18-26` — the richest of the five, and already correct:
+- `tracker.sh:16-26` — the richest of the five, and already correct:
   `EXIT_TRANSPORT=4` is precisely "the call did not answer", and `EXIT_PARTIAL=5`
   is "the write may have landed", which `github.sh:295-298` documents for a
   create that failed after possibly landing.
@@ -65,12 +65,14 @@ utility is warranted at the third repetition, so the applier that reaches it
 makes that call and clears CLAUDE.md anatomy rule 2 with it; nothing here
 forbids it.
 
-**The mechanism is background, poll, kill, reap — trap-free.** Redirect the call's
+**The mechanism is background, poll, signal, reap — trap-free.** Redirect the call's
 stdout and stderr to separate files, run it in the background, capture `$!`, poll
-`kill -0` against a tenth-second counter, then `kill -9` and `wait` to reap it and
-recover its status. `scripts/check-public-safety-test.sh:762-789` already contains
-this idiom. It is Bash 3.2-safe, needs no trap, and needs nothing macOS does not
-ship. Exceeding the bound is signalled as return 124 — `timeout(1)`'s own
+`kill -0` against a tenth-second counter, then `kill -TERM`, a two-second grace poll,
+`kill -KILL` for a process that ignored TERM, and `wait` to reap it and recover its
+status. `scripts/check-public-safety-test.sh:762-801` is the idiom's in-repo
+precedent; that leg tore its process down with a bare `kill -9` and this change
+escalates it, so the repository no longer demonstrates what this record forbids.
+The idiom is Bash 3.2-safe, needs no trap, and needs nothing macOS does not ship. Exceeding the bound is signalled as return 124 — `timeout(1)`'s own
 convention, and an internal return rather than any script's exit status. That
 last clause is a call-site obligation, not a property of the function: every
 caller here runs under `set -e`, so the call captures its status
@@ -82,14 +84,6 @@ mid-stream, so a truncated capture is indistinguishable from a complete short
 one — a half-written JSONL page from `--paginate --jq` parses cleanly and reads as
 a smaller result set. The caller discards the capture on 124 and reports, rather
 than parsing what arrived.
-
-**A `git` call over SSH also sets `GIT_SSH_COMMAND`.** `kill -9` reaches `git`, not
-the `ssh` child it spawned: the transport survives, reparented to init, still
-holding the call's scratch files. `GIT_SSH_COMMAND='ssh -o ConnectTimeout=<n>
--o BatchMode=yes'` bounds the connect phase inside the transport that would
-otherwise outlive the wrapper, and it is an environment variable for one call,
-so it mutates no operator configuration. The wrapper stays as the outer bound for
-the phases a connect timeout does not cover.
 
 **The bound is 30 seconds for a call that issues one request and 120 seconds for
 one that may issue more.** The trigger is the call's request count, not the
@@ -135,13 +129,11 @@ it, and no required-command list gains `timeout` or `gtimeout`.
   overhead accumulates: a 30-second bound fires at roughly 32 seconds on
   bash 3.2.57, not at 30.0. Nothing here depends on the difference, but a caller
   must not document the bound as exact.
-- Each bounded call reaps the process it started. A transport child that process
-  spawned is not reached by `kill -9` on it, which is why the `git` site sets a
-  connect timeout as well; for `gh`, which performs its own HTTPS requests in
-  process, there is no such child. That remedy reaches an SSH remote only, and
-  `publish-handoff:381` reads whatever `origin` the operator's checkout has: on an
-  HTTPS origin the variable is inert and `git-remote-https` outlives the wrapper.
-  Accepted and stated rather than closed. A caller killed mid-call still orphans
+- Each bounded call reaps the process it started, and the TERM step is what makes
+  that reach the transport child too: `git` tears down its `ssh` or
+  `git-remote-https` on TERM and cannot on KILL. So the wrapper leaves nothing
+  behind on either transport, and `publish-handoff:381` no longer depends on which
+  `origin` the operator's checkout carries. A caller killed mid-call still orphans
   whatever was running, which is today's exposure unchanged.
 - Four copies of one idiom will drift. That is the cost of not prescribing a
   shared helper now, and the reference is what they are checked against.
@@ -170,13 +162,14 @@ it, and no required-command list gains `timeout` or `gtimeout`.
 - **A blanket "exceeding the bound exits 2".** verified: at 15fd217
   `rg --no-config -n 'exit 2' skills/quest/scripts/publish-forge-review` reports no
   match; `collect-telemetry:78-86` and `cleared-dependencies.sh:325-332` both spend
-  exit 2 on usage; and `tracker.sh:18-26` already classes a dead call as
+  exit 2 on usage; and `tracker.sh:16-26` already classes a dead call as
   `EXIT_TRANSPORT=4`.
-- **Relying on `GIT_SSH_COMMAND` alone, without the wrapper.** verified: at 15fd217
+- **`GIT_SSH_COMMAND` in place of the wrapper.** verified: at 15fd217
   on macOS, `GIT_SSH_COMMAND='ssh -o ConnectTimeout=3 -o BatchMode=yes' git ls-remote`
   against a black-holed address returns in 3.02 s leaving no surviving `ssh`, but it
-  bounds only the connect phase and reaches no `gh` call, which is seventeen of
-  the eighteen invocations — `publish-handoff:381` is the one `git` site.
+  bounds only the connect phase, reaches only an SSH origin, and reaches no `gh` call,
+  which is seventeen of the eighteen invocations — `publish-handoff:381` is the one
+  `git` site.
 - **An EXIT-trap or signal-handler bound.** verified: `publish-forge-review:39`,
   `publish-handoff:97`, `collect-telemetry:111` and `github.sh:76` each already
   install an EXIT trap, and `cleared-dependencies.sh:66-73` records why its sourced
@@ -184,6 +177,17 @@ it, and no required-command list gains `timeout` or `gtimeout`.
 - **A per-request bound for the multi-request calls.** verified: gh 2.100.0 exposes
   no per-request timeout — `gh api --help` and `gh help environment` each report no
   match for `timeout`.
+- **`kill -9` alone, with no TERM before it.** verified: `SIGKILL` cannot be handled,
+  so a severed `git` never tears down the transport it spawned. Measured at 15fd217
+  on macOS with `git ls-remote` against a black-holed address, signalling the `git`
+  process once its child existed: over SSH, TERM leaves survivors=0 and KILL leaves
+  survivors=1 (`/usr/bin/ssh`, reparented to pid 1); over HTTPS, TERM leaves
+  survivors=0 and KILL leaves survivors=1 (`git-remote-https`, reparented the same
+  way). `timeout(1)`, whose exit-124 convention this record borrows, sends TERM and
+  escalates to KILL only under `-k`. An earlier draft of this record prescribed KILL
+  alone and compensated with a `GIT_SSH_COMMAND` connect timeout that reached SSH
+  origins only; escalating removes the orphan rather than narrowing it, so the
+  compensation went with it.
 - **Reusing the precedent's one-second poll verbatim.** verified: the precedent polls
   a single call in a test, where a second is free; at eighteen invocations, and at
   `collect-telemetry`'s 200 issues by six reads, a one-second floor adds twenty
@@ -191,7 +195,9 @@ it, and no required-command list gains `timeout` or `gtimeout`.
   argument, so the tenth-second poll costs no portability: at 15fd217 on macOS
   `sleep 0.1` exits 0 in 0.102 s, and the whole idiom smoke-tested under
   `/bin/bash` 3.2.57 returns 124 on a bound exceeded, 0 with stdout captured on
-  success, and the callee's own 3 with stderr captured on failure.
+  success, the callee's own 3 with stderr captured on failure, and 124 again for a
+  callee that traps TERM and ignores it — escalated after the grace window, at
+  3 s for a 1-second bound.
 - **Leaving the bound to each applier.** judgment: that is the divergence this
   record exists to prevent, and #379's acceptance criteria refuse it outright.
 - **Doing nothing.** judgment: an unattended worker that hangs on an unreachable
