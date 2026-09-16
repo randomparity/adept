@@ -58,6 +58,12 @@ on the readback reports that the comment *was* created, names its URL, and repor
 unverified — more precise than treating the two post-write sites alike, and honest in both
 directions. None is retried, and the diagnostic says why re-running is not the remedy.
 
+Two new causes join exit 2 beyond the bound itself, both from moving a captured value into a file:
+`awk` failing to scan the create response for a URL, and `cat` failing to read back the refs
+`git ls-remote` reported. Each is a scan that could not run, so each faults rather than collapsing
+into the emptiness check below it, which would report a scan that could not run as one that found
+nothing — the defect this script's header already names.
+
 **No shared helper.** ADR 0068 leaves extraction to whichever applier reaches the third
 repetition; three run in parallel and none can observe that count, so the idiom stays local and
 the reference is what they are checked against.
