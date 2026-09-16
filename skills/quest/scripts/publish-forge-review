@@ -11,6 +11,13 @@ SCRIPT_DIR=${BASH_SOURCE[0]%/*}
 [ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR=.
 SCRIPT_DIR=$(cd "$SCRIPT_DIR" && pwd)
 body=''
+gh_capture=''
+# Seconds. gh pr comment issues a lookup and a mutation; gh api issues one
+# request. references/network-bounds.md carries the rule, ADR 0068 the record.
+# The override exists so the behaviour suite can reach the bound without a real
+# wait; no caller sets it.
+BOUND_MULTI=${PUBLISH_FORGE_REVIEW_BOUND:-120}
+BOUND_SINGLE=${PUBLISH_FORGE_REVIEW_BOUND:-30}
 disposer=''
 repo=''
 pr=''
@@ -39,8 +46,64 @@ finish_body_lifecycle() {
 trap finish_body_lifecycle EXIT
 
 fail() {
+	# Every fatal path runs through here, so this is the one place a gh capture
+	# needs removing. The composed body is deliberately retained instead, by the
+	# exit trap.
+	if [ -n "$gh_capture" ] && [ -e "$gh_capture" ]; then
+		rm -f -- "$gh_capture" ||
+			printf 'publish-forge-review: retained gh capture: %s\n' "$gh_capture" >&2
+	fi
 	printf 'publish-forge-review: %s\n' "$1" >&2
 	exit 1
+}
+
+# Run a command under a bound. Returns the command's own status, or 124 when the
+# bound was exceeded. stdout and stderr land in separate caller-owned files.
+# Transcribed from references/network-bounds.md; ADR 0068 carries the reasoning.
+bounded_call() { # seconds out-file err-file command...
+	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
+	shift 3
+	"$@" >"$out" 2>"$err" &
+	pid=$!
+	# Tenths, so the counter stays integer arithmetic on a Bash 3.2 floor.
+	while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$((bound * 10))" ]; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+	if kill -0 "$pid" 2>/dev/null; then
+		# TERM, then KILL only if TERM does not land. Never a bare KILL.
+		kill -TERM "$pid" 2>/dev/null || :
+		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
+			sleep 0.1
+			grace=$((grace + 1))
+		done
+		kill -KILL "$pid" 2>/dev/null || :
+		wait "$pid" 2>/dev/null || :
+		# The writer was killed mid-stream, so the capture is void. Emptying it
+		# here makes that structural: a site that parses it anyway gets nothing,
+		# not a truncated page that reads as a complete short one.
+		: >"$out"
+		return 124
+	fi
+	wait "$pid" || rc=$?
+	return "$rc"
+}
+
+# One bounded gh call. Its stdout is left at gh_capture for the caller to read
+# and remove; its stderr is forwarded to this script's own, which is where gh's
+# stderr went before either call was captured at all.
+run_gh() { # seconds gh-args...
+	local bound=$1 err rc=0
+	shift
+	gh_capture=$(mktemp) || fail 'cannot create a gh stdout capture'
+	err=$(mktemp) || fail 'cannot create a gh stderr capture'
+	bounded_call "$bound" "$gh_capture" "$err" gh "$@" || rc=$?
+	if [ -s "$err" ]; then
+		cat "$err" >&2 || fail 'cannot read a gh stderr capture'
+	fi
+	rm -f -- "$err" ||
+		printf 'publish-forge-review: retained gh capture: %s\n' "$err" >&2
+	return "$rc"
 }
 
 preflight() {
@@ -57,6 +120,9 @@ preflight() {
 	esac
 	command -v "$disposer" >/dev/null 2>&1 ||
 		fail "recoverable-delete command is unavailable: $disposer; install it or expose it in PATH"
+	case $BOUND_MULTI$BOUND_SINGLE in
+	'' | *[!0-9]*) fail 'network bound override must be a whole number of seconds' ;;
+	esac
 	[ -x "$SCRIPT_DIR/check-public-safety" ] ||
 		fail 'bundled public-safety check is unavailable; repair the installed quest skill'
 }
@@ -238,18 +304,29 @@ compose_body() {
 }
 
 post_comment() {
-	local comment_output post_status=0 candidate
-	comment_output=$(gh pr comment "$pr" --repo "github.com/$repo" --body-file "$body") ||
-		post_status=$?
-	[ "$post_status" -eq 0 ] || fail 'comment creation did not complete'
-	candidate=$(printf '%s\n' "$comment_output" |
-		awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }')
+	local post_status=0 candidate
+	run_gh "$BOUND_MULTI" pr comment "$pr" --repo "github.com/$repo" \
+		--body-file "$body" || post_status=$?
+	case $post_status in
+	0) ;;
+	124)
+		# A bound does not make a write atomic. Report indeterminacy, never
+		# failure, and never retry.
+		fail "comment creation exceeded its ${BOUND_MULTI}s bound; the comment may or may not have been created; inspect the pull request before any further attempt"
+		;;
+	*) fail 'comment creation did not complete' ;;
+	esac
+	candidate=$(awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }' \
+		"$gh_capture") || fail 'comment creation returned no readable identity'
+	rm -f -- "$gh_capture" ||
+		printf 'publish-forge-review: retained gh capture: %s\n' "$gh_capture" >&2
+	gh_capture=''
 	[ -n "$candidate" ] || fail 'comment creation returned no usable identity'
 	printf '%s\n' "$candidate"
 }
 
 read_comment() {
-	local comment_url=$1 expected_prefix comment_id endpoint response api_status=0
+	local comment_url=$1 expected_prefix comment_id endpoint api_status=0
 	expected_prefix="https://github.com/$repo/pull/$pr#issuecomment-"
 	case $comment_url in
 	"$expected_prefix"*) comment_id=${comment_url#"$expected_prefix"} ;;
@@ -257,10 +334,19 @@ read_comment() {
 	esac
 	case $comment_id in '' | *[!0-9]*) fail 'comment creation returned an invalid identity' ;; esac
 	endpoint="/repos/$repo/issues/comments/$comment_id"
-	response=$(gh api --hostname github.com "$endpoint") || api_status=$?
-	[ "$api_status" -eq 0 ] || fail 'comment readback failed'
-	jq -e --rawfile expected "$body" '.body == $expected' <<<"$response" >/dev/null ||
+	run_gh "$BOUND_SINGLE" api --hostname github.com "$endpoint" || api_status=$?
+	case $api_status in
+	0) ;;
+	124)
+		fail "comment readback exceeded its ${BOUND_SINGLE}s bound; the annotation was posted but could not be verified"
+		;;
+	*) fail 'comment readback failed' ;;
+	esac
+	jq -e --rawfile expected "$body" '.body == $expected' "$gh_capture" >/dev/null ||
 		fail 'comment readback did not match the checked body'
+	rm -f -- "$gh_capture" ||
+		printf 'publish-forge-review: retained gh capture: %s\n' "$gh_capture" >&2
+	gh_capture=''
 }
 
 append_ledger() {
