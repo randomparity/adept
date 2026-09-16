@@ -17,11 +17,22 @@
 # Exit 0 success, 1 a condition failed, 2 the script could not run. Every
 # nonzero exit names the condition: "which of the three failed" is precisely
 # what the orchestrator otherwise has to work out by re-reading the body.
+#
+# Every network call here is bounded (references/network-bounds.md). A call that
+# exceeded its bound reported nothing, so it is exit 2 -- "could not run" -- and
+# never exit 1, which would claim a condition was checked and found false. Past
+# the write a bound cannot make the call atomic: a timeout on the create, or on
+# the readback after it, leaves a comment this script cannot verify, and the
+# diagnostic says which rather than guessing either way.
 set -euo pipefail
 
 MARKER='<!-- WORK:TRAJECTORY -->'
 SENTINEL='<!-- TRAJECTORY:COMPLETE -->'
 MAX_NOTES_BYTES=8192
+# Each of the five network calls below issues exactly one request, so each takes
+# the 30-second bound in references/network-bounds.md. Not a deadline: the poll
+# loop's own overhead accumulates and a 30-second bound fires at roughly 32.
+NETWORK_BOUND_SECONDS=30
 
 SCRIPT_DIR=${BASH_SOURCE[0]%/*}
 [ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR=.
@@ -49,6 +60,8 @@ head_sha=''
 issue_html_url=''
 pr_closing_refs=''
 response=''
+call_out=''
+call_err=''
 
 # A finding and a fault are different verdicts and get different statuses. Exit
 # 1 means the hand-off is not publishable and says why; exit 2 means this script
@@ -172,6 +185,72 @@ make_workspace() {
 	stored="$workspace/stored"
 }
 
+# Run a command under a bound. Returns the command's own status, or 124 when the
+# bound was exceeded. stdout and stderr land in separate caller-owned files: a
+# merged capture once made a gh release notice part of a value a caller then
+# decided labels from.
+bounded_call() { # seconds out-file err-file command...
+	# rc, not status: under zsh `status` is a read-only special parameter.
+	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
+	shift 3
+	"$@" >"$out" 2>"$err" &
+	pid=$!
+	# Tenths, so the counter stays integer arithmetic on a Bash 3.2 floor.
+	while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$((bound * 10))" ]; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+	if kill -0 "$pid" 2>/dev/null; then
+		# TERM, then KILL only if TERM does not land. Never a bare KILL: SIGKILL
+		# cannot be handled, so a git severed by it never tears down the ssh or
+		# git-remote-https it spawned and the transport outlives this call.
+		kill -TERM "$pid" 2>/dev/null || :
+		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
+			sleep 0.1
+			grace=$((grace + 1))
+		done
+		kill -KILL "$pid" 2>/dev/null || :
+		wait "$pid" 2>/dev/null || :
+		# The writer was killed mid-stream, so the capture is void. Emptying it
+		# here makes that structural: a site that parses it anyway gets nothing,
+		# not a truncated page that reads as a complete short one.
+		: >"$out"
+		return 124
+	fi
+	wait "$pid" || rc=$?
+	return "$rc"
+}
+
+# One bounded network call. On return the stdout capture is $call_out and the
+# stderr capture $call_err. Returns 124 for an exceeded bound, the command's own
+# status otherwise: the caller classifies, because only it knows whether the call
+# was a write. Capturing stderr to a file would stop it reaching the terminal --
+# gh writes non-fatal material there while exiting 0 -- so it is passed through
+# on every status but 124, where a partial diagnostic would read as an answer.
+bounded_network_call() { # slot command...
+	local slot=$1 rc=0
+	shift
+	call_out="$workspace/$slot.out"
+	call_err="$workspace/$slot.err"
+	bounded_call "$NETWORK_BOUND_SECONDS" "$call_out" "$call_err" "$@" || rc=$?
+	if [ "$rc" -ne 124 ] && [ -s "$call_err" ]; then
+		# Not a colon-discard: cat is not a pure builtin, so ADR 0047's gate
+		# would refuse one here, and a diagnostic this could not relay is worth
+		# a line of its own rather than silence.
+		cat -- "$call_err" >&2 ||
+			printf 'publish-handoff: the call diagnostic at %s could not be read\n' \
+				"$call_err" >&2
+	fi
+	return "$rc"
+}
+
+# A timeout is a fault, never a finding: the call reported nothing, so it never
+# reported that a condition was checked and found false. Exit 2 is this script's
+# "could not run" class, which is the row references/network-bounds.md assigns it.
+timed_out() { # call-description consequence
+	fault "$1 exceeded the ${NETWORK_BOUND_SECONDS}-second network bound; $2"
+}
+
 # od answers three ways and awk collapses two of them, so both statuses are read
 # explicitly: a scan that could not run must never report as a scan that found
 # nothing.
@@ -279,7 +358,7 @@ clear_local_git_env() {
 # binding that bites comes from the pull request instead -- it names the issues it
 # closes, and that statement does not inherit the argument under test.
 resolve_destination() {
-	local issue_json is_pull number matched
+	local is_pull number matched issue_out rc=0
 	# The independent check, first, because it is the one that catches the
 	# likeliest mistake. An empty list is refused rather than waved through: the
 	# requirement is that the destination be corroborated before composing, and an
@@ -305,8 +384,13 @@ resolve_destination() {
 	done <<<"$pr_closing_refs"
 	[ "$matched" = yes ] ||
 		fail "pull request $repo#$pr closes $(printf '%s' "$pr_closing_refs" | tr '\n' ' ')but the hand-off names issue $issue; one of the two is wrong"
-	issue_json=$(gh api --hostname github.com "/repos/$repo/issues/$issue") ||
+	bounded_network_call issue-read gh api --hostname github.com "/repos/$repo/issues/$issue" ||
+		rc=$?
+	[ "$rc" -ne 124 ] ||
+		timed_out "reading the hand-off destination $repo#$issue" 'nothing was posted'
+	[ "$rc" -eq 0 ] ||
 		fault "the hand-off destination could not be read: $repo#$issue -- check the ISSUE argument first, then whether GitHub is reachable"
+	issue_out=$call_out
 	# GitHub serves pull requests from the issues number space and returns them
 	# with a pull_request key an ordinary issue does not carry. The closing-issue
 	# check above does not cover this: a pull request number may legitimately
@@ -314,11 +398,11 @@ resolve_destination() {
 	# there with a message about the wrong thing. Without this check the comment is
 	# created before anything can object, surfacing one step later as an
 	# unparseable URL rather than as the swapped argument it is.
-	is_pull=$(jq -r 'if has("pull_request") then "yes" else "no" end' <<<"$issue_json") ||
+	is_pull=$(jq -r 'if has("pull_request") then "yes" else "no" end' "$issue_out") ||
 		fault 'the destination response could not be parsed'
 	[ "$is_pull" = no ] ||
 		fail "$repo#$issue is a pull request, not an issue; the hand-off block is recorded on the issue, so ISSUE and PR appear to have been swapped"
-	number=$(jq -r '.number' <<<"$issue_json") ||
+	number=$(jq -r '.number' "$issue_out") ||
 		fault 'the destination response could not be parsed'
 	[ "$number" = "$issue" ] ||
 		fail "the destination reported number $number, not $issue"
@@ -329,7 +413,7 @@ resolve_destination() {
 	# hand-off reported as unpublished, whose remedy is to publish another one.
 	# The destination's own html_url is the canonical form, from the same
 	# response the checks above already trust.
-	issue_html_url=$(jq -r '.html_url // empty' <<<"$issue_json") ||
+	issue_html_url=$(jq -r '.html_url // empty' "$issue_out") ||
 		fault 'the destination response could not be parsed'
 	[ -n "$issue_html_url" ] ||
 		fault "the destination reported no canonical URL: $repo#$issue"
@@ -340,24 +424,29 @@ resolve_destination() {
 # second independent observation, and a disagreement means the branch moved
 # between the two reads -- exactly the moment a handshake must not be posted.
 resolve_head() {
-	local pr_json number state head_branch head_ref_oid cross ls_output line_count
-	pr_json=$(gh pr view "$pr" --repo "github.com/$repo" \
-		--json number,state,headRefName,headRefOid,isCrossRepository,closingIssuesReferences) ||
+	local number state head_branch head_ref_oid cross pr_out ls_output line_count rc=0
+	bounded_network_call pr-view gh pr view "$pr" --repo "github.com/$repo" \
+		--json number,state,headRefName,headRefOid,isCrossRepository,closingIssuesReferences ||
+		rc=$?
+	[ "$rc" -ne 124 ] ||
+		timed_out "reading pull request $repo#$pr" 'nothing was posted'
+	[ "$rc" -eq 0 ] ||
 		fault "the pull request could not be read: $repo#$pr"
+	pr_out=$call_out
 	# Read here because this is the call that already exists; consumed by
 	# resolve_destination, which runs next. One number per line, empty when the
 	# pull request body carries no Closes trailer.
-	pr_closing_refs=$(jq -r '.closingIssuesReferences[].number' <<<"$pr_json") ||
+	pr_closing_refs=$(jq -r '.closingIssuesReferences[].number' "$pr_out") ||
 		fault 'the pull request response could not be parsed'
-	number=$(jq -r '.number' <<<"$pr_json") ||
+	number=$(jq -r '.number' "$pr_out") ||
 		fault 'the pull request response could not be parsed'
-	state=$(jq -r '.state' <<<"$pr_json") ||
+	state=$(jq -r '.state' "$pr_out") ||
 		fault 'the pull request response could not be parsed'
-	head_branch=$(jq -r '.headRefName' <<<"$pr_json") ||
+	head_branch=$(jq -r '.headRefName' "$pr_out") ||
 		fault 'the pull request response could not be parsed'
-	head_ref_oid=$(jq -r '.headRefOid' <<<"$pr_json") ||
+	head_ref_oid=$(jq -r '.headRefOid' "$pr_out") ||
 		fault 'the pull request response could not be parsed'
-	cross=$(jq -r '.isCrossRepository' <<<"$pr_json") ||
+	cross=$(jq -r '.isCrossRepository' "$pr_out") ||
 		fault 'the pull request response could not be parsed'
 	[ "$number" = "$pr" ] ||
 		fail "the pull request reported number $number, not $pr"
@@ -378,8 +467,14 @@ resolve_head() {
 	# way skills/quest/scripts/check-public-safety clears it before its own git
 	# calls, and for the same reason.
 	clear_local_git_env
-	ls_output=$(git ls-remote origin "refs/heads/$head_branch") ||
+	rc=0
+	bounded_network_call ls-remote git ls-remote origin "refs/heads/$head_branch" || rc=$?
+	[ "$rc" -ne 124 ] ||
+		timed_out "reading refs/heads/$head_branch from origin" 'nothing was posted'
+	[ "$rc" -eq 0 ] ||
 		fault "git ls-remote could not read refs/heads/$head_branch from origin; run this from the checkout whose origin is $repo"
+	ls_output=$(cat "$call_out") ||
+		fault 'the refs origin reported could not be read'
 	[ -n "$ls_output" ] ||
 		fail "origin has no refs/heads/$head_branch, which is the pull request's head branch"
 	line_count=$(printf '%s\n' "$ls_output" | wc -l) ||
