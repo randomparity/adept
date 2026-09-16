@@ -58,7 +58,7 @@ a one-line manifest bump.
 | `skills/quest-log/assets/cleared-dependencies.sh` | The cleared-dependency recipe; one reading wrapper over `gh` plus three direct label writes, all unbounded | The same, with the wrapper bounded and taking a bound argument, and the three writes routed through it |
 | `tests/fixtures/quest/publish-forge-review-test.sh` | 22 registered cases | 24 — two timeout cases added |
 | `tests/fixtures/quest-log/cleared-dependencies-test.sh` | Sourced and direct-execution behaviour coverage | The same plus eight timeout assertions |
-| `.claude-plugin/plugin.json` | `version: 5.10.0` | `version: 5.10.2`, reserved by the campaign |
+| `.claude-plugin/plugin.json` | the base ref's version | `version: 5.10.2`, this row's reservation in the campaign's ascending merge order |
 
 No file moves, no owner changes, no obsolete path to remove, no compatibility path retained.
 Both files keep their current responsibility; this is a clean extension of each.
@@ -185,7 +185,7 @@ own copies under different names and shares nothing with these.
    		printf 'publish-forge-review: retained gh stderr capture: %s\n' "$err" >&2
    	[ "$forward_status" -eq 0 ] || fail 'cannot read a gh stderr capture'
    	return "$rc"
-   ^}
+   }
    ```
 
 5. In `preflight()`, after the `disposer` checks and before the bundled-scanner check, add:

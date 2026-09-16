@@ -111,6 +111,14 @@ Capture files are private and unguessable.
 - The bound is approximate. Poll overhead accumulates, so a 30-second bound fires near 32.
 - PID reuse inside one poll interval, same-uid, as `references/network-bounds.md` records.
 - An indeterminate write leaves an artifact this script cannot verify. Reported, not resolved.
+- A bound exceeded on the *post-write* blocker re-read reverts the `status:ready` write that had
+  already succeeded, because an unreadable blocker fails the final verdict and that failure drives
+  the restore. This is deliberate and is the one place a non-answer causes a write: reverting
+  returns the issue to the state it held before this run touched it, which is the conservative
+  direction, and the restore's own diagnostic carries the bound-exceeded reason verbatim. It
+  differs from the verification read one step earlier, which does *not* restore — there the
+  unknown is the dependent's own labels, so a write would rest on nothing, whereas here the
+  unknown is whether the readying was justified at all.
 - A per-call bound does not bound a run; neither file gains an aggregate budget. An `apply`
   sweep against a dead remote can still run for a long time: up to
   `cleared_dependency_max_lookups` blocker reads at 30 s apiece, plus the per-candidate calls.
