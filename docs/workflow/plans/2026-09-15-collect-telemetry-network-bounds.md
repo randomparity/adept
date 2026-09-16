@@ -15,10 +15,10 @@ branches on, so no metric-position logic changes.
 Design: `docs/workflow/specs/2026-09-15-collect-telemetry-network-bounds-design.md`.
 Failure model: that spec's `## Failure model`.
 
-Expected implementation size: 200–250 changed lines (M) — from the file map below: a bound
+Expected implementation size: 220–270 changed lines (M) — from the file map below: a bound
 validator, `bounded_call` and `bounded_read`, six wrapper swaps and two hard-stop diagnostics in
-the collector; three hang scenarios, three refusal cases and one mutual-exclusion assertion in
-its suite; and one version field.
+the collector; four hang scenarios, three refusal cases and one mutual-exclusion assertion in its
+suite; and one version field.
 
 ## Global Constraints
 
@@ -41,7 +41,7 @@ its suite; and one version field.
 | File | Owns now | Owns after |
 |---|---|---|
 | `skills/bards-tale/scripts/collect-telemetry` | six unbounded `gh` reads, a 0/1 `fetch_failed` flag, two hard stops printing a constant as a `gh` exit | the same six reads under a bound, `fetch_failed` carrying the call's own status, `fetch_timed_out` beside it, two hard stops that distinguish a bound from a `gh` exit |
-| `tests/fixtures/bards-tale/collect-telemetry-test.sh` | behaviour coverage for the tri-state, the rate-limit cutoff and the selection abort | the same, plus a deterministic hang and four timeout scenarios |
+| `tests/fixtures/bards-tale/collect-telemetry-test.sh` | behaviour coverage for the tri-state, the rate-limit cutoff and the selection abort | the same, plus a deterministic hang, four timeout scenarios, three refusals and a mutual-exclusion guard |
 | `.claude-plugin/plugin.json` | `version` | `version` at `5.10.3` |
 
 No file moves; no caller migrates; no path becomes obsolete. The six fetch functions are already
@@ -73,6 +73,7 @@ Consumed from the existing file, each confirmed present at `main` `1c40c98`: `di
 |---|---|
 | A hung hard-stop read exits 1 with a bound diagnostic | `focused-test` — `collect-telemetry-test.sh`, new "bounded reads" scenarios. Red before the change: the run hangs instead of exiting. Green: `just test collect-telemetry` |
 | A hung per-issue read lands `error`, not `unknown`, in every tri-state position it feeds | `focused-test` — same suite, `FAKE_GH_HANG=api` scenario. Red: the run hangs. Green: same command |
+| A hung comments read lands `error` through the emptied stdout capture, not `unknown` | `focused-test` — same suite, `FAKE_GH_HANG=issue` scenario over the eight `[[ -s $blob ]]`-guarded positions. Red: the run hangs. Green: same command |
 | A bound override that is not one to five digits without a leading zero is refused | `focused-test` — same suite, three cases. Red: the variable is unread, so the run succeeds instead of exiting non-zero. Green: same command |
 | The two hard-stop forms exclude each other | `focused-test` — same suite; the existing selection-failure scenario gains an assertion that a `gh` nonzero exit prints `gh exit ` and *not* the bound clause. Red: the assertion is absent, so nothing proves the one-way substring is not the whole story. Green: same command |
 | The envelope is unchanged | `focused-test` — the suite's existing assertions, unmodified. Green: same command |
@@ -108,7 +109,7 @@ They read the caller's **shell** variable rather than relying on an assignment p
 function's environment, and an unset one forwards empty, which the collector's own `:-` defaults
 absorb. Leave everything else in `run_collector` alone.
 
-**3. Write the four failing scenarios.** Append them to the same file, immediately before the
+**3. Write the failing scenarios.** Append them to the same file, immediately before the
 `# --- usage ---` section. Note that each direct invocation spells its assignments out: a word
 produced by expanding an array is no longer recognised as an assignment prefix.
 
@@ -169,6 +170,38 @@ assert_doc 'a span the timed-out read did not feed keeps its value' \
 	'([.metrics.issues[] | select(.number == 301)][0].lead_time_hours) == 5'
 assert_contains 'exceeded its 1s network bound' "$SCRATCH/stderr"
 
+# A timed-out comments read reaches error by a different route, and that route
+# is the single line in bounded_call which empties the stdout capture on 124.
+# These eight positions are guarded by `[[ -s $blob ]]` and fall through to
+# unknown defaults, not to error: without this case that line ships untested,
+# and a regression would report a timeout as unknown with the suite green. The
+# timeline read answers normally here, so cycle_hours is the control.
+rm -f "$SCRATCH"/fake/tl-*.json "$SCRATCH"/fake/issue-*.json \
+	"$SCRATCH"/fake/prlist-*.json "$SCRATCH"/fake/pr-*.json
+jq -nc '[{number: 302, state: "closed", createdAt: "2026-07-01T09:00:00Z",
+	closedAt: "2026-07-01T14:00:00Z", labels: []}]' >"$SCRATCH/fake/search.json"
+jq -nc '[{event: "labeled", label: {name: "status:in-progress"},
+	created_at: "2026-07-01T10:00:00Z"},
+	{event: "closed", created_at: "2026-07-01T14:00:00Z"}]' >"$SCRATCH/fake/tl-302.json"
+printf '%s\n' '[]' >"$SCRATCH/fake/prlist-302.json"
+FAKE_GH_HANG=issue
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=1
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=1
+if ! run_collector 'status:ready'; then
+	cat "$SCRATCH/stderr" >&2
+	fail 'a timed-out comments read must not abort the run'
+fi
+FAKE_GH_HANG=
+COLLECT_TELEMETRY_BOUND_ONE_REQUEST=
+COLLECT_TELEMETRY_BOUND_MANY_REQUESTS=
+assert_doc 'every position a timed-out comments read feeds is error, never unknown' \
+	'([.metrics.issues[] | select(.number == 302)][0]) |
+	[.scope_estimate, .scope_complete, .trajectory_phase, .trajectory_branch,
+	 .trajectory_pr, .trajectory_guardrails, .trajectory_surprises,
+	 .divination_complexity] | all(. == "error")'
+assert_doc 'the timeline read that did answer keeps its value' \
+	'([.metrics.issues[] | select(.number == 302)][0].cycle_hours) == 4'
+
 # The three refusals, each a value that would otherwise change the bound
 # silently rather than be rejected: a non-digit that $(( )) would evaluate, a
 # leading zero it would read as octal, and a six-digit value that overflows when
@@ -200,7 +233,7 @@ fi
 because a suite that hangs and a suite that fails an assertion are not distinguishable by exit
 status alone.
 
-*The three hang contracts.* Their red is the hang itself, so it is discriminated against a
+*The four hang contracts.* Their red is the hang itself, so it is discriminated against a
 measured baseline rather than against a guess. First measure the baseline with the scenarios
 absent — `git stash && time bash tests/fixtures/bards-tale/collect-telemetry-test.sh && git stash
 pop`; on the development host that is about 85 seconds, exit 0. Then, with the scenarios present
@@ -221,7 +254,7 @@ beat is that measurement, not 240. Terminating the suite leaves up to one orphan
 per hang scenario reached, which exit on their own within five minutes; do not reach for a
 host-wide `pkill`, which would also kill an unrelated process on a shared machine.
 
-*The override contract.* Temporarily delete the three hang scenarios — everything from the
+*The override contract.* Temporarily delete the four hang scenarios — everything from the
 `# --- scenario: bounded reads ---` banner down to the
 `printf '%s\n' '[]' >"$SCRATCH/fake/search.json"` line that opens the refusal loop — and run
 `just test collect-telemetry` bare. Expect exit 1 naming `a bound override of 'abc' must exit
@@ -242,14 +275,15 @@ immediately after the `for tool in gh jq` loop, insert:
 # issues one request, 120 for one that may issue more. Overridable so the
 # behaviour suite reaches the timeout path without waiting a field value out.
 #
-# All three clauses of the check are load-bearing, and each was measured on
-# bash 3.2.57 rather than assumed. Non-digits: $(( )) evaluates a variable's
-# contents recursively, so a crafted array subscript there runs a command
-# substitution. A leading zero: $(( )) reads 08 as octal and errors, and 010 as
-# 8 -- a bound changed silently rather than refused. More than five digits:
-# bound * 10 overflows, the poll loop is skipped, and the bound collapses to
-# zero, killing every call immediately. ${#2} is a string length, so the length
-# test never evaluates the value.
+# All three clauses of the check are load-bearing, each measured on bash 3.2.57
+# rather than assumed. Non-digits: $(( )) evaluates a variable's contents
+# recursively, so a crafted array subscript there runs a command substitution.
+# A leading zero: $(( )) errors on 08 and reads 010 as 8 -- a bound changed
+# silently rather than refused. More than five digits: a bound above 99999
+# seconds is not a bound, and the cap is also what keeps the wrap out of reach,
+# since at nineteen digits bound * 10 returns -8446744073709551616, the poll
+# loop never runs and the bound collapses to zero. ${#2} is a string length, so
+# the length test never evaluates the value.
 check_bound() { # variable-name value
 	local digits=0
 	case $2 in
@@ -422,14 +456,21 @@ fi
 
 **11. Bump the plugin version.** Set `.claude-plugin/plugin.json`'s `version` to `5.10.3`.
 
-**12. State the aggregate-budget decision in the PR body.** Issue #387 asks for this answer in
-the PR, not only in a design file, so it is a deliverable of this task rather than shipping
-prose. The PR body must carry, in its own short section: that there is no aggregate budget; that
-`RATE_LIMIT_STOP` bounds only a uniformly failing remote because `consecutive_errors` resets at
-`collect-telemetry:883`; the resulting worst case of roughly 9 hours for a 200-issue selection
-with four issues in five carrying a hanging read; and that a run budget is reported as a
-follow-up candidate because it needs a new envelope marker, a minor bump under ADR 0030, and a
-renderer change in `skills/bards-tale/SKILL.md`, which this run may not touch.
+**12. State the two answers issue #387 asks for in the PR body**, not only in a design file, so
+they are deliverables of this task rather than shipping prose.
+
+*The aggregate budget*, in its own short section: that there is no aggregate budget; that
+`RATE_LIMIT_STOP` bounds only a uniformly failing remote, because `consecutive_errors` resets at
+`collect-telemetry:883`; the resulting worst case of 160 × (120 + 30 + 30) = 28800 seconds, 8
+hours, for a 200-issue selection with four issues in five carrying a hanging read — three reads
+and not four, since `pr_side_view` is gated on `pr_ok` at `:554`; and that a run budget is
+reported as a follow-up candidate because it needs a new envelope marker, a minor bump under
+ADR 0030, and a renderer change in `skills/bards-tale/SKILL.md`, which this run may not touch.
+
+*The test-determinism choice*, in one short paragraph: the bound is made injectable and the
+fake's hang is an `exec sleep 300`, so the suite waits for the one-second bound rather than for
+the sleep, and the sleep's duration never contributes to the suite's wall time — which is what
+takes the flake out of both directions the issue names.
 
 **13. Confirm green.** Run, bare and in order:
 

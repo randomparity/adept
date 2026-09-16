@@ -51,11 +51,15 @@ call and not each request, as the reference requires.
 Both bounds are overridable by environment variable so the behaviour suite can exercise the
 timeout path without waiting a field value out; the issue names that as an accepted way to make
 the hang deterministic. Each value is refused unless it is one to five bare decimal digits with
-no leading zero, checked before it reaches any arithmetic. All three clauses are load-bearing, as
-measured on bash 3.2.57: a leading zero makes `$(( ))` read `08` as octal and error, or `010` as
-8; six or more digits overflow when multiplied by ten and collapse the bound to zero, firing the
-kill immediately; and bash evaluates a variable's contents recursively inside `$(( ))`, where a
-crafted array subscript runs a command substitution. A refused value is a `die`.
+no leading zero, checked before it reaches any arithmetic. All three clauses are load-bearing,
+measured on bash 3.2.57 rather than assumed: bash evaluates a variable's contents recursively
+inside `$(( ))`, where a crafted array subscript runs a command substitution; a leading zero
+makes `$(( ))` error on `08` and read `010` as 8, changing the bound silently instead of refusing
+it; and a bound above 99999 seconds is not a bound, while capping the digit count is also what
+keeps the wrap out of reach — at nineteen digits `bound * 10` returns `-8446744073709551616`, the
+poll loop never runs and the bound collapses to zero, killing every call at once. Five digits
+settles the last two together without the validator reasoning about the shell's integer width. A
+refused value is a `die`.
 
 ### Where a timeout lands
 
@@ -74,8 +78,10 @@ any failed `gh` timeline read. This change neither creates that nor alters it.
 **No aggregate budget.** The honest worst case first, since `RATE_LIMIT_STOP` does not supply
 one: `consecutive_errors` resets at `:883` on any clean issue, so it bounds a *uniformly* failing
 remote and not an intermittently failing one. A 200-issue selection where four issues in five
-carry a hanging read can spend roughly 160 × (120 + 30 + 30) seconds ≈ 9 hours purely waiting out
-bounds. That is the measured answer to ADR 0068's delegated question, and it is not "minutes".
+carry a hanging read can spend 160 × (120 + 30 + 30) = 28800 seconds — 8 hours — purely waiting
+out bounds. Three reads, not four: `pr_side_view` is gated on `pr_ok` at `:554`, so a run cannot
+hit that bound on an issue whose candidate read already failed. That is the answer to ADR 0068's
+delegated question, and it is not "minutes".
 
 The decision is still no aggregate budget, for a reason that does not depend on the circuit:
 this convention exists to convert an unbounded hang into a finite, progress-making run, and it
@@ -172,8 +178,11 @@ The change adds one environment-variable entry point, which is the security trig
    arithmetic.
 6. Every assertion in the existing suite passes unmodified, and `schema_version` stays `1.6`.
 7. `.claude-plugin/plugin.json` is at `5.10.3`.
-8. The PR body states the aggregate-budget decision and the worst case it rests on, which is
-   where issue #387 asks for it.
+8. The PR body states the aggregate-budget decision with the worst case it rests on, and states
+   how the suite's hang is made deterministic. Issue #387 asks for both there.
+9. A timed-out **comments** read is covered as well as a timed-out timeline read: its positions
+   reach `error` only because the mechanism empties the stdout capture, so that line is proved
+   rather than assumed.
 
 ## Validation
 
