@@ -66,18 +66,16 @@ diagnostic. **Where it is machine-parsed it is a contract break**: `github.sh:56
 that `tracker.sh`'s stderr is a single JSON error object callers parse, and that a plain line
 beside it breaks the parse on a run that otherwise succeeded. Such a site keeps the notice off
 that channel by invoking the bound as `{ bounded_call … ; } 2>/dev/null`, which does suppress
-it — the redirect is in place when the reap happens — and reports through its own class as
-usual.
+it — the redirect is in place when the reap happens.
 
-**Allocate the capture files privately.** `mktemp` (mode 0600), or a file inside an `mktemp -d`
-root (0700), removed on the caller's existing EXIT trap — never a `$$`-derived name in a shared
-temporary directory, where the capture is world-readable at the default umask and the `>`
-redirect will follow a pre-created symlink. This pins what all five callers already do:
-`github.sh:73`, `cleared-dependencies.sh:78`, `collect-telemetry:101`, `publish-handoff:169`,
-`publish-forge-review:203`.
+Adapt it to the call site. Seven properties are not adaptable.
 
-Adapt it to the call site. Six properties are not adaptable.
-
+- **Allocate the capture files privately.** `mktemp` (mode 0600), or a file inside an
+  `mktemp -d` root (0700), removed on the caller's existing EXIT trap — never a `$$`-derived
+  name in a shared temporary directory, where the capture is world-readable at the default
+  umask and the `>` redirect will follow a pre-created symlink. This pins what all five callers
+  already do: `github.sh:73`, `cleared-dependencies.sh:78`, `collect-telemetry:101`,
+  `publish-handoff:169`, `publish-forge-review:203`.
 - **Capture to files, not to a command substitution.** `value=$(gh ...)` blocks in the parent
   and bounds nothing. A site that captures a value today reads it back out of the stdout file
   instead. That is a restructuring, not a wrapper swap, and it is most of the work: twelve of
@@ -91,8 +89,8 @@ Adapt it to the call site. Six properties are not adaptable.
 - **Discard the stdout capture on 124.** The writer was killed mid-stream, so a truncated
   capture is indistinguishable from a complete short one. A half-written JSONL page parses
   cleanly and reads as a smaller result set. Report; do not parse what arrived. The function
-  empties the file itself so the obligation is structural rather than remembered; keep that
-  line, and do not read the capture back from anywhere else on the 124 path.
+  empties the file on that path so the obligation is structural rather than remembered — keep
+  that line.
 - **Escalate; never send a bare `KILL`.** `SIGKILL` cannot be handled, so a `git` severed by it
   never tears down the `ssh` or `git-remote-https` it spawned: the transport is reparented to
   init and holds the connection after the wrapper has returned. On `SIGTERM` `git` tears it down
