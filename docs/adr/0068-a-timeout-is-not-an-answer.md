@@ -71,7 +71,11 @@ stdout and stderr to separate files, run it in the background, capture `$!`, pol
 recover its status. `scripts/check-public-safety-test.sh:762-789` already contains
 this idiom. It is Bash 3.2-safe, needs no trap, and needs nothing macOS does not
 ship. Exceeding the bound is signalled as return 124 — `timeout(1)`'s own
-convention, and an internal return rather than any script's exit status.
+convention, and an internal return rather than any script's exit status. That
+last clause is a call-site obligation, not a property of the function: every
+caller here runs under `set -e`, so the call captures its status
+(`|| rc=$?`) and a bare statement would abort the script at 124 before the
+breach could be classified at all.
 
 **Stdout captured by a call that hit its bound is void.** The killed writer stopped
 mid-stream, so a truncated capture is indistinguishable from a complete short
@@ -132,10 +136,13 @@ it, and no required-command list gains `timeout` or `gtimeout`.
   bash 3.2.57, not at 30.0. Nothing here depends on the difference, but a caller
   must not document the bound as exact.
 - Each bounded call reaps the process it started. A transport child that process
-  spawned is not reached by `kill -9` on it, which is why the `git` sites set a
+  spawned is not reached by `kill -9` on it, which is why the `git` site sets a
   connect timeout as well; for `gh`, which performs its own HTTPS requests in
-  process, there is no such child. A caller killed mid-call still orphans whatever
-  was running, which is today's exposure unchanged.
+  process, there is no such child. That remedy reaches an SSH remote only, and
+  `publish-handoff:381` reads whatever `origin` the operator's checkout has: on an
+  HTTPS origin the variable is inert and `git-remote-https` outlives the wrapper.
+  Accepted and stated rather than closed. A caller killed mid-call still orphans
+  whatever was running, which is today's exposure unchanged.
 - Four copies of one idiom will drift. That is the cost of not prescribing a
   shared helper now, and the reference is what they are checked against.
 - The mechanism is a child a model has to reason about stopping only within one

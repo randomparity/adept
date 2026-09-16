@@ -24,7 +24,10 @@ every target, so no rule here uses one.
 # merged capture once made a gh release notice part of a value a caller then
 # decided labels from.
 bounded_call() { # seconds out-file err-file command...
-	local bound=$1 out=$2 err=$3 pid waited=0 status=0
+	# rc, not status: under zsh `status` is a read-only special parameter, and a
+	# `local status=0` in a sourced body once killed a caller's whole session --
+	# cleared-dependencies.sh:5-16 carries that record.
+	local bound=$1 out=$2 err=$3 pid waited=0 rc=0
 	shift 3
 	"$@" >"$out" 2>"$err" &
 	pid=$!
@@ -38,17 +41,19 @@ bounded_call() { # seconds out-file err-file command...
 		wait "$pid" 2>/dev/null || :
 		return 124
 	fi
-	wait "$pid" || status=$?
-	return "$status"
+	wait "$pid" || rc=$?
+	return "$rc"
 }
 ```
 
-Adapt it to the call site. Four properties are not adaptable.
+Adapt it to the call site. Five properties are not adaptable.
 
 - **Capture to files, not to a command substitution.** `value=$(gh ...)` blocks in the parent
   and bounds nothing. A site that captures a value today reads it back out of the stdout file
-  instead. That is a restructuring, not a wrapper swap: `cleared-dependencies.sh:82` and
-  `github.sh:78` both capture this way today.
+  instead. That is a restructuring, not a wrapper swap, and it is most of the work: twelve of
+  the eighteen invocations capture into a command substitution — `cleared-dependencies.sh:82`
+  and `github.sh:78` among them, and all five of `publish-handoff`'s. Only
+  `collect-telemetry`'s six already redirect to a file and are genuine wrapper swaps.
 - **Keep the streams the site already keeps apart, apart.** `gh` writes non-fatal material to
   stderr while exiting 0, and two files where a site merged them once is what this preserves.
   A site that deliberately merges a diagnostic it discards on success — `cleared-dependencies.sh:56-60`
@@ -59,6 +64,10 @@ Adapt it to the call site. Four properties are not adaptable.
 - **Reap before returning.** The `wait` after `kill -9` is what stops the process this call
   started outliving it. Nothing here polls a *previous* invocation, keeps a PID file, or leaves
   a process for a later run to reason about.
+- **Capture the status at the call site.** Write `bounded_call <bound> "$out" "$err" <cmd> || rc=$?`,
+  never a bare statement. Every caller here runs under `set -e`, where a bare call aborts the
+  script the moment the bound is exceeded — before the line that would classify the breach or
+  print the diagnostic, which is the one thing this convention exists to make happen.
 
 `124` is this function's internal signal, borrowed from `timeout(1)`'s convention. It is never a
 script's exit status.
@@ -68,6 +77,12 @@ spawned, so the transport survives the wrapper and is reparented to init. Set
 `GIT_SSH_COMMAND='ssh -o ConnectTimeout=<n> -o BatchMode=yes'` for the call — an environment
 variable for one invocation, mutating no operator configuration — and keep the wrapper as the
 outer bound. `gh` performs its own requests in process and has no such child.
+
+That covers an SSH remote only, and the one `git` site reads whatever `origin` the operator's
+checkout has. **On an HTTPS origin the variable is inert**: the wrapper still returns at the
+bound, but `git-remote-https` outlives it holding the connection until the OS gives up. That
+residual is accepted and stated rather than closed, on the same terms as the caller-killed
+orphan below.
 
 ## The bound
 
@@ -100,6 +115,9 @@ Report a timeout in the caller's **own existing vocabulary**. Do not add an exit
 script that does not have one, and do not take a number that script already spends on something
 else; the point is that a timeout is distinguishable from an answer, not that every caller grows
 the same number.
+
+The table below is what each caller **is to adopt**, not what it does today: no executable is
+bounded yet, and until its applier lands, every call in it still blocks indefinitely.
 
 | Caller | A timeout reports as |
 |---|---|
