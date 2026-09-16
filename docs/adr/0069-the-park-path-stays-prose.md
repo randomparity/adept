@@ -115,12 +115,13 @@ survive — the park residual's stated recovery, "a reader recovers from by open
 ## Considered & rejected
 
 - **A sibling executable beside `publish-handoff`.** verified: `wc -l` gives 646 lines at commit
-  `66617c4`, of which `resolve_destination` and `resolve_head` are 132; the remaining 646 − 132 =
-  514 are what a sibling would duplicate and a shared unit would reuse. The worse of the two
-  composer shapes, on a decision that declines both.
+  `66617c4`, of which `resolve_destination` and `resolve_head` are 132, leaving 646 − 132 = 514 a
+  sibling could not share. Not all 514 is park-applicable — the compose step and its handshake
+  assertions sit inside it and question 1 excludes them — but a sibling duplicates the reusable part
+  a shared unit would have reused. The worse of the two composer shapes, on a decision declining both.
 - **A shared composition unit with hand-off and park entry points.** judgment: the better composer
-  shape, rejected only because rule 2 does not warrant a composer at all. Nothing about the shape
-  itself sinks it, and a future record reversing this one should start from it.
+  shape, rejected because this record declines a composer on the ground stated in the Decision —
+  not on anything about the shape. A future record reversing this one should start from it.
 - **A park-side validator the caller runs against a body it composed.** judgment: it is #390's own
   second fix direction scoped to one call site, and #390 can apply the same check at the shared
   hand-write path for every type at no greater cost. 0066's prevention-over-detection ground is
