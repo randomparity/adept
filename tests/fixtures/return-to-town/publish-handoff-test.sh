@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Behaviour tests for the merge hand-off publication helper.
 #
-# `gh` is faked on PATH and driven by GH_MODE. `git` is not faked: the SHA the
-# whole contract turns on is what `git ls-remote` returns, so the fixture builds
-# a real repository with a real bare remote and the helper reads it for real.
+# `gh` is faked on PATH and driven by GH_MODE. `git` is not faked, except in the
+# one case that bounds `git ls-remote`: the SHA the whole contract turns on is
+# what `git ls-remote` returns, so the fixture builds a real repository with a
+# real bare remote and the helper reads it for real.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -62,6 +63,13 @@ pr)
 	printf 'pr-view\n' >>"$state/events"
 	case ${GH_MODE:-success} in
 	pr-view-fail) exit 1 ;;
+	# A partial object first, for a later site that parses a capture on the 124
+	# path -- nothing here does, and the spec says so rather than claiming this
+	# case observes the discard.
+	hang-pr-view)
+		printf '{"number": 4'
+		exec sleep 30
+		;;
 	esac
 	jq -n \
 		--argjson number "${FAKE_PR_NUMBER:-$number}" \
@@ -114,6 +122,13 @@ issue)
 	two-urls) printf 'one\ntwo\n' ;;
 	foreign-url) printf '%s\n' 'https://github.com/other/repo/issues/9#issuecomment-73' ;;
 	nonnumeric-url) printf '%s\n' "https://github.com/$url_repo/issues/$issue_number#issuecomment-nope" ;;
+	# The comment is recorded above and a plausible URL is emitted before the
+	# hang, which is the real hazard: the write landed and its response did not
+	# arrive. The case then proves the helper reported neither as settled.
+	hang-comment)
+		printf '%s\n' "https://github.com/$url_repo/issues/$issue_number#issuecomment-73"
+		exec sleep 30
+		;;
 	*) printf '%s\n' "https://github.com/$url_repo/issues/$issue_number#issuecomment-73" ;;
 	esac
 	;;
@@ -139,6 +154,7 @@ api)
 		printf 'issue-read\n' >>"$state/events"
 		case ${FAKE_ISSUE_MODE:-present} in
 		absent) exit 1 ;;
+		hang) exec sleep 30 ;;
 		esac
 		want=${endpoint##*/}
 		# The canonical issue URL, which the helper uses to build the comment-URL
@@ -159,6 +175,7 @@ api)
 	printf 'api\n' >>"$state/events"
 	case ${GH_MODE:-success} in
 	read-fail) exit 1 ;;
+	hang-readback) exec sleep 30 ;;
 	drop-sentinel) grep -vxF -- '<!-- TRAJECTORY:COMPLETE -->' "$state/comment-body" >"$state/served" ;;
 	drop-marker) grep -vxF -- '<!-- WORK:TRAJECTORY -->' "$state/comment-body" >"$state/served" ;;
 	drop-handshake) grep -v '^MERGE-READY:' "$state/comment-body" >"$state/served" ;;
@@ -184,6 +201,7 @@ new_case() { # -- sets CASE, WORK, STATE, BIN, NOTES, HEAD_SHA
 	STATE="$root/state"
 	BIN="$root/bin"
 	NOTES="$root/notes.md"
+	HELPER_PATH=''
 	mkdir -p "$STATE"
 	write_fake_gh "$BIN"
 	git init --quiet --bare "$root/origin.git"
@@ -236,6 +254,42 @@ run_helper() { # [args...] -- sets RUN_STATUS, RUN_OUT, RUN_ERR
 	set -e
 	RUN_OUT=$(cat "$CASE/out")
 	RUN_ERR=$(cat "$CASE/err")
+}
+
+# The shipped bound is 30 seconds, which no test can wait for, so a case that has
+# to reach it runs a copy of the script with that one assignment rewritten to 2.
+# The root gets a stub public-safety gate, not a symlink: check-public-safety.sh
+# is itself a shim execing $ROOT/skills/quest/scripts/check-public-safety computed
+# from its own location, so a symlinked scripts/ resolves back here and finds no
+# skills/quest -- case_cdpath_does_not_steer_resolution stubs it for that reason.
+# The grep is the point: a renamed constant fails loudly here rather than silently
+# restoring a 30-second wait nothing would ever hit.
+short_bound_helper() { # -- sets HELPER_PATH
+	local root copy
+	root="$CASE/bounded-root"
+	copy="$root/skills/return-to-town/scripts/publish-handoff"
+	mkdir -p "$root/skills/return-to-town/scripts" "$root/scripts"
+	printf '#!/usr/bin/env bash\nexit 0\n' >"$root/scripts/check-public-safety.sh"
+	chmod +x "$root/scripts/check-public-safety.sh"
+	sed 's/^NETWORK_BOUND_SECONDS=30$/NETWORK_BOUND_SECONDS=2/' "$SCRIPT" >"$copy"
+	grep -qxF 'NETWORK_BOUND_SECONDS=2' "$copy" || return 1
+	chmod +x "$copy"
+	HELPER_PATH=$copy
+}
+
+# Only the ls-remote case installs this. Everything but ls-remote is the real git,
+# whose path is baked in here because the shim shadows it on PATH.
+write_fake_git() { # bin
+	local bin=$1
+	cat >"$bin/git" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "\${1:-}" = ls-remote ]; then
+	exec sleep 30
+fi
+exec '$(command -v git)' "\$@"
+EOF
+	chmod +x "$bin/git"
 }
 
 expect_status() { # label expected
@@ -653,6 +707,103 @@ case_pr_view_fails() {
 	ok "$label"
 }
 
+# --- bounded network calls ---------------------------------------------------
+
+case_pr_view_times_out() {
+	local label='a pull request read that exceeds the bound is a named fault'
+	new_case
+	short_bound_helper || {
+		fail_case "$label" 'the bound constant could not be rewritten'
+		return 0
+	}
+	GH_MODE=hang-pr-view run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 2 || return 0
+	expect_stderr "$label" "reading pull request $REPO#$PR" || return 0
+	expect_stderr "$label" 'network bound' || return 0
+	expect_stderr "$label" 'nothing was posted' || return 0
+	[ ! -e "$STATE/comment-body" ] || {
+		fail_case "$label" 'a comment was posted despite the timed-out read'
+		return 0
+	}
+	ok "$label"
+}
+
+case_issue_read_times_out() {
+	local label='a destination read that exceeds the bound is a named fault'
+	new_case
+	short_bound_helper || {
+		fail_case "$label" 'the bound constant could not be rewritten'
+		return 0
+	}
+	FAKE_ISSUE_MODE=hang run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 2 || return 0
+	expect_stderr "$label" "reading the hand-off destination $REPO#$ISSUE" || return 0
+	expect_stderr "$label" 'network bound' || return 0
+	ok "$label"
+}
+
+case_ls_remote_times_out() {
+	local label='an origin read that exceeds the bound is a named fault'
+	new_case
+	short_bound_helper || {
+		fail_case "$label" 'the bound constant could not be rewritten'
+		return 0
+	}
+	write_fake_git "$BIN"
+	run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 2 || return 0
+	expect_stderr "$label" "reading refs/heads/$BRANCH from origin" || return 0
+	expect_stderr "$label" 'network bound' || return 0
+	# The "nothing was posted" guard lives in case_pr_view_times_out alone: all
+	# three time out ahead of compose_body, so one case settles the pre-write path.
+	ok "$label"
+}
+
+case_comment_write_times_out() {
+	local label='a write that exceeds the bound reports an indeterminate comment'
+	new_case
+	short_bound_helper || {
+		fail_case "$label" 'the bound constant could not be rewritten'
+		return 0
+	}
+	GH_MODE=hang-comment run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 2 || return 0
+	expect_stderr "$label" "creating the hand-off comment on $REPO#$ISSUE" || return 0
+	expect_stderr "$label" 'network bound' || return 0
+	expect_stderr "$label" 'may or may not have landed' || return 0
+	# The fake recorded the write and emitted a URL before hanging. Both assertions
+	# below are the contract: the helper must not claim nothing was posted, and it
+	# must not print a verified URL it never verified.
+	[ -e "$STATE/comment-body" ] || {
+		fail_case "$label" 'the fixture did not record the write it is meant to model'
+		return 0
+	}
+	[ -z "$RUN_OUT" ] || {
+		fail_case "$label" "stdout carried '$RUN_OUT' for an unverified write"
+		return 0
+	}
+	ok "$label"
+}
+
+case_readback_times_out() {
+	local label='a readback that exceeds the bound names the comment it could not verify'
+	new_case
+	short_bound_helper || {
+		fail_case "$label" 'the bound constant could not be rewritten'
+		return 0
+	}
+	GH_MODE=hang-readback run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	expect_status "$label" 2 || return 0
+	expect_stderr "$label" 'reading back the stored hand-off comment' || return 0
+	expect_stderr "$label" "https://github.com/$REPO/issues/$ISSUE#issuecomment-73" || return 0
+	expect_stderr "$label" 'was not verified' || return 0
+	[ -z "$RUN_OUT" ] || {
+		fail_case "$label" "stdout carried '$RUN_OUT' for an unverified comment"
+		return 0
+	}
+	ok "$label"
+}
+
 # The minimal PATH carries bash alone: `#!/usr/bin/env bash` resolves the
 # interpreter through PATH too, so an empty one fails at exec with 127 and never
 # reaches the check under test.
@@ -959,6 +1110,11 @@ case_comment_creation_fails
 case_readback_fails
 case_bad_comment_url
 case_pr_view_fails
+case_pr_view_times_out
+case_issue_read_times_out
+case_ls_remote_times_out
+case_comment_write_times_out
+case_readback_times_out
 case_missing_command
 case_rerun_is_safe
 case_issue_not_closed_by_pr
