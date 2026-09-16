@@ -132,7 +132,7 @@ response came back leaves a published artifact the script cannot verify.
 - Do not retry it.
 - Say which call it was, so an operator can look.
 
-`github.sh:394-397` already reasons this way for an unretried create, and reports it through
+`github.sh:421-424` already reasons this way for an unretried create, and reports it through
 `EXIT_PARTIAL`.
 
 ## Classification
