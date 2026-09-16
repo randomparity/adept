@@ -45,6 +45,10 @@ bounded_call() { # seconds out-file err-file command...
 		done
 		kill -KILL "$pid" 2>/dev/null || :
 		wait "$pid" 2>/dev/null || :
+		# The writer was killed mid-stream, so the capture is void. Emptying it
+		# here makes that structural: a site that parses it anyway gets nothing,
+		# not a truncated page that reads as a complete short one.
+		: >"$out"
 		return 124
 	fi
 	wait "$pid" || rc=$?
@@ -57,8 +61,20 @@ enough to be noise against a 30- or 120-second bound.
 
 Bash announces a signalled background job on the script's own stderr — `… Terminated: 15` —
 and the `2>/dev/null` on `wait` does not suppress it, because the notice is printed before the
-reap. It is noise beside the caller's own diagnostic rather than a second error, and a caller
-that parses a bounded script's stderr has to expect it.
+reap. Where that stderr is prose the notice is harmless noise beside the caller's own
+diagnostic. **Where it is machine-parsed it is a contract break**: `github.sh:56-62` records
+that `tracker.sh`'s stderr is a single JSON error object callers parse, and that a plain line
+beside it breaks the parse on a run that otherwise succeeded. Such a site keeps the notice off
+that channel by invoking the bound as `{ bounded_call … ; } 2>/dev/null`, which does suppress
+it — the redirect is in place when the reap happens — and reports through its own class as
+usual.
+
+**Allocate the capture files privately.** `mktemp` (mode 0600), or a file inside an `mktemp -d`
+root (0700), removed on the caller's existing EXIT trap — never a `$$`-derived name in a shared
+temporary directory, where the capture is world-readable at the default umask and the `>`
+redirect will follow a pre-created symlink. This pins what all five callers already do:
+`github.sh:73`, `cleared-dependencies.sh:78`, `collect-telemetry:101`, `publish-handoff:169`,
+`publish-forge-review:203`.
 
 Adapt it to the call site. Six properties are not adaptable.
 
@@ -74,7 +90,9 @@ Adapt it to the call site. Six properties are not adaptable.
   records two — keeps doing that; the rule protects a captured *value*, not every stream.
 - **Discard the stdout capture on 124.** The writer was killed mid-stream, so a truncated
   capture is indistinguishable from a complete short one. A half-written JSONL page parses
-  cleanly and reads as a smaller result set. Report; do not parse what arrived.
+  cleanly and reads as a smaller result set. Report; do not parse what arrived. The function
+  empties the file itself so the obligation is structural rather than remembered; keep that
+  line, and do not read the capture back from anywhere else on the 124 path.
 - **Escalate; never send a bare `KILL`.** `SIGKILL` cannot be handled, so a `git` severed by it
   never tears down the `ssh` or `git-remote-https` it spawned: the transport is reparented to
   init and holds the connection after the wrapper has returned. On `SIGTERM` `git` tears it down
@@ -134,7 +152,7 @@ bounded yet, and until its applier lands, every call in it still blocks indefini
 | `skills/quest/scripts/publish-forge-review` | `fail` — exit 1; it has no exit-2 class |
 | `skills/bards-tale/scripts/collect-telemetry` | `die` — exit 1; its exit 2 is `usage`. In the tri-state a timed-out read is `error`, never `unknown(...)`, never a zero |
 | `skills/quest-log/assets/cleared-dependencies.sh` | exit 1 — its "degraded or partial" verdict; exit 2 is `usage`. Through the wrapper, a nonzero return carrying `cleared_dependency_err` |
-| `skills/quest-log/assets/profiles/github.sh` | `EXIT_TRANSPORT` (4) — it already means "the call did not answer" |
+| `skills/quest-log/assets/profiles/github.sh` | `EXIT_TRANSPORT` (4) — it already means "the call did not answer". Its stderr is a parsed JSON object, so this is the site that must brace the bound against the job notice |
 
 Whatever the status, the diagnostic names the call and says the bound was exceeded. A message
 that reports a timeout as a missing record, a false condition, or an unknown value is the defect
@@ -154,3 +172,13 @@ workaround is the divergence the record exists to prevent.
   budget is that script's own question.
 - **Orphans after the caller itself dies.** Each bounded call reaps the process it started. A
   caller killed mid-call leaves the same orphan it would today.
+- **Classifying an interactive prompt.** `ssh` reads a passphrase or a host-key confirmation
+  from `/dev/tty`, not from the redirected streams, so at an attended terminal a `git` call can
+  sit on a prompt until the bound fires and then be reported as a bound exceeded. The bound
+  contains it; it does not name it. An applier that wants the sharper diagnostic sets
+  `GIT_TERMINAL_PROMPT=0` for the call, which is a fail-fast knob and not the connect timeout
+  ADR 0068 rejected. Unattended there is no controlling terminal and the call fails fast anyway.
+- **PID reuse.** Bash reaps the background child as soon as it exits, freeing its PID to the
+  kernel, so a poll that lands after a reuse sees an unrelated process as the call still running
+  and signals it at the bound. The window is one poll interval, same-uid, and `kill -0` is the
+  only Bash 3.2 idiom available; it is stated here so the next reader does not rediscover it.

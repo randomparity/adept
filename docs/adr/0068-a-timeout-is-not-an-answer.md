@@ -69,10 +69,11 @@ forbids it.
 stdout and stderr to separate files, run it in the background, capture `$!`, poll
 `kill -0` against a tenth-second counter, then `kill -TERM`, a two-second grace poll,
 `kill -KILL` for a process that ignored TERM, and `wait` to reap it and recover its
-status. `scripts/check-public-safety-test.sh:762-801` is the idiom's in-repo
+status. `scripts/check-public-safety-test.sh:762-803` is the idiom's in-repo
 precedent; that leg tore its process down with a bare `kill -9` and this change
 escalates it, so the repository no longer demonstrates what this record forbids.
-The idiom is Bash 3.2-safe, needs no trap, and needs nothing macOS does not ship. Exceeding the bound is signalled as return 124 — `timeout(1)`'s own
+The idiom is Bash 3.2-safe, needs no trap, and needs nothing macOS does not
+ship. Exceeding the bound is signalled as return 124 — `timeout(1)`'s own
 convention, and an internal return rather than any script's exit status. That
 last clause is a call-site obligation, not a property of the function: every
 caller here runs under `set -e`, so the call captures its status
@@ -132,9 +133,12 @@ it, and no required-command list gains `timeout` or `gtimeout`.
 - Each bounded call reaps the process it started, and the TERM step is what makes
   that reach the transport child too: `git` tears down its `ssh` or
   `git-remote-https` on TERM and cannot on KILL. So the wrapper leaves nothing
-  behind on either transport, and `publish-handoff:381` no longer depends on which
-  `origin` the operator's checkout carries. A caller killed mid-call still orphans
-  whatever was running, which is today's exposure unchanged.
+  behind on either transport whenever TERM is honoured inside the grace window —
+  measured teardown is around 0.08 s against a 2-second window — and
+  `publish-handoff:381` no longer depends on which `origin` the operator's checkout
+  carries. `gh` performs its own requests in process and spawns no such child, so
+  the question does not arise for the other seventeen invocations. A caller killed
+  mid-call still orphans whatever was running, which is today's exposure unchanged.
 - Four copies of one idiom will drift. That is the cost of not prescribing a
   shared helper now, and the reference is what they are checked against.
 - The mechanism is a child a model has to reason about stopping only within one
