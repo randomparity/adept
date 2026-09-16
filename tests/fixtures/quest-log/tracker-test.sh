@@ -1255,6 +1255,56 @@ FAKE_GH_HANG='label delete' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH"
 assert_exit 5 "$status" 'a claim-recover delete timeout on a malformed claim'
 assert_error "$sandbox/err" partial 'a claim-recover delete timeout on a malformed claim'
 
+# claim-release's delete timeout: a real, matching held claim so the delete is
+# actually reached, then a bound breach on the delete itself.
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
+	exec sleep 300
+fi
+if [[ $1 == api ]]; then
+	printf 'q101-releasetok;alice;1700000000\n'
+	exit 0
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+status=0
+FAKE_GH_HANG='label delete' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" claim-release --profile github --target example/repo 101 \
+	--token q101-releasetok \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a claim-release delete timeout on a held, matching claim'
+assert_error "$sandbox/err" partial 'a claim-release delete timeout on a held, matching claim'
+
+# claim-acquire's create timeout, read back as genuinely absent (a real 404):
+# this is the path where the create's own GH_TIMED_OUT can be clobbered by the
+# read-back's github_run call before the absent-case classification runs. The
+# producer deliberately collides with github_classify's "authentication"
+# keyword, so a stale (reset-to-0) GH_TIMED_OUT would misclassify this exit
+# auth (3) instead of the required transport (4).
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
+	exec sleep 300
+fi
+if [[ $1 == api ]]; then
+	printf 'gh: Not Found (HTTP 404)\n' >&2
+	exit 1
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+status=0
+FAKE_GH_HANG='label create' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" claim-acquire --profile github --target example/repo 101 \
+	--token q101-timeouttest --producer authentication-bot \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'a claim-acquire create timeout whose producer collides with a classify keyword'
+assert_error "$sandbox/err" transport 'a claim-acquire create timeout whose producer collides with a classify keyword'
+
 # --- a CRLF declaration is valid, not malformed -----------------------------
 mkdir -p "$sandbox/crlf"
 git -C "$sandbox/crlf" init -q

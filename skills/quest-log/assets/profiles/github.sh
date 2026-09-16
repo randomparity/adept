@@ -792,8 +792,15 @@ profile_claim_acquire() {
 	# store's state is the only trustworthy discriminator between losing the
 	# race, winning but losing the response, and a create that genuinely
 	# failed. The create's own error is preserved across the read-back --
-	# GH_ERR belongs to whichever gh ran last.
+	# GH_ERR *and* GH_TIMED_OUT belong to whichever gh ran last, and
+	# github_claim_read below makes its own github_run call, which resets
+	# both. Without create_timed_out, a create that genuinely timed out
+	# followed by a read-back that answers (rather than itself timing out)
+	# would reach the absent-case classify below with GH_TIMED_OUT reset to
+	# 0 -- the same message-text misclassification the rest of this file was
+	# just fixed against, just via a stale flag instead of a missing one.
 	create_err=$GH_ERR
+	local create_timed_out=$GH_TIMED_OUT
 	local read_status=0
 	github_claim_read "$issue" || read_status=$?
 	if ((read_status != 0)); then
@@ -816,6 +823,10 @@ profile_claim_acquire() {
 		github_claim_conflict "$issue"
 		;;
 	absent)
+		# Restore the create's own timed-out state before classifying its
+		# error: github_claim_read's own github_run call has already
+		# overwritten GH_TIMED_OUT with the read-back's outcome.
+		GH_TIMED_OUT=$create_timed_out
 		github_die "$create_err"
 		;;
 	esac
