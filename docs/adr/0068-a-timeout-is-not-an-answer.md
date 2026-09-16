@@ -168,8 +168,8 @@ it, and no required-command list gains `timeout` or `gtimeout`.
 - **Relying on `GIT_SSH_COMMAND` alone, without the wrapper.** verified: at 15fd217
   on macOS, `GIT_SSH_COMMAND='ssh -o ConnectTimeout=3 -o BatchMode=yes' git ls-remote`
   against a black-holed address returns in 3.02 s leaving no surviving `ssh`, but it
-  bounds only the connect phase and reaches no `gh` call, which is fifteen of the
-  eighteen invocations.
+  bounds only the connect phase and reaches no `gh` call, which is seventeen of
+  the eighteen invocations — `publish-handoff:381` is the one `git` site.
 - **An EXIT-trap or signal-handler bound.** verified: `publish-forge-review:39`,
   `publish-handoff:97`, `collect-telemetry:111` and `github.sh:76` each already
   install an EXIT trap, and `cleared-dependencies.sh:66-73` records why its sourced
