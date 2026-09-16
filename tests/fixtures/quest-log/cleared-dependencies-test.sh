@@ -29,7 +29,14 @@ gh() {
 	if [[ $fake_mode == chatty ]]; then
 		printf 'A new release of gh is available: 2.63.0 -> 2.65.0\n' >&2
 	fi
+	# The hang arms below are bare `exec sleep 30`: exec replaces the subshell the
+	# bound backgrounded, so TERM reaches the blocking process directly. No pid is
+	# recorded here -- this fake is a shell function, so `$$` inside it is the
+	# test's own pid, not the backgrounded subshell's.
 	if [[ $1 == api ]]; then
+		if [[ $fake_mode == hang-api ]]; then
+			exec sleep 30
+		fi
 		if [[ $fake_mode == api-fail ]]; then
 			printf 'API \033[31mdenied\n' >&2
 			return 1
@@ -39,6 +46,9 @@ gh() {
 	fi
 	if [[ $1 == label && $2 == create ]]; then
 		[[ $* == *'--repo owner/repo'* ]] || fail 'label create omitted the target repo'
+		if [[ $fake_mode == hang-label ]]; then
+			exec sleep 30
+		fi
 		if [[ $fake_mode == label-fail ]]; then
 			printf 'label \033[31mdenied\n' >&2
 			return 1
@@ -46,6 +56,15 @@ gh() {
 		return
 	fi
 	if [[ $1 == issue && $2 == edit ]]; then
+		if [[ $fake_mode == hang-edit ]]; then
+			exec sleep 30
+		fi
+		# hang-restore is conflict everywhere else; here it hangs only on the
+		# restoring write, which carries --add-label status:blocked. The readying
+		# write does not, which is how this branch already discriminates below.
+		if [[ $fake_mode == hang-restore && $* == *'--add-label status:blocked'* ]]; then
+			exec sleep 30
+		fi
 		if [[ $fake_mode == edit-fail ]]; then
 			printf 'edit \033[31mdenied\n' >&2
 			return 1
@@ -61,6 +80,9 @@ gh() {
 	if [[ $1 == issue && $2 == view ]]; then
 		case $3 in
 		1)
+			if [[ $fake_mode == hang-blocker ]]; then
+				exec sleep 30
+			fi
 			printf '1\n' >>"$blocker_log"
 			if [[ $fake_mode == race && -e $ready_state ]]; then
 				printf 'OPEN\n'
@@ -81,17 +103,24 @@ gh() {
 			return 1
 			;;
 		101)
-			if [[ $fake_mode == postread-fail && -e $ready_state ]]; then
+			# The pre-write read and the post-write verification read differ only
+			# by whether the edit has happened, which is what this arm already
+			# keys on.
+			if [[ $fake_mode == hang-dependent && ! -e $ready_state ]]; then
+				exec sleep 30
+			elif [[ $fake_mode == hang-verify && -e $ready_state ]]; then
+				exec sleep 30
+			elif [[ $fake_mode == postread-fail && -e $ready_state ]]; then
 				printf 'read \033[31mdenied\n' >&2
 				return 1
 			elif [[ $* == *'--json number,state,body,labels'* && -e $ready_state ]]; then
-				if [[ $fake_mode == conflict ]]; then
+				if [[ $fake_mode == conflict || $fake_mode == hang-restore ]]; then
 					printf '%s\n' '{"number":101,"state":"OPEN","body":"Blocked by #1","labels":[{"name":"status:ready"},{"name":"status:blocked"}]}'
 				else
 					printf '%s\n' '{"number":101,"state":"OPEN","body":"Blocked by #1","labels":[{"name":"status:ready"}]}'
 				fi
 			elif [[ $* == *'--json labels'* ]]; then
-				if [[ $fake_mode == conflict ]]; then
+				if [[ $fake_mode == conflict || $fake_mode == hang-restore ]]; then
 					printf '%s\n' '{"labels":[{"name":"status:ready"},{"name":"status:blocked"}]}'
 				else
 					printf '%s\n' '{"labels":[{"name":"status:ready"}]}'
@@ -239,6 +268,174 @@ unset -f mktemp
 	fail "unallocatable scratch was not named: $cleared_dependency_reason"
 reset_cleared_dependency_cache
 
+# --- a call that did not answer is not an answer -----------------------------
+# Every gh call this recipe makes runs under a bound; a bound exceeded is never
+# reported as a missing record, an empty listing, or a failed write. The bounds
+# drop to one and two seconds around each case so the suite waits a second or two
+# rather than thirty, and are restored afterwards -- the fake blocks for thirty
+# either way.
+#
+# The two are deliberately set to *different* values, and every case below asserts
+# which number reached its diagnostic. Setting both to one would leave a site that
+# passed the single-request bound where the design's table requires the
+# multi-request one, or the reverse, indistinguishable: each case would still pass.
+# The distinction costs one extra second across the whole block.
+fake_mode=hang-blocker
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
+if cleared_dependency_body_verdict owner/repo 10 'Blocked by #1'; then
+	fail 'a blocker read that did not answer cleared a dependent'
+fi
+cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
+[[ $cleared_dependency_reason == *'unreadable blocker #1'* ]] ||
+	fail "an unanswered blocker read was not unreadable: $cleared_dependency_reason"
+[[ $cleared_dependency_reason == *'did not answer'* ]] ||
+	fail "an unanswered blocker read did not say so: $cleared_dependency_reason"
+[[ $cleared_dependency_reason == *'its 1s bound'* ]] ||
+	fail "a blocker read did not run under the single-request bound: $cleared_dependency_reason"
+[[ $cleared_dependency_reason != *'missing blocker'* ]] ||
+	fail "an unanswered blocker read was reported missing: $cleared_dependency_reason"
+[[ $cleared_dependency_reason != *CLOSED* ]] ||
+	fail "an unanswered blocker read was reported closed: $cleared_dependency_reason"
+fake_mode=normal
+reset_cleared_dependency_cache
+
+# A bound the arithmetic destination would reject is refused before the call, not
+# after it. `08` is the reachable half of that guard and costs nothing to commit:
+# bash reads a leading zero as octal, so `$((08 * 10))` is an arithmetic error --
+# cleared_dependency_run's own comment records what that error then does, and why
+# it is worse than an abort. The unreachable half is a bound carrying a command
+# substitution, which stays untested because observing it means committing the
+# payload.
+fake_mode=hang-blocker
+cleared_dependency_bound_single=08
+if cleared_dependency_body_verdict owner/repo 10 'Blocked by #1'; then
+	fail 'a bound the arithmetic would reject cleared a dependent'
+fi
+cleared_dependency_bound_single=30
+[[ $cleared_dependency_reason == *'not a whole number of seconds'* ]] ||
+	fail "a leading-zero bound was not refused: $cleared_dependency_reason"
+[[ $cleared_dependency_reason != *'did not answer'* ]] ||
+	fail "a refused bound was reported as a call that did not answer: $cleared_dependency_reason"
+fake_mode=normal
+reset_cleared_dependency_cache
+
+: >"$gh_log"
+fake_mode=hang-api
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
+set +e
+reconcile_cleared_dependencies plan owner/repo >/dev/null 2>"$SCRATCH/hang-api"
+hang_api_status=$?
+set -e
+cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
+fake_mode=normal
+[[ $hang_api_status -eq 1 ]] || fail 'an unanswered issue listing must exit 1'
+rg -q --no-config 'cannot list open dependents' "$SCRATCH/hang-api" ||
+	fail 'an unanswered issue listing was not named'
+rg -q --no-config 'did not answer' "$SCRATCH/hang-api" ||
+	fail 'an unanswered issue listing did not say so'
+rg -q --no-config 'its 2s bound' "$SCRATCH/hang-api" ||
+	fail 'the paginated listing did not run under the multi-request bound'
+rg -q --no-config 'no labels changed' "$SCRATCH/hang-api" ||
+	fail 'an unanswered issue listing did not say no labels changed'
+[[ ! -s $gh_log ]] || fail 'an unanswered issue listing changed labels'
+reset_cleared_dependency_cache
+
+rm -f "$ready_state"
+: >"$gh_log"
+fake_mode=hang-label
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-label"; then
+	fail 'an unanswered label create must fail closed'
+fi
+cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
+fake_mode=normal
+rg -q --no-config 'may or may not exist' "$SCRATCH/hang-label" ||
+	fail 'an unanswered label create was reported as a failure, not as indeterminate'
+rg -q --no-config 'its 1s bound' "$SCRATCH/hang-label" ||
+	fail 'the label create did not run under the single-request bound'
+[[ ! -s $gh_log ]] || fail 'an unanswered label create still attempted an edit'
+reset_cleared_dependency_cache
+
+rm -f "$ready_state"
+: >"$gh_log"
+fake_mode=hang-edit
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-edit"; then
+	fail 'an unanswered label write must fail closed'
+fi
+cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
+fake_mode=normal
+rg -q --no-config 'may or may not have been changed' "$SCRATCH/hang-edit" ||
+	fail 'an unanswered label write was reported as a failure, not as indeterminate'
+rg -q --no-config 'its 2s bound' "$SCRATCH/hang-edit" ||
+	fail 'the label write did not run under the multi-request bound'
+if rg -q --no-config -- '--add-label status:blocked' "$gh_log"; then
+	fail 'an unanswered label write was followed by a restore'
+fi
+reset_cleared_dependency_cache
+
+rm -f "$ready_state"
+: >"$gh_log"
+fake_mode=hang-dependent
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-dependent"; then
+	fail 'an unanswered dependent read must fail closed'
+fi
+cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
+fake_mode=normal
+rg -q --no-config 'unreadable dependent #101' "$SCRATCH/hang-dependent" ||
+	fail 'an unanswered dependent read was not unreadable'
+rg -q --no-config 'did not answer' "$SCRATCH/hang-dependent" ||
+	fail 'an unanswered dependent read did not say so'
+rg -q --no-config 'its 1s bound' "$SCRATCH/hang-dependent" ||
+	fail 'the dependent read did not run under the single-request bound'
+reset_cleared_dependency_cache
+
+rm -f "$ready_state"
+: >"$gh_log"
+fake_mode=hang-verify
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-verify"; then
+	fail 'an unanswered verification read must fail closed'
+fi
+cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
+fake_mode=normal
+rg -q --no-config 'verification unreadable for #101' "$SCRATCH/hang-verify" ||
+	fail 'an unanswered verification read was not unreadable'
+rg -q --no-config 'did not answer' "$SCRATCH/hang-verify" ||
+	fail 'an unanswered verification read did not say so'
+rg -q --no-config 'its 1s bound' "$SCRATCH/hang-verify" ||
+	fail 'the verification read did not run under the single-request bound'
+# A call that did not answer is not evidence the write went wrong.
+if rg -q --no-config -- '--add-label status:blocked' "$gh_log"; then
+	fail 'an unanswered verification read triggered a restore'
+fi
+reset_cleared_dependency_cache
+
+rm -f "$ready_state"
+: >"$gh_log"
+fake_mode=hang-restore
+cleared_dependency_bound_single=1 cleared_dependency_bound_multi=2
+if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/hang-restore"; then
+	fail 'a conflicting write whose restore did not answer must fail closed'
+fi
+# The last of the restores, and nothing below reads the bounds again, which is
+# what shellcheck sees here. The sourced recipe reads them, not this file.
+# shellcheck disable=SC2034
+cleared_dependency_bound_single=30 cleared_dependency_bound_multi=120
+fake_mode=normal
+rg -q --no-config 'conflicting status write' "$SCRATCH/hang-restore" ||
+	fail 'an unanswered restore masked the primary error'
+rg -q --no-config 'restoring #101 to status:blocked' "$SCRATCH/hang-restore" ||
+	fail 'an unanswered restore did not name the call'
+rg -q --no-config 'may or may not have been changed' "$SCRATCH/hang-restore" ||
+	fail 'an unanswered restore was reported as a failure, not as indeterminate'
+rg -q --no-config 'its 2s bound' "$SCRATCH/hang-restore" ||
+	fail 'the restore did not run under the multi-request bound'
+[[ $(wc -l <"$gh_log") -eq 1 ]] ||
+	fail 'an unanswered restore wrote more than the readying edit'
+reset_cleared_dependency_cache
+
 fake_mode=stale
 rm -f "$ready_state"
 if apply_cleared_dependency owner/repo "$initial" >/dev/null 2>"$SCRATCH/stale"; then
@@ -345,6 +542,23 @@ set -e
 rg -q --no-config '^usage:' "$direct_usage_err" ||
 	fail 'the direct usage error printed no usage line'
 
+# Executed, a bound exceeded is the same verdict the sourced form reports: exit
+# 1, its degraded-or-partial class, never the exit 2 it spends on usage. The
+# bound is exported rather than assigned in the file, which is why the file
+# assigns its defaults with `:=`.
+direct_hang_err=$SCRATCH/direct-hang.err
+fake_mode=hang-api
+set +e
+PATH="$fake_bin:$PATH" cleared_dependency_bound_multi=1 \
+	bash "$script_dir/../../../skills/quest-log/assets/cleared-dependencies.sh" \
+	plan owner/repo >"$SCRATCH/direct-hang.out" 2>"$direct_hang_err"
+direct_hang_status=$?
+set -e
+fake_mode=normal
+[[ $direct_hang_status -eq 1 ]] || fail 'a direct unanswered listing must exit 1'
+rg -q --no-config 'cannot list open dependents' "$direct_hang_err" ||
+	fail 'direct execution did not report the unanswered listing'
+
 # --- a non-bash interpreter refuses without killing the caller ---------------
 # The recipes no longer instruct anyone to source this asset, but sourcing
 # stays supported and a sourcing caller's shell is not always bash.
@@ -376,4 +590,28 @@ if command -v zsh >/dev/null; then
 else
 	printf 'cleared-dependencies-test: zsh not installed; interpreter-guard case skipped\n'
 fi
+# --- the killed writer's capture is void ------------------------------------
+# One of the convention's seven non-adaptable properties: on a bound exceeded the
+# stdout capture is emptied, so a half-written page cannot be parsed as a
+# complete short one. Neither file's call sites can observe it -- both refuse to
+# parse before reading on the 124 path -- so it is asserted against the function
+# directly, and the writer must write *before* it blocks or the capture would be
+# empty either way and deleting the rule would leave this green.
+bounded_out=$SCRATCH/bounded.out
+bounded_err=$SCRATCH/bounded.err
+partial_writer=$SCRATCH/partial-writer.sh
+cat >"$partial_writer" <<'WRITER'
+#!/usr/bin/env bash
+printf '%s' '[{"number":101,"stat'
+exec sleep 30
+WRITER
+chmod +x "$partial_writer"
+bounded_rc=0
+cleared_dependency_bounded_call 1 "$bounded_out" "$bounded_err" "$partial_writer" || bounded_rc=$?
+[[ $bounded_rc -eq 1 ]] && fail 'the bounded call refused its own bound'
+[[ $bounded_rc -eq 124 ]] ||
+	fail "a blocked writer was not reported as a bound exceeded: rc=$bounded_rc"
+[[ ! -s $bounded_out ]] ||
+	fail "the killed writer's partial capture survived: $(cat "$bounded_out")"
+
 printf 'cleared-dependencies-test: pass\n'
