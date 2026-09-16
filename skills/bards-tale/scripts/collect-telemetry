@@ -113,6 +113,11 @@ done
 # since at nineteen digits bound * 10 returns -8446744073709551616, the poll
 # loop never runs and the bound collapses to zero. ${#2} is a string length, so
 # the length test never evaluates the value.
+#
+# The '' arm is unreachable from the two call sites below, whose :- defaults
+# substitute for empty as well as unset, so an empty override takes the field
+# value rather than being refused. It stays because an empty bound would reach
+# $(( )) as a syntax error rather than as a refusal, and the arm costs nothing.
 check_bound() { # variable-name value
 	local digits=0
 	case $2 in

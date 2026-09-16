@@ -50,8 +50,9 @@ call and not each request, as the reference requires.
 
 Both bounds are overridable by environment variable so the behaviour suite can exercise the
 timeout path without waiting a field value out; the issue names that as an accepted way to make
-the hang deterministic. Each value is refused unless it is one to five bare decimal digits with
-no leading zero, checked before it reaches any arithmetic. All three clauses are load-bearing,
+the hang deterministic. Unset — and, because the defaults use `:-`, empty — takes the field
+value; any other value is refused unless it is one to five bare decimal digits with no leading
+zero, checked before it reaches any arithmetic. All three clauses are load-bearing,
 measured on bash 3.2.57 rather than assumed: bash evaluates a variable's contents recursively
 inside `$(( ))`, where a crafted array subscript runs a command substitution; a leading zero
 makes `$(( ))` error on `08` and read `010` as 8, changing the bound silently instead of refusing
@@ -85,7 +86,7 @@ delegated question, and it is not "minutes".
 
 The decision is still no aggregate budget, for a reason that does not depend on the circuit:
 this convention exists to convert an unbounded hang into a finite, progress-making run, and it
-does. Nine hours is bad; forever is a different category, and it is the one #379 is about. A run
+does. Eight hours is bad; forever is a different category, and it is the one #379 is about. A run
 budget is not a smaller version of this change — it needs a new envelope marker (the issue is
 explicit that it cannot be called `rate_limited`), a minor bump under ADR 0030, and a renderer
 change in `skills/bards-tale/SKILL.md`, which is outside this run's permitted surface. It is
@@ -157,8 +158,9 @@ The change adds one environment-variable entry point, which is the security trig
 - **Actor model.** Whoever sets these variables is the same actor who supplies argv and `PATH`
   and who can already replace `gh` outright; the script trusts that actor completely and always
   has. `gh`'s responses remain untrusted input.
-- **Control per boundary.** Each bound is rejected unless it is one to five bare decimal digits
-  with no leading zero, before it reaches `$(( ))`. The digit rule stops bash's recursive
+- **Control per boundary.** An unset or empty variable takes the field default and never reaches
+  the check. Any other value is rejected unless it is one to five bare decimal digits with no
+  leading zero, before it reaches `$(( ))`. The digit rule stops bash's recursive
   arithmetic evaluation from running a command substitution hidden in an array subscript; the
   other two stop an octal reading and an overflow that would each silently change the bound
   rather than refuse it. On rejection the script `die`s, naming the variable and the value.
