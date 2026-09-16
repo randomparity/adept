@@ -1092,6 +1092,248 @@ PATH="$sandbox/bin:$PATH" "$tracker" view --profile '' --target example/repo 101
 assert_exit 1 "$status" 'view with an empty profile name'
 assert_error "$sandbox/err" usage 'empty profile name'
 
+# --- network bounds ----------------------------------------------------------
+# github_run's gh call now runs under references/network-bounds.md's bound
+# instead of blocking indefinitely. This fake gh hangs on demand: when its
+# subcommand matches FAKE_GH_HANG it optionally emits FAKE_GH_PARTIAL, flushed
+# through a subshell before exec replaces the image, then execs into a sleep
+# far longer than any bound this suite uses -- exec so the bound's TERM reaches
+# the hung process directly and leaves no orphan, per
+# collect-telemetry-test.sh's identical shim and its own comment on why.
+mkdir -p "$sandbox/hang-bin"
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
+	if [[ -n ${FAKE_GH_PARTIAL:-} ]]; then
+		(printf '%s' "$FAKE_GH_PARTIAL")
+	fi
+	exec sleep 300
+fi
+if [[ $1 == issue && $2 == create ]]; then
+	printf 'Creating issue in example/repo\n'
+	printf 'https://github.com/example/repo/issues/101\n'
+	exit 0
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+
+# A read that exceeds its bound reports EXIT_TRANSPORT (4) -- the class that
+# already means "the call did not answer" -- and the diagnostic names the call
+# and the bound, never "not found" or "authentication" text that would
+# misclassify it. github_bound_single overridden to 1s so the case does not
+# wait a field value out.
+status=0
+FAKE_GH_HANG='issue view' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" view --profile github --target example/repo 101 \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'a read that exceeds its network bound'
+assert_error "$sandbox/err" transport 'a read that exceeds its network bound'
+assert_contains 'exceeded its 1s network bound' "$sandbox/err"
+
+# The bash job-terminated notice bounded_call's kill leaves on this shell's own
+# stderr must never join the single JSON error object tracker.sh's callers
+# parse: a run that times out still emits exactly one JSON value and no bare
+# line beside it.
+[[ $(jq -s 'length' <"$sandbox/err" 2>/dev/null) == 1 ]] ||
+	fail 'a timed-out read left more than one JSON value on stderr'
+rg -qF 'Terminated' "$sandbox/err" &&
+	fail 'the bash job-terminated notice reached the parsed-JSON stderr channel'
+status=0
+
+# The two multi-request call sites -- label-history's --paginate --slurp and
+# claim-list's --paginate over per_page=100 -- take the 120-second bound;
+# every other site takes 30. Both overridden here to different small values so
+# the diagnostic's own bound number, not a timing race, proves which constant
+# reached which call.
+status=0
+FAKE_GH_HANG='repo view' github_bound_single=1 github_bound_multi=2 \
+	PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" target-url --profile github --target example/repo \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'a single-request site exceeding its bound'
+assert_contains 'exceeded its 1s network bound' "$sandbox/err"
+
+status=0
+FAKE_GH_HANG='api' github_bound_single=1 github_bound_multi=2 \
+	PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" label-history --profile github --target example/repo 101 status:ready \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'label-history exceeding its bound'
+assert_contains 'exceeded its 2s network bound' "$sandbox/err"
+
+status=0
+FAKE_GH_HANG='api' github_bound_single=1 github_bound_multi=2 \
+	PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" claim-list --profile github --target example/repo \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'claim-list exceeding its bound'
+assert_contains 'exceeded its 2s network bound' "$sandbox/err"
+
+# A write killed mid-flight reports indeterminate, never a failure, and never
+# by parsing whatever fragment gh had written before it was signalled: the
+# capture is void on a bound breach, so a create that had written most of a
+# URL before being killed must not read as though the write completed.
+status=0
+FAKE_GH_HANG='issue create' FAKE_GH_PARTIAL='https://github.com/example/repo/issues/1' \
+	github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" create --profile github --target example/repo \
+	--title T --body-file "$sandbox/body.md" \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a create that exceeds its network bound'
+jq -e '.error == "partial" and .partial.url == ""' >/dev/null <"$sandbox/err" ||
+	fail "a timed-out create read its voided capture as a landed write: $(cat "$sandbox/err")"
+
+# A bound override that is not a whole number of seconds never reaches the
+# arithmetic destination bounded_call multiplies it against -- caught here,
+# not by whatever $((...)) does with the value.
+status=0
+github_bound_single=01 PATH="$sandbox/bin:$PATH" \
+	"$tracker" target-url --profile github --target example/repo \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'a bound override with a leading zero'
+assert_error "$sandbox/err" usage 'a bound override with a leading zero'
+
+# A timeout's own outcome, not its message text, must decide its classification:
+# github_run's synthesized diagnostic splices in the caller's own gh arguments
+# (title, search text, label name, ...), so ordinary text a human writes into a
+# search or a title can coincidentally match github_classify's substring keys.
+# GH_TIMED_OUT is what keeps these transport/partial rather than misrouted.
+status=0
+FAKE_GH_HANG='search issues' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" search --profile github --target example/repo --text 'could not resolve conflict' \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'a search timeout whose query text collides with a classify keyword'
+assert_error "$sandbox/err" transport 'a search timeout whose query text collides with a classify keyword'
+
+status=0
+FAKE_GH_HANG='issue create' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" create --profile github --target example/repo \
+	--title 'could not resolve payment gateway' --body-file "$sandbox/body.md" \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a create timeout whose title collides with a classify keyword'
+jq -e '.error == "partial" and .partial.url == ""' >/dev/null <"$sandbox/err" ||
+	fail "a create timeout with colliding title was not reported partial: $(cat "$sandbox/err")"
+
+# label-ensure has no EXIT_PARTIAL branch of its own before this case existed:
+# any non-"already exists" failure, including a timeout now reachable for the
+# first time, must report indeterminate rather than the classified transport
+# die every other kind of label-ensure failure still uses.
+status=0
+FAKE_GH_HANG='label create' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" label-ensure --profile github --target example/repo \
+	status:probe 0e8a16 'probe label' \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a label-ensure timeout'
+assert_error "$sandbox/err" partial 'a label-ensure timeout'
+
+# claim-recover's delete is reached for the first time on a timeout too. Seed a
+# malformed claim (no --token/--producer matching needed) so --force reaches
+# the delete without going through the token-matching held path.
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
+	exec sleep 300
+fi
+if [[ $1 == api ]]; then
+	case " $* " in
+	*'/labels/quest-claim%2F'*) printf 'malformed-claim-body\n' ;;
+	*) printf '5039780970\n' ;;
+	esac
+	exit 0
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+status=0
+FAKE_GH_HANG='label delete' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" claim-recover --profile github --target example/repo 101 \
+	--force --token q101-abcdefab --producer someuser \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a claim-recover delete timeout on a malformed claim'
+assert_error "$sandbox/err" partial 'a claim-recover delete timeout on a malformed claim'
+
+# claim-release's delete timeout: a real, matching held claim so the delete is
+# actually reached, then a bound breach on the delete itself.
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
+	exec sleep 300
+fi
+if [[ $1 == api ]]; then
+	printf 'q101-releasetok;alice;1700000000\n'
+	exit 0
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+status=0
+FAKE_GH_HANG='label delete' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" claim-release --profile github --target example/repo 101 \
+	--token q101-releasetok \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a claim-release delete timeout on a held, matching claim'
+assert_error "$sandbox/err" partial 'a claim-release delete timeout on a held, matching claim'
+
+# claim-acquire's create timeout, read back as genuinely absent (a real 404):
+# this is the path where the create's own GH_TIMED_OUT can be clobbered by the
+# read-back's github_run call before the absent-case classification runs. The
+# producer deliberately collides with github_classify's "authentication"
+# keyword, so a stale (reset-to-0) GH_TIMED_OUT would misclassify this exit
+# auth (3) instead of the required transport (4).
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
+	exec sleep 300
+fi
+if [[ $1 == api ]]; then
+	printf 'gh: Not Found (HTTP 404)\n' >&2
+	exit 1
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+status=0
+FAKE_GH_HANG='label create' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" claim-acquire --profile github --target example/repo 101 \
+	--token q101-timeouttest --producer authentication-bot \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 4 "$status" 'a claim-acquire create timeout whose producer collides with a classify keyword'
+assert_error "$sandbox/err" transport 'a claim-acquire create timeout whose producer collides with a classify keyword'
+
+# link-parent's second call -- the sub_issues POST -- is a write. Its own
+# timeout must report indeterminate, not the read-style classified failure its
+# sibling lookup call correctly still uses. The first call (the child's
+# database id) answers normally so the write is actually reached.
+cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $1 == api ]]; then
+	case " $* " in
+	*'/sub_issues'*)
+		if [[ ${FAKE_GH_HANG:-} == sub_issues ]]; then
+			exec sleep 300
+		fi
+		printf '{}\n'
+		;;
+	*) printf '5039780970\n' ;;
+	esac
+	exit 0
+fi
+exit 0
+FAKE_GH
+chmod +x "$sandbox/hang-bin/gh"
+status=0
+FAKE_GH_HANG=sub_issues github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
+	"$tracker" link-parent --profile github --target example/repo 100 101 \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 5 "$status" 'a link-parent sub_issues write timeout'
+assert_error "$sandbox/err" partial 'a link-parent sub_issues write timeout'
+
 # --- a CRLF declaration is valid, not malformed -----------------------------
 mkdir -p "$sandbox/crlf"
 git -C "$sandbox/crlf" init -q

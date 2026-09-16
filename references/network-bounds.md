@@ -62,7 +62,7 @@ enough to be noise against a 30- or 120-second bound.
 Bash announces a signalled background job on the script's own stderr — `… Terminated: 15` —
 and the `2>/dev/null` on `wait` does not suppress it, because the notice is printed before the
 reap. Where that stderr is prose the notice is harmless noise beside the caller's own
-diagnostic. **Where it is machine-parsed it is a contract break**: `github.sh:56-62` records
+diagnostic. **Where it is machine-parsed it is a contract break**: `github.sh:58-66` records
 that `tracker.sh`'s stderr is a single JSON error object callers parse, and that a plain line
 beside it breaks the parse on a run that otherwise succeeded. Such a site keeps the notice off
 that channel by invoking the bound as `{ bounded_call … ; } 2>/dev/null`, which does suppress
@@ -81,8 +81,8 @@ Adapt it to the call site. Seven properties are not adaptable.
   and bounds nothing. A site that captures a value today reads it back out of the stdout file
   instead. That is a restructuring, not a wrapper swap, and it was most of the work: twelve of
   the eighteen invocations captured into a command substitution, and only `collect-telemetry`'s
-  six already redirected to a file. Four callers have since been restructured. `github_run` in
-  `github.sh` is the last one that still captures into a substitution, and #394 tracks it.
+  six already redirected to a file. All five callers have since been restructured; `github_run`
+  in `github.sh` was the last, in #394.
 - **Keep the streams the site already keeps apart, apart.** `gh` writes non-fatal material to
   stderr while exiting 0, and two files where a site merged them once is what this preserves.
   A site that deliberately merges a diagnostic it discards on success — `cleared-dependencies.sh:102-104`
@@ -132,7 +132,7 @@ response came back leaves a published artifact the script cannot verify.
 - Do not retry it.
 - Say which call it was, so an operator can look.
 
-`github.sh:295-298` already reasons this way for an unretried create, and reports it through
+`github.sh:421-424` already reasons this way for an unretried create, and reports it through
 `EXIT_PARTIAL`.
 
 ## Classification
@@ -142,10 +142,9 @@ script that does not have one, and do not take a number that script already spen
 else; the point is that a timeout is distinguishable from an answer, not that every caller grows
 the same number.
 
-Four of the five callers below now do this. `publish-handoff` was bounded in #384,
-`publish-forge-review` and `cleared-dependencies.sh` in #386, `collect-telemetry` in #387.
-`github.sh` is not bounded yet, so every call through `github_run` still blocks indefinitely
-until #394 lands.
+All five callers below now do this. `publish-handoff` was bounded in #384,
+`publish-forge-review` and `cleared-dependencies.sh` in #386, `collect-telemetry` in #387, and
+`github.sh` in #394.
 
 | Caller | A timeout reports as |
 |---|---|
