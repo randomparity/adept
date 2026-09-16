@@ -559,7 +559,8 @@ post_comment() {
 	# stdin instead, so a relative TMPDIR whose first component is an identifier
 	# followed by `=` would silently scan this script's own stdin for the URL --
 	# a scan that could not run reporting as one that found nothing.
-	candidate=$(awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }' <"$call_out") ||
+	candidate=$(awk 'NF { count += 1; value = $0 } END { if (count == 1) print value }' \
+		<"$call_out") ||
 		fault 'the comment-creation response could not be scanned for a URL'
 	[ -n "$candidate" ] ||
 		fail 'creating the hand-off comment returned no usable comment URL'
