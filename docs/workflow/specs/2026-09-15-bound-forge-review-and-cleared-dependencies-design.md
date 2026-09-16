@@ -158,7 +158,11 @@ the orphan a caller killed mid-call leaves, which is today's exposure unchanged.
 1. Each of the six invocation points runs under `bounded_call` at the bound its row above states,
    and no `gh` invocation expression in either file is captured by a command substitution.
 2. `publish-forge-review` exits 1 on a bound exceeded at either site, with a diagnostic naming the
-   call and the bound; the `:242` write additionally reports the comment may or may not exist.
+   call and the bound; the `:242` write additionally reports the comment may or may not exist. A
+   readback failure of **any** status, not only a bound exceeded, names the posted comment it
+   could not verify: the comment is equally unverified either way, and withholding its URL on the
+   pre-existing failure path would leave the operator to find it — which is how a re-run posts a
+   second one.
 3. `cleared-dependencies.sh` reports a bound exceeded through `unreadable blocker`,
    `unreadable dependent`, `verification unreadable`, `cannot list open dependents`, or the
    matching write diagnostic; exits 1; and keeps "no labels changed" true when it changed none.
