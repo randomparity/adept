@@ -526,11 +526,11 @@ tokens.
 ```bash
 post_annotation() { # kind(issue|pr) number type bodyfile
   # type is the full token the convention names, e.g. WORK:TRAJECTORY or GROOM:STALE.
-  local open="<!-- $3 -->" close="<!-- ${3#*:}:COMPLETE -->"
   case $3 in
     *:*) : ;;
     *) echo "post_annotation: type '$3' needs the full token, e.g. WORK:TRAJECTORY" >&2; return 1 ;;
   esac
+  local open="<!-- $3 -->" close="<!-- ${3#*:}:COMPLETE -->"
   # Check the file first: grep's nonzero exit cannot distinguish "no match" from
   # "no such file", so without this the marker messages below would misreport a
   # missing body file as a malformed block.
