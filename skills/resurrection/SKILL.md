@@ -49,7 +49,10 @@ actively working the same repo. Read → plan → one confirmation → apply.
    This is the repair owner for a primary return-to-town edge that was interrupted or omitted.
    List all other `blocked`/`needs-human` issues as *held* with their parked-phase note (from
    `WORK:TRAJECTORY`; for a birth-blocked issue with no trajectory note, the
-   `Blocked by #<n>` body line is the parked-state record). Open, missing, malformed, or
+   `Blocked by #<n>` body line is the parked-state record). A note missing its closing
+   sentinel is not selected at all: latest-complete-wins filters it out and returns the newest
+   *earlier* complete block, so an issue can present a stale hand-off as its current parked
+   state. Open, missing, malformed, or
    unreadable blockers stay held with the recipe's actionable reason. A human owns every
    other exit edge. Only clean up if a merged PR already closed the underlying work.
 5. **Strip stale labels from closed issues.** Same colon-label caveat — list and filter

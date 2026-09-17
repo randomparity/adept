@@ -21,7 +21,10 @@ integration is advisory evidence for the observed head/base snapshot: GitHub's g
 atomically protects only the head, so report the residual base-advance race and never claim the
 landed base combination was locally tested.
 
-PR-only tracking uses complete `WORK:TRAJECTORY` blocks on the pull request. Each transition first
+PR-only tracking uses complete `WORK:TRAJECTORY` blocks on the pull request. Compose every block
+under this contract with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a block
+missing either. Each transition first
 posts and reads back `outcome: pending`, changes and reads back labels, then posts and reads back a
 matching `outcome: applied`. Labels are current state; a pending block without its matching applied
 block is interrupted intent to reconcile. Use the caller's stable run token and include version,
@@ -209,7 +212,9 @@ operator-merge path only:
   state; leave its labels intact and let campaign park it for operator
   reconciliation. After verified closure, strip its `status:` labels and post
   a `WORK:TRAJECTORY` comment with `outcome: merged via PR #N`, guardrail
-  status, and any surprises.
+  status, and any surprises. Compose it with both markers and post it through the
+  [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+  refuses a block missing either.
 - **Restock PR-only path:** do not invent or close an issue and do not reconcile cleared
   dependents. After the guarded merge, complete the pending/applied terminal trajectory on the pull
   request and remove its `status:` labels. Terminal tracking precedes unit cleanup.

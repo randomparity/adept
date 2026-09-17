@@ -105,7 +105,9 @@ the challenge summary.
      pass or is already annotated (extend path), and so has a number. If the adoptee
      carried an in-flight `status:` label at adoption, first post/update a
      `WORK:TRAJECTORY` note recording its parked phase and live branch/PR, per the
-     `quest-log` blocked-edge rule.
+     `quest-log` blocked-edge rule. Compose it with both markers and post it through the
+     [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+     refuses a block missing either.
    - **Created entry:** delegate to `$bounty` decompose mode under its
      carried-confirmation contract (the waivers and refusal handling live there). The
      sub-issue's Evidence section is the entry's seam rationale (step 4). Birth

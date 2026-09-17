@@ -377,7 +377,9 @@ Execute **close-not-planned** only after the operator has seen it in the plan. P
 `WORK:CLOSE-NOT-PLANNED` annotation containing the evidence, trigger, likely impact,
 remediation/quest cost, cost/benefit rationale, reconsideration condition, and completion
 sentinel (`<!-- WORK:CLOSE-NOT-PLANNED -->` through
-`<!-- CLOSE-NOT-PLANNED:COMPLETE -->`). The annotation must succeed and be read back before
+`<!-- CLOSE-NOT-PLANNED:COMPLETE -->`). Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a block
+missing either. The annotation must succeed and be read back before
 closure; otherwise
 leave the issue open, record an issue-local blocker, and continue draining other rows. Then run
 `gh issue close <N> --reason "not planned"` and verify with
@@ -661,7 +663,9 @@ evidence citations, proposed action — and ask for one explicit operator confir
 changing anything on GitHub. It is the same gate this step already requires for enqueueing,
 because these are issues the campaign chose not to own; with no proposed action, no
 confirmation is asked. On confirmation, for each moved issue: post one `WORK:RESCORE`
-annotation comment, then flip the priority label. The comment carries the prior level, the
+annotation comment, then flip the priority label. Compose it with both markers and post it
+through the [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+refuses a block missing either. The comment carries the prior level, the
 new level, the evidence citations, and the batch merge that changed the picture:
 
 ```markdown
@@ -727,7 +731,7 @@ A `merged` row is drained whether or not its branch and worktree have been clean
 
 **GitHub is the parked state** (quest-log skill). Who writes the label depends on who parked it:
 - **Worker reported blocker** → it already posted `WORK:TRAJECTORY` and set `status:blocked`/`status:needs-human`. Record `Status: blocked` with reason from report. Don't rewrite label.
-- **You block it** (triage inconclusive, merge-phase blocker, orchestrator decision) → post `WORK:TRAJECTORY` note, ensure-create and set label (`status:blocked` for external dependency, `status:needs-human` for human diagnosis).
+- **You block it** (triage inconclusive, merge-phase blocker, orchestrator decision) → post `WORK:TRAJECTORY` note, ensure-create and set label (`status:blocked` for external dependency, `status:needs-human` for human diagnosis). Compose it with both markers and post it through the [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a block missing either.
 
 Ensure manifest row and GitHub state agree before moving on.
 

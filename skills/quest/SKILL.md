@@ -273,8 +273,10 @@ ADR, plan, or other generated artifact.
 
 An unattended root never answers a design-changing question itself: post a
 public-safe `WORK:TRAJECTORY`, set `status:needs-human`, and stop before
-design. If the checkpoint data is unsafe, the notice names only the parked
-phase and the need for human input.
+design. Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+refuses a block missing either. If the checkpoint data is unsafe, the notice
+names only the parked phase and the need for human input.
 
 ### Posting the annotation
 
@@ -285,7 +287,9 @@ the comment back and verify the token and all eight fields before continuing,
 then cross-check the annotation token against the claim token and run verify
 gate **G2** (`claim-verify` again). Post
 it even for a trivial bugfix that skips design -- `$resurrection` reads it as
-the liveness signal.
+the liveness signal. Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+refuses a block missing either.
 
 ## 2. Branch
 
@@ -666,7 +670,10 @@ resume:
 - **On approval**, post a fresh complete `WORK:TRAJECTORY` recording it — who approved,
   where the approval is recorded, and what it authorized — then swap
   `status:needs-human` → `status:in-review` in a single-active edit. Record before
-  label: the same exit-edges discipline the park itself followed.
+  label: the same exit-edges discipline the park itself followed. Compose it with both
+  markers and post it through the
+  [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses
+  a block missing either.
 - **Resume at step 7** (Simplify). The approval alone never re-enters the loop —
   `$trial-loop`'s caller contract forbids a budget-stopped run from re-entering — so
   the budget stop stands as the run's ending. One exception, already governed: if a
@@ -1058,7 +1065,10 @@ records it, in this order:
    the live branch and PR if either exists, guardrail status, and exactly what
    a human must decide or supply. The exit-edges rule (quest-log skill)
    requires the note before the label, so an issue never parks without a record
-   of where.
+   of where. Compose it with both markers and post it through the
+   [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+   refuses a block missing either -- a park note that loses its sentinel is filtered
+   out by latest-complete-wins, and an older block is returned as current.
 2. **Then set the label** (ensure-create it first; single-active swap):
    - **`status:blocked`** -- an external dependency: an unmerged upstream PR, an
      absent credential or service, a decision owned by someone not in this

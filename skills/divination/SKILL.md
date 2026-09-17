@@ -70,7 +70,9 @@ is read-only; the sole mutation is one bounded public `WORK:DIVINATION` issue co
    Each reference occupies the remainder of its `Evidence` line. Add no trailing whitespace,
    punctuation, or commentary after the reference bytes.
 
-   Use the quest-log body-file recipe and make exactly one comment-write attempt. Capture its URL
+   Use the quest-log [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation),
+   which refuses a block missing either marker, and make exactly one comment-write attempt.
+   Capture its URL
    and read that comment back. Success requires the token, exact author/producer login, issue URL,
    both whole-line markers, clean source revision, four fields, and every evidence line.
 9. **Reconcile an indeterminate write once.** Perform one complete-or-reject paginated comments
