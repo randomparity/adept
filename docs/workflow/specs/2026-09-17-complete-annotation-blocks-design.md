@@ -56,9 +56,20 @@ Seventeen sites: `quest` (4), `campaign` (3), `counterspell` (3), `saga` (1), `r
 
 *A "call site" is a governing write contract, not an individual write sentence.* Where a skill
 states a tracking contract once and then refers to writes under it, the contract carries the
-pointer and the sentences it governs inherit it — so `return-to-town:214-216`,
-`restock:705-706` and `restock:711-712` are covered by the contracts at `return-to-town:24-28` and
-`restock:698-700` and take no pointer of their own. This is what makes seventeen the exact count.
+pointer and the sentences it governs inherit it. The complete inherit list, so the count of
+seventeen is auditable rather than asserted:
+
+- under `return-to-town:24-28` — the restock-path bullet at `:218-221`. Note that the
+  operator-merge bullet immediately above it, `:212-217`, takes a pointer of its own rather than
+  inheriting; the two are separate paths.
+- under `restock:698-700` — `:705-706`, `:711-712`, the `PUBLIC_SUMMARY_UNSAFE` trajectory at
+  `:740-744`, and the Phase 4 step-3 writes at `:778-781`.
+
+The Phase 4 site is the longest hop: it sits under `## Phase 4: Sequential Merge` (from `:747`),
+a different top-level section from the contract sentence that governs it. It still inherits
+correctly — the contract reads "every block under this contract", and a Phase 4 trajectory is one —
+so it takes no pointer, but it is the weakest link in the inheritance argument and is named here
+rather than left for a reader to find.
 
 **C. The reader — `skills/resurrection/SKILL.md`.** State the consequence a sentinel-less block has
 for the sweep, so writer and reader agree on framing (#380 criterion 3, left to prose by ADR 0069).
@@ -86,8 +97,11 @@ recorded because #385 asked for it explicitly.
   which is a reader-contract change this row's exclusions assign elsewhere.
 - **A fixture that extracts the fenced snippet and runs it against a stubbed `gh`.** Rejected: it
   would test an extracted copy rather than the shipped instruction, and would need to stay in sync
-  with the fence. The derivation's correctness is instead checked by walking it against every row of
-  the type table — the step whose absence let the `GROOM:STALE` defect through in review.
+  with the fence. The derivation's correctness is instead checked by walking it against the
+  enumerated shipped type tokens, per the plan's Task 1 Step 1.4 — **not** against the rows of the
+  type table, which lists five of the seven and would send a reviewer past `WORK:RESCORE` and
+  `WORK:CLOSE-NOT-PLANNED`. That walk is the step whose absence let the `GROOM:STALE` defect through
+  in review.
 - **A new ADR for this shape.** Declined: ADR 0069 already decided the governing question and
   pre-authorised a check at the shared recipe. `docs/adr/*` is an approved exclusion (owner #381).
 
@@ -112,7 +126,11 @@ readers. No anonymous or networked actor; no CI job writes an annotation.
 
 - A writer that ignores the pointer and posts with a bare `gh ... comment` is not caught. Accepted:
   prose is the shape ADR 0069 chose, and instruction-following is the residual it recorded. Bounded
-  by A1 making the complete block the only worked example a writer can copy.
+  by the explicit marker-pair rule in A1's bullet and by the pointer at each of the seventeen call
+  sites — **not** by the worked example's completeness, which the base already had. A1 replaces a
+  placeholder type with a real one; it does not introduce completeness, and a writer composing any
+  of the six types other than `WORK:TRAJECTORY` still performs two substitutions, the closing one
+  still being the droppable half. That is why the stated bound is the rule and the pointers.
 - The interrupted park — note posted, worker gone before the label swap — is unchanged. Accepted:
   ADR 0069's recorded residual, owned by #380.
 - A malformed block whose markers are present but whose body is wrong is not detected. Accepted:
@@ -122,6 +140,14 @@ readers. No anonymous or networked actor; no CI job writes an annotation.
 - The single `gh ... comment` call the recipe already made is unbounded. Accepted:
   `references/network-bounds.md` governs shipped executables, and this is a prose snippet; this
   design adds no network call of its own.
+- No structural gate validates the seventeen cross-skill links or the anchor they target.
+  `check-skill-shape.sh` rule 5 scans only `../../references/*.md`. Accepted, with the consequence
+  stated plainly: renaming `skills/quest-log/` or rewording the `### Recipe: post an annotation`
+  heading silently breaks all seventeen pointers and takes the write-time check's reachability with
+  them — the very reachability criterion 4 rests on. The branch takes the repository's unguarded
+  cross-skill links from five to twenty-two. Extending rule 5 to `../<skill>/SKILL.md` links and
+  their anchors is the honest fix; it is a `scripts/` change this row's surface withholds, so it is
+  carried as a follow-up candidate rather than made here.
 
 **Covered elsewhere.**
 

@@ -531,6 +531,11 @@ post_annotation() { # kind(issue|pr) number type bodyfile
     *:*) : ;;
     *) echo "post_annotation: type '$3' needs the full token, e.g. WORK:TRAJECTORY" >&2; return 1 ;;
   esac
+  # Check the file first: grep's nonzero exit cannot distinguish "no match" from
+  # "no such file", so without this the marker messages below would misreport a
+  # missing body file as a malformed block.
+  [ -r "$4" ] ||
+    { echo "post_annotation: body file $4 is missing or unreadable" >&2; return 1; }
   # Refuse before posting. A block missing either whole-line marker reads as absent
   # to every consumer, and latest-complete-wins then hands back an older complete
   # block in its place -- a wrong answer, not a missing one.
