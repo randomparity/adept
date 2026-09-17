@@ -419,14 +419,24 @@ Durable across sessions and compaction; queryable by text match; invisible in re
 Markdown except the body.
 
 ```markdown
-<!-- WORK:TYPE -->
-## <Type> — issue #N
-<structured body, short labelled bullets>
-<!-- TYPE:COMPLETE -->
+<!-- WORK:TRAJECTORY -->
+## Trajectory — issue #412
+- Outcome: parked at step 6 (adversarial review).
+- Branch/PR: `feat/widget-412`, PR #418.
+- Guardrails: `just verify` green at `a1b2c3d`.
+- Needs: operator decision on the unresolved retry-budget finding.
+<!-- TRAJECTORY:COMPLETE -->
 ```
 
-- The `TYPE:COMPLETE` sentinel distinguishes a finished annotation from a comment whose
-  write died midway. A block without its sentinel is treated as absent.
+- **Both markers are required, and the closing one is what gets dropped.** The sentinel
+  distinguishes a finished annotation from a comment whose write died midway. The pair is the
+  type token itself, then its text after the first colon plus `:COMPLETE` — `WORK:TRAJECTORY`
+  closes with `TRAJECTORY:COMPLETE`, and `GROOM:STALE` closes with `STALE:COMPLETE`, which is why
+  the opening marker is never assumed to start with `WORK:`. A writer who changes the opening line
+  and forgets the closing one produces a block every reader treats as absent — worse than absent,
+  in fact, because latest-complete-wins then returns the newest *earlier* complete block in its
+  place, so a stale hand-off reads as current. Post through the
+  [post-annotation recipe](#recipe-post-an-annotation), which refuses a block missing either.
 - **Latest-complete-wins.** The *last* complete block of a given type on the issue/PR is
   authoritative; earlier same-type blocks are superseded history. Writers append a fresh
   complete block — no read-modify-delete race.
@@ -515,7 +525,24 @@ tokens.
 
 ```bash
 post_annotation() { # kind(issue|pr) number type bodyfile
-  # bodyfile already contains the full block incl. <!-- WORK:$3 --> ... <!-- $3:COMPLETE -->
+  # type is the full token the convention names, e.g. WORK:TRAJECTORY or GROOM:STALE.
+  case $3 in
+    *:*) : ;;
+    *) echo "post_annotation: type '$3' needs the full token, e.g. WORK:TRAJECTORY" >&2; return 1 ;;
+  esac
+  local open="<!-- $3 -->" close="<!-- ${3#*:}:COMPLETE -->"
+  # Check the file first: grep's nonzero exit cannot distinguish "no match" from
+  # "no such file", so without this the marker messages below would misreport a
+  # missing body file as a malformed block.
+  [ -r "$4" ] ||
+    { echo "post_annotation: body file $4 is missing or unreadable" >&2; return 1; }
+  # Refuse before posting. A block missing either whole-line marker reads as absent
+  # to every consumer, and latest-complete-wins then hands back an older complete
+  # block in its place -- a wrong answer, not a missing one.
+  grep -qxF "$open" "$4" ||
+    { echo "post_annotation: $4 lacks the whole-line opening marker $open" >&2; return 1; }
+  grep -qxF "$close" "$4" ||
+    { echo "post_annotation: $4 lacks the whole-line closing sentinel $close" >&2; return 1; }
   gh "$1" comment "$2" --body-file "$4"
 }
 ```
