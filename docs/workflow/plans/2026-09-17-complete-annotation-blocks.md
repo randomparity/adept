@@ -236,6 +236,13 @@ independent of cwd.
 **Where this fits.** Without this task the Task 1 check reaches no writer, because `post_annotation`
 is referenced by nothing today.
 
+**Which sentences count as a site.** A call site is a *governing write contract*, not every sentence
+that mentions a write. Where a skill states its tracking contract once and later refers to writes
+under it, the contract carries the pointer and those sentences inherit it. Three write instructions
+are therefore deliberately left without a pointer of their own, each already governed by a contract
+that gets one: `return-to-town:214-216` (under `:24-28`), and `restock:705-706` and `:711-712`
+(both under `:698-700`). Do not add pointers there — Step 2.10's count of seventeen will fail.
+
 ### Verification
 
 | Contract | Mode | Detail |
@@ -283,8 +290,7 @@ listing held work with its parked-phase note, add:
 
 > A note missing its closing sentinel is not selected at all: latest-complete-wins filters it out
 > and returns the newest *earlier* complete block, so an issue can present a stale hand-off as its
-> current parked state. Treat a parked-phase note that disagrees with the issue's labels as
-> unreliable rather than authoritative.
+> current parked state.
 
 **Step 2.10.** Verify the links. Run both commands **before** the edits to observe red.
 

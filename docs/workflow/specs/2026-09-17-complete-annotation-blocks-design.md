@@ -54,6 +54,12 @@ Three parts, one owning definition.
 Seventeen sites: `quest` (4), `campaign` (3), `counterspell` (3), `saga` (1), `return-to-town` (2),
 `restock` (2), `warding` (1), `divination` (1).
 
+*A "call site" is a governing write contract, not an individual write sentence.* Where a skill
+states a tracking contract once and then refers to writes under it, the contract carries the
+pointer and the sentences it governs inherit it — so `return-to-town:214-216`,
+`restock:705-706` and `restock:711-712` are covered by the contracts at `return-to-town:24-28` and
+`restock:698-700` and take no pointer of their own. This is what makes seventeen the exact count.
+
 **C. The reader — `skills/resurrection/SKILL.md`.** State the consequence a sentinel-less block has
 for the sweep, so writer and reader agree on framing (#380 criterion 3, left to prose by ADR 0069).
 
@@ -98,8 +104,9 @@ readers. No anonymous or networked actor; no CI job writes an annotation.
 - The latest-complete selection contract, consumed by nine skills, stays unchanged. This adds a
   writer-side check; it does not alter what readers select.
 - `WORK:SCOPE`'s role as `$resurrection`'s liveness signal.
-- The marker pair published for each type in the table at `quest-log:436-442`. The recipe must
-  derive exactly those bytes, for every row.
+- The marker pair each shipped type already uses at its call sites and readers. The recipe must
+  derive exactly those bytes for all seven enumerated in Success 3 — not only the five that the
+  table at `quest-log:436-442` happens to list.
 
 **Accepted failure classes.**
 
