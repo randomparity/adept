@@ -420,9 +420,11 @@ Each prompt carries:
   identity/revision, approval evidence and class fit instead of claiming an
   operator approved this repair. Quest rechecks live base authority and
   freezes its own matching `WORK:SCOPE` packet before design
-- The claim contract: a new run with no compatible claim mints its own token. A same-claim
-  continuation carries and verifies the existing scope/claim token without acquiring or
-  recovering it. A replacement mints a successor token only for its separately authorized
+- The claim contract: a new run with no compatible claim mints its own token. Only unchanged
+  logical ownership in the current root, across context compaction, or across a verified native
+  root switch carries and verifies the existing scope/claim token without acquiring or
+  recovering it. Every new-session successor to an existing run is a replacement: after
+  predecessor end and explicit recovery authority, it mints a successor token for that
   recovery operation. No worker recovers a claim without the exact authority carried in its
   dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
@@ -471,8 +473,10 @@ replacement precondition but does not authorize claim recovery. Record the exact
 issue/observed claim, action, and operator decision provenance in the existing private
 manifest; the prompt carries that authority beside the branch-reuse decision. The worker
 re-reads claim/state under quest-log before `claim-recover --force`; a changed or unreadable
-claim holds. A same-claim continuation or handoff needs no recovery: it verifies the matching
-token and continues. Generic re-dispatch, campaign, or resume approval is not recovery authority.
+claim holds. Only an unchanged-owner continuation in the current root, across compaction, or
+across a verified native root switch needs no recovery: it verifies the matching token and
+continues. A new-session successor is a replacement even when it reuses the branch or receives a
+copied token. Generic re-dispatch, campaign, or resume approval is not recovery authority.
 
 Before the serial blocking dispatch and wait, emit the before-wait progress update required by the top-level contract.
 
@@ -500,7 +504,7 @@ Before the parallel background wait, emit the before-wait progress update requir
 
 The operator's answer to that hold is what reaches the harness's stop control. Told to re-dispatch, stop the agent, wait for its end-of-run notification, and dispatch only then.
 
-**A re-dispatch resumes where it can and restarts where it cannot.** Reconcile the row's artifacts first (step 3) — a dying agent may have pushed a branch or opened a PR you have not recorded. A row where that turns up no branch has nothing to resume; dispatch it fresh. Otherwise hand the successor the context it had before plus the recovered branch name, an explicit `reuse` decision, and the last phase the events showed. The branch carries the committed work by reference, so do not paste a diff into the prompt — bulky going in, stale on arrival. Reclaim the dead agent's worktree before dispatching: it still has the branch checked out, so the successor's own `git worktree add` on that path fails until you either hand it that path or remove it, and any uncommitted edits stranded there are readable only until you do.
+**A re-dispatch resumes where it can and restarts where it cannot.** Reconcile the row's artifacts first (step 3) — a dying agent may have pushed a branch or opened a PR you have not recorded. A row where that turns up no branch has nothing to resume; dispatch it fresh. Otherwise hand the successor the context it had before plus the recovered branch name, an explicit `reuse` decision, the separately authorized claim recovery and successor token, and the last phase the events showed. The branch carries the committed work by reference, so do not paste a diff into the prompt — bulky going in, stale on arrival. Reclaim the dead agent's worktree before dispatching: it still has the branch checked out, so the successor's own `git worktree add` on that path fails until you either hand it that path or remove it, and any uncommitted edits stranded there are readable only until you do.
 
 Carry only the issue-relevant
 [continuity packet](../quest-log/SKILL.md#model-and-session-handoffs) in that successor dispatch,

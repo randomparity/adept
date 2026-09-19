@@ -30,9 +30,10 @@ actively working the same repo. Read → plan → one confirmation → apply.
      If a claim is present, hold it as a claimed in-flight row pending an explicit
      operator abandonment/recovery decision under quest-log; age alone cannot authorize
      its reset or deletion. An approved reset releases the observed token's claim.
-   - **claim on a closed issue** → plan: delete the claim (release guarded by the
-     observed token; closed-state is authoritative). This cleanup remains separate
-     from recovery of an open in-flight claim.
+   - **claim on a closed issue** → plan: delete the claim (release a well-formed claim
+     with the observed token; explicitly authorize manual label deletion for a malformed
+     claim; closed-state is authoritative). This cleanup remains separate from recovery
+     of an open in-flight claim.
 3. **Staleness gate** (prevents clobbering a legitimately-quiet in-flight issue whose branch
    was never pushed). Reset a `status:in-progress` issue only when ALL hold:
    (a) no open/merged PR references it;
@@ -79,9 +80,12 @@ actively working the same repo. Read → plan → one confirmation → apply.
    confirmation. One confirmation may cover the displayed decisions. Before every
    claim-clearing write, including an open-issue reset or closed-issue cleanup, re-read claim
    and issue state. A new/changed or unreadable claim, incompatible state, failed staleness
-   gate, or issue that is no longer closed for closed cleanup holds the row. Do not delete a
-   malformed claim through token release; hold for its explicitly authorized force-recovery
-   path. After confirmation, apply per issue;
+   gate, or issue that is no longer closed for closed cleanup holds the row. Release a
+   well-formed closed claim with its observed token. Do not use `claim-recover --force` for
+   closed cleanup because it recreates the claim. For a malformed closed claim, the displayed
+   plan must explicitly authorize manual deletion; after the immediate re-read, run
+   `gh label delete "quest-claim/<N>" --repo <owner/name> --yes`. Verify claim absence with a
+   fresh `claim-list` read after either cleanup route. After confirmation, apply per issue;
    pass all and only the confirmed cleared-dependency issue numbers to
    `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name> <number>...`, then verify every
    reported transition. Re-evaluation may retain an issue whose state changed after

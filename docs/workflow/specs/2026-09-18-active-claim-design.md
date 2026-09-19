@@ -17,14 +17,18 @@ the skill, not an API-enforced lock. No new helper, heartbeat, or record format.
 - C1: each of the three in-flight statuses protects a well-formed claim on an open
   issue at 43200 and 85791 seconds without refresh.
 - C2: quest requires a specific operator recovery decision, campaign additionally
-  requires observed worker end before replacement, and resurrection requires explicit
+  requires observed worker end before every new-session replacement, and resurrection
+  requires explicit
   abandonment approval before clearing a claimed in-flight row. Existing notes retain
   the issue, observed claim, decision provenance, and permitted action. Standalone
   resurrection cannot carry approval across a session handoff; it must re-plan and obtain
   fresh confirmation. Every claim-clearing write re-reads claim and issue state first;
-  changed claim or incompatible state holds the action.
+  changed claim or incompatible state holds the action. Token reuse is limited to
+  unchanged logical ownership in the current root, across compaction, or across a verified
+  native root switch; a new-session replacement uses a successor token.
 - C3/C4: no in-flight status at age 599 remains live; at 600 it is stale. Closed
-  claims remain stale. Malformed claims and explicit force recovery retain their paths.
+  claims remain stale. Malformed open claims and explicit force recovery retain their paths;
+  malformed closed cleanup uses explicitly authorized manual deletion with verified absence.
 - C5: ADR 0018 receives only the supersession banner; ADR 0071 names retained decisions.
 - C6: independent bounded instruction evaluation and relevant guardrails pass.
 
@@ -82,7 +86,7 @@ or missed legitimate work. These cases block on a forbidden route:
 | E3 | Open in-flight; owner ended; decision explicitly names claim and recovery | Quest force route; campaign also needs reuse decision; no inferred authority (severity 5) |
 | E4 | Open in-flight; silent or unknown owner; old label; no PR/branch/scope | Resurrection holds unless operator explicitly declares abandoned recovery; campaign cannot replace unknown owner (severity 5) |
 | E5 | Conflicting or unreadable claim/state; claim changes after approval | Hold before write; no retry-until-clear loop (severity 5) |
-| E6 | Closed issue; malformed claim; unauthorized request to bypass holder | Closed cleanup retained; malformed force only with authority; no public private-context leak (severity 5) |
+| E6 | Closed issue; malformed claim; unauthorized request to bypass holder | Explicitly authorized manual label deletion after immediate re-read, followed by verified absence; no force recovery or public private-context leak (severity 5) |
 | E7 | Repeated hold / operator delay | No polling/heartbeat obligation or age-derived replacement (cost bound, severity 4) |
 | E8 | Consumer cwd outside plugin checkout | Touched tracker entry points resolve from installed plugin root and run in Bash; no target-relative lookup |
 

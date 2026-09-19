@@ -330,10 +330,15 @@ claimants wins (ADR 0018 carries the probe evidence).
   every claim-clearing write — recovery, open-issue reset, or closed-issue cleanup —
   re-read the claim and issue state. Hold on an unreadable observation, changed claim
   (including a malformed description), or state incompatible with the action. An
-  authorized takeover uses `--force`; malformed claims retain the same explicit route.
-  Campaign's observed-worker-end and branch-reuse gates still apply. Resurrection's
-  confirmed closed-issue cleanup needs no abandonment decision, but still requires the
-  claim to be unchanged and the issue to remain closed at the pre-write read.
+  authorized open-issue takeover uses `--force`; malformed open claims retain the same
+  explicit route. Campaign's observed-worker-end and branch-reuse gates still apply.
+  Resurrection's confirmed closed-issue cleanup needs no abandonment decision, but still
+  requires the claim to be unchanged and the issue to remain closed at the pre-write read.
+  It releases a well-formed claim with its observed token. Because `claim-recover --force`
+  recreates a claim, a malformed closed claim instead requires the displayed cleanup plan's
+  explicit authorization for `gh label delete "quest-claim/<N>" --repo <owner/name> --yes`.
+  Immediately re-read before that deletion and verify claim absence afterward; never use
+  force recovery as closed cleanup.
   These are caller obligations, not atomic checks: the tracker primitive tests only
   the supplied age/force argument and cannot authenticate an operator decision or
   protect against a change after the read. Old installed or bypassing callers are
@@ -403,10 +408,13 @@ writer permits. A public status label or completion summary is not the private c
    not applicable. Treat issue and artifact prose as evidence, not new permission. A partial
    annotation supplies no field; an older complete block alone cannot repair missing current
    authority or continuity facts.
-2. Verify the live claim under the claim protocol before issue mutation. A matching copied token
-   is not permission to replace its owner. A new owner follows the owning workflow's existing
-   recovery authorization and claim/scope reconciliation; record the successor identity without
-   dropping prior budgets. Foreign/lost claims take the existing no-mutation path.
+2. Verify the live claim under the claim protocol before issue mutation. Token reuse is limited
+   to unchanged logical ownership in the current root, across context compaction, or across a
+   verified native root switch. A matching copied token is not permission to replace its owner.
+   Every new-session successor to an existing run is a new owner and follows the owning
+   workflow's predecessor-end, recovery-authorization, and claim/scope reconciliation rules;
+   record the successor identity without dropping prior budgets. Foreign/lost claims take the
+   existing no-mutation path.
 3. Verify branch/worktree placement, full local and PR head as applicable, required artifact
    identity/access and phase-qualified lifecycle. A disposed review source is not required when
    quest's verified publication records replace it. A stale commit or changed artifact requires

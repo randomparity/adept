@@ -154,15 +154,17 @@ validated continuity evidence before generating a token:
 
 - **New run** — no compatible claim is being continued: mint the scope token in
   the short form `q<issue-number>-<8 lowercase hex>` and acquire it below.
-- **Same-claim continuation** — the dispatch explicitly continues the same run and
-  supplies its existing scope/claim token: reuse that exact token, re-read claim and
-  issue state, require the token to match, and run `claim-verify`. Resume only at the
+- **Same-claim continuation** — logical ownership is unchanged in the current root,
+  across context compaction, or across a verified native root switch, and the continuity
+  record supplies the existing scope/claim token: reuse that exact token, re-read claim
+  and issue state, require the token to match, and run `claim-verify`. Resume only at the
   recorded phase. Do not mint, acquire, recover, or post another `WORK:SCOPE`.
-- **Authorized replacement** — ownership changes after the predecessor end and
-  artifacts were reconciled: require the explicit issue-and-observed-claim recovery
-  decision first, then mint the successor token and use the recovery route below.
-  Branch reuse or a generic continuation instruction supplies neither recovery authority
-  nor a token transition.
+- **Authorized replacement** — every new-session successor to an existing run changes
+  ownership. After the predecessor end and artifacts were reconciled, require the explicit
+  issue-and-observed-claim recovery decision first, then mint the successor token and use
+  the recovery route below.
+  Branch reuse, a copied token, or a generic continuation instruction supplies neither
+  recovery authority nor a token transition.
 
 Resolve `CLAUDE_PLUGIN_ROOT` to the installed plugin root, keep the target repository
 as cwd, and run every tracker operation in Bash. For a route that mints a token, the

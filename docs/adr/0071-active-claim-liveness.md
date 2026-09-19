@@ -18,7 +18,7 @@ primitive, token grammar and binding, verify gates, and other decisions.
 An open issue's well-formed claim is live when its age is below `CLAIM_GRACE=600`
 seconds or it carries `status:in-progress`, `status:in-review`, or
 `status:awaiting-merge`. There is no in-flight TTL or refresh obligation. Closed
-issues' claims remain stale. Malformed claims retain their explicit recovery path.
+issues' claims remain stale. Malformed open claims retain their explicit recovery path.
 
 Quest-log owns this policy. Quest and campaign may authorize age-based recovery
 only for an open issue outside those in-flight statuses after grace expires.
@@ -31,7 +31,10 @@ write. Standalone resurrection has no such artifact, so its confirmation is
 single-session only and must be reacquired from a fresh plan after any handoff.
 Immediately before every claim-clearing write, including closed cleanup, re-read
 claim and issue state and hold if the observed claim changed or state no longer
-fits the action. Force recovery remains available.
+fits the action. Force recovery remains available for authorized open-issue takeover.
+Closed cleanup releases a well-formed claim by token; a malformed closed claim uses
+explicitly authorized manual label deletion with verified absence because force recovery
+would recreate the claim.
 
 The tracker primitive still enforces token, grammar, and caller-supplied age or
 force arguments; it does not decide policy or authenticate the operator's intent.
