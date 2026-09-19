@@ -28,7 +28,9 @@ the skill, not an API-enforced lock. No new helper, heartbeat, or record format.
   native root switch; a new-session replacement uses a successor token.
 - C3/C4: no in-flight status at age 599 remains live; at 600 it is stale. Closed
   claims remain stale. Malformed open claims and explicit force recovery retain their paths;
-  malformed closed cleanup uses explicitly authorized manual deletion with verified absence.
+  campaign triage uses that same classification rather than claim presence. Malformed closed
+  cleanup binds authorization and immediate revalidation to the exact opaque raw label
+  description, then uses manual deletion with verified absence.
 - C5: ADR 0018 receives only the supersession banner; ADR 0071 names retained decisions.
 - C6: independent bounded instruction evaluation and relevant guardrails pass.
 
@@ -85,8 +87,8 @@ or missed legitimate work. These cases block on a forbidden route:
 | E2 | Open; no in-flight status; ages 599 and 600 | Hold then grace recovery; no TTL delay (happy path, severity 4) |
 | E3 | Open in-flight; owner ended; decision explicitly names claim and recovery | Quest force route; campaign also needs reuse decision; no inferred authority (severity 5) |
 | E4 | Open in-flight; silent or unknown owner; old label; no PR/branch/scope | Resurrection holds unless operator explicitly declares abandoned recovery; campaign cannot replace unknown owner (severity 5) |
-| E5 | Conflicting or unreadable claim/state; claim changes after approval | Hold before write; no retry-until-clear loop (severity 5) |
-| E6 | Closed issue; malformed claim; unauthorized request to bypass holder | Explicitly authorized manual label deletion after immediate re-read, followed by verified absence; no force recovery or public private-context leak (severity 5) |
+| E5 | Conflicting or unreadable claim/state; claim changes after approval | Hold before write; malformed cleanup compares the exact raw description rather than a normalized tuple; no retry-until-clear loop (severity 5) |
+| E6 | Closed issue; malformed claim; unauthorized request to bypass holder | Manual deletion authorized for the exact opaque raw description, matched again immediately before deletion, followed by verified absence; no force recovery or public private-context leak (severity 5) |
 | E7 | Repeated hold / operator delay | No polling/heartbeat obligation or age-derived replacement (cost bound, severity 4) |
 | E8 | Consumer cwd outside plugin checkout | Touched tracker entry points resolve from installed plugin root and run in Bash; no target-relative lookup |
 

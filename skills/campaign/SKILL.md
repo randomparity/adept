@@ -230,7 +230,14 @@ For each queued issue, check for artifacts from prior runs:
   manifest mutation/readback fails, retain an explicit unreconciled blocker and forbid
   completion. Other close reasons follow the existing done path without re-closing.
 - **`status:` label set** → map to campaign state: `ready`/`needs-triage` → `pending` (triage); `in-progress`/`in-review` → `in-flight` (reconcile artifacts); `awaiting-merge` → verify PR then `ready-to-merge`; `blocked`/`needs-human` → `blocked`. Treat closed as authoritative regardless of label.
-- **Quest claim present** (one `claim-list` read for the batch) → in-flight evidence: map the row to in-flight and reconcile artifacts as for an in-progress label.
+- **Quest claim present** (one `claim-list` read for the batch) → classify it under
+  quest-log before mapping the row. Closed is terminal. An unreadable or malformed claim is a
+  hold; malformed recovery additionally needs its explicit authority. On an open issue, an
+  in-flight status or a well-formed claim younger than `CLAIM_GRACE` maps to `in-flight` and
+  reconciles artifacts as for an in-progress label. A well-formed claim at or beyond grace with
+  no in-flight status maps to `pending` as a recovery candidate; reconcile branch/PR artifacts,
+  then let step 5 re-read and take only its bounded `--older-than 600` dispatch route. Record the
+  classification with the row so resume does not mistake claim presence for liveness.
 - **Existing PR green + mergeable** → mark `ready-to-merge`, carry to step 4
 - **Persisted step-4 assignments exist** → read them back, don't re-derive
 - **Existing branch/PR incomplete** → **recover branch first**: if a PR exists, resolve its number from the issue link, then `gh pr view <PR> --json headRefName`; else match `feat/<short-slug>-<issue-number>` in `git branch` or `git ls-remote --heads origin` (full shape, not `*-<n>` suffix — #1 must not match ...-11). Persist to manifest. **PR-linked branch → reuse by default** (the PR explicitly names it, satisfying `$quest`'s reuse rule). **Convention-only branch → ask the user** reuse-or-restart before dispatch, and carry the operator's decision in the prompt. Deleting any branch requires explicit user confirmation

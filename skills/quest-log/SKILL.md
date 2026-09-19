@@ -337,8 +337,10 @@ claimants wins (ADR 0018 carries the probe evidence).
   It releases a well-formed claim with its observed token. Because `claim-recover --force`
   recreates a claim, a malformed closed claim instead requires the displayed cleanup plan's
   explicit authorization for `gh label delete "quest-claim/<N>" --repo <owner/name> --yes`.
-  Immediately re-read before that deletion and verify claim absence afterward; never use
-  force recovery as closed cleanup.
+  Bind that authorization to the exact opaque label-description value read directly from the
+  label API, not `claim-list`'s normalized malformed tuple. Immediately re-read that raw value
+  and closed state before deletion, hold on any mismatch, and verify claim absence afterward;
+  never use force recovery as closed cleanup.
   These are caller obligations, not atomic checks: the tracker primitive tests only
   the supplied age/force argument and cannot authenticate an operator decision or
   protect against a change after the read. Old installed or bypassing callers are
