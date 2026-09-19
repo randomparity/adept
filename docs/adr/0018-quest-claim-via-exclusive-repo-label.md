@@ -4,6 +4,8 @@
 
 Accepted (2026-08-16)
 
+> **Superseded by [0071](0071-active-claim-liveness.md)** (2026-09-18)
+
 ## Context
 
 Issue #125: two `$quest` agents can observe the same `status:ready` issue,
