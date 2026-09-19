@@ -71,12 +71,17 @@ actively working the same repo. Read → plan → one confirmation → apply.
 6. **Plan → confirm → apply.** Present the full reconciliation table (`#issue → action`).
    List any branch before touching it. For a claimed in-flight reset, show the observed
    claim and explicitly name the abandonment decision and reset/release action; a generic
-   cleanup confirmation cannot stand in for that decision. Retain the exact approval and
-   provenance in existing private run notes under quest-log's recovery-authority rule.
-   One confirmation may cover the displayed decisions. Before each open-issue reset,
-   re-read claim and issue state; a new/changed or unreadable claim, incompatible state,
-   or failed staleness gate holds the row. Do not delete a malformed claim through token
-   release; hold for its explicitly authorized force-recovery path. After confirmation, apply per issue;
+   cleanup confirmation cannot stand in for that decision. When an invoking workflow has
+   existing private notes, retain the exact approval and provenance there under quest-log's
+   recovery-authority rule. Standalone resurrection defines no private continuity artifact:
+   its confirmation is valid only in the current uninterrupted session. After any session
+   handoff, do not reuse it; re-read the live evidence, display a fresh plan, and obtain fresh
+   confirmation. One confirmation may cover the displayed decisions. Before every
+   claim-clearing write, including an open-issue reset or closed-issue cleanup, re-read claim
+   and issue state. A new/changed or unreadable claim, incompatible state, failed staleness
+   gate, or issue that is no longer closed for closed cleanup holds the row. Do not delete a
+   malformed claim through token release; hold for its explicitly authorized force-recovery
+   path. After confirmation, apply per issue;
    pass all and only the confirmed cleared-dependency issue numbers to
    `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name> <number>...`, then verify every
    reported transition. Re-evaluation may retain an issue whose state changed after

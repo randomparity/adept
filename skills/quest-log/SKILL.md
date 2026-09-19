@@ -324,12 +324,16 @@ claimants wins (ADR 0018 carries the probe evidence).
   decision naming the issue, observed claim, and permitted recovery action; age,
   silence, and missing branch/PR evidence do not grant it. Record that decision and
   its provenance in the owning workflow's existing private notes or campaign manifest
-  before writing. Immediately before recovery or an open-issue reset that clears a
-  claim, re-read the claim and issue state. Hold on an unreadable observation, changed
-  claim (including a malformed description), or state incompatible with the authorized
-  action. An authorized takeover uses `--force`; malformed claims retain the same
-  explicit route. Campaign's observed-worker-end and branch-reuse gates still apply.
-  Resurrection's confirmed closed-issue cleanup remains a separate edge below.
+  before writing. Standalone resurrection has no private continuity artifact, so its
+  confirmation is valid only in the current uninterrupted session; after any session
+  handoff it must re-read, re-plan, and obtain fresh confirmation. Immediately before
+  every claim-clearing write — recovery, open-issue reset, or closed-issue cleanup —
+  re-read the claim and issue state. Hold on an unreadable observation, changed claim
+  (including a malformed description), or state incompatible with the action. An
+  authorized takeover uses `--force`; malformed claims retain the same explicit route.
+  Campaign's observed-worker-end and branch-reuse gates still apply. Resurrection's
+  confirmed closed-issue cleanup needs no abandonment decision, but still requires the
+  claim to be unchanged and the issue to remain closed at the pre-write read.
   These are caller obligations, not atomic checks: the tracker primitive tests only
   the supplied age/force argument and cannot authenticate an operator decision or
   protect against a change after the read. Old installed or bypassing callers are

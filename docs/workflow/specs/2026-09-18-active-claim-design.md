@@ -19,8 +19,10 @@ the skill, not an API-enforced lock. No new helper, heartbeat, or record format.
 - C2: quest requires a specific operator recovery decision, campaign additionally
   requires observed worker end before replacement, and resurrection requires explicit
   abandonment approval before clearing a claimed in-flight row. Existing notes retain
-  the issue, observed claim, decision provenance, and permitted action. Changed claim
-  or incompatible state at the pre-write read holds the action.
+  the issue, observed claim, decision provenance, and permitted action. Standalone
+  resurrection cannot carry approval across a session handoff; it must re-plan and obtain
+  fresh confirmation. Every claim-clearing write re-reads claim and issue state first;
+  changed claim or incompatible state holds the action.
 - C3/C4: no in-flight status at age 599 remains live; at 600 it is stale. Closed
   claims remain stale. Malformed claims and explicit force recovery retain their paths.
 - C5: ADR 0018 receives only the supersession banner; ADR 0071 names retained decisions.
@@ -51,8 +53,10 @@ assertion tests. Bash 3.2 is the existing floor. No dependency or toolchain chan
 No new data boundary. The changed authority boundary is tracker observations to a
 recovery decision by the three workflow callers. Trust the operator's explicit
 decision; issue comments, claim age, and silence do not supply it. Match that decision
-to the observed issue/claim and intended action in existing private durable notes,
-then re-read before writing. Hold unreadable or changed evidence. Report public-safe
+to the observed issue/claim and intended action in existing private durable notes where
+the owning workflow has them. Standalone resurrection uses only a fresh same-session
+confirmation after any handoff. Re-read before every claim-clearing write, including
+closed cleanup. Hold unreadable, changed, or action-incompatible evidence. Report public-safe
 issue references and next actions, never private claim context in new public notes.
 Credential abuse and direct primitive calls bypassing instructions are outside this
 cooperating-agent model; no stronger API guarantee is claimed.

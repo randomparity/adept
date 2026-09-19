@@ -27,8 +27,11 @@ issue and observed claim. Campaign additionally retains its observed-worker-end
 and branch-reuse gates. Resurrection must present claimed in-flight resets as
 explicit abandonment decisions, not infer abandonment from its age/branch checks.
 Record the decision in the owning workflow's existing durable notes before the
-write, re-read claim and issue state, and hold if the observed claim changed or
-state no longer fits the authorized action. Force recovery remains available.
+write. Standalone resurrection has no such artifact, so its confirmation is
+single-session only and must be reacquired from a fresh plan after any handoff.
+Immediately before every claim-clearing write, including closed cleanup, re-read
+claim and issue state and hold if the observed claim changed or state no longer
+fits the action. Force recovery remains available.
 
 The tracker primitive still enforces token, grammar, and caller-supplied age or
 force arguments; it does not decide policy or authenticate the operator's intent.
