@@ -80,6 +80,7 @@ or missed legitimate work. These cases block on a forbidden route:
 | E5 | Conflicting or unreadable claim/state; claim changes after approval | Hold before write; no retry-until-clear loop (severity 5) |
 | E6 | Closed issue; malformed claim; unauthorized request to bypass holder | Closed cleanup retained; malformed force only with authority; no public private-context leak (severity 5) |
 | E7 | Repeated hold / operator delay | No polling/heartbeat obligation or age-derived replacement (cost bound, severity 4) |
+| E8 | Consumer cwd outside plugin checkout | Touched tracker entry points resolve from installed plugin root and run in Bash; no target-relative lookup |
 
 The liveness and recovery instructions use `task-test-not-applicable`: no executable
 consumer decides these prose authorization rules, and text matching cannot observe agent
