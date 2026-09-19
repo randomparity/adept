@@ -449,6 +449,8 @@ Markdown except the body.
 | `WORK:SCOPE` | issue | after scoping, before building | eight-field charter plus blast radius, change hazards, complexity (S/M/L), decompose verdict, classification, artifact lane, review depth, and fixed design denominator with provenance |
 | `WORK:REVIEW` | PR | after PR creation | compact summary plus labelled forge-review payload |
 | `WORK:TRAJECTORY` | issue | at the terminal hand-off, and before parking an issue at `blocked`/`needs-human` (exit-edges rule above) | outcome or parked phase, branch/PR #, guardrail status, what a human must decide or supply, surprises worth remembering |
+| `WORK:CLOSE-NOT-PLANNED` | issue | after the campaign plan is visible, before closing a confirmed defect as not planned | evidence, trigger, likely impact, remediation/quest cost, cost/benefit rationale, and observable reconsideration condition |
+| `WORK:RESCORE` | issue | before a campaign changes a deferred issue's priority label | prior and new priority, evidence citations, and the batch merge that changed the assessment |
 | `GROOM:STALE` | issue | when `$warding` first marks an issue `stale`, one grace period before it closes it | how long the issue has been quiet, the date the sweep will close it, and how to keep it open |
 
 `WORK:DIVINATION` is advisory evidence owned by `$divination`; it never freezes scope, supplies a
