@@ -83,7 +83,8 @@ review of concrete reader paths, not prose assertions or an uncalibrated self-ju
 ## Success and validation
 
 Quest and forge reach the same table for ST1–ST9 before their first workspace mutation. Reading
-those paths establishes the behavioral contract; existing shape checks establish packaged links.
+those paths establishes the behavioral contract. Resolve quest's relative policy link from its
+installed directory and confirm the destination heading manually; shape-check does not cover it.
 The implementation inventory separates semantic prose review from the manifest's structural gate.
 Run focused shape/version checks and commit-check; the managed push hook owns final full local
 verification and CI independently runs both OS legs. Report their actual observations separately.
