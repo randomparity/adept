@@ -420,7 +420,11 @@ Each prompt carries:
   identity/revision, approval evidence and class fit instead of claiming an
   operator approved this repair. Quest rechecks live base authority and
   freezes its own matching `WORK:SCOPE` packet before design
-- The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
+- The claim contract: a new run with no compatible claim mints its own token. A same-claim
+  continuation carries and verifies the existing scope/claim token without acquiring or
+  recovering it. A replacement mints a successor token only for its separately authorized
+  recovery operation. No worker recovers a claim without the exact authority carried in its
+  dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
 - Assigned ADR/migration numbers, exact mandatory per-PR edits, file scope; the
