@@ -53,11 +53,13 @@ review continuation and the step-9 author handshake retain their own authority g
 ## 0. Preflight
 
 Run `$attunement` to learn the repo: `BASE_BRANCH`, guardrail commands,
-working-tree state, gh authentication, parallel-run context. Keep that discovery read-only:
-defer its task-plan/file writes until forge's
-[shared-tree placement policy](../forge/SKILL.md#shared-tree-placement-policy) has selected a
-safe checkout. Retain the observations for the branch gate below; write durable local notes only
-after entering the selected checkout. This also gates preflight notes before the first file edit.
+working-tree state, gh authentication, parallel-run context. Keep discovery read-only, then
+evaluate forge's [shared-tree placement policy](../forge/SKILL.md#shared-tree-placement-policy)
+before composing a scope or blocker annotation body or writing other files. Retain the decision
+and observations; branch/worktree creation still waits for scope and claim gate G3 below.
+Until placement completes, compose required tracker annotations only in a private temporary
+directory outside the checkouts, including when the policy stops this run. Defer checkout-local
+notes and file writes until entering the selected checkout; a stop never permits those writes.
 
 ## 1. Scope the Issue
 

@@ -132,7 +132,7 @@ Set this up before either execution mode runs.
 
 This is the shared policy for `$quest` and `$forge`. Evaluate it before the first branch,
 worktree, or file mutation, including project setup and `scripts/sdd-workspace`. Quest reads
-this subsection at branch setup; that does not invoke forge's build or baseline early.
+this subsection during preflight and revalidates at branch setup; neither invokes forge early.
 
 Consume attunement's `SHARED_TREE` for this checkout. If absent, from another checkout, or
 invalidated by observed changes, run `$attunement` before deciding; retain each unknown half
@@ -176,6 +176,9 @@ When isolation is required, a declined request or creation failure stops; it can
 to the optional in-place arm. Preserve dispatched file scope, assigned numbers, and ADR-index
 ownership unchanged whichever placement is selected. Existing default-branch and branch-reuse
 restrictions still apply. Detached linked reuse retains forge's existing finish-time branch step.
+Before placement completes, a caller's required scope/park annotation bodies may use private
+temporary storage outside the checkouts, even on a stop. This reporting exception permits no
+checkout-local notes, setup, edits, or branch/worktree creation contrary to the selected action.
 
 ### Create the selected external worktree
 
