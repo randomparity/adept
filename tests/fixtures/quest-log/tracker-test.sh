@@ -1188,6 +1188,15 @@ jq -e '.error == "partial" and .partial.url == ""' >/dev/null <"$sandbox/err" ||
 # A bound override that is not a whole number of seconds never reaches the
 # arithmetic destination bounded_call multiplies it against -- caught here,
 # not by whatever $((...)) does with the value.
+: >"$sandbox/calls"
+status=0
+github_bound_single=0 GH_CALL_LOG="$sandbox/calls" PATH="$sandbox/bin:$PATH" \
+	"$tracker" target-url --profile github --target example/repo \
+	>"$sandbox/out" 2>"$sandbox/err" || status=$?
+assert_exit 1 "$status" 'a bound override of zero'
+assert_error "$sandbox/err" usage 'a bound override of zero'
+[[ ! -s $sandbox/calls ]] || fail 'a zero bound reached gh before validation'
+
 status=0
 github_bound_single=01 PATH="$sandbox/bin:$PATH" \
 	"$tracker" target-url --profile github --target example/repo \
