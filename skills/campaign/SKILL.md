@@ -444,8 +444,16 @@ Each prompt carries:
   `CAMPAIGN-OCCURRENCE-RATIONALE:` field in any new occurrence
 - (Parallel only) external worktree path (`../<repo>-worktrees/<branch>`)
 
-**Claim check before every dispatch and re-dispatch.** Read the claim
-(`claim-list` covers the batch; a read failure holds the row — the step-5
+**Claim check before every dispatch and re-dispatch.** Resolve `CLAUDE_PLUGIN_ROOT`
+to the installed plugin root and keep the target repository as cwd. Read the claim
+batch in Bash:
+
+```sh
+bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/tracker.sh" claim-list \
+  --target <owner/name>
+```
+
+A read failure holds the row — the step-5
 hold: named in the run output while the rest of the queue drains — and
 reports the error; never dispatch on an unreadable claim state). Read issue state/status
 and apply quest-log's liveness and recovery-authority rules. No claim on an open issue →
