@@ -296,19 +296,24 @@ refuses a block missing either.
 Verify gate **G3**: `claim-verify` before creating the branch; a lost gate
 halts per step 1's rule.
 
-Fetch, sync `BASE_BRANCH` to `origin/BASE_BRANCH`, and create
-`feat/<short-slug>-<issue-number>` off it. Never work on the default branch. If
+**Decide placement before mutation.** Consume preflight's `SHARED_TREE` through forge's
+[shared-tree placement policy](../forge/SKILL.md#shared-tree-placement-policy) before fetching,
+syncing a base, creating a branch/worktree, or writing files. Read and apply that policy only;
+do not run forge's implementation or setup here. It owns the state/action decision, including
+unknowns and already-isolated reuse; do not substitute a disclosure-only condition or another
+shared/solo verdict. A stop takes this quest's existing blocker path.
+
+After that gate, fetch and create `feat/<short-slug>-<issue-number>` from
+`origin/BASE_BRANCH` in the selected checkout. Never work on the default branch. If
 a branch for this issue already exists, ask before reusing it unless the issue
 or PR explicitly names it or your dispatch prompt carries the operator's reuse
 decision.
 
-**Worktree placement.** If repo instructions require an isolated worktree (or
-you are a parallel agent that must not share a working tree), create it
-*outside* the repo tree -- `../<repo>-worktrees/<branch>` -- and `cd` there
-first. Never nest a worktree inside the repo: whole-tree tooling (linters, type
-checkers, test discovery) will walk it and fail your commit on another agent's
-in-flight code. If the harness's built-in isolation would nest it, run
-`git worktree add <external-path>` yourself.
+When the policy selects isolation, use forge's external placement procedure with the fetched
+`origin/BASE_BRANCH` as the new branch's start point, then enter and verify that checkout before
+writing. Do not switch, reset, or synchronize the source checkout's branch to create the
+destination. Reuse an authorized already-isolated worktree without recursively isolating it.
+Carry the dispatched file scope, assigned numbers, and ADR-index ownership into that checkout.
 
 ### Governed small change path
 

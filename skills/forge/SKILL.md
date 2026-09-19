@@ -128,26 +128,57 @@ abbreviations for filenames and human-facing status.
 
 Set this up before either execution mode runs.
 
-**Detect isolation before creating anything.**
+### Shared-tree placement policy
+
+This is the shared policy for `$quest` and `$forge`. Evaluate it before the first branch,
+worktree, or file mutation, including project setup and `scripts/sdd-workspace`. Quest reads
+this subsection at branch setup; that does not invoke forge's build or baseline early.
+
+Consume attunement's `SHARED_TREE` for this checkout. If absent, from another checkout, or
+invalidated by observed changes, run `$attunement` before deciding; retain each unknown half
+as unknown. Do not create a competing shared/solo probe or infer a zero from missing evidence.
+Sibling counts include stale and tooling worktrees: nonzero is not evidence of another agent,
+its ownership, or its liveness. Disclosed concurrency can require isolation even with zero
+siblings; lack of disclosure cannot weaken the policy.
+
+**Resolve checkout topology without mutating it.**
 
 ```bash
-GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
-GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
-git rev-parse --show-superproject-working-tree 2>/dev/null   # non-empty ⇒ submodule
+GIT_DIR=$(cd "$(git rev-parse --git-dir)" && pwd -P)
+GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
+git rev-parse --show-superproject-working-tree   # non-empty ⇒ submodule
 ```
 
 `GIT_DIR != GIT_COMMON` means a linked worktree — **but it is also true inside a
 submodule**, so the third command is not optional. A submodule is a normal
 checkout for this purpose.
 
-Already isolated: report the path and whether HEAD is detached (detached means a
-branch has to be created at finish time), then skip to project setup. Do not
-create a second worktree.
+Check each command's exit status and require non-empty resolved directory paths before
+comparing them. Failed or inconclusive topology is unknown, not a primary or linked verdict.
+For linked reuse, verify the physical checkout is external to the primary checkout using
+preflight's worktree paths, and matches this run's assigned path/branch or authorized reuse.
+Nested or unassigned placement stops for reconciliation; do not relocate or delete another tree.
 
-Not isolated: if the instructions do not already declare a worktree preference,
-ask before creating one — it changes where the user's work lives. Honour a
-declared preference without asking. If the user declines, work in place and
-continue to project setup.
+Apply the first matching row. Clean means `pre-existing dirty or staged paths: no`:
+
+| Observed state | Action before mutation |
+|---|---|
+| Dirty yes or unknown, or topology unknown | Stop through the caller's dirty-tree/blocker path; report the unresolved evidence. Never stash, discard, or reinterpret it as clean. |
+| Clean, authorized external linked checkout; siblings zero, nonzero, or unknown | Reuse it. Report placement and detached HEAD if present; do not create another worktree because of siblings. |
+| Clean primary/submodule; isolation required by instructions, disclosed concurrency, or siblings nonzero/unknown | Require an external sibling worktree using the placement procedure below. |
+| Clean primary/submodule; zero siblings, no required isolation or disclosed concurrency | Quest may create its feature branch in place. Forge honors a declared worktree preference; otherwise ask, and permit in-place work if declined. |
+
+Record the inputs and selected action with the run's existing preflight facts. An unknown sibling
+count permits reuse only in the verified linked arm, never in-place edits in a primary checkout.
+When isolation is required, a declined request or creation failure stops; it cannot fall through
+to the optional in-place arm. Preserve dispatched file scope, assigned numbers, and ADR-index
+ownership unchanged whichever placement is selected. Existing default-branch and branch-reuse
+restrictions still apply. Detached linked reuse retains forge's existing finish-time branch step.
+
+### Create the selected external worktree
+
+Only the isolation action uses this procedure; reuse and permitted in-place work skip to project
+setup. Verify the new destination and its clean state before setup or edits.
 
 **Prefer the harness's native worktree tool** — something named like
 `EnterWorktree`, a `/worktree` command, a `--worktree` flag. It handles
@@ -187,7 +218,8 @@ the containment check prints, remove the worktree and recreate it externally —
 never paper over it with a `.gitignore` entry.
 
 If `git worktree add` fails on a sandbox permission denial, say the sandbox
-blocked it, work in the current directory, and run setup and baseline there.
+blocked it and stop through the caller's blocker path. Do not run setup or edit in the source
+checkout as a fallback for failed isolation.
 
 **Then set up and verify a clean baseline.** Check the checkout's local
 prerequisites and readiness; install missing dependencies for applicable
