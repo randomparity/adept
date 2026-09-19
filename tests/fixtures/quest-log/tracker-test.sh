@@ -1195,6 +1195,7 @@ github_bound_single=0 GH_CALL_LOG="$sandbox/calls" PATH="$sandbox/bin:$PATH" \
 	>"$sandbox/out" 2>"$sandbox/err" || status=$?
 assert_exit 1 "$status" 'a bound override of zero'
 assert_error "$sandbox/err" usage 'a bound override of zero'
+assert_contains 'positive whole number of seconds without a leading zero' "$sandbox/err"
 [[ ! -s $sandbox/calls ]] || fail 'a zero bound reached gh before validation'
 
 status=0

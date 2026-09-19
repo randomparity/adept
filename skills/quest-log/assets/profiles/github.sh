@@ -148,7 +148,7 @@ github_run() { # bound gh-args...
 	case $bound in
 	'' | *[!0-9]* | 0?* | 0)
 		die "$EXIT_USAGE" usage \
-			"tracker command bound is not a whole number of seconds without a leading zero: $bound"
+			"tracker command bound is not a positive whole number of seconds without a leading zero: $bound"
 		;;
 	esac
 	((${#bound} <= 7)) ||
