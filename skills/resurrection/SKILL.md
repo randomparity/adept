@@ -11,8 +11,9 @@ actively working the same repo. Read → plan → one confirmation → apply.
 ## Steps
 
 1. **Resolve repo.** `gh repo view --json nameWithOwner --jq .nameWithOwner` → `owner/name`.
-2. **Sweep in-flight issues.** Fetch quest claims once
-   (`skills/quest-log/assets/tracker.sh claim-list --target <owner/name>`) for
+2. **Sweep in-flight issues.** Resolve `CLAUDE_PLUGIN_ROOT` to the installed plugin
+   root, keeping the target repository as cwd. Fetch quest claims once in Bash
+   (`bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/tracker.sh" claim-list --target <owner/name>`) for
    the checks below. Do **not** filter with `gh issue list --label status:...` —
    `gh` mis-encodes the colon and multiple `--label` flags AND (see the skill's colon-label
    gotcha), so either returns nothing. List by state once and filter **client-side**:
@@ -25,12 +26,13 @@ actively working the same repo. Read → plan → one confirmation → apply.
    - **merged PR with `Closes #N`** (`gh pr list --repo <owner/name> --state merged --search
      "N in:body"` — verify the `Closes` link) → plan: close issue, strip `status:` labels.
    - **open PR** → plan: correct the label to match the PR's actual state.
-   - **no PR, no matching branch, and stale** (gate below) → plan: reset to `status:ready`,
-     and delete the issue's orphaned `quest-claim/<N>` label (release guarded by the
-     observed token) if `claim-list` showed one.
+   - **no PR, no matching branch, and stale** (gate below) → plan: reset to `status:ready`.
+     If a claim is present, hold it as a claimed in-flight row pending an explicit
+     operator abandonment/recovery decision under quest-log; age alone cannot authorize
+     its reset or deletion. An approved reset releases the observed token's claim.
    - **claim on a closed issue** → plan: delete the claim (release guarded by the
-     observed token; the owner is gone). A claim never extends or vetoes the reset
-     window — its TTL gates quest-versus-quest recovery, not this sweep.
+     observed token; closed-state is authoritative). This cleanup remains separate
+     from recovery of an open in-flight claim.
 3. **Staleness gate** (prevents clobbering a legitimately-quiet in-flight issue whose branch
    was never pushed). Reset a `status:in-progress` issue only when ALL hold:
    (a) no open/merged PR references it;
@@ -42,6 +44,9 @@ actively working the same repo. Read → plan → one confirmation → apply.
    (d) the `status:` label's age exceeds the threshold (default 60 min), read via the
        skill's timeline recipe. **Empty timeline result = stale-unknown → do NOT reset;
        surface for a human.** Fail closed, never clobber.
+   These gates identify an unclaimed orphan or a candidate for an explicit abandonment
+   decision; they do not make a claimed in-flight issue stale. A claimed row requires
+   the additional recovery authority below, regardless of how old its label or claim is.
 4. **Reconcile blocked dependencies; hold other parked work.** Run the
    `quest-log` recipe in Bash:
    `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>`. Add every returned issue to the
@@ -64,7 +69,14 @@ actively working the same repo. Read → plan → one confirmation → apply.
    keep those still carrying any `status:` value → plan: remove the residual `status:` label
    (closed-state is authoritative).
 6. **Plan → confirm → apply.** Present the full reconciliation table (`#issue → action`).
-   List any branch before touching it. After one explicit confirmation, apply per issue;
+   List any branch before touching it. For a claimed in-flight reset, show the observed
+   claim and explicitly name the abandonment decision and reset/release action; a generic
+   cleanup confirmation cannot stand in for that decision. Retain the exact approval and
+   provenance in existing private run notes under quest-log's recovery-authority rule.
+   One confirmation may cover the displayed decisions. Before each open-issue reset,
+   re-read claim and issue state; a new/changed or unreadable claim, incompatible state,
+   or failed staleness gate holds the row. Do not delete a malformed claim through token
+   release; hold for its explicitly authorized force-recovery path. After confirmation, apply per issue;
    pass all and only the confirmed cleared-dependency issue numbers to
    `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name> <number>...`, then verify every
    reported transition. Re-evaluation may retain an issue whose state changed after

@@ -308,19 +308,35 @@ claimants wins (ADR 0018 carries the probe evidence).
   consumer that reads `WORK:SCOPE` for authority or liveness applies the
   token match when a claim is present; on an issue with no claim at all the
   annotation rule stands unchanged.
-- **Liveness**: `CLAIM_GRACE=600` and `CLAIM_TTL=43200` seconds. A claim is
-  *live* when its age < `CLAIM_TTL` **and** (its age < `CLAIM_GRACE` **or**
-  the issue carries an in-flight status: `in-progress`, `in-review`,
-  `awaiting-merge`). Anything else is *stale*, including every claim on a
-  closed issue. The grace window covers the acquire→status-swap gap; a
-  claim that never reaches an in-flight status is recoverable once grace
-  expires, by design. Epochs are self-asserted: the protocol assumes host
+- **Liveness** (ADR 0071): a well-formed claim is *live* when the issue is open
+  **and** (its age < `CLAIM_GRACE=600` seconds **or** the issue carries an
+  in-flight status: `status:in-progress`, `status:in-review`,
+  `status:awaiting-merge`). Otherwise it is *stale*, including every claim on a
+  closed issue. In-flight claims have no age limit or refresh obligation;
+  `CLAIM_TTL` no longer authorizes recovery. The grace window covers the
+  acquire→status-swap gap; a claim that never reaches an in-flight status is
+  recoverable once grace expires, by design. Epochs are self-asserted: the protocol assumes host
   clock skew ≤ 300 s (half the grace); a host with worse skew misjudges
   liveness — an environmental invariant, and one that breaks TLS and git
   first.
+- **Recovery authority**: an open, non-in-flight claim past grace may use
+  `claim-recover --older-than 600`. An in-flight claim requires an explicit operator
+  decision naming the issue, observed claim, and permitted recovery action; age,
+  silence, and missing branch/PR evidence do not grant it. Record that decision and
+  its provenance in the owning workflow's existing private notes or campaign manifest
+  before writing. Immediately before recovery or an open-issue reset that clears a
+  claim, re-read the claim and issue state. Hold on an unreadable observation, changed
+  claim (including a malformed description), or state incompatible with the authorized
+  action. An authorized takeover uses `--force`; malformed claims retain the same
+  explicit route. Campaign's observed-worker-end and branch-reuse gates still apply.
+  Resurrection's confirmed closed-issue cleanup remains a separate edge below.
+  These are caller obligations, not atomic checks: the tracker primitive tests only
+  the supplied age/force argument and cannot authenticate an operator decision or
+  protect against a change after the read. Old installed or bypassing callers are
+  outside this cooperating-workflow guarantee.
 - **Operations** (tracker engine, github profile):
   `claim-acquire|claim-verify|claim-release|claim-recover|claim-list`.
-  Exit class `EXIT_CONFLICT=6` reports a live foreign claim with a
+  Exit class `EXIT_CONFLICT=6` reports a foreign claim with a
   structured holder payload on stderr; `claim-verify` exits 0 held, 2
   absent, 6 foreign; `claim-recover` requires `--older-than <seconds>` or
   `--force` (the structural carrier of an operator's recovery decision). A
