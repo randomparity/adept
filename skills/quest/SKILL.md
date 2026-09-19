@@ -53,7 +53,11 @@ review continuation and the step-9 author handshake retain their own authority g
 ## 0. Preflight
 
 Run `$attunement` to learn the repo: `BASE_BRANCH`, guardrail commands,
-working-tree state, gh authentication, parallel-run context.
+working-tree state, gh authentication, parallel-run context. Keep that discovery read-only:
+defer its task-plan/file writes until forge's
+[shared-tree placement policy](../forge/SKILL.md#shared-tree-placement-policy) has selected a
+safe checkout. Retain the observations for the branch gate below; write durable local notes only
+after entering the selected checkout. This also gates preflight notes before the first file edit.
 
 ## 1. Scope the Issue
 

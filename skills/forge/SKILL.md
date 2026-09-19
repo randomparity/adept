@@ -136,7 +136,9 @@ this subsection at branch setup; that does not invoke forge's build or baseline 
 
 Consume attunement's `SHARED_TREE` for this checkout. If absent, from another checkout, or
 invalidated by observed changes, run `$attunement` before deciding; retain each unknown half
-as unknown. Do not create a competing shared/solo probe or infer a zero from missing evidence.
+as unknown. Keep that discovery read-only and defer its task-plan/file writes until this policy
+permits mutation in the selected checkout. Do not create a competing shared/solo probe or infer
+a zero from missing evidence.
 Sibling counts include stale and tooling worktrees: nonzero is not evidence of another agent,
 its ownership, or its liveness. Disclosed concurrency can require isolation even with zero
 siblings; lack of disclosure cannot weaken the policy.
