@@ -461,14 +461,14 @@ dispatch; the worker acquires its own. Open non-in-flight issue with a grace-sta
 dispatch with that bounded recovery authorization; the worker re-reads claim/state and
 runs `claim-recover --older-than 600`. Closed issue → reconcile terminal state, not dispatch.
 An in-flight claim is live regardless of age; no TTL or silence authorizes replacement.
-Live or malformed claim → hold unless explicit recovery authority is present. When the row's agent has been observed
-ended (the re-dispatch bar above), the operator's re-dispatch answer is the
-recovery authorization; the prompt carries it as an explicit line —
-"Claim recovery authorized: the prior run was observed ended" — beside the
-branch-reuse decision. Record the exact issue/observed claim, action, and operator decision
-provenance in the existing private manifest; pass them to the worker, which re-reads
-claim/state under quest-log before `claim-recover --force`. A changed or unreadable claim
-holds. Observed end alone, or a generic campaign/resume approval, is not recovery authority.
+Live or malformed claim → hold unless an explicit decision authorizes recovery of that
+issue's observed claim for the named replacement action. Observed worker end satisfies the
+replacement precondition but does not authorize claim recovery. Record the exact
+issue/observed claim, action, and operator decision provenance in the existing private
+manifest; the prompt carries that authority beside the branch-reuse decision. The worker
+re-reads claim/state under quest-log before `claim-recover --force`; a changed or unreadable
+claim holds. A same-claim continuation or handoff needs no recovery: it verifies the matching
+token and continues. Generic re-dispatch, campaign, or resume approval is not recovery authority.
 
 Before the serial blocking dispatch and wait, emit the before-wait progress update required by the top-level contract.
 
