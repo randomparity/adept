@@ -146,9 +146,9 @@ github_run() { # bound gh-args...
 	# cleared-dependencies.sh:118-134 carries for cleared_dependency_run, the
 	# closest structural analog to this wrapper.
 	case $bound in
-	'' | *[!0-9]* | 0?*)
+	'' | *[!0-9]* | 0?* | 0)
 		die "$EXIT_USAGE" usage \
-			"tracker command bound is not a whole number of seconds without a leading zero: $bound"
+			"tracker command bound is not a positive whole number of seconds without a leading zero: $bound"
 		;;
 	esac
 	((${#bound} <= 7)) ||
