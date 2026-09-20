@@ -12,41 +12,28 @@ status. Time alone cannot distinguish an abandoned run from a legitimate wait.
 
 ## Decision
 
-Supersede ADR 0018's liveness and recovery policy only; retain its exclusive label
-primitive, token grammar and binding, verify gates, and other decisions.
+Supersede ADR 0018's liveness predicate only; retain its exclusive label primitive,
+token grammar and binding, verify gates, recovery mechanisms, and other decisions.
 
-An open issue's well-formed claim is live when its age is below `CLAIM_GRACE=600`
-seconds or it carries `status:in-progress`, `status:in-review`, or
-`status:awaiting-merge`. There is no in-flight TTL or refresh obligation. Closed
-issues' claims remain stale. Malformed open claims retain their explicit recovery path.
+A well-formed claim is live when its issue is open and either its age is below
+`CLAIM_GRACE=600` seconds or the issue carries `status:in-progress`,
+`status:in-review`, or `status:awaiting-merge`. Otherwise it is stale, including every
+claim on a closed issue. An in-flight claim has no age limit or refresh obligation, so
+the former `CLAIM_TTL` does not authorize its recovery.
 
-Quest-log owns this policy. Quest and campaign may authorize age-based recovery
-only for an open issue outside those in-flight statuses after grace expires.
-An in-flight claim requires an explicit operator recovery decision naming the
-issue and observed claim. Campaign additionally retains its observed-worker-end
-and branch-reuse gates. Resurrection must present claimed in-flight resets as
-explicit abandonment decisions, not infer abandonment from its age/branch checks.
-Record the decision in the owning workflow's existing durable notes before the
-write. Standalone resurrection has no such artifact, so its confirmation is
-single-session only and must be reacquired from a fresh plan after any handoff.
-Immediately before every claim-clearing write, including closed cleanup, re-read
-claim and issue state and hold if the observed claim changed or state no longer
-fits the action. Force recovery remains available for authorized open-issue takeover.
-Closed cleanup releases a well-formed claim by token; a malformed closed claim binds
-authorization and immediate revalidation to the exact opaque raw label description, then uses
-manual label deletion with verified absence because force recovery would recreate the claim.
-
-The tracker primitive still enforces token, grammar, and caller-supplied age or
-force arguments; it does not decide policy or authenticate the operator's intent.
+Quest-log owns the predicate. Quest, campaign, and resurrection consume it and do not
+recover or clear an in-flight claim solely because of age. This decision does not
+change the existing operator-authorized force path or define a new abandonment,
+handoff, malformed-claim, or cleanup protocol.
 
 ## Consequences
 
-- A quiet in-flight claim can occupy an issue indefinitely until explicit recovery.
-- Status and claim observations are not atomic. This change governs cooperating
-  workflow callers; it adds no server-side lease, conditional deletion, or protection
-  from an old installed workflow or a caller bypassing the policy.
-- Pre-status grace, closed cleanup, clock-skew assumptions, and claim exclusion in
-  seek-quest remain with their existing owners. No new heartbeat or state store.
+- A quiet in-flight claim can occupy an issue indefinitely until the existing operator path
+  resolves it.
+- The pre-status grace window and closed-issue staleness remain unchanged.
+- Malformed claims, force authorization, claim cleanup, token transfer, clock-skew
+  assumptions, installed-consumer paths, and seek-quest exclusion remain with their
+  existing owners. No heartbeat or state store is added.
 
 ## Considered & rejected
 
@@ -56,6 +43,5 @@ force arguments; it does not decide policy or authenticate the operator's intent
   matching the #412 report and violating its acceptance criterion.
 - **Refresh at phase seams.** judgment: a human checkpoint can outlast the TTL
   without another phase seam; timed refresh adds an obligation during legitimate waits.
-- **Move policy into the tracker command.** judgment: this change is the authorization
-  contract of the owning skills; duplicating it in the generic recovery primitive adds
-  executable surface while explicit operator intent would still belong to the caller.
+- **Change recovery or cleanup protocols too.** rejected as outside issue #412; removing
+  age as in-flight recovery authority is sufficient for the reported failure.

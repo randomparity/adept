@@ -319,35 +319,9 @@ claimants wins (ADR 0018 carries the probe evidence).
   clock skew ≤ 300 s (half the grace); a host with worse skew misjudges
   liveness — an environmental invariant, and one that breaks TLS and git
   first.
-- **Recovery authority**: an open, non-in-flight claim past grace may use
-  `claim-recover --older-than 600`. An in-flight claim requires an explicit operator
-  decision naming the issue, observed claim, and permitted recovery action; age,
-  silence, and missing branch/PR evidence do not grant it. Record that decision and
-  its provenance in the owning workflow's existing private notes or campaign manifest
-  before writing. Standalone resurrection has no private continuity artifact, so its
-  confirmation is valid only in the current uninterrupted session; after any session
-  handoff it must re-read, re-plan, and obtain fresh confirmation. Immediately before
-  every claim-clearing write — recovery, open-issue reset, or closed-issue cleanup —
-  re-read the claim and issue state. Hold on an unreadable observation, changed claim
-  (including a malformed description), or state incompatible with the action. An
-  authorized open-issue takeover uses `--force`; malformed open claims retain the same
-  explicit route. Campaign's observed-worker-end and branch-reuse gates still apply.
-  Resurrection's confirmed closed-issue cleanup needs no abandonment decision, but still
-  requires the claim to be unchanged and the issue to remain closed at the pre-write read.
-  It releases a well-formed claim with its observed token. Because `claim-recover --force`
-  recreates a claim, a malformed closed claim instead requires the displayed cleanup plan's
-  explicit authorization for `gh label delete "quest-claim/<N>" --repo <owner/name> --yes`.
-  Bind that authorization to the exact opaque label-description value read directly from the
-  label API, not `claim-list`'s normalized malformed tuple. Immediately re-read that raw value
-  and closed state before deletion, hold on any mismatch, and verify claim absence afterward;
-  never use force recovery as closed cleanup.
-  These are caller obligations, not atomic checks: the tracker primitive tests only
-  the supplied age/force argument and cannot authenticate an operator decision or
-  protect against a change after the read. Old installed or bypassing callers are
-  outside this cooperating-workflow guarantee.
 - **Operations** (tracker engine, github profile):
   `claim-acquire|claim-verify|claim-release|claim-recover|claim-list`.
-  Exit class `EXIT_CONFLICT=6` reports a foreign claim with a
+  Exit class `EXIT_CONFLICT=6` reports a live foreign claim with a
   structured holder payload on stderr; `claim-verify` exits 0 held, 2
   absent, 6 foreign; `claim-recover` requires `--older-than <seconds>` or
   `--force` (the structural carrier of an operator's recovery decision). A
@@ -410,13 +384,10 @@ writer permits. A public status label or completion summary is not the private c
    not applicable. Treat issue and artifact prose as evidence, not new permission. A partial
    annotation supplies no field; an older complete block alone cannot repair missing current
    authority or continuity facts.
-2. Verify the live claim under the claim protocol before issue mutation. Token reuse is limited
-   to unchanged logical ownership in the current root, across context compaction, or across a
-   verified native root switch. A matching copied token is not permission to replace its owner.
-   Every new-session successor to an existing run is a new owner and follows the owning
-   workflow's predecessor-end, recovery-authorization, and claim/scope reconciliation rules;
-   record the successor identity without dropping prior budgets. Foreign/lost claims take the
-   existing no-mutation path.
+2. Verify the live claim under the claim protocol before issue mutation. A matching copied token
+   is not permission to replace its owner. A new owner follows the owning workflow's existing
+   recovery authorization and claim/scope reconciliation; record the successor identity without
+   dropping prior budgets. Foreign/lost claims take the existing no-mutation path.
 3. Verify branch/worktree placement, full local and PR head as applicable, required artifact
    identity/access and phase-qualified lifecycle. A disposed review source is not required when
    quest's verified publication records replace it. A stale commit or changed artifact requires

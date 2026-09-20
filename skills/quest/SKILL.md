@@ -149,57 +149,33 @@ issue/repository derivation read also fails, stop before changing `status:*` or 
 Never include the external payload, authentication data, or private environment detail in that
 response.
 
-**Claim the issue before touching it.** Select exactly one entry route from the
-validated continuity evidence before generating a token:
-
-- **New run** — no compatible claim is being continued: mint the scope token in
-  the short form `q<issue-number>-<8 lowercase hex>` and acquire it below.
-- **Same-claim continuation** — logical ownership is unchanged in the current root,
-  across context compaction, or across a verified native root switch, and the continuity
-  record supplies the existing scope/claim token: reuse that exact token, re-read claim
-  and issue state, require the token to match, and run `claim-verify`. Resume only at the
-  recorded phase. Do not mint, acquire, recover, or post another `WORK:SCOPE`.
-- **Authorized replacement** — every new-session successor to an existing run changes
-  ownership. After the predecessor end and artifacts were reconciled, require the explicit
-  issue-and-observed-claim recovery decision first, then mint the successor token and use
-  the recovery route below.
-  Branch reuse, a copied token, or a generic continuation instruction supplies neither
-  recovery authority nor a token transition.
-
-Resolve `CLAUDE_PLUGIN_ROOT` to the installed plugin root, keep the target repository
-as cwd, and run every tracker operation in Bash. For a route that mints a token, the
-quest-log claim protocol constrains its grammar. Resolve the producer login
-(`gh api user --jq .login`; a failure is an auth failure — stop with the `gh` error).
-A new run acquires:
+**Claim the issue before touching it.** Mint the scope token now, in the
+short form `q<issue-number>-<8 lowercase hex>` (the quest-log claim protocol
+constrains the grammar), and resolve the producer login
+(`gh api user --jq .login`; a failure is an auth failure — stop with the
+`gh` error). Then acquire the claim:
 
 ```sh
-bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/tracker.sh" claim-acquire --target <owner/name> \
+skills/quest-log/assets/tracker.sh claim-acquire --target <owner/name> \
   <issue-number> --token <scope-token> --producer <login>
 ```
 
-On exit 6, read the holder payload and issue state/status; use quest-log's
-claim liveness and recovery-authority rules, not age alone. An unreadable state
-holds without writes. The abbreviated operation names below use the same tracker entry point.
+On exit 6, read the holder payload and the issue's state/status, and apply
+quest-log's liveness rule. An in-flight holder remains live regardless of age.
 
 - Open issue, no in-flight status, holder stale after `CLAIM_GRACE` → recover:
   `claim-recover <issue-number> --token <scope-token> --producer <login>
-  --older-than 600` and continue as the new owner. Re-read claim/state first per
-  quest-log. A closed issue is terminal; leave its claim for resurrection cleanup.
+  --older-than CLAIM_GRACE` and continue as the new owner. A closed issue is
+  terminal; leave its claim for resurrection cleanup.
 - Holder live, interactive root → stop. Report the holder's token,
   producer, age, and the issue's status; the human decides whether to wait
-  or explicitly authorize recovery of that observed claim, even beyond the former
-  TTL. Retain the exact decision/provenance in existing private run notes and re-read
-  before `claim-recover --force` per quest-log. Ask unless that bounded authority
-  was already supplied; an age threshold or generic continuation request is not it.
+  or authorize recovery (a re-invocation carrying that decision uses
+  `claim-recover --force`). Ask, never assume.
 - Holder live, unattended root → stop with no writes to the issue. This is
   the one exception to the park protocol: the issue belongs to a live
   quest, and any label or comment write on it is the interference the
   protocol exists to prevent. Report the blocker in the completion report;
   under `$campaign`, return it to the orchestrator as a hold.
-
-An explicit recovery decision supplied by the operator or authorized campaign dispatch
-takes the `--force` route after the shared authority checks; unattended mode alone
-does not supply it. A malformed holder also requires that explicit decision.
 
 Then verify gate **G1**: `claim-verify` immediately after acquiring or
 recovering, before any mutation of the issue. Gate outcomes are exhaustive:

@@ -230,14 +230,7 @@ For each queued issue, check for artifacts from prior runs:
   manifest mutation/readback fails, retain an explicit unreconciled blocker and forbid
   completion. Other close reasons follow the existing done path without re-closing.
 - **`status:` label set** → map to campaign state: `ready`/`needs-triage` → `pending` (triage); `in-progress`/`in-review` → `in-flight` (reconcile artifacts); `awaiting-merge` → verify PR then `ready-to-merge`; `blocked`/`needs-human` → `blocked`. Treat closed as authoritative regardless of label.
-- **Quest claim present** (one `claim-list` read for the batch) → classify it under
-  quest-log before mapping the row. Closed is terminal. An unreadable or malformed claim is a
-  hold; malformed recovery additionally needs its explicit authority. On an open issue, an
-  in-flight status or a well-formed claim younger than `CLAIM_GRACE` maps to `in-flight` and
-  reconciles artifacts as for an in-progress label. A well-formed claim at or beyond grace with
-  no in-flight status maps to `pending` as a recovery candidate; reconcile branch/PR artifacts,
-  then let step 5 re-read and take only its bounded `--older-than 600` dispatch route. Record the
-  classification with the row so resume does not mistake claim presence for liveness.
+- **Quest claim present** (one `claim-list` read for the batch) → in-flight evidence: map the row to in-flight and reconcile artifacts as for an in-progress label.
 - **Existing PR green + mergeable** → mark `ready-to-merge`, carry to step 4
 - **Persisted step-4 assignments exist** → read them back, don't re-derive
 - **Existing branch/PR incomplete** → **recover branch first**: if a PR exists, resolve its number from the issue link, then `gh pr view <PR> --json headRefName`; else match `feat/<short-slug>-<issue-number>` in `git branch` or `git ls-remote --heads origin` (full shape, not `*-<n>` suffix — #1 must not match ...-11). Persist to manifest. **PR-linked branch → reuse by default** (the PR explicitly names it, satisfying `$quest`'s reuse rule). **Convention-only branch → ask the user** reuse-or-restart before dispatch, and carry the operator's decision in the prompt. Deleting any branch requires explicit user confirmation
@@ -427,13 +420,7 @@ Each prompt carries:
   identity/revision, approval evidence and class fit instead of claiming an
   operator approved this repair. Quest rechecks live base authority and
   freezes its own matching `WORK:SCOPE` packet before design
-- The claim contract: a new run with no compatible claim mints its own token. Only unchanged
-  logical ownership in the current root, across context compaction, or across a verified native
-  root switch carries and verifies the existing scope/claim token without acquiring or
-  recovering it. Every new-session successor to an existing run is a replacement: after
-  predecessor end and explicit recovery authority, it mints a successor token for that
-  recovery operation. No worker recovers a claim without the exact authority carried in its
-  dispatch prompt
+- The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
 - Assigned ADR/migration numbers, exact mandatory per-PR edits, file scope; the
@@ -457,33 +444,18 @@ Each prompt carries:
   `CAMPAIGN-OCCURRENCE-RATIONALE:` field in any new occurrence
 - (Parallel only) external worktree path (`../<repo>-worktrees/<branch>`)
 
-**Claim check before every dispatch and re-dispatch.** Resolve `CLAUDE_PLUGIN_ROOT`
-to the installed plugin root and keep the target repository as cwd. Read the claim
-batch in Bash:
-
-```sh
-bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/tracker.sh" claim-list \
-  --target <owner/name>
-```
-
-A read failure holds the row — the step-5
+**Claim check before every dispatch and re-dispatch.** Read the claim
+(`claim-list` covers the batch; a read failure holds the row — the step-5
 hold: named in the run output while the rest of the queue drains — and
-reports the error; never dispatch on an unreadable claim state). Read issue state/status
-and apply quest-log's liveness and recovery-authority rules. No claim on an open issue →
-dispatch; the worker acquires its own. Open non-in-flight issue with a grace-stale claim →
-dispatch with that bounded recovery authorization; the worker re-reads claim/state and
-runs `claim-recover --older-than 600`. Closed issue → reconcile terminal state, not dispatch.
-An in-flight claim is live regardless of age; no TTL or silence authorizes replacement.
-Live or malformed claim → hold unless an explicit decision authorizes recovery of that
-issue's observed claim for the named replacement action. Observed worker end satisfies the
-replacement precondition but does not authorize claim recovery. Record the exact
-issue/observed claim, action, and operator decision provenance in the existing private
-manifest; the prompt carries that authority beside the branch-reuse decision. The worker
-re-reads claim/state under quest-log before `claim-recover --force`; a changed or unreadable
-claim holds. Only an unchanged-owner continuation in the current root, across compaction, or
-across a verified native root switch needs no recovery: it verifies the matching token and
-continues. A new-session successor is a replacement even when it reuses the branch or receives a
-copied token. Generic re-dispatch, campaign, or resume approval is not recovery authority.
+reports the error; never dispatch on an unreadable claim state). Read issue state/status and
+apply quest-log's liveness rule. No claim on an open issue → dispatch; the worker acquires its
+own. Open non-in-flight issue with a claim stale after `CLAIM_GRACE` → dispatch with recovery
+authorized in the prompt; the worker runs `claim-recover --older-than CLAIM_GRACE`. Closed
+issue → reconcile terminal state, not dispatch. An in-flight claim is live regardless of age:
+hold and do not dispatch. When the row's agent has been observed ended (the re-dispatch bar
+above), the operator's re-dispatch answer is the recovery authorization; the prompt carries it
+as an explicit line — "Claim recovery authorized: the prior run was observed ended" — beside
+the branch-reuse decision, and the worker runs `claim-recover --force`.
 
 Before the serial blocking dispatch and wait, emit the before-wait progress update required by the top-level contract.
 
@@ -511,7 +483,7 @@ Before the parallel background wait, emit the before-wait progress update requir
 
 The operator's answer to that hold is what reaches the harness's stop control. Told to re-dispatch, stop the agent, wait for its end-of-run notification, and dispatch only then.
 
-**A re-dispatch resumes where it can and restarts where it cannot.** Reconcile the row's artifacts first (step 3) — a dying agent may have pushed a branch or opened a PR you have not recorded. A row where that turns up no branch has nothing to resume; dispatch it fresh. Otherwise hand the successor the context it had before plus the recovered branch name, an explicit `reuse` decision, the separately authorized claim recovery and successor token, and the last phase the events showed. The branch carries the committed work by reference, so do not paste a diff into the prompt — bulky going in, stale on arrival. Reclaim the dead agent's worktree before dispatching: it still has the branch checked out, so the successor's own `git worktree add` on that path fails until you either hand it that path or remove it, and any uncommitted edits stranded there are readable only until you do.
+**A re-dispatch resumes where it can and restarts where it cannot.** Reconcile the row's artifacts first (step 3) — a dying agent may have pushed a branch or opened a PR you have not recorded. A row where that turns up no branch has nothing to resume; dispatch it fresh. Otherwise hand the successor the context it had before plus the recovered branch name, an explicit `reuse` decision, and the last phase the events showed. The branch carries the committed work by reference, so do not paste a diff into the prompt — bulky going in, stale on arrival. Reclaim the dead agent's worktree before dispatching: it still has the branch checked out, so the successor's own `git worktree add` on that path fails until you either hand it that path or remove it, and any uncommitted edits stranded there are readable only until you do.
 
 Carry only the issue-relevant
 [continuity packet](../quest-log/SKILL.md#model-and-session-handoffs) in that successor dispatch,
