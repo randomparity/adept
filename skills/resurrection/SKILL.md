@@ -25,12 +25,11 @@ actively working the same repo. Read → plan → one confirmation → apply.
    - **merged PR with `Closes #N`** (`gh pr list --repo <owner/name> --state merged --search
      "N in:body"` — verify the `Closes` link) → plan: close issue, strip `status:` labels.
    - **open PR** → plan: correct the label to match the PR's actual state.
-   - **no PR, no matching branch, and stale** (gate below) → plan: reset to `status:ready`,
-     and delete the issue's orphaned `quest-claim/<N>` label (release guarded by the
-     observed token) if `claim-list` showed one.
+   - **no PR, no matching branch, and stale** (gate below), with no claim → plan: reset to
+     `status:ready`. If `claim-list` showed a claim, age alone is insufficient to clear it;
+     hold that row for an operator decision instead.
    - **claim on a closed issue** → plan: delete the claim (release guarded by the
-     observed token; the owner is gone). A claim never extends or vetoes the reset
-     window — its TTL gates quest-versus-quest recovery, not this sweep.
+     observed token; closed-state is authoritative).
 3. **Staleness gate** (prevents clobbering a legitimately-quiet in-flight issue whose branch
    was never pushed). Reset a `status:in-progress` issue only when ALL hold:
    (a) no open/merged PR references it;
@@ -42,6 +41,8 @@ actively working the same repo. Read → plan → one confirmation → apply.
    (d) the `status:` label's age exceeds the threshold (default 60 min), read via the
        skill's timeline recipe. **Empty timeline result = stale-unknown → do NOT reset;
        surface for a human.** Fail closed, never clobber.
+   These gates do not override claim liveness: age alone does not make a claim on an open
+   in-flight issue stale.
 4. **Reconcile blocked dependencies; hold other parked work.** Run the
    `quest-log` recipe in Bash:
    `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>`. Add every returned issue to the

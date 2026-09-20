@@ -447,14 +447,15 @@ Each prompt carries:
 **Claim check before every dispatch and re-dispatch.** Read the claim
 (`claim-list` covers the batch; a read failure holds the row — the step-5
 hold: named in the run output while the rest of the queue drains — and
-reports the error; never dispatch on an unreadable claim state). No claim →
-dispatch; the worker acquires its own. Stale claim → dispatch with recovery
-authorized in the prompt; the worker runs `claim-recover --older-than`.
-Live claim → hold: do not dispatch. When the row's agent has been observed
-ended (the re-dispatch bar above), the operator's re-dispatch answer is the
-recovery authorization; the prompt carries it as an explicit line —
-"Claim recovery authorized: the prior run was observed ended" — beside the
-branch-reuse decision, and the worker runs `claim-recover --force`.
+reports the error; never dispatch on an unreadable claim state). Read issue state/status and
+apply quest-log's liveness rule. No claim on an open issue → dispatch; the worker acquires its
+own. Open non-in-flight issue with a claim stale after `CLAIM_GRACE` → dispatch with recovery
+authorized in the prompt; the worker runs `claim-recover --older-than CLAIM_GRACE`. Closed
+issue → reconcile terminal state, not dispatch. An in-flight claim is live regardless of age:
+hold and do not dispatch. When the row's agent has been observed ended (the re-dispatch bar
+above), the operator's re-dispatch answer is the recovery authorization; the prompt carries it
+as an explicit line — "Claim recovery authorized: the prior run was observed ended" — beside
+the branch-reuse decision, and the worker runs `claim-recover --force`.
 
 Before the serial blocking dispatch and wait, emit the before-wait progress update required by the top-level contract.
 

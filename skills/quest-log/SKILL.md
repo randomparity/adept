@@ -308,13 +308,14 @@ claimants wins (ADR 0018 carries the probe evidence).
   consumer that reads `WORK:SCOPE` for authority or liveness applies the
   token match when a claim is present; on an issue with no claim at all the
   annotation rule stands unchanged.
-- **Liveness**: `CLAIM_GRACE=600` and `CLAIM_TTL=43200` seconds. A claim is
-  *live* when its age < `CLAIM_TTL` **and** (its age < `CLAIM_GRACE` **or**
-  the issue carries an in-flight status: `in-progress`, `in-review`,
-  `awaiting-merge`). Anything else is *stale*, including every claim on a
-  closed issue. The grace window covers the acquire→status-swap gap; a
-  claim that never reaches an in-flight status is recoverable once grace
-  expires, by design. Epochs are self-asserted: the protocol assumes host
+- **Liveness** (ADR 0071): a well-formed claim is *live* when the issue is open
+  **and** (its age < `CLAIM_GRACE=600` seconds **or** the issue carries an
+  in-flight status: `status:in-progress`, `status:in-review`,
+  `status:awaiting-merge`). Otherwise it is *stale*, including every claim on a
+  closed issue. In-flight claims have no age limit or refresh obligation;
+  `CLAIM_TTL` no longer authorizes recovery. The grace window covers the
+  acquire→status-swap gap; a claim that never reaches an in-flight status is
+  recoverable once grace expires, by design. Epochs are self-asserted: the protocol assumes host
   clock skew ≤ 300 s (half the grace); a host with worse skew misjudges
   liveness — an environmental invariant, and one that breaks TLS and git
   first.

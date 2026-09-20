@@ -160,12 +160,13 @@ skills/quest-log/assets/tracker.sh claim-acquire --target <owner/name> \
   <issue-number> --token <scope-token> --producer <login>
 ```
 
-On exit 6, read the holder payload and the issue's status:
+On exit 6, read the holder payload and the issue's state/status, and apply
+quest-log's liveness rule. An in-flight holder remains live regardless of age.
 
-- Holder stale per the liveness rule → recover:
+- Open issue, no in-flight status, holder stale after `CLAIM_GRACE` → recover:
   `claim-recover <issue-number> --token <scope-token> --producer <login>
-  --older-than <CLAIM_TTL if the issue carries an in-flight status, else
-  CLAIM_GRACE>` and continue as the new owner.
+  --older-than CLAIM_GRACE` and continue as the new owner. A closed issue is
+  terminal; leave its claim for resurrection cleanup.
 - Holder live, interactive root → stop. Report the holder's token,
   producer, age, and the issue's status; the human decides whether to wait
   or authorize recovery (a re-invocation carrying that decision uses
