@@ -52,11 +52,20 @@ deadline expires, and read it once when it returns:
 
 ```bash
 # One background task for the whole wait. Not one per check.
-timeout 3600 bash -c 'until <condition>; do sleep 60; done'; echo "wait ended: $?"
+# macOS does not ship timeout(1). Bound the loop with the shell clock.
+deadline=$(( $(date +%s) + 3600 ))
+status=0
+until <condition>; do
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    status=124
+    break
+  fi
+  sleep 60
+done
+echo "wait ended: $status"
 ```
 
-The `sleep` runs in the shell, where it is free. Set the outer `timeout` to the longest the wait
-could legitimately take, so the read returns a result rather than a reason to open another wait.
+The `sleep` runs in the shell, where it is free. `status` is 0 when the condition holds and 124 when the deadline passes, so the read returns a result rather than a reason to open another wait. Do not wrap this in `timeout(1)`. Homebrew is not required.
 
 While a wait is open, drain other work in hand. When the outstanding reports are the only work
 left, say plainly what is blocked and on what, and then wait — never manufacture polls to look
