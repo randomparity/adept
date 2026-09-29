@@ -23,6 +23,8 @@ every target, so no rule here uses one.
 # bound was exceeded. stdout and stderr land in separate caller-owned files: a
 # merged capture once made a gh release notice part of a value a caller then
 # decided labels from.
+# Precondition: the caller has validated bound as decimal seconds with no leading
+# zeros (except 0), and a range safe for bound * 10, before invoking this function.
 bounded_call() { # seconds out-file err-file command...
 	# rc, not status: under zsh `status` is a read-only special parameter, and a
 	# `local status=0` in a sourced body once killed a caller's whole session --
@@ -68,7 +70,16 @@ beside it breaks the parse on a run that otherwise succeeded. Such a site keeps 
 that channel by invoking the bound as `{ bounded_call … ; } 2>/dev/null`, which does suppress
 it — the redirect is in place when the reap happens.
 
-Adapt it to the call site. Seven properties are not adaptable.
+Adapt it to the call site. Eight properties are not adaptable.
+
+- **Validate the bound before invoking the mechanism.** The caller must reject an empty
+  value, non-decimal characters (including signs and arithmetic expressions), and leading
+  zeros other than the single digit `0`, before arithmetic or child launch. Bound the digit
+  count without arithmetic before multiplying by ten: at most seven digits is a sufficient
+  cap even for signed 32-bit arithmetic. A caller may impose a stricter domain, such as
+  positive seconds only. Reject invalid input through the site's existing error vocabulary;
+  do not invoke `bounded_call` with it. Fixed `30` and `120` literals satisfy this prerequisite
+  by construction. Keep existing applier guards; this template relies on caller validation.
 
 - **Allocate the capture files privately.** `mktemp` (mode 0600), or a file inside an
   `mktemp -d` root (0700), removed on the caller's existing EXIT trap — never a `$$`-derived
