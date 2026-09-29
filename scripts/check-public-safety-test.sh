@@ -215,7 +215,7 @@ done
 rm -f "$SCRATCH/repo/version.txt"
 
 # Keep the full private range denied, including both end addresses and prose punctuation.
-for address in '10.'0.0.0 '10.'255.255.255 '"10.'1.2.3'"' '(10.'1.2.3')' '10.'1.2.3'/8'; do
+for address in '10.'0.0.0 '10.'255.255.255 '"10.'1.2.3'"' '(10.'1.2.3')' '10.'1.2.3'/8' '10.'1.2.3'_ssh.log'; do
 	printf 'private address %s\n' "$address" >"$SCRATCH/repo/address.txt"
 	status=0
 	"$CHECKER" "$SCRATCH/repo/address.txt" >"$SCRATCH/output" 2>&1 || status=$?
