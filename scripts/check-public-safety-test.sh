@@ -203,6 +203,29 @@ if "$CHECKER" "$SCRATCH/repo" >"$SCRATCH/output" 2>&1; then
 fi
 rm -f "$SCRATCH/repo/tenant.md"
 
+# A sentence-ending semantic version has only three numeric components.
+for version in '5.10.3.' '5.10.255.' '10.3.4.'; do
+	printf 'Plugin version %s\n' "$version" >"$SCRATCH/repo/version.txt"
+	if ! "$CHECKER" "$SCRATCH/repo/version.txt" >"$SCRATCH/output" 2>&1; then
+		printf 'public-safety-test: sentence-ending version should pass\n' >&2
+		cat "$SCRATCH/output" >&2
+		exit 1
+	fi
+done
+rm -f "$SCRATCH/repo/version.txt"
+
+# Keep the full private range denied, including both end addresses and prose punctuation.
+for address in '10.'0.0.0 '10.'255.255.255 '"10.'1.2.3'"' '(10.'1.2.3')' '10.'1.2.3'/8'; do
+	printf 'private address %s\n' "$address" >"$SCRATCH/repo/address.txt"
+	status=0
+	"$CHECKER" "$SCRATCH/repo/address.txt" >"$SCRATCH/output" 2>&1 || status=$?
+	if [ "$status" -ne 1 ]; then
+		printf 'public-safety-test: full private address must return 1, got %s\n' "$status" >&2
+		exit 1
+	fi
+done
+rm -f "$SCRATCH/repo/address.txt"
+
 # An email address is PII CLAUDE.md names and no pattern matched (issue #377).
 # Assembled at runtime so this file is not itself a match for the gate.
 printf 'reached person@leaky-ho%s\n' 'st.net' >"$SCRATCH/repo/contact.md"
