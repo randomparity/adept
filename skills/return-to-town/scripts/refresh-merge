@@ -264,7 +264,7 @@ read_collection() { # endpoint collection-key; aggregate capped pages with exact
 	jq --arg key "$key" '[.[]|.[$key][]]' "$scratch/out" >"$scratch/$key" || finish 4 'cannot retain check collection'
 }
 check_states() { # file mode; sets pending, refuses failures and unknown vocabulary.
-	local file=$1 mode=$2 verdict
+	local file=$1 mode=$2 verdict outcome
 	verdict=$(jq -r --arg mode "$mode" '
 	 if $mode=="status" then
 	  if any(.[];.state!="success" and .state!="pending") then "hold" elif any(.[];.state=="pending") then "pending" else "green" end
@@ -272,7 +272,21 @@ check_states() { # file mode; sets pending, refuses failures and unknown vocabul
 	  if any(.[]; if .status=="completed" then (.conclusion!="success" and .conclusion!="skipped" and .conclusion!="neutral") else .status as $status|(["queued","in_progress","waiting","pending","requested"]|index($status))==null end) then "hold"
 	  elif any(.[];.status!="completed") then "pending" else "green" end
 	 end' "$file") || finish 4 'cannot classify exact-head checks'
-	case $verdict in green) ;; pending) pending=yes ;; *) finish 1 'exact-head check failed or has unsupported conclusion' ;; esac
+	case $verdict in
+	green) ;;
+	pending) pending=yes ;;
+	*)
+		outcome=$(jq -r --arg mode "$mode" '
+			 [.[] | if $mode=="status" then .state else
+			  if .status=="completed" then .conclusion else .status end end
+			 | select(.!="success" and .!="skipped" and .!="neutral" and
+			   .!="pending" and .!="queued" and .!="in_progress" and .!="waiting" and .!="requested")]
+			 | first | . as $value |
+			 if (["failure","error","cancelled","action_required","stale","startup_failure","timed_out"]|index($value))!=null
+			 then $value else "unsupported" end' "$file") || finish 4 'cannot retain check outcome'
+		finish 1 "exact-head check holds: $outcome"
+		;;
+	esac
 }
 checks() {
 	local empty_reads=0 count pending workflows

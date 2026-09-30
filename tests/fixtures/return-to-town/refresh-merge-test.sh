@@ -67,6 +67,8 @@ run:list)
  no-runs|no-automation) printf '[]\n' ;;
  saturated) jq -n '[range(100)|{workflowName:"x",event:"pull_request",status:"completed",conclusion:"success"}]' ;;
  ci-fail) printf '[{"status":"completed","conclusion":"failure"}]\n' ;;
+ ci-cancelled|ci-action_required|ci-stale|ci-startup_failure)
+  jq -nc --arg conclusion "${mode#ci-}" '[{status:"completed",conclusion:$conclusion}]' ;;
  ci-unknown) printf '[{"status":"completed","conclusion":"mystery"}]\n' ;;
  dynamic)
   if [ ! -f "$TEST_STATE/polled" ]; then
@@ -220,6 +222,13 @@ for mode in ci-fail ci-unknown saturated dynamic check-fail status-fail no-runs 
 	run_case "$expected"
 	no_writes
 	if [ "$mode" = ancestry-fault ]; then jq -e '.state.failures|length==0' "$CASE/private/context" >/dev/null; fi
+done
+for conclusion in cancelled action_required stale startup_failure; do
+	new_case
+	export TEST_MODE=ci-$conclusion
+	run_case 1
+	no_writes
+	jq -e --arg conclusion "$conclusion" '.reason==("exact-head check holds: "+$conclusion)' "$TEST_STATE/out" >/dev/null || fail 'lost check conclusion'
 done
 new_case
 export TEST_MODE=no-automation
