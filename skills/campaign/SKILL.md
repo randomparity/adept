@@ -320,7 +320,17 @@ Count issues needing fixes. **Every fix runs in a worker** — never inline.
 
 Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge order), `w1`, `w2`... for parallel.
 
-**Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial — crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from attunement's known-landmine record. Reserve each row's exact value in planned merge order under the repository's ordering rule and persist it as `path=value`; use `—` when there is no mandatory edit. A reservation remains consumed if its row becomes blocked or is skipped, and is never assigned to another row. File scope is a hint, not guarantee.
+**Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial —
+crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from
+attunement's known-landmine record. Before assigning ADR/migration values, complete the
+shared [visible-number reservation scan](../../references/numbered-reservations.md) over
+base, own consumed manifest, canonical live-token scopes, open PR full changed paths and
+pushed branches. Failed/incomplete reads hold the row. Reserve each row's exact value in
+planned merge order under the repository's ordering rule and persist it as `path=value`;
+use `—` when there is no mandatory edit. A reservation remains consumed if its row becomes
+blocked or is skipped, and is never assigned to another row. Pass exact assigned `path=value`
+entries to the worker for WORK:SCOPE surface publication before numbered file creation.
+File scope is a hint, not guarantee.
 
 Present triage/plan table: issue → verdict, artifact lane, design denominator and provenance,
 decomposition, review depth, wave, assigned numbers, mandatory per-PR edits, file scope.
@@ -588,8 +598,9 @@ yours. Everything else in that skill still applies. Its tracking writes and clea
 reconcile remain load-bearing, as does its switch to `BASE_BRANCH` and fast-forward pull.
 Merge eligible rows with ordered mandatory edits in their assigned value order. A blocked
 row drops out of that order, but its reservation stays consumed. If a moved base makes an
-assignment invalid, the orchestrator alone reserves the next unused valid value and persists
-it before refresh; a worker may apply only that exact reassignment from a fresh prompt. When
+assignment invalid, the orchestrator alone repeats the same
+[complete reservation scan](../../references/numbered-reservations.md), reserves the next
+unused valid value and persists it before refresh; a worker may apply only that exact reassignment from a fresh prompt. When
 the assigned value remains valid against the moved base, resolve the shared-file conflict by
 keeping that exact assignment.
 An earlier assigned row that is neither blocked nor skipped holds later ordered rows until it

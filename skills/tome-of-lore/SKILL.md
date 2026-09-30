@@ -20,7 +20,11 @@ owner.
 
 ## Architecture Decision Records
 
-`docs/adr/NNNN-slug.md`, numbered one above the highest present.
+`docs/adr/NNNN-slug.md`: use the campaign/quest's exact supplied and published assignment.
+For issue-backed allocation, apply the shared
+[visible-number reservation scan](../../references/numbered-reservations.md) before choosing or creating the file; a local directory's highest number alone is incomplete.
+Direct offline authoring may take one above the highest present as a local candidate,
+with no cross-run uniqueness promise; resolve it through the scan before issue-backed use.
 
 ```markdown
 # NNNN — one line naming the decision
