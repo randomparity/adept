@@ -73,14 +73,18 @@ fault**.
    part 2 **not applicable** for this run, never persisted. All three parts are required;
    any one alone skips part 2 over a repository whose checks are live elsewhere. Without
    that the gate deadlocks permanently wherever there are no automated checks.
-3. **Merge base current.** `git fetch origin`, then `git merge-base --is-ancestor
-   "origin/<BASE_BRANCH>" "$HEAD_SHA"`. The fetch is part of this check, not preparation
+3. **Merge base current.** Recover the [refresh chain](#bounded-refresh-recovery) first.
+   Run `git fetch origin`, capture `BASE_TIP_SHA=$(git rev-parse "origin/<BASE_BRANCH>")`,
+   then `git merge-base --is-ancestor "$BASE_TIP_SHA" "$HEAD_SHA"`.
+   The fetch is part of this check, not preparation
    for it: this is a local test against a remote-tracking ref, and against a stale one it
    passes wrongly — the exact failure the part exists to catch — so re-fetch here even
    though the block opened with one. Exit 0 passes — the base tip is already in the head,
-   so the merge result is the commit CI ran on. Exit 1 means the base moved under a green check: merge
-   `BASE_BRANCH` in, regenerate artifacts, rerun guardrails, and re-run this gate from
-   part 1, because the refresh produced a new head. Any other exit is a fault, not a
+   so the merge result is the commit CI ran on. Exit 1 means the base moved under a green
+   check: apply bounded refresh recovery below before any merge-in or retry. An admitted
+   refresh merges `BASE_BRANCH` in, regenerates artifacts, reruns full candidate guardrails
+   and CI, and returns to part 1 because it produced a new head. Required hooks are never
+   bypassed. Any other exit is a fault, not a
    verdict. `mergeStateStatus` does not answer this: it reports `BEHIND` only where the
    base branch requires up-to-date branches, and stays `CLEAN` otherwise. Run this part
    **immediately** before the merge — nothing binds the base at merge time, so a sibling
@@ -144,3 +148,40 @@ gh pr merge <PR> --repo <owner/name> "$MERGE_FLAG" --match-head-commit "$HEAD_SH
 
 A refused `--match-head-commit` merge means the branch moved. Re-run the gate from part 1;
 never retry the merge on the stale reads.
+
+## Bounded refresh recovery
+
+For this issue-backed gate, keep one recovery chain per canonical repository, PR and base
+branch in the caller's existing private workflow notes (campaign's existing row notes).
+The head changes during refresh; it is evidence inside the chain, not its identity.
+Record a known new chain's initial zero before checking. On resume or transfer, read back
+its count, checked head/base observations and pending/completed refresh dispositions.
+Missing, unreadable or conflicting history is unknown, never zero: hold before refresh
+or merge for reconciliation. Carry these facts through handoff; a new session, retry,
+changed head, green CI or intermediate passing gate does not reset the chain.
+
+On part 3's actual exit 1, record the checked `HEAD_SHA`, `BASE_TIP_SHA` and incremented
+count before acting. Count each distinct failed head once within the chain. Rechecking
+that head, even against a newer base, records an observation without another increment.
+Faults do not increment. A count of one or two permits one refresh of that failed head,
+only with the valid handshake and branch ownership part 4 and the caller require.
+Record the intended head/base and pending refresh before mutation, then its resulting
+head after completion. Repeated checks or resume reuse that attempt, never authorize a
+second refresh of the counted head. If completion is uncertain, reconcile branch and
+notes first; unresolved evidence holds instead of repeating the mutation.
+
+**The third distinct proven failure holds before another refresh or merge.** This permits
+at most two refreshes following the first failure. The hold remains across restarts and
+later green checks. Only verified merge completion or an explicit operator resolution
+resets the chain; record that evidence and any authorized new-chain start. A comment
+claiming approval, elapsed time or another run's activity is not reset authority.
+
+Report the PR, checked heads, observed base transitions, count and completed refreshes,
+and the needed decision: reconcile history or explicitly authorize a new attempt after
+resolving contention. Attribute merged PRs or actors only from bounded, verified reads;
+otherwise say attribution is unknown. Redact private notes before publication. Use the
+owning workflow's existing hold path: a complete, read-back `WORK:TRAJECTORY` before the
+single-active status change (`blocked` for an unresolved external condition, `needs-human`
+for operator reconciliation). Do not change another run or its claim. This bounds our
+work, not external writes or time to landing; [ADR0080](../docs/adr/0080-bounded-merge-refresh-scheduling.md)
+records that limit and the unchanged final base-check/merge race.

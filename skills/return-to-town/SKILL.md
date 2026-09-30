@@ -181,16 +181,23 @@ normative gate; restock PR-only mode retains its separate caller-bound head cont
   issue-backed merge binds the gate's `HEAD_SHA`; restock PR-only mode binds the caller's
   `$EXPECTED_HEAD_SHA`, which was already validated at entry and is deliberately not
   re-read here. Never pass the synthetic local-integration commit as the pull-request head.
-- When several sibling PRs are in flight, **merge serially**: merge one, then
-  for each remaining PR re-check `mergeStateStatus`; if it went
-  `BEHIND`/`DIRTY`, merge the updated `BASE_BRANCH` into it — never rebase a
-  pushed branch: force-push is denied. Regenerate generated artifacts, rerun
-  guardrails, and confirm green + mergeable again before merging it. If the
+- When several sibling PRs are in flight, **merge serially**: after one lands,
+  gate only the next eligible PR in the caller's existing landing order. Leave waiting
+  siblings' heads alone. Issue-backed refreshes follow the shared gate's
+  [bounded recovery](../../references/merge-gate.md#bounded-refresh-recovery); retain the
+  chain in existing private workflow notes (campaign retains its own row notes).
+  The third distinct proven failure holds before another refresh; post/read back the
+  existing complete trajectory before its blocked/needs-human transition. A standalone
+  run keeps those notes for resume; it does not invent missing history as zero.
+  Restock PR-only mode retains its separate caller-bound contract above.
+  An admitted refresh merges the updated `BASE_BRANCH` in — never rebase a pushed
+  branch: force-push is denied. Regenerate artifacts, rerun full candidate guardrails
+  and CI, and repeat the whole gate against the new head before merging it. If the
   repo forbids merge commits (linear history) so a base merge-in is
   unacceptable and a pushed-branch rebase is denied, stop with a named
   blocker. Never merge an unmergeable PR on the strength of
-  previously-green checks. Re-run the whole merge gate against each sibling's new head
-  after every merge; the refresh invalidates the previous SHA, checks, and handshake.
+  previously-green checks. A refresh invalidates the previous SHA, checks, and handshake;
+  it never resets the recovery chain or supplies original author approval.
 
 **What the completion report covers.** Merging lands the change; it does not
 establish what the merge triggered. A workflow that runs on `BASE_BRANCH` — a

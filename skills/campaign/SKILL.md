@@ -606,9 +606,14 @@ keeping that exact assignment.
 An earlier assigned row that is neither blocked nor skipped holds later ordered rows until it
 is merge-ready; only an explicitly blocked or skipped row may be passed over, with its
 reservation consumed.
-Merge one PR, then re-run the gate for each remaining in-flight PR. If the base moved, refresh
-the branch as part 3 directs. If the repository forbids the required merge commit and rebasing
-a pushed branch is denied, stop with a named blocker.
+Merge one PR, then gate only the next eligible PR in that landing order. Refresh only that
+PR when part 3 admits it; leave waiting siblings' heads alone until their turn. Preserve each
+row's [bounded refresh chain](../../references/merge-gate.md#bounded-refresh-recovery) in
+its existing private manifest notes, including through a blocked/skipped interval or resume.
+The third distinct proven base-moved failure holds that row before another refresh; use
+step 8's trajectory/status path and keep draining other eligible work. The orchestrator
+remains the sole manifest writer. If the repository forbids the required merge commit and
+rebasing a pushed branch is denied, stop with a named blocker.
 
 **Never merge a pull request for which you hold no merge-ready handshake, however green
 GitHub reports it.** A worker opens its pull request before its quest hand-off, so green +
