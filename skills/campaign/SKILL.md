@@ -589,9 +589,15 @@ the old verdict. The gate's fresh-base check keeps its immediately-before-merge
 position. Explicitly human-run campaigns retain their existing merge
 authorization and review gates.
 
-As each issue's pull request passes the four-part merge gate above — all four parts, for
-one `HEAD_SHA` — run `$return-to-town` (you are authorized), which re-runs the gate and
-performs the guarded merge. **Green + mergeable is not that trigger.** Its "After a merge"
+For an explicit human grant covering this sequence, pass only the next eligible row to
+`$return-to-town`'s [finite root-owned path](../../references/merge-gate.md#finite-root-owned-execution).
+After observed worker end and worktree reclamation below, prepare its private context from
+this row's actual authority, scope, assignments and retained recovery facts, then invoke the
+helper once. It enforces all four predicates and performs the guarded merge; green + mergeable
+alone is never authorization. Consume one terminal result, not model turns per CI snapshot.
+Policy-only admission retains the exact-head evaluation above and manual repeated gate; it
+cannot enter this automatic refresh path with a grant that covers only one evaluated SHA.
+Return-to-town's "After a merge"
 list is written for a run cleaning up after itself, so replace its worktree-removal and
 branch-deletion steps with the gated list at the end of this step — the worktree here is not
 yours. Everything else in that skill still applies. Its tracking writes and cleared-dependency
@@ -606,9 +612,14 @@ keeping that exact assignment.
 An earlier assigned row that is neither blocked nor skipped holds later ordered rows until it
 is merge-ready; only an explicitly blocked or skipped row may be passed over, with its
 reservation consumed.
-Merge one PR, then re-run the gate for each remaining in-flight PR. If the base moved, refresh
-the branch as part 3 directs. If the repository forbids the required merge commit and rebasing
-a pushed branch is denied, stop with a named blocker.
+Merge one PR, then gate only the next eligible PR in that landing order. Refresh only that
+PR when part 3 admits it; leave waiting siblings' heads alone until their turn. Preserve each
+row's [bounded refresh chain](../../references/merge-gate.md#bounded-refresh-recovery) in
+its existing private manifest notes, including through a blocked/skipped interval or resume.
+The third distinct proven base-moved failure holds that row before another refresh; use
+step 8's trajectory/status path and keep draining other eligible work. The orchestrator
+remains the sole manifest writer. If the repository forbids the required merge commit and
+rebasing a pushed branch is denied, stop with a named blocker.
 
 **Never merge a pull request for which you hold no merge-ready handshake, however green
 GitHub reports it.** A worker opens its pull request before its quest hand-off, so green +
@@ -619,8 +630,9 @@ durable line from the issue rather than spending the step-5 agent-probe budget.
 **In parallel mode the dispatched agent may still be running.** Do not begin merging when
 its pull request first reads green + mergeable; leave it pending until hand-off supplies the
 matching handshake and the four-part gate passes. Even then, the agent may still be finishing
-its report, and its branch remains checked out in a worktree you did not create. Merging is
-unaffected because it touches only pushed refs. A refresh is different: `git worktree add`
+its report, and its branch remains checked out in a worktree you did not create. A manual
+exact-head merge touches only pushed refs. The finite helper requires observed end and
+reclamation at entry because it may refresh. A refresh is different: `git worktree add`
 fails while another worktree holds the branch. Refresh a `BEHIND` sibling only after the
 agent's observed end of run, or after `git worktree list` shows the branch checked out nowhere
 for a row you did not dispatch. Post-handoff work belongs to you or to a fresh bounded dispatch,
