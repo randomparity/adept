@@ -11,6 +11,11 @@ through this procedure before issue-backed publication or numbered file creation
 Identify the explicit target repository, canonical origin, fresh base SHA, numbered path
 convention and ordering rule. Keep independent ADR/migration namespaces separate. Include
 this run's own consumed manifest reservations; never read another run's private files.
+Resolve and validate the GitHub host from canonical origin, then bind `GH_HOST` to that host
+for each tracker/gh process (for example `env GH_HOST="$ORIGIN_HOST" "$TRACKER" claim-list
+--target OWNER/REPO`). Every gh read uses the same per-process binding and explicit target;
+an inherited `GH_HOST` must not steer any source. Hold if the selected tracker cannot
+address that origin host; a repository name alone does not bind the server.
 Use existing [network bounds](network-bounds.md):30s per single request,120s per paginated
 invocation or fetch. Capture checked output; timeout/nonzero/unparseable/partial reads hold
 before assignment. No retry loop or successful empty-set fallback. Cap each discovered set
@@ -36,7 +41,8 @@ pagination or hold. Complete each source even if a high number is already known.
    Read each PR's base/head immutable SHAs and number via `gh api repos/OWNER/REPO/pulls/N`.
    Obtain those git objects from canonical origin (including `refs/pull/N/head` for forks);
    compare fetched head with the observed head SHA, and hold on a changed head or missing
-   object. Compute `git merge-base BASE_SHA HEAD_SHA`, then read the full changed paths via
+   object. Compute `git merge-base --all BASE_SHA HEAD_SHA`, check status and require exactly one
+   resulting commit; zero or multiple bases hold. Then read the full changed paths via
    `git diff --no-renames --name-only -z MERGE_BASE HEAD_SHA`. Disabling rename detection
    includes old and new names; keep both. Failed/ambiguous merge-base holds. Do not replace
    this complete object diff with a truncated API file list or displayed diff excerpt.
