@@ -709,6 +709,48 @@ case_pr_view_fails() {
 
 # --- bounded network calls ---------------------------------------------------
 
+case_timeout_discards_capture() {
+	local label='a bounded writer loses its partial stdout capture on timeout'
+	local root function_file writer out err rc=0
+	fixture_scratch "$SCRATCH/discard."
+	root=$FIXTURE_SCRATCH
+	function_file="$root/bounded-call.sh"
+	writer="$root/partial-writer.sh"
+	out="$root/out"
+	err="$root/err"
+	# Exercise the shipped function, not the helper's outer stdout: the helper
+	# refuses to parse on timeout before that stream could expose the capture.
+	awk '/^bounded_call\(\)/ { copying=1 } copying { print } copying && /^}/ { exit }' \
+		"$SCRIPT" >"$function_file"
+	[ -s "$function_file" ] || {
+		fail_case "$label" 'the bounded function could not be extracted'
+		return 0
+	}
+	# shellcheck source=/dev/null
+	. "$function_file"
+	cat >"$writer" <<'WRITER'
+#!/usr/bin/env bash
+printf '%s' '{"partial":'
+printf '%s\n' 'partial written' >&2
+exec sleep 30
+WRITER
+	chmod +x "$writer"
+	{ bounded_call 1 "$out" "$err" "$writer" || rc=$?; } 2>/dev/null
+	[ "$rc" -eq 124 ] || {
+		fail_case "$label" "expected bound exceeded (124), got $rc"
+		return 0
+	}
+	grep -qxF 'partial written' "$err" || {
+		fail_case "$label" 'the writer did not emit its partial payload before blocking'
+		return 0
+	}
+	[ -f "$out" ] && [ ! -s "$out" ] || {
+		fail_case "$label" 'the timed-out writer retained its partial stdout capture'
+		return 0
+	}
+	ok "$label"
+}
+
 case_pr_view_times_out() {
 	local label='a pull request read that exceeds the bound is a named fault'
 	new_case
@@ -1110,6 +1152,7 @@ case_comment_creation_fails
 case_readback_fails
 case_bad_comment_url
 case_pr_view_fails
+case_timeout_discards_capture
 case_pr_view_times_out
 case_issue_read_times_out
 case_ls_remote_times_out
