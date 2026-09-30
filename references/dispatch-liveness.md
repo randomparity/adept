@@ -50,13 +50,31 @@ on durable state rather than on a report — a tracker row, a pull request, a pu
 the entire wait in **one** background shell task that blocks until the condition holds or its own
 deadline expires, and read it once when it returns:
 
+Use the Bash 3.2 `bounded_call` function from [network bounds](network-bounds.md#the-mechanism)
+in that background task; it needs no `timeout` or `gtimeout` command. Define that function first,
+then run:
+
 ```bash
 # One background task for the whole wait. Not one per check.
-timeout 3600 bash -c 'until <condition>; do sleep 60; done'; echo "wait ended: $?"
+wait_dir=$(mktemp -d) || exit 1
+trap 'rm -rf -- "$wait_dir"' EXIT
+rc=0
+bounded_call 3600 "$wait_dir/out" "$wait_dir/err" \
+  bash -c 'until <condition>; do sleep 60; done' || rc=$?
+cat "$wait_dir/out"
+cat "$wait_dir/err" >&2
+printf 'wait ended: %s\n' "$rc"
+exit "$rc"
 ```
 
-The `sleep` runs in the shell, where it is free. Set the outer `timeout` to the longest the wait
+The `sleep` runs in the shell, where it is free. Set the outer bound to the longest the wait
 could legitimately take, so the read returns a result rather than a reason to open another wait.
+The bound covers the whole child shell, including a condition that does not return; checking a
+deadline only between condition attempts would not. A nonzero condition status means pending in
+this `until` loop; make an unrecoverable condition error explicitly exit the child shell to return
+that status. The canonical pattern's timeout-status collision and process-cleanup limitations
+still apply. The bound reaps the child shell but may leave external condition subprocesses
+running; timeout proves neither their termination nor worker death.
 
 While a wait is open, drain other work in hand. When the outstanding reports are the only work
 left, say plainly what is blocked and on what, and then wait — never manufacture polls to look
