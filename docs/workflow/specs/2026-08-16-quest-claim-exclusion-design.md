@@ -1,12 +1,8 @@
 # Quest claim exclusion — design
 
-> Historical design: current liveness is ADR0071; forced recovery and campaign attribution
-> are superseded by [ADR0076](../../adr/0076-campaign-claim-attribution-and-guarded-recovery.md).
-> Its old force examples below describe the original design, not the current invocation.
-
 Issue: [#125 — Prevent concurrent quests from claiming the same issue](https://github.com/randomparity/adept/issues/125).
 Scope charter: `WORK:SCOPE` token `quest125-20260816-26f4f2a7` on the issue.
-ADR: [0018](../../adr/0018-quest-claim-via-exclusive-repo-label.md).
+ADR: [0018](../adr/0018-quest-claim-via-exclusive-repo-label.md).
 
 ## Problem
 
