@@ -61,6 +61,22 @@ bounded_call() { # seconds out-file err-file command...
 The grace window is two seconds: long enough for `git` to tear its transport down, short
 enough to be noise against a 30- or 120-second bound.
 
+### Boundary completion determination
+
+The loop checks liveness before testing the counter limit, and the following `if` checks
+it again. Explicit `wait` is not Bash's only reaping opportunity: GNU Bash 3.2 `jobs.c`
+reaps children through its SIGCHLD handler as well. This does not make the final liveness
+check and signal atomic.
+
+The completed-but-unreaped-child allegation in #405 was not reproduced with the unchanged
+mechanism on Bash 3.2.57, macOS arm64: a one-second bound, ten trials each at child sleep
+values 0.95, 1.00, 1.03, 1.06, 1.09 and 1.12 seconds produced 38 complete status-0 captures
+and 22 empty status-124 captures. No timeout had the child's completion sidecar. A sidecar
+write is not proof of process exit; these finite observations do not prove race freedom.
+The [measurement record](../docs/workflow/specs/2026-09-29-boundary-capture-determination-design.md)
+carries the base, per-delay results, method and source. No algorithm change follows from
+this negative determination.
+
 Bash announces a signalled background job on the script's own stderr — `… Terminated: 15` —
 and the `2>/dev/null` on `wait` does not suppress it, because the notice is printed before the
 reap. Where that stderr is prose the notice is harmless noise beside the caller's own
