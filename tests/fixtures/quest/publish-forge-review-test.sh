@@ -38,6 +38,7 @@ write_fakes() {
 set -euo pipefail
 
 state=$FAKE_STATE
+printf 'invoked\n' >"$state/gh-invoked"
 case $1 in
 pr)
 	shift
@@ -390,7 +391,8 @@ case_missing_scan_dependencies() {
 			fail "$name" 'missing tool was not named'
 			return
 		fi
-		if [ "$STATUS" -eq 0 ] || [ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] ||
+		if [ "$STATUS" -ne 1 ] || [ -n "$OUTPUT" ] || [ -e "$STATE/gh-invoked" ] ||
+			[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] ||
 			! cmp -s "$LEDGER" "$REPO/ledger-before" || body_file >/dev/null; then
 			fail "$name" 'missing dependency did not stop before composition with sources retained'
 			return
