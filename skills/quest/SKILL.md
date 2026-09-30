@@ -217,6 +217,16 @@ Record all eight fields:
 - `ambiguities` -- unresolved design-changing ambiguities, or explicit empty;
 - `interaction` -- the root value above.
 
+Before assigning an ADR/migration number, a standalone quest runs the shared
+[visible-number reservation scan](../../references/numbered-reservations.md). A campaign
+worker validates its supplied values under that same procedure and holds a foreign collision
+for exact orchestrator reassignment; it never renumbers independently. Failed/incomplete
+reads hold before assignment. Publish every assigned ADR/migration number in `surface` as
+its exact supplied or selected repository `path=value`, including optional unused slots,
+before numbered file creation. Preserve the scope token's canonical claim binding.
+Carry the exact published ADR assignment into `$spellcraft` as authoritative supplied
+numbering; do not let the downstream “next free” instruction choose a different number.
+
 Use the existing outcome, criteria, surface, and ambiguity fields to retain the bounded
 ownership evidence and intended owner, affected caller migration, obsolete-path removal,
 and any protected contract or justified compatibility path. Link a proposed move or retained
