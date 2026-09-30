@@ -871,6 +871,34 @@ case_missing_command() {
 	ok "$label"
 }
 
+case_missing_sleep() {
+	local label='missing sleep is named before network calls' minimal tool
+	new_case
+	minimal="$CASE/no-sleep"
+	mkdir "$minimal"
+	for tool in bash gh jq git grep rg iconv od awk wc tail cat tr mktemp rm; do
+		if [ "$tool" = gh ]; then
+			ln -s "$BIN/gh" "$minimal/gh"
+		else
+			ln -s "$(command -v "$tool")" "$minimal/$tool"
+		fi
+	done
+	RUN_STATUS=0
+	(
+		cd "$WORK" || exit 90
+		PATH="$minimal" FAKE_STATE=$STATE FAKE_BRANCH=$BRANCH \
+			"$SCRIPT" "$REPO" "$ISSUE" "$PR" "$NOTES"
+	) >"$CASE/out" 2>"$CASE/err" || RUN_STATUS=$?
+	RUN_ERR=$(cat "$CASE/err")
+	expect_status "$label" 2 || return 0
+	expect_stderr "$label" 'required command is unavailable: sleep' || return 0
+	if [ -s "$CASE/out" ] || [ -s "$STATE/events" ]; then
+		fail_case "$label" 'missing sleep reached a network call or emitted success output'
+		return 0
+	fi
+	ok "$label"
+}
+
 # Issue #308 defect 4: a worker died mid-hand-off. The helper cannot resurrect
 # it; what it guarantees is that the successor's remedy is simply to run again,
 # because every run appends a fresh complete block and latest-complete-wins.
@@ -1159,6 +1187,7 @@ case_ls_remote_times_out
 case_comment_write_times_out
 case_readback_times_out
 case_missing_command
+case_missing_sleep
 case_rerun_is_safe
 case_issue_not_closed_by_pr
 case_pr_no_closing_issue

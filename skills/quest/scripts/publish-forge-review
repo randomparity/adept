@@ -114,7 +114,7 @@ run_gh() { # seconds gh-args...
 
 preflight() {
 	local command bound
-	for command in gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm; do
+	for command in gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm sleep; do
 		command -v "$command" >/dev/null 2>&1 ||
 			fail "required command is unavailable: $command; install it or expose it in PATH"
 	done
