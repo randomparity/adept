@@ -166,6 +166,22 @@ grow. Say so in a comment at the site, so the next reader does not read the numb
 The bound is not exact. Poll overhead accumulates, so a 30-second bound fires at roughly 32
 seconds. Do not document it as a deadline.
 
+### Measured poll overhead
+
+A child still running at the first liveness check pays a tick before the next observation;
+a child already reaped can skip it. There is no universal 100-ms per-call minimum.
+In #406, 30 alternating-order paired fast-command trials on Bash 3.2.57/macOS arm64 used
+identical shell parsing, child, separate captures and readback, excluding file allocation.
+Mean bounded/unbounded times were 132.35/26.19 ms; paired added mean 106.16 ms, median
+106.60 ms, range 91.83–128.10 ms. No network requests were measured.
+
+This modest absolute cost is accepted for the existing portable 30/120-second bounded
+network-call convention; the uniform polling schedule is retained. Six times the mean is
+an illustrative 0.637-second estimate, not a telemetry benchmark. Host, scheduling and
+workload differences may change the cost; this is an acceptability judgment, not a workload
+latency guarantee. The [measurement record](../docs/workflow/specs/2026-09-29-poll-cost-determination-design.md)
+carries the base, method and limits.
+
 ## Writes
 
 A bound does not make a write atomic. A call killed after the write landed but before its
