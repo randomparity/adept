@@ -168,8 +168,9 @@ seconds. Do not document it as a deadline.
 
 ### Measured poll overhead
 
-A child still running at the first liveness check pays a tick before the next observation;
-a child already reaped can skip it. There is no universal 100-ms per-call minimum.
+For the existing 30/120-second bounds, a child still running at the first liveness check
+pays a tick before the next observation; a child already reaped can skip it. There is no
+universal 100-ms per-call minimum.
 In #406, 30 alternating-order paired fast-command trials on Bash 3.2.57/macOS arm64 used
 identical shell parsing, child, separate captures and readback, excluding file allocation.
 Mean bounded/unbounded times were 132.35/26.19 ms; paired added mean 106.16 ms, median
