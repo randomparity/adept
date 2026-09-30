@@ -171,6 +171,18 @@ Before every authorized issue-backed merge, apply
 [the commit-bound merge gate](../../references/merge-gate.md). The reference is the complete
 normative gate; restock PR-only mode retains its separate caller-bound head contract.
 
+For a human grant covering the refresh/merge sequence, use the shared reference's
+[finite root-owned execution](../../references/merge-gate.md#finite-root-owned-execution)
+from the caller's clean, reclaimed feature worktree. Establish actual observed worker end
+before takeover, eligible order, scope and exact mandatory assignments; write the private v1
+context from those facts and the retained refresh chain. Invoke the installed `refresh-merge`
+once with the retained claim token and context path. It owns the ordinary refresh, full
+candidate verification/push, CI wait, gate, derivative and guarded merge sequence. Read its
+terminal result on completion, retain its packet on hold, and use the existing trajectory/
+status path before stopping. Only verified MERGED proceeds to tracking and cleanup below.
+The worker's handoff does not grant the worker this invocation. Standing-policy admission
+bound to one head stays with campaign's manual gate/evaluation route; restock stays PR-only.
+
 - Use the repo's required merge method. Per common convention, **do not squash
   code PRs** — squashing collapses the small logically-scoped commits that
   `git bisect` relies on. Use `--rebase` (linear history) or `--merge` unless

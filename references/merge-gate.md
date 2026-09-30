@@ -149,6 +149,50 @@ gh pr merge <PR> --repo <owner/name> "$MERGE_FLAG" --match-head-commit "$HEAD_SH
 A refused `--match-head-commit` merge means the branch moved. Re-run the gate from part 1;
 never retry the merge on the stale reads.
 
+## Finite root-owned execution
+
+For an explicit human grant covering this refresh/merge sequence, the campaign root or
+directly authorized human flow uses
+[`refresh-merge`](../skills/return-to-town/scripts/refresh-merge) from its reclaimed, clean
+feature worktree. A dispatched quest worker stops at its authored handoff. Before invocation,
+the caller establishes eligible landing order, current scope, complete assignment snapshot,
+human authority, observed worker end and worktree ownership. A claim token alone proves
+none of those facts. Policy-only authority tied to an evaluated head retains its existing
+manual route and returns to policy evaluation whenever the head changes.
+
+Create a private context using the exact
+[v1 schema](../docs/workflow/specs/2026-09-30-bounded-merge-refresh-design.md#private-context-v1).
+Record its absolute path in existing row/workflow notes. Supply real authority provenance,
+exact numbered/version assignments, regeneration argv/allowed paths, and the attuned full
+verification owner. Empty assignment arrays assert that none apply; unsupported conventions
+hold for root. Use a regular mode-0600 file under a physical mode-0700 directory. Reconcile existing
+history before construction; missing history never authorizes a new zero-count packet.
+
+```sh
+bash "$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/refresh-merge" \
+  --claim-token "$CLAIM_TOKEN" --context "$REFRESH_CONTEXT"
+```
+
+Run once with a timeout covering the packet's finite deadline, or one harness-managed
+background task and read on completion. The helper owns CI waiting, all four predicates,
+at most two admitted refreshes, required hooks/full candidate verification, derivative
+publication and the final head-bound merge. It rechecks assignments against each captured
+base; root alone reassigns. No model polling is needed between ordinary transitions.
+
+Consume the compact terminal JSON and exit status together: 0 means verified MERGED at its
+head; 1 is a known hold; 2/6 are independently established claim failures; 4 is a read fault;
+5 means a mutation may have landed. Any unverified mutation-capable child completion keeps
+pending state and reports 5. Do not infer no write from a child's diagnostic prose.
+Pending cold resume holds unless exact authoritative merged readback resolves it. Preserve
+the context and checkout on every hold, post/read back the existing complete trajectory, then
+set the appropriate single-active status. Root performs existing tracking and cleanup only
+after verified merge; the helper neither releases claims nor removes worktrees.
+
+The private packet is trusted caller evidence. It does not authenticate a harness event,
+separate agents sharing one OS/GitHub principal, or serialize concurrent invocations. The
+caller owns truthful evidence and one invocation per packet. Unrelated actors and queues
+remain outside this path; no eventual-landing or atomic-base guarantee is added.
+
 ## Bounded refresh recovery
 
 For this issue-backed gate, keep one recovery chain per canonical repository, PR and base

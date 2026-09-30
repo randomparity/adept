@@ -589,9 +589,15 @@ the old verdict. The gate's fresh-base check keeps its immediately-before-merge
 position. Explicitly human-run campaigns retain their existing merge
 authorization and review gates.
 
-As each issue's pull request passes the four-part merge gate above — all four parts, for
-one `HEAD_SHA` — run `$return-to-town` (you are authorized), which re-runs the gate and
-performs the guarded merge. **Green + mergeable is not that trigger.** Its "After a merge"
+For an explicit human grant covering this sequence, pass only the next eligible row to
+`$return-to-town`'s [finite root-owned path](../../references/merge-gate.md#finite-root-owned-execution).
+After observed worker end and worktree reclamation below, prepare its private context from
+this row's actual authority, scope, assignments and retained recovery facts, then invoke the
+helper once. It enforces all four predicates and performs the guarded merge; green + mergeable
+alone is never authorization. Consume one terminal result, not model turns per CI snapshot.
+Policy-only admission retains the exact-head evaluation above and manual repeated gate; it
+cannot enter this automatic refresh path with a grant that covers only one evaluated SHA.
+Return-to-town's "After a merge"
 list is written for a run cleaning up after itself, so replace its worktree-removal and
 branch-deletion steps with the gated list at the end of this step — the worktree here is not
 yours. Everything else in that skill still applies. Its tracking writes and cleared-dependency
@@ -624,8 +630,9 @@ durable line from the issue rather than spending the step-5 agent-probe budget.
 **In parallel mode the dispatched agent may still be running.** Do not begin merging when
 its pull request first reads green + mergeable; leave it pending until hand-off supplies the
 matching handshake and the four-part gate passes. Even then, the agent may still be finishing
-its report, and its branch remains checked out in a worktree you did not create. Merging is
-unaffected because it touches only pushed refs. A refresh is different: `git worktree add`
+its report, and its branch remains checked out in a worktree you did not create. A manual
+exact-head merge touches only pushed refs. The finite helper requires observed end and
+reclamation at entry because it may refresh. A refresh is different: `git worktree add`
 fails while another worktree holds the branch. Refresh a `BEHIND` sibling only after the
 agent's observed end of run, or after `git worktree list` shows the branch checked out nowhere
 for a row you did not dispatch. Post-handoff work belongs to you or to a fresh bounded dispatch,

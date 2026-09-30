@@ -1,0 +1,478 @@
+#!/usr/bin/env bash
+# One trusted root's finite issue-backed refresh, gate and guarded merge.
+set -euo pipefail
+export LC_ALL=C
+SCRIPT_DIR=$(CDPATH='' cd -P -- "${BASH_SOURCE[0]%/*}" && pwd)
+ROOT=$(CDPATH='' cd -P -- "$SCRIPT_DIR/../../.." && pwd)
+repo='' issue=0 pr=0 head='' scratch='' context='' finished=no mutation_readback=no state_tmp='' validated=no
+started=$SECONDS deadline=86400
+emit_result() {
+	local code=$1 reason=$2 failures=null outcome=hold
+	[ "$code" -ne 0 ] || outcome=merged
+	if [ "$validated" = yes ]; then
+		failures=$(jq '.state.failures|length' "$scratch/packet") || failures=null
+	fi
+	jq -n -c --arg outcome "$outcome" --arg repo "$repo" --argjson issue "$issue" \
+		--argjson pr "$pr" --arg head "$head" --argjson failures "$failures" --arg reason "$reason" \
+		'{outcome:$outcome,repo:$repo,issue:$issue,pr:$pr,head:$head,failures:$failures,reason:$reason}'
+}
+finish() {
+	local code=$1 reason=$2
+	[ "$mutation_readback" != yes ] || code=5
+	emit_result "$code" "$reason"
+	finished=yes
+	exit "$code"
+}
+# shellcheck disable=SC2329 # EXIT trap owns scratch cleanup.
+cleanup() {
+	local rc=$?
+	if [ "$finished" = no ]; then
+		[ "$rc" -ne 0 ] || rc=4
+		[ "$mutation_readback" != yes ] || rc=5
+		emit_result "$rc" 'unexpected local fault; reconcile retained context'
+	fi
+	if [ -n "$scratch" ] && ! rm -Rf -- "$scratch"; then
+		printf 'refresh-merge: retained private captures: %s\n' "$scratch" >&2
+		[ "$rc" -ne 0 ] || rc=4
+	fi
+	if [ -n "$state_tmp" ] && ! rm -f -- "$state_tmp"; then
+		printf 'refresh-merge: retained private state temporary: %s\n' "$state_tmp" >&2
+		[ "$rc" -ne 0 ] || rc=4
+	fi
+	exit "$rc"
+}
+trap cleanup EXIT
+for command in bash git gh jq mktemp cat rm sleep chmod cmp mv stat wc cp awk; do
+	command -v "$command" >/dev/null || {
+		printf 'refresh-merge: missing %s\n' "$command" >&2
+		exit 1
+	}
+done
+[ "$#" -eq 4 ] && [ "$1" = --claim-token ] && [ "$3" = --context ] || finish 1 'usage: refresh-merge --claim-token TOKEN --context PRIVATE_FILE'
+claim_token=$2 context=$4
+[[ $claim_token =~ ^q([123456789][0123456789]*)-[0123456789abcdef]{8}$ ]] || finish 1 'invalid claim token'
+claim_issue=${BASH_REMATCH[1]}
+umask 077
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/refresh-merge.XXXXXX") || finish 4 'cannot create private captures'
+# The standard trap-free Bash3.2 bound; a timeout discards its stdout capture.
+bounded_call() {
+	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
+	shift 3
+	"$@" >"$out" 2>"$err" &
+	pid=$!
+	while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$((bound * 10))" ]; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+	if kill -0 "$pid" 2>/dev/null; then
+		kill -TERM "$pid" 2>/dev/null || :
+		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
+			sleep 0.1
+			grace=$((grace + 1))
+		done
+		kill -KILL "$pid" 2>/dev/null || :
+		wait "$pid" 2>/dev/null || :
+		: >"$out"
+		return 124
+	fi
+	wait "$pid" || rc=$?
+	return "$rc"
+}
+run() { # upper-bound command...; checked caller classifies failures before reading out.
+	local bound=$1 remaining rc=0
+	shift
+	remaining=$((deadline - SECONDS + started))
+	[ "$remaining" -gt 0 ] || return 124
+	[ "$bound" -le "$remaining" ] || bound=$remaining
+	bounded_call "$bound" "$scratch/out" "$scratch/err" "$@" || rc=$?
+	cat "$scratch/err" >&2 || return 4
+	return "$rc"
+}
+read_call() {
+	local bound=$1
+	shift
+	run "$bound" "$@" || finish 4 'bounded read did not answer; reconcile before retry'
+}
+file_mode() {
+	if stat -f '%Lp' "$1" >"$scratch/mode" 2>"$scratch/stat-err"; then
+		:
+	else stat -c '%a' "$1" >"$scratch/mode" || finish 4 'cannot read private file mode'; fi
+	cat "$scratch/mode"
+}
+private_context() {
+	local parent physical
+	case $context in /*) ;; *) finish 1 'context must be an absolute private path' ;; esac
+	[ -f "$context" ] && [ ! -L "$context" ] || finish 1 'context is missing or not a regular private file'
+	parent=${context%/*}
+	physical=$(CDPATH='' cd -P -- "$parent" && pwd) || finish 1 'cannot resolve context parent'
+	[ "$parent" = "$physical" ] && [ ! -L "$parent" ] || finish 1 'context parent must be physical'
+	[ "$(file_mode "$parent")" = 700 ] && [ "$(file_mode "$context")" = 600 ] || finish 1 'context permissions must be private'
+	[ "$(wc -c <"$context")" -le 262144 ] || finish 1 'context exceeds size bound'
+}
+validate_packet() {
+	jq -e '
+	def keys_are($ks): type=="object" and (keys==($ks|sort));
+	def sha: type=="string" and test("^[0-9a-f]{40}$");
+	def text: type=="string" and length>0;
+	def path: text and (startswith("/")|not) and (split("/")|all(.!="" and .!="." and .!="..")) and (startswith("-")|not);
+	def argv: type=="array" and length>0 and all(text);
+	def semver: type=="string" and test("^(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})$");
+	keys_are(["format","repo","issue","pr","branch","base","worktree","approved_head","authority","assignments","merge_method","regenerate","generated_paths","verification","deadline_seconds","state"])
+	and .format=="refresh-merge-v1"
+	and (.repo|type=="string" and test("^[A-Za-z0-9_][A-Za-z0-9_.-]*/[A-Za-z0-9_][A-Za-z0-9_.-]*$"))
+	and ([.issue,.pr]|all(type=="number" and .==floor and .>0 and .<=2147483647))
+	and ([.branch,.base,.worktree]|all(text)) and (.approved_head|sha)
+	and (.authority|keys_are(["role","merge_grant","ownership","scope_check","assignment_check"]) and (.role=="campaign-root" or .role=="direct-human") and all(.[];text))
+	and (.merge_method=="merge" or .merge_method=="rebase")
+	and (.regenerate|type=="array" and length<=20 and all(argv))
+	and (.generated_paths|type=="array" and length<=500 and all(path) and length==(unique|length))
+	and (.verification|keys_are(["mode","argv","hook_path","hook_blob"]) and
+	 (if .mode=="command" then (.argv|argv) and .hook_path=="" and .hook_blob==""
+	 elif .mode=="push-hook" then .argv==[] and (.hook_path|text) and (.hook_blob|sha) else false end))
+	and (.deadline_seconds|type=="number" and .==floor and .>0 and .<=86400)
+	and (.assignments|keys_are(["numbered","versions"]) and
+	 (.numbered|type=="array" and length<=100 and all(keys_are(["path","value","directory","separator","suffix"]) and (.path|path) and (.directory|path) and (.value|type=="string" and test("^[0-9]{1,18}$")) and (.separator=="-" or .separator=="_") and (.suffix|type=="string" and test("^\\.[A-Za-z0-9]+$")))) and
+	 (.versions|type=="array" and length<=100 and all(keys_are(["path","value"]) and (.path|path) and (.value|semver))))
+	and (.state|keys_are(["phase","head","failures","observations","lineage","handshake_url"]) and
+	 (.phase|IN("ready","refresh-pending","push-pending","pushed","derive-pending","approved","merge-pending","merged")) and (.head|sha) and
+	 (.failures|type=="array" and length<=3 and all(sha) and length==(unique|length)) and
+	 (.observations|type=="array" and length<=500 and all(keys_are(["head","base","exit"]) and (.head|sha) and (.base|sha) and (.exit|type=="number" and .==floor and .>=0 and .<=255))) and
+	 (.lineage|type=="array" and length<=2 and all(keys_are(["from","base","to"]) and ([.from,.base,.to]|all(sha)))) and
+	 (.handshake_url|type=="string"))
+	and ([..|strings]|all(test("[\\x00-\\x1f\\x7f]")|not))
+	and (.state as $s|($s.failures|sort)==([$s.observations[]|select(.exit==1)|.head]|unique))
+	and ((reduce .state.lineage[] as $link ({head:.approved_head,ok:true}; .ok=(.ok and .head==$link.from) | .head=$link.to)) as $chain|$chain.ok and $chain.head==.state.head)
+	and (.state as $s|all($s.lineage[];.from as $h|$s.failures|index($h)!=null))
+	and (.state as $s|all($s.lineage[];. as $l|any($s.observations[];.head==$l.from and .base==$l.base and .exit==1)))
+	' "$scratch/packet" >/dev/null || finish 1 'invalid or inconsistent recovery context'
+}
+save_state() { # jq filter followed by jq arguments
+	local filter=$1
+	shift
+	private_context
+	cmp -s "$context" "$scratch/packet" || finish 1 'context changed outside this invocation'
+	jq "$@" "$filter" "$scratch/packet" >"$scratch/next" || finish 4 'cannot compose recovery state'
+	[ "$(wc -c <"$scratch/next")" -le 262144 ] || finish 1 'recovery context exceeds size bound'
+	local next
+	next=$(mktemp "${context%/*}/.refresh-merge.XXXXXX") || finish 4 'cannot allocate state replacement'
+	state_tmp=$next
+	if ! cat "$scratch/next" >"$next" || ! chmod 600 "$next" || ! cmp -s "$next" "$scratch/next"; then
+		rm -f -- "$next"
+		finish 4 'cannot verify state replacement'
+	fi
+	mv -- "$next" "$context" || finish 4 'cannot install state replacement'
+	state_tmp=''
+	cmp -s "$context" "$scratch/next" || finish 4 'state readback differs'
+	cp "$scratch/next" "$scratch/packet" || finish 4 'cannot retain checked state'
+}
+private_context
+cp "$context" "$scratch/packet"
+validate_packet
+validated=yes
+repo=$(jq -r .repo "$scratch/packet") issue=$(jq -r .issue "$scratch/packet") pr=$(jq -r .pr "$scratch/packet")
+head=$(jq -r .state.head "$scratch/packet") branch=$(jq -r .branch "$scratch/packet") base=$(jq -r .base "$scratch/packet")
+approved=$(jq -r .approved_head "$scratch/packet") deadline=$(jq -r .deadline_seconds "$scratch/packet")
+[ "$issue" = "$claim_issue" ] || finish 1 'claim issue does not match context'
+case $branch in main | master) finish 1 'feature branch required' ;; esac
+for ref in "$branch" "$base"; do git check-ref-format --branch "$ref" >"$scratch/ref" || finish 1 'invalid branch ref'; done
+[ "$branch" != "$base" ] || finish 1 'feature and base must differ'
+variables=$(git rev-parse --local-env-vars) || finish 4 'cannot read git selectors'
+[ -n "$variables" ] || finish 4 'git returned no selector inventory'
+while IFS= read -r variable; do [ -z "$variable" ] || unset "$variable"; done <<<"$variables"
+checkout=$(git rev-parse --show-toplevel) || finish 1 'current checkout unavailable'
+[ "$(CDPATH='' cd -P -- "$checkout" && pwd)" = "$(jq -r .worktree "$scratch/packet")" ] || finish 1 'current physical worktree does not match ownership'
+[ "$(git symbolic-ref --quiet --short HEAD)" = "$branch" ] || finish 1 'worktree branch does not match context'
+git worktree list --porcelain >"$scratch/worktrees" || finish 4 'cannot read worktree inventory'
+awk -v p="$checkout" -v b="refs/heads/$branch" '$1=="worktree"{path=substr($0,10)} $1=="branch"&&$2==b&&path==p{found++} END{exit found!=1}' "$scratch/worktrees" || finish 1 'branch ownership is not unique in worktree inventory'
+for direction in fetch push; do
+	if [ "$direction" = push ]; then origin=$(git remote get-url --push --all origin); else origin=$(git remote get-url --all origin); fi
+	origin=${origin%.git}
+	case $origin in "https://github.com/$repo" | "git@github.com:$repo" | "ssh://git@github.com/$repo") ;; *) finish 1 'origin does not match canonical destination' ;; esac
+done
+TRACKER="$ROOT/skills/quest-log/assets/tracker.sh"
+DELIVER="$ROOT/skills/deliver/scripts/deliver-write"
+PUBLISH="$ROOT/skills/return-to-town/scripts/publish-handoff"
+for helper in "$TRACKER" "$DELIVER" "$PUBLISH"; do [ -x "$helper" ] || finish 1 'coherent bundled helper missing'; done
+verify_claim() {
+	local rc=0
+	run 120 env GH_HOST=github.com bash "$TRACKER" claim-verify --profile github --target "$repo" "$issue" --token "$claim_token" || rc=$?
+	case $rc in 0) ;; 2 | 6) finish "$rc" 'canonical claim no longer held' ;; *) finish 4 'canonical claim verification did not answer' ;; esac
+}
+pr_read() {
+	read_call 30 gh pr view "$pr" --repo "github.com/$repo" --json number,state,headRefName,headRefOid,baseRefName,isCrossRepository,author,closingIssuesReferences
+	cp "$scratch/out" "$scratch/pr" || finish 4 'cannot retain PR response'
+	jq -e --argjson pr "$pr" --argjson issue "$issue" --arg repo "$repo" --arg branch "$branch" --arg base "$base" \
+		'.number==$pr and .headRefName==$branch and .baseRefName==$base and .isCrossRepository==false and (.headRefOid|test("^[0-9a-f]{40}$")) and (.author.login|type)=="string" and (.closingIssuesReferences|length)==1 and (.closingIssuesReferences[0]|.number==$issue and (((.repository.owner.login // "")+"/"+(.repository.name // ""))|ascii_downcase)==($repo|ascii_downcase))' "$scratch/pr" >/dev/null || finish 1 'PR binding or ownership differs'
+}
+terminal_readback() {
+	pr_read
+	jq -e --arg head "$head" '.state=="MERGED" and .headRefOid==$head' "$scratch/pr" >/dev/null
+}
+phase=$(jq -r .state.phase "$scratch/packet")
+case $phase in
+*-pending | merged)
+	if terminal_readback; then
+		save_state '.state.phase="merged"'
+		finish 0 'verified merged readback'
+	fi
+	finish 1 'interrupted action or terminal mismatch; operator reconciliation required'
+	;;
+esac
+[ "$(jq '.state.failures|length' "$scratch/packet")" -lt 3 ] || finish 1 'third proven base failure; operator resolution required'
+verify_claim
+parity() {
+	local remote local_head
+	pr_read
+	[ "$(jq -r .state "$scratch/pr")" = OPEN ] || finish 1 'pull request is not open'
+	read_call 30 git ls-remote origin "refs/heads/$branch"
+	remote=$(cat "$scratch/out")
+	[ "$remote" = "$head"$'\t'"refs/heads/$branch" ] || finish 1 'remote head changed or missing'
+	[ "$(jq -r .headRefOid "$scratch/pr")" = "$head" ] || finish 1 'API head and remote head differ'
+	local_head=$(git rev-parse HEAD) || finish 4 'cannot read local head'
+	[ "$local_head" = "$head" ] || finish 1 'local head differs from recovery state'
+	git status --porcelain --untracked-files=all >"$scratch/status" || finish 4 'cannot read worktree status'
+	[ ! -s "$scratch/status" ] || finish 1 'worktree has changes requiring root reconciliation'
+}
+comments() {
+	# One120s bound covers the entire paginated invocation, not each page.
+	read_call 120 gh api --hostname github.com "repos/$repo/issues/$issue/comments?per_page=100" --paginate --slurp
+	jq -e 'type=="array" and all(type=="array") and (flatten|length)<500 and (flatten|all((.id|type)=="number" and (.body|type)=="string" and (.user.login|type)=="string"))' "$scratch/out" >/dev/null || finish 4 'comments are incomplete or malformed'
+	jq 'flatten' "$scratch/out" >"$scratch/comments" || finish 4 'cannot retain comments'
+}
+handshake() { # original or current; original authority must always exist.
+	local sha=$1 author author_path expected permission
+	jq --arg sha "$sha" --arg pr "$pr" \
+		'[.[]|select(.body|test("(?m)^<!-- WORK:TRAJECTORY -->$") and test("(?m)^<!-- TRAJECTORY:COMPLETE -->$") and test("(?m)^MERGE-READY: #"+$pr+" @ "+$sha+"$"))]|last' "$scratch/comments" >"$scratch/handshake"
+	author=$(jq -r '.user.login // empty' "$scratch/handshake")
+	[[ $author =~ ^[A-Za-z0-9][A-Za-z0-9-]*(\[bot\])?$ ]] || finish 1 'matching complete authorized handshake missing'
+	expected=$(jq -r .author.login "$scratch/pr")
+	if [ "$author" = "$expected" ]; then return; fi
+	author_path=$(jq -nr --arg author "$author" '$author|@uri') || finish 4 'cannot encode author destination'
+	read_call 30 gh api --hostname github.com "repos/$repo/collaborators/$author_path/permission"
+	permission=$(jq -r '.permission // empty' "$scratch/out") || finish 4 'cannot parse author permission'
+	case $permission in admin | maintain | write) return ;; esac
+	if [ "$sha" != "$approved" ] && [ "$(jq '.state.lineage|length' "$scratch/packet")" -gt 0 ]; then
+		read_call 30 gh api --hostname github.com user
+		[ "$(jq -r .login "$scratch/out")" = "$author" ] && return
+	fi
+	finish 1 'handshake author has no original or derivative authority'
+}
+read_collection() { # endpoint collection-key; aggregate capped pages with exact total.
+	local endpoint=$1 key=$2
+	read_call 120 gh api --hostname github.com "$endpoint" --paginate --slurp
+	jq -e --arg key "$key" 'type=="array" and length>0 and all((.total_count|type)=="number" and (.[$key]|type)=="array") and ([.[].total_count]|unique|length)==1 and ([.[]|.[$key][]]|length)==.[0].total_count and .[0].total_count<500' "$scratch/out" >/dev/null || finish 4 'SHA check collection is incomplete or malformed'
+	jq --arg key "$key" '[.[]|.[$key][]]' "$scratch/out" >"$scratch/$key" || finish 4 'cannot retain check collection'
+}
+check_states() { # file mode; sets pending, refuses failures and unknown vocabulary.
+	local file=$1 mode=$2 verdict
+	verdict=$(jq -r --arg mode "$mode" '
+	 if $mode=="status" then
+	  if any(.[];.state!="success" and .state!="pending") then "hold" elif any(.[];.state=="pending") then "pending" else "green" end
+	 else
+	  if any(.[]; if .status=="completed" then (.conclusion!="success" and .conclusion!="skipped" and .conclusion!="neutral") else .status as $status|(["queued","in_progress","waiting","pending","requested"]|index($status))==null end) then "hold"
+	  elif any(.[];.status!="completed") then "pending" else "green" end
+	 end' "$file") || finish 4 'cannot classify exact-head checks'
+	case $verdict in green) ;; pending) pending=yes ;; *) finish 1 'exact-head check failed or has unsupported conclusion' ;; esac
+}
+checks() {
+	local empty_reads=0 count pending workflows
+	while :; do
+		pending=no
+		read_call 30 gh run list --repo "github.com/$repo" --commit "$head" --limit 100 --json workflowName,event,status,conclusion
+		jq -e 'type=="array" and length<100' "$scratch/out" >/dev/null || finish 1 'Actions run set malformed or saturated'
+		cp "$scratch/out" "$scratch/runs" || finish 4 'cannot retain Actions run set'
+		count=$(jq length "$scratch/runs")
+		check_states "$scratch/runs" runs
+		read_collection "repos/$repo/commits/$head/check-runs?per_page=100" check_runs
+		check_states "$scratch/check_runs" runs
+		read_collection "repos/$repo/commits/$head/status?per_page=100" statuses
+		check_states "$scratch/statuses" status
+		if [ "$count" -eq 0 ]; then
+			read_collection "repos/$repo/actions/workflows?per_page=100" workflows
+			workflows=$(jq length "$scratch/workflows")
+			if [ "$workflows" -ne 0 ] || [ "$(jq length "$scratch/check_runs")" -ne 0 ] || [ "$(jq length "$scratch/statuses")" -ne 0 ]; then
+				empty_reads=$((empty_reads + 1))
+				[ "$empty_reads" -lt 3 ] || finish 1 'no Actions run appeared within three reads'
+				pending=yes
+			fi
+		fi
+		[ "$pending" = yes ] || return 0
+		[ "$((SECONDS - started))" -lt "$deadline" ] || finish 4 'invocation deadline reached while waiting'
+		sleep 5
+		parity
+	done
+}
+semver_less() {
+	jq -n -e --arg a "$1" --arg b "$2" 'def v: capture("^(?<a>0|[1-9][0-9]{0,8})\\.(?<b>0|[1-9][0-9]{0,8})\\.(?<c>0|[1-9][0-9]{0,8})$")|[.a,.b,.c]|map(tonumber); ($a|v)<($b|v)' >/dev/null
+}
+assignments_valid() {
+	local item path value directory separator suffix name number entry expected candidate base_version found
+	read_call "$deadline" git ls-tree -r --name-only -z "$base_tip"
+	cp "$scratch/out" "$scratch/tree" || finish 4 'cannot retain captured base tree'
+	jq -c '.assignments.numbered[]' "$scratch/packet" >"$scratch/numbered" || finish 4 'cannot read numbered assignments'
+	while IFS= read -r item; do
+		path=$(jq -r .path <<<"$item") value=$(jq -r .value <<<"$item") directory=$(jq -r .directory <<<"$item")
+		separator=$(jq -r .separator <<<"$item") suffix=$(jq -r .suffix <<<"$item")
+		expected="$directory/$value$separator"
+		[ "${path%/*}" = "$directory" ] || finish 1 'unsupported numbered assignment convention'
+		case $path in "$expected"?*"$suffix") ;; *) finish 1 'assigned number and path convention disagree' ;; esac
+		while IFS= read -r -d '' entry; do
+			case $entry in "$directory/"*) name=${entry#"$directory/"} ;; *) continue ;; esac
+			case $name in [0-9]*) ;; *) continue ;; esac
+			case $name in */*) finish 1 'unsupported numbered path in captured base' ;; esac
+			number=${name%%[!0-9]*}
+			case $name in "$number$separator"?*"$suffix") ;; *) finish 1 'captured base contains malformed numbered path' ;; esac
+			[ "${#number}" -eq "${#value}" ] || finish 1 'captured base number width differs'
+			[[ $number < $value ]] || finish 1 'captured base invalidates numbered assignment; root must reassign'
+		done <"$scratch/tree"
+	done <"$scratch/numbered"
+	jq -c '.assignments.versions[]' "$scratch/packet" >"$scratch/versions" || finish 4 'cannot read version assignments'
+	while IFS= read -r item; do
+		path=$(jq -r .path <<<"$item") value=$(jq -r .value <<<"$item")
+		git show "$head:$path" >"$scratch/version" || finish 4 'cannot read candidate assigned version'
+		candidate=$(jq -er .version "$scratch/version") || finish 4 'candidate version is malformed'
+		[ "$candidate" = "$value" ] || finish 1 'candidate version differs from assignment'
+		found=no
+		while IFS= read -r -d '' entry; do [ "$entry" != "$path" ] || found=yes; done <"$scratch/tree"
+		if [ "$found" = yes ]; then
+			git show "$base_tip:$path" >"$scratch/version" || finish 4 'cannot read captured base version'
+			base_version=$(jq -er .version "$scratch/version") || finish 4 'base version is malformed'
+			semver_less "$base_version" "$value" || finish 1 'captured base invalidates version assignment; root must reassign'
+		fi
+	done <"$scratch/versions"
+}
+base_gate() { # exit1 alone permits bounded recovery; other failures terminate.
+	local rc=0 duplicate
+	read_call 120 git fetch origin
+	base_tip=$(git rev-parse "refs/remotes/origin/$base^{commit}") || finish 4 'cannot resolve fetched base'
+	assignments_valid
+	run "$deadline" git merge-base --is-ancestor "$base_tip" "$head" || rc=$?
+	[ "$(jq '.state.observations|length' "$scratch/packet")" -lt 500 ] || finish 1 'observation ceiling reached; reconcile history'
+	duplicate=$(jq --arg head "$head" '.state.failures|index($head)!=null' "$scratch/packet")
+	# shellcheck disable=SC2016 # Variables are jq arguments, not shell expansions.
+	save_state '.state.observations += [{head:$head,base:$base,exit:$rc}] | if $rc==1 and (.state.failures|index($head))==null then .state.failures += [$head] else . end' --arg head "$head" --arg base "$base_tip" --argjson rc "$rc"
+	case $rc in
+	0) return 0 ;;
+	1)
+		[ "$(jq '.state.failures|length' "$scratch/packet")" -lt 3 ] || finish 1 'third proven base failure; operator resolution required'
+		[ "$duplicate" = false ] || finish 1 'failed head already recorded; reconcile its attempt'
+		return 1
+		;;
+	*) finish 4 'ancestry command fault; no refresh authorized' ;;
+	esac
+}
+execute_argv() { # jq selector yielding one argv array
+	local arg argv=()
+	jq -r "$1[]" "$scratch/packet" >"$scratch/argv" || finish 1 'cannot parse approved command'
+	while IFS= read -r arg; do argv[${#argv[@]}]=$arg; done <"$scratch/argv"
+	run "$deadline" "${argv[@]}" || finish 1 'approved local command did not complete successfully'
+}
+verify_hook() {
+	local configured effective expected rc=0
+	[ "$(jq -r .verification.mode "$scratch/packet")" = push-hook ] || return 0
+	configured=$(git config --get core.hooksPath) || rc=$?
+	case $rc in 0 | 1) ;; *) finish 4 'cannot resolve configured hook path' ;; esac
+	if [ -n "$configured" ]; then effective="$configured/pre-push"; else effective=$(git rev-parse --git-path hooks/pre-push); fi
+	expected=$(jq -r .verification.hook_path "$scratch/packet")
+	effective=$(CDPATH='' cd -P -- "${effective%/*}" && printf '%s/%s' "$PWD" "${effective##*/}") || finish 1 'effective managed hook unavailable'
+	[ "$effective" = "$expected" ] && [ -x "$effective" ] && [ ! -L "$effective" ] || finish 1 'managed hook ownership changed'
+	[ "$(git hash-object -- "$effective")" = "$(jq -r .verification.hook_blob "$scratch/packet")" ] || finish 1 'managed hook content changed'
+}
+refresh() {
+	local from=$head count index=0 path rc=0
+	comments
+	handshake "$approved"
+	verify_claim
+	verify_hook
+	save_state '.state.phase="refresh-pending"'
+	run "$deadline" git merge --no-edit "$base_tip" || finish 1 'base refresh failed; retain worktree and reconcile'
+	count=$(jq '.regenerate|length' "$scratch/packet")
+	while [ "$index" -lt "$count" ]; do
+		execute_argv ".regenerate[$index]"
+		index=$((index + 1))
+	done
+	git diff --name-only -z HEAD >"$scratch/changed" || finish 4 'cannot inspect regenerated paths'
+	git ls-files --others --exclude-standard -z >>"$scratch/changed" || finish 4 'cannot inspect untracked paths'
+	while IFS= read -r -d '' path; do
+		jq -e --arg path "$path" '.generated_paths|index($path)!=null' "$scratch/packet" >/dev/null || finish 1 'regeneration changed an unapproved path'
+		git --literal-pathspecs add -- "$path" || finish 1 'cannot stage approved generated path'
+	done <"$scratch/changed"
+	git diff --cached --quiet || rc=$?
+	case $rc in 0) ;; 1) run "$deadline" git commit -m 'chore: regenerate after base refresh' || finish 1 'generated artifact commit failed' ;; *) finish 4 'cannot inspect staged changes' ;; esac
+	head=$(git rev-parse HEAD) || finish 4 'cannot read refreshed head'
+	[ "$head" != "$from" ] || finish 1 'refresh did not produce a new head'
+	if [ "$(jq -r .verification.mode "$scratch/packet")" = command ]; then execute_argv .verification.argv; fi
+	verify_hook
+	# shellcheck disable=SC2016 # Variables are jq arguments, not shell expansions.
+	save_state '.state.head=$to | .state.lineage += [{from:$from,base:$base,to:$to}] | .state.phase="push-pending" | .state.handshake_url=""' --arg from "$from" --arg base "$base_tip" --arg to "$head"
+	verify_claim
+	mutation_readback=yes
+	run "$deadline" bash "$DELIVER" --claim-token "$claim_token" "$repo" "$issue" push || finish 5 'push completion unverified; reconcile pending action'
+	read_call 30 git ls-remote origin "refs/heads/$branch"
+	[ "$(cat "$scratch/out")" = "$head"$'\t'"refs/heads/$branch" ] || finish 5 'pushed head readback differs; reconcile pending action'
+	save_state '.state.phase="pushed"'
+	mutation_readback=no
+}
+derive() {
+	local url
+	[ "$head" != "$approved" ] || return 0
+	[ "$(jq -r .state.phase "$scratch/packet")" != approved ] || return 0
+	printf 'Derivative handoff for PR #%s after a bounded base refresh.\nOriginal author-approved head: %s\nCurrent refreshed head: %s\nExact-head checks and the captured base passed.\n' "$pr" "$approved" "$head" >"$scratch/notes"
+	run 120 bash "$PUBLISH" --preflight --claim-token "$claim_token" "$repo" "$issue" "$pr" "$scratch/notes" || finish 1 'derivative preflight refused'
+	verify_claim
+	save_state '.state.phase="derive-pending"'
+	mutation_readback=yes
+	run 120 bash "$PUBLISH" --claim-token "$claim_token" "$repo" "$issue" "$pr" "$scratch/notes" || finish 5 'derivative publication unverified; reconcile pending action'
+	url=$(cat "$scratch/out")
+	[[ $url =~ ^https://github.com/[^/]+/[^/]+/issues/[0-9]+#issuecomment-[0-9]+$ ]] || finish 5 'derivative publication URL unverified'
+	case $url in "https://github.com/$repo/issues/$issue#issuecomment-"*) ;; *) finish 5 'derivative publication destination differs' ;; esac
+	parity
+	# shellcheck disable=SC2016 # Variable is a jq argument, not a shell expansion.
+	save_state '.state.phase="approved" | .state.handshake_url=$url' --arg url "$url"
+	mutation_readback=no
+}
+parity
+jq -c '.state.lineage[]' "$scratch/packet" >"$scratch/lineage" || finish 4 'cannot read recorded lineage'
+while IFS= read -r link; do
+	from=$(jq -r .from <<<"$link") to=$(jq -r .to <<<"$link") ancestor=$(jq -r .base <<<"$link")
+	[ "$from" != "$to" ] || finish 1 'recorded refresh did not change head'
+	for parent in "$from" "$ancestor"; do
+		rc=0
+		git merge-base --is-ancestor "$parent" "$to" || rc=$?
+		case $rc in 0) ;; 1) finish 1 'recorded lineage is not supported by git objects' ;; *) finish 4 'recorded lineage could not be checked' ;; esac
+	done
+done <"$scratch/lineage"
+comments
+handshake "$approved"
+while :; do
+	parity
+	comments
+	handshake "$approved"
+	checks
+	parity
+	if ! base_gate; then
+		refresh
+		continue
+	fi
+	derive
+	parity
+	checks
+	comments
+	handshake "$approved"
+	handshake "$head"
+	verify_claim
+	save_state '.state.phase="merge-pending"'
+	if ! base_gate; then
+		refresh
+		continue
+	fi
+	method=$(jq -r .merge_method "$scratch/packet")
+	mutation_readback=yes
+	run 120 gh pr merge "$pr" --repo "github.com/$repo" "--$method" --match-head-commit "$head" || finish 5 'merge completion unverified; reconcile pending action'
+	if terminal_readback; then
+		save_state '.state.phase="merged"'
+		mutation_readback=no
+		finish 0 'verified merged readback'
+	fi
+	finish 5 'merge did not yield verified expected MERGED state; reconcile pending action'
+done
