@@ -73,7 +73,8 @@ The bound covers the whole child shell, including a condition that does not retu
 deadline only between condition attempts would not. A nonzero condition status means pending in
 this `until` loop; make an unrecoverable condition error explicitly exit the child shell to return
 that status. The canonical pattern's timeout-status collision and process-cleanup limitations
-still apply; do not treat a timeout as evidence of worker death.
+still apply. The bound reaps the child shell but may leave external condition subprocesses
+running; timeout proves neither their termination nor worker death.
 
 While a wait is open, drain other work in hand. When the outstanding reports are the only work
 left, say plainly what is blocked and on what, and then wait — never manufacture polls to look
