@@ -1200,6 +1200,21 @@ for bad in abc 08 100000; do
 	assert_contains 'COLLECT_TELEMETRY_BOUND_ONE_REQUEST' "$SCRATCH/stderr"
 done
 
+# Supply the existing preflight dependencies and interpreter, but withhold sleep.
+mkdir "$SCRATCH/no-sleep"
+ln -s "$(command -v bash)" "$SCRATCH/no-sleep/bash"
+ln -s "$(command -v jq)" "$SCRATCH/no-sleep/jq"
+ln -s "$SCRATCH/bin/gh" "$SCRATCH/no-sleep/gh"
+: >"$SCRATCH/calls"
+missing_sleep_status=0
+PATH="$SCRATCH/no-sleep" CALL_LOG="$SCRATCH/calls" \
+	"$collector" 'status:ready' >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" ||
+	missing_sleep_status=$?
+[[ $missing_sleep_status == 1 ]] || fail 'missing sleep did not use the dependency error class'
+assert_contains 'sleep is required but not installed' "$SCRATCH/stderr"
+[[ ! -s $SCRATCH/stdout && ! -s $SCRATCH/calls ]] ||
+	fail 'missing sleep reached a gh call or emitted success output'
+
 # --- usage ----------------------------------------------------------------------
 PATH="$SCRATCH/bin:$PATH" "$collector" >"$SCRATCH/stdout" 2>"$SCRATCH/stderr" &&
 	fail 'missing selector must exit non-zero'

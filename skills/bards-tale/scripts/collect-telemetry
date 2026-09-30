@@ -100,7 +100,7 @@ die() {
 SELECTOR=$1
 PRIOR_SIDECAR=${2:-}
 
-for tool in gh jq; do
+for tool in gh jq sleep; do
 	command -v "$tool" >/dev/null 2>&1 || die "$tool is required but not installed"
 done
 

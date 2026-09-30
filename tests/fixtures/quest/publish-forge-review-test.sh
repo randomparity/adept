@@ -376,26 +376,26 @@ case_public_safety_stops_publication() {
 }
 
 case_missing_scan_dependencies() {
-	local name='PFR missing scan dependencies fail before composition' missing tool
-	for missing in rg jq; do
+	local name='PFR missing dependencies fail before composition' missing tool
+	for missing in rg jq sleep; do
 		new_case
 		mkdir "$REPO/bin"
-		for tool in bash gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm; do
+		for tool in bash gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm sleep; do
 			[ "$tool" != "$missing" ] || continue
 			ln -s "$(command -v "$tool")" "$REPO/bin/$tool"
 		done
 		cp "$LEDGER" "$REPO/ledger-before"
 		run_preflight required "$REVIEW" /usr/bin/env PATH="$FAKES:$REPO/bin"
+		if ! grep -q "required command is unavailable: $missing" "$REPO/error"; then
+			fail "$name" 'missing tool was not named'
+			return
+		fi
 		if [ "$STATUS" -eq 0 ] || [ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] ||
 			! cmp -s "$LEDGER" "$REPO/ledger-before" || body_file >/dev/null; then
 			fail "$name" 'missing dependency did not stop before composition with sources retained'
 			return
 		fi
 		assert_no_post "$name" || return
-		if ! grep -q "required command is unavailable: $missing" "$REPO/error"; then
-			fail "$name" 'missing tool was not named'
-			return
-		fi
 	done
 	ok "$name"
 }

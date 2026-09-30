@@ -114,7 +114,7 @@ require_commands() {
 	# rg is here because check-public-safety.sh needs it and exits 2 without it.
 	# Refusing at this preflight names the missing binary; letting it through
 	# reaches that gate's fault status instead, which says nothing useful.
-	for required in gh jq git grep rg iconv od awk wc tail cat tr mktemp rm; do
+	for required in gh jq git grep rg iconv od awk wc tail cat tr mktemp rm sleep; do
 		command -v "$required" >/dev/null 2>&1 ||
 			fault "required command is unavailable: $required"
 	done
