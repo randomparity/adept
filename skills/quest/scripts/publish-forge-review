@@ -10,6 +10,7 @@ MAX_BODY_BYTES=32768
 SCRIPT_DIR=${BASH_SOURCE[0]%/*}
 [ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR=.
 SCRIPT_DIR=$(cd "$SCRIPT_DIR" && pwd)
+ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/../../.." && pwd)
 body=''
 gh_capture=''
 # Seconds. gh pr comment issues a lookup and a mutation; gh api issues one
@@ -22,6 +23,8 @@ disposer=''
 repo=''
 pr=''
 mode=''
+claim_token=''
+claim_issue=''
 operation=publish
 review_or_reason=''
 ledger=''
@@ -32,8 +35,7 @@ platform=''
 ledger_directory=''
 
 finish_body_lifecycle() {
-	local exit_status
-	exit_status=$?
+	local exit_status=$?
 	# Failures deliberately leave the checked body beside the ledger for recovery.
 	[ "$exit_status" -ne 0 ] && return "$exit_status"
 	if [ -n "$body" ] && [ -e "$body" ]; then
@@ -114,7 +116,7 @@ run_gh() { # seconds gh-args...
 
 preflight() {
 	local command bound
-	for command in gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm sleep; do
+	for command in bash gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm sleep; do
 		command -v "$command" >/dev/null 2>&1 ||
 			fail "required command is unavailable: $command; install it or expose it in PATH"
 	done
@@ -145,6 +147,8 @@ preflight() {
 		[ "${#bound}" -le 7 ] ||
 			fail 'network bound override is implausibly large; give a whole number of seconds'
 	done
+	[ -x "$ROOT/skills/quest-log/assets/tracker.sh" ] ||
+		fail 'bundled tracker is unavailable; repair the installed plugin'
 	[ -x "$SCRIPT_DIR/check-public-safety" ] ||
 		fail 'bundled public-safety check is unavailable; repair the installed quest skill'
 }
@@ -154,9 +158,16 @@ validate_arguments() {
 		operation=preflight
 		shift
 	fi
+	[ "${1-}" = --claim-token ] && [ "$#" -ge 2 ] ||
+		fail 'usage: required --claim-token TOKEN'
+	claim_token=$2
+	shift 2
+	[[ $claim_token =~ ^q([123456789][0123456789]*)-[0123456789abcdef]{8}$ ]] ||
+		fail 'invalid issue claim token'
+	claim_issue=${BASH_REMATCH[1]}
 	case $# in
 	6 | 7) ;;
-	*) fail 'usage: publish-forge-review [--preflight] REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY [PAYLOAD]' ;;
+	*) fail 'usage: publish-forge-review [--preflight] --claim-token TOKEN REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY [PAYLOAD]' ;;
 	esac
 	repo=$1
 	pr=$2
@@ -441,6 +452,20 @@ if [ "$operation" = preflight ]; then
 	body=''
 	printf '%s\n' preflight-ok
 	exit 0
+fi
+run_gh "$BOUND_SINGLE" pr view "$pr" --repo "github.com/$repo" \
+	--json number,closingIssuesReferences || fail 'cannot read publication destination'
+jq -e --argjson pr "$pr" --argjson issue "$claim_issue" --arg repo "$repo" \
+	'.number==$pr and any(.closingIssuesReferences[]; .number==$issue and (((.repository.owner.login // "")+"/"+(.repository.name // ""))|ascii_downcase)==($repo|ascii_downcase))' \
+	"$gh_capture" >/dev/null || fail 'claim issue does not match PR closing reference'
+rm -- "$gh_capture" || fail 'cannot remove destination capture'
+gh_capture=''
+claim_rc=0
+GH_HOST=github.com bash "$ROOT/skills/quest-log/assets/tracker.sh" claim-verify \
+	--profile github --target "$repo" "$claim_issue" --token "$claim_token" >&2 || claim_rc=$?
+if [ "$claim_rc" -ne 0 ]; then
+	printf 'publication refused; local checkout: %s\n' "$PWD" >&2
+	exit "$claim_rc"
 fi
 comment_url=$(post_comment)
 read_comment "$comment_url"

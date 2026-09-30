@@ -6,6 +6,13 @@ that record carries the reasoning, this file carries what to do. Local subproces
 no network — `git rev-parse --local-env-vars` and the like — are outside it, and so is retry or
 backoff, which this convention does not authorize anywhere.
 
+The fixed-operation `skills/deliver/scripts/deliver-write` managed push is the narrow
+exception: it may exceed120seconds while its mandatory pre-push suite runs. The operator
+explicitly authorized “allow the managed push to exceed 120 seconds” for #424. It does
+not bypass hooks or relax canonical claim/GitHub-call bounds. Verification precedes that
+hook interval and is not atomic with the remote push. New PR reads/writes retain30/120s
+bounds; a timed-out write reports indeterminate exit5 and is not automatically retried.
+
 ## The invariant
 
 **A timeout is not an answer.** A call that exceeded its bound did not report that the condition

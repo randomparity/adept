@@ -17,8 +17,10 @@ passed=0
 failed=0
 fixture_init publish-forge-review-test
 # Run every publication case from the installed skill alone.
-cp -R "$SKILL_SOURCE" "$SCRATCH/quest"
-SCRIPT="$SCRATCH/quest/scripts/publish-forge-review"
+mkdir -p "$SCRATCH/plugin/skills"
+cp -R "$SKILL_SOURCE" "$SCRATCH/plugin/skills/quest"
+cp -R "$SCRIPT_DIR/../../../skills/quest-log" "$SCRATCH/plugin/skills/quest-log"
+SCRIPT="$SCRATCH/plugin/skills/quest/scripts/publish-forge-review"
 
 ok() {
 	passed=$((passed + 1))
@@ -42,6 +44,10 @@ printf 'invoked\n' >"$state/gh-invoked"
 case $1 in
 pr)
 	shift
+	if [ "$1" = view ]; then
+		jq -n --argjson issue "${CLOSING_ISSUE:-101}" --arg name "${CLOSING_REPO_NAME:-widgets}" '{number:42,closingIssuesReferences:[{number:$issue,repository:{name:$name,owner:{login:"acme"}}}]}'
+		exit 0
+	fi
 	[ "$1" = comment ] || exit 97
 	shift
 	body=''
@@ -81,6 +87,7 @@ api)
 	host=''
 	while [ "$#" -gt 0 ]; do
 		case $1 in
+		--jq) shift 2 ;;
 		--hostname)
 			host=$2
 			shift 2
@@ -92,6 +99,19 @@ api)
 		esac
 	done
 	[ -n "$endpoint" ] || exit 94
+	case $endpoint in
+	*/labels/quest-claim%2F*)
+		printf 'claim-read\n' >>"$state/events"
+		printf '%s\n' "${GH_HOST:-}" >"$state/claim-host"
+		case ${CLAIM_MODE:-held} in
+		held) printf 'q101-12345678;producer;1\n' ;;
+		foreign) printf 'foreign-token;producer;1\n' ;;
+		malformed) printf 'bad;description\n' ;;
+		absent) printf 'gh: Not Found (HTTP 404)\n' >&2; exit 1 ;;
+		transport) printf 'gh: unavailable (HTTP 502)\n' >&2; exit 1 ;;
+		esac
+		exit 0 ;;
+	esac
 	printf '%s\n' "$endpoint" >"$state/api-path"
 	printf '%s\n' "$host" >"$state/api-host"
 	case ${GH_MODE:-success} in
@@ -233,7 +253,7 @@ run_helper() {
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
 		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
 		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
-		"$@" "$SCRIPT" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
+		"$@" "$SCRIPT" --claim-token "${CLAIM_TOKEN-q101-12345678}" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
 		${payload_args[@]+"${payload_args[@]}"} \
 		2>"$REPO/error") || STATUS=$?
 }
@@ -249,7 +269,7 @@ run_preflight() {
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
 		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
 		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
-		"$@" "$SCRIPT" --preflight acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
+		"$@" "$SCRIPT" --preflight --claim-token "${CLAIM_TOKEN-q101-12345678}" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
 		${payload_args[@]+"${payload_args[@]}"} \
 		2>"$REPO/error") || STATUS=$?
 }
@@ -929,7 +949,7 @@ case_empty_payload_argument_is_absent() {
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
 		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
 		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
-		"$SCRIPT" acme/widgets 42 required "$REVIEW" "$LEDGER" "$SUMMARY" '' \
+		"$SCRIPT" --claim-token "${CLAIM_TOKEN-q101-12345678}" acme/widgets 42 required "$REVIEW" "$LEDGER" "$SUMMARY" '' \
 		2>"$REPO/error") || status=$?
 	if [ "$status" -ne 0 ]; then
 		fail "$name" 'empty payload argument failed the helper'
@@ -1067,7 +1087,7 @@ case_argument_arity_is_bounded() {
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
 		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
 		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
-		"$SCRIPT" acme/widgets 42 required "$REVIEW" "$LEDGER" \
+		"$SCRIPT" --claim-token "${CLAIM_TOKEN-q101-12345678}" acme/widgets 42 required "$REVIEW" "$LEDGER" \
 		2>"$REPO/error") || status=$?
 	if [ "$status" -eq 0 ] || [ -n "$OUTPUT" ]; then
 		fail "$name" 'five arguments did not fail at usage'
@@ -1081,7 +1101,7 @@ case_argument_arity_is_bounded() {
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
 		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
 		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
-		"$SCRIPT" acme/widgets 42 required "$REVIEW" "$LEDGER" "$SUMMARY" extra more \
+		"$SCRIPT" --claim-token "${CLAIM_TOKEN-q101-12345678}" acme/widgets 42 required "$REVIEW" "$LEDGER" "$SUMMARY" extra more \
 		2>"$REPO/error") || status=$?
 	if [ "$status" -eq 0 ] || [ -n "$OUTPUT" ]; then
 		fail "$name" 'eight arguments did not fail at usage'
@@ -1094,7 +1114,67 @@ case_argument_arity_is_bounded() {
 	ok "$name"
 }
 
+case_foreign_claim_stops_publication() {
+	local name='foreign claim refuses publication before side effects'
+	new_case
+	run_helper required "$REVIEW" env CLAIM_MODE=foreign
+	if [ "$STATUS" -ne 6 ] || [ "$(post_count)" -ne 0 ]; then
+		fail "$name" "expected exit6/no comment, got $STATUS/$(post_count)"
+		return 0
+	fi
+	[ -f "$REVIEW" ] && [ -f "$SUMMARY" ] || {
+		fail "$name" 'lost-claim refusal disposed source inputs'
+		return 0
+	}
+	ok "$name"
+}
+
+case_claim_states_and_destinations() {
+	local name='claim exits and destination binding prevent all publication side effects' claim expected before
+	for claim in absent foreign malformed transport; do
+		new_case
+		before=$(cat "$LEDGER")
+		run_helper required "$REVIEW" env CLAIM_MODE="$claim" GH_HOST=enterprise.example
+		case $claim in absent) expected=2 ;; transport) expected=4 ;; *) expected=6 ;; esac
+		if [ "$STATUS" -ne "$expected" ] || [ "$(post_count)" -ne 0 ] ||
+			[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ] || [ "$(cat "$LEDGER")" != "$before" ] ||
+			[ "$(cat "$STATE/claim-host")" != github.com ]; then
+			fail "$name" "$claim: gate/status/host/retention contract failed ($STATUS)"
+			return 0
+		fi
+		grep -q 'local checkout:' "$REPO/error" || {
+			fail "$name" 'missing checkout diagnostic'
+			return 0
+		}
+	done
+	for setting in CLOSING_ISSUE=999 CLOSING_REPO_NAME=other; do
+		new_case
+		run_helper required "$REVIEW" env "$setting"
+		if [ "$STATUS" -eq 0 ] || [ "$(post_count)" -ne 0 ] || [ -e "$STATE/claim-host" ]; then
+			fail "$name" 'wrong issue/repository reached claim gate or comment'
+			return 0
+		fi
+	done
+	ok "$name"
+}
+
+case_invalid_claim_tokens() {
+	local name='invalid claim tokens fail before network access' token
+	for token in '' q0-12345678 q101-1234567g malformed; do
+		new_case
+		CLAIM_TOKEN=$token run_helper required "$REVIEW" env
+		if [ "$STATUS" -eq 0 ] || [ -e "$STATE/gh-invoked" ]; then
+			fail "$name" 'invalid token reached GitHub'
+			return 0
+		fi
+	done
+	ok "$name"
+}
+
 printf 'publish-forge-review\n\n'
+case_foreign_claim_stops_publication
+case_claim_states_and_destinations
+case_invalid_claim_tokens
 case_required_safe_review
 case_public_safety_stops_publication
 case_missing_scan_dependencies

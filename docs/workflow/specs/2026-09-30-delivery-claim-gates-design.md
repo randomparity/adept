@@ -4,7 +4,8 @@
 
 Issue #424's Expected and Proposed approach require held claims at issue-backed
 push, PR create/edit and publication comment boundaries. Charter q424-c646f537
-freezes EMPTY exclusions and full-spec M250; ADR0077 records the executable owner.
+freezes EMPTY exclusions and full-spec M250;
+[ADR0077](../../adr/0077-claim-verified-delivery-and-publication.md) records the executable owner.
 Only assigned version7.0.0 changes invocation compatibility; persisted claims are unchanged.
 
 ## Architecture and contracts
