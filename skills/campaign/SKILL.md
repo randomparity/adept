@@ -70,9 +70,9 @@ Slug is a short hash of this normal form. Store the full normal form in the mani
 On a newly created campaign, mint one opaque public-safe UUID and persist
 `Campaign identity: <collision-resolved-manifest-stem>-<uuid>`. Reuse it unchanged on resume;
 never derive it again. A fresh campaign after an archived completed run mints a new UUID even
-when selector and filename stem repeat. Use the exact identity in every bounty prompt,
-occurrence marker, and recovery search. Validate a non-empty identity and Normalized-selector
-together before reconciliation; neither the initial hash nor filename stem alone is a durable
+when selector and filename stem repeat. Use the exact identity in every quest and bounty prompt,
+quest WORK:SCOPE provenance, occurrence marker, and recovery search. Validate a non-empty identity
+and Normalized-selector together before reconciliation; neither the initial hash nor filename stem alone is a durable
 marker namespace.
 
 **Keep manifest out of git** without relying on target repo's `.gitignore`** (required before any manifest write or resume mutation**):
@@ -147,6 +147,11 @@ Manifest schema:
 | Issue | Exclusions and owners | Epic direction | Approval provenance |
 |-------|-----------------------|----------------|---------------------|
 | #NNN  | <normalized set or explicit empty> | <evidence summary or none> | pending |
+
+## Worker claim assignments
+<private per-attempt notes: issue, Campaign identity, scope token, attempt, worker identity
+(pending before dispatch; harness identity bound after dispatch), and observed-end evidence.
+Retain earlier attempt bindings on replacement; never infer missing legacy bindings.>
 
 ## Outcomes log
 <appended per close/merge/block; every entry dated — merge entries' dates drive step 7's
@@ -410,6 +415,14 @@ blockers, and every discovered/finalized follow-up, including every adjacent-not
 candidate returned by review. For each bounty open-sweep occurrence it includes occurrence number,
 sweep number, rationale, state, and state reason. No diffs/logs/file bodies.
 
+**Assign the claim before dispatch.** For each new attempt, mint `q<N>-<8 lowercase hex>`.
+Atomically record and read back the issue, Campaign identity, token and attempt in the manifest's
+existing private notes, with worker identity `pending` until dispatch returns its harness identity.
+Bind that identity and read back before any dependent action; a failed or unverifiable binding
+holds the row. Retain each previous token/worker binding and its observed-end evidence. A resume
+of the same active worker retains its token; a replacement receives a fresh token. Never infer
+a legacy row's missing binding from producer login, a public charter or branch naming.
+
 Each prompt carries:
 - Issue number, acceptance criteria, **completion notes verbatim** (private dispatch context) and the **public-safe summary** (the only form allowed on public surfaces: acceptance criteria, `WORK:` annotations, PR bodies)
 - Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification.
@@ -420,7 +433,9 @@ Each prompt carries:
   identity/revision, approval evidence and class fit instead of claiming an
   operator approved this repair. Quest rechecks live base authority and
   freezes its own matching `WORK:SCOPE` packet before design
-- The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
+- The claim contract: the exact assigned scope token and Campaign identity; quest uses that token
+  and names the identity in WORK:SCOPE provenance. No claim recovery without its explicit packet
+  in this prompt; a forced packet names the observed holder as `--expect-token`.
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
 - Assigned ADR/migration numbers, exact mandatory per-PR edits, file scope; the
@@ -444,18 +459,32 @@ Each prompt carries:
   `CAMPAIGN-OCCURRENCE-RATIONALE:` field in any new occurrence
 - (Parallel only) external worktree path (`../<repo>-worktrees/<branch>`)
 
-**Claim check before every dispatch and re-dispatch.** Read the claim
-(`claim-list` covers the batch; a read failure holds the row — the step-5
-hold: named in the run output while the rest of the queue drains — and
-reports the error; never dispatch on an unreadable claim state). Read issue state/status and
-apply quest-log's liveness rule. No claim on an open issue → dispatch; the worker acquires its
-own. Open non-in-flight issue with a claim stale after `CLAIM_GRACE` → dispatch with recovery
-authorized in the prompt; the worker runs `claim-recover --older-than CLAIM_GRACE`. Closed
-issue → reconcile terminal state, not dispatch. An in-flight claim is live regardless of age:
-hold and do not dispatch. When the row's agent has been observed ended (the re-dispatch bar
-above), the operator's re-dispatch answer is the recovery authorization; the prompt carries it
-as an explicit line — "Claim recovery authorized: the prior run was observed ended" — beside
-the branch-reuse decision, and the worker runs `claim-recover --force`.
+**Claim check before every dispatch and re-dispatch.** Read the claim (`claim-list` covers the
+batch), issue state/status and matching complete WORK:SCOPE provenance. A read failure holds
+the row; never dispatch on unreadable claim state. Compare its holder token with this row's
+retained token/worker bindings, not with the shared producer login or descriptive provenance.
+An unknown token is **foreign**, even when the login or public Campaign identity matches.
+Report token, producer, age, status and matching WORK:SCOPE provenance, or explicit unavailable;
+never present it as this run's stray and never reconstruct a missing binding from that report.
+
+Apply quest-log's liveness rule. No claim on an open issue → dispatch with the assigned token.
+Open non-in-flight issue with a claim stale after CLAIM_GRACE → the existing age-recovery path:
+dispatch with `claim-recover --older-than CLAIM_GRACE` authorization. Report unknown ownership
+as foreign even on that stale path. Closed issue → reconcile terminal state. Any live in-flight
+claim → hold without dispatch or issue/claim mutation, regardless of age.
+
+Before offering campaign-owned live recovery, prove the exact holder token belongs to this row's
+recorded worker and that **that worker** was harness-observed ended under dispatch-liveness.
+End of a different worker, shared login, silence or matching public provenance proves no such
+ownership. An unknown live holder remains a foreign hold for the operator. An exceptional
+operator-directed foreign recovery must explicitly name that foreign holder, never be inferred.
+For a reconciled ended holder, the operator's re-dispatch decision authorizes recovery only of
+the named token. The prompt carries `Claim recovery authorized: holder <token>, worker <identity>
+observed ended` beside the branch-reuse decision, and quest runs
+`claim-recover --force --expect-token <observed-holder-token>`. Re-read immediately before dispatch;
+a changed holder invalidates the packet and holds the row. Preserve the replacement budget.
+The worker's direct read guards the expected holder again; GitHub read then delete is not atomic,
+so substitution after that read remains possible, and verify gates still apply.
 
 Before the serial blocking dispatch and wait, emit the before-wait progress update required by the top-level contract.
 

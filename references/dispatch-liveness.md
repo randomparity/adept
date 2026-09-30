@@ -70,6 +70,13 @@ dispatcher can reach: reports, tracker state, branch or commit state, and worktr
 the disposition of each artifact, establish ownership, resolve conflicts or inaccessible required
 evidence, and check once more for a late valid report.
 
+For campaign claim recovery, establish ownership by the holder's exact scope token in the
+campaign's pre-dispatch row/worker binding. The observed end must belong to that bound worker;
+a shared login or campaign-shaped public provenance is not attribution. Unknown or missing
+bindings are foreign holds, reported with token, producer, age and matching WORK:SCOPE
+provenance. An authorized forced recovery names the observed holder with `--expect-token`;
+a changed holder refuses at the next read. This does not make GitHub read/delete atomic.
+
 A late valid report cancels recovery. An unresolved conflict, inaccessible required artifact, or
 uncertain ownership stops the work unit with the unresolved state recorded; it authorizes no
 replacement and no worktree reclamation.
