@@ -4,7 +4,7 @@
 
 Accepted (2026-08-16)
 
-> **Superseded by [0071](0071-active-claim-liveness.md)** (2026-09-18)
+> **Superseded by [0076](0076-campaign-claim-attribution-and-guarded-recovery.md)** (2026-09-29)
 
 ## Context
 

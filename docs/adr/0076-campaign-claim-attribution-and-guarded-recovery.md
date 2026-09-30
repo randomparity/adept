@@ -2,11 +2,12 @@
 
 ## Status
 
-Accepted (2026-09-29).
-Supersedes ADR0018's unguarded forced-recovery and malformed-force behavior;
-supplements [0071](0071-active-claim-liveness.md), retaining its liveness rule.
+Accepted (2026-09-29)
 
 ## Context
+
+Supersedes ADR0018's unguarded forced-recovery and malformed-force behavior;
+supplements [0071](0071-active-claim-liveness.md), retaining its liveness rule.
 
 Issue #423 demonstrates that shared account logins do not attribute a live claim
 to a campaign's worker. Existing campaign instructions mint tokens in workers and
@@ -41,14 +42,14 @@ This breaking invocation contract ships as version 6.0.0.
 
 ## Considered & rejected
 
-- **Do nothing** — requirement judgment: contradicts #423's holder-attribution and
+- **Do nothing** — judgment: contradicts #423's holder-attribution and
   expected-holder criteria; a shared login cannot supply a worker binding.
-- **Add campaign identity to label descriptions** — source-backed: the current
+- **Add campaign identity to label descriptions** — verified: the current
   `github_claim_read` requires three fields and treats a fourth as malformed.
   Unnecessary persisted-format migration when the existing token discriminates runs.
-- **Use login or WORK:SCOPE provenance alone** — requirement judgment: #423's observed
+- **Use login or WORK:SCOPE provenance alone** — judgment: #423's observed
   shared-account incident requires exact durable token ownership, not a descriptive hint.
-- **Replace the coordination store** — scope judgment: atomic compare-delete needs a
+- **Replace the coordination store** — judgment: atomic compare-delete needs a
   different primitive and caller migration; #423 explicitly proposes the bounded
   expected-token check under the existing read/delete sequence.
 
