@@ -16,6 +16,29 @@ discover them first.
 (green CI + mergeable) means proceed to the next step — do not end your turn.
 Stop only on a genuine blocker you have named.
 
+## Issue-backed write contract
+
+An issue-backed invocation requires its caller's exact scope token: `$deliver <issue>
+--claim-token <scope-token>`. Missing or ambiguous tokens stop before any remote write;
+never acquire, recover or infer another holder's token. Issue-free invocation retains
+its existing direct commands.
+
+Use the installed plugin's `skills/deliver/scripts/deliver-write` for issue-backed
+push and every PR creation/body update, with `--claim-token TOKEN REPO ISSUE` followed
+by one fixed operation: `push`, `pr-create BASE TITLE BODY-FILE`, or `pr-edit PR BODY-FILE`.
+The helper binds the current feature branch/origin and destination, then invokes the
+canonical tracker on github.com immediately before its selected write. Only held0
+permits it; absent2/foreign or malformed6 preserve diagnostics and local checkout path,
+stop the remaining delivery writes, and never reacquire. Transport4 remains an ordinary
+retryable pre-write failure under existing workflow authority, not an automatic retry.
+
+A successful push followed by a lost gate before PR creation leaves the remote branch;
+report that phase truthfully instead of claiming no write occurred. Verification and
+write are not atomic, including the required managed pre-push hook interval. The managed
+push may exceed120seconds for that suite under the explicit operator exception; hooks
+remain mandatory and claim/GitHub-call bounds remain unchanged. Timeout PR writes are
+indeterminate and require inspection before another attempt. See [ADR0077](../../docs/adr/0077-claim-verified-delivery-and-publication.md).
+
 ## 1. Final local verification
 
 Identify the final candidate after implementation, review fixes, and
@@ -44,7 +67,8 @@ because this is the first step that needs a branch name. Create one at the
 current commit (`git switch -c <name>`) before pushing; derive the name from the
 work and say what you chose.
 
-Push the branch. The hook's successful exit counts only for the object it
+Push the branch (issue-backed: `deliver-write --claim-token TOKEN REPO ISSUE push`;
+issue-free: ordinary `git push`). The hook's successful exit counts only for the object it
 actually checked. Confirm the pushed branch object's full SHA matches the
 checked candidate before recording a full pass. A skipped, failed, cancelled,
 or inconclusive hook has no passing result. Diagnose a failed hook before
@@ -53,7 +77,12 @@ environment change, reassess the assembled-branch and final evidence before
 claiming coverage. A new phase alone never invalidates an applicable result or
 requires another full run.
 
-Open a PR against `BASE_BRANCH` with `gh pr create`. Its body describes only
+Open a PR against `BASE_BRANCH` (issue-backed: `deliver-write --claim-token TOKEN
+REPO ISSUE pr-create BASE_BRANCH TITLE BODY-FILE`; issue-free: `gh pr create`).
+Use `pr-edit PR BODY-FILE` through the same helper for issue-backed body changes,
+after the PR already corroborates its linked issue. If that binding is absent, stop and
+inspect it before a separately claim-verified metadata repair; the body helper cannot
+establish the missing binding. Verify before other issue metadata writes. Its body describes only
 what is in the diff, in plain factual language. Avoid inflated words such as
 "critical", "crucial", "essential", "significant",
 "comprehensive", "robust", or "elegant". End with `Closes #<issue-number>` only if

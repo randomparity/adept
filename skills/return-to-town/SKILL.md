@@ -99,9 +99,18 @@ condition the merge gate checks, first on the body it composed and again on the 
 stored, and prints the verified comment URL.
 
 ```sh
-"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" --preflight <owner/name> <issue> <PR> <notes-file>
-"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" <owner/name> <issue> <PR> <notes-file>
+"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" --preflight --claim-token <scope-token> <owner/name> <issue> <PR> <notes-file>
+"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" --claim-token <scope-token> <owner/name> <issue> <PR> <notes-file>
 ```
+
+Both modes require the caller's exact claim/scope token for this issue; never acquire
+or recover a claim here. Preflight retains bounded read-only discovery/full composition
+and performs no claim verification or write. Normal publication verifies through the
+same-root canonical tracker on github.com immediately before comment creation. Lost
+claims preserve exit2/6, holder diagnostics and the local checkout path, with no comment;
+transport4 does not authorize reacquisition. Existing one-time publication and explicit
+recovery rules still govern subsequent attempts. The verification/write interval is
+non-atomic. Use one coherent installed plugin bundle for helper and tracker assets.
 
 Run it from the checkout whose `origin` is the repository being handed off. The path and the
 working directory are two different places: `$CLAUDE_PLUGIN_ROOT` locates the executable inside

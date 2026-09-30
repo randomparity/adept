@@ -47,6 +47,8 @@ SCRIPT_DIR=${BASH_SOURCE[0]%/*}
 SCRIPT_DIR=$(CDPATH='' cd -P -- "$SCRIPT_DIR" && pwd)
 ROOT=$(CDPATH='' cd -P -- "$SCRIPT_DIR/../../.." && pwd)
 
+claim_token=''
+claim_issue=''
 operation=publish
 repo=''
 issue=''
@@ -59,6 +61,7 @@ handshake=''
 head_sha=''
 issue_html_url=''
 pr_closing_refs=''
+claim_issue_bound=''
 response_file=''
 call_out=''
 call_err=''
@@ -114,10 +117,12 @@ require_commands() {
 	# rg is here because check-public-safety.sh needs it and exits 2 without it.
 	# Refusing at this preflight names the missing binary; letting it through
 	# reaches that gate's fault status instead, which says nothing useful.
-	for required in gh jq git grep rg iconv od awk wc tail cat tr mktemp rm sleep; do
+	for required in bash gh jq git grep rg iconv od awk wc tail cat tr mktemp rm sleep; do
 		command -v "$required" >/dev/null 2>&1 ||
 			fault "required command is unavailable: $required"
 	done
+	[ -x "$ROOT/skills/quest-log/assets/tracker.sh" ] ||
+		fault 'bundled tracker is unavailable; repair the installed plugin'
 	[ -x "$ROOT/scripts/check-public-safety.sh" ] ||
 		fault "public-safety check is unavailable: $ROOT/scripts/check-public-safety.sh"
 }
@@ -127,8 +132,15 @@ validate_arguments() {
 		operation=preflight
 		shift
 	fi
+	[ "${1-}" = --claim-token ] && [ "$#" -ge 2 ] ||
+		fault 'usage: required --claim-token TOKEN'
+	claim_token=$2
+	shift 2
+	[[ $claim_token =~ ^q([123456789][0123456789]*)-[0123456789abcdef]{8}$ ]] ||
+		fail 'invalid issue claim token'
+	claim_issue=${BASH_REMATCH[1]}
 	[ "$#" -eq 4 ] ||
-		fault 'usage: publish-handoff [--preflight] REPO ISSUE PR NOTES'
+		fault 'usage: publish-handoff [--preflight] --claim-token TOKEN REPO ISSUE PR NOTES'
 	repo=$1
 	issue=$2
 	pr=$3
@@ -167,6 +179,7 @@ validate_arguments() {
 	case $pr in
 	'' | *[!0123456789]* | 0) fail "pull request number is invalid: $pr" ;;
 	esac
+	[ "$claim_issue" = "$issue" ] || fail 'claim token issue mismatch'
 	# iconv, od, cat and tail all take this path as a bare operand, so a name
 	# beginning with `-` is consumed as an option and those tools read stdin
 	# instead. Three of the byte validations then return clean having never
@@ -438,6 +451,9 @@ resolve_head() {
 	# pull request body carries no Closes trailer.
 	pr_closing_refs=$(jq -r '.closingIssuesReferences[].number' "$pr_out") ||
 		fault 'the pull request response could not be parsed'
+	claim_issue_bound=$(jq -r --argjson issue "$issue" --arg repo "$repo" \
+		'any(.closingIssuesReferences[]; .number==$issue and (((.repository.owner.login // "")+"/"+(.repository.name // ""))|ascii_downcase)==($repo|ascii_downcase))' \
+		"$pr_out") || fault 'the claim destination could not be parsed'
 	number=$(jq -r '.number' "$pr_out") ||
 		fault 'the pull request response could not be parsed'
 	state=$(jq -r '.state' "$pr_out") ||
@@ -639,6 +655,14 @@ compose_body
 if [ "$operation" = preflight ]; then
 	printf 'preflight-ok\n'
 	exit 0
+fi
+[ "$claim_issue_bound" = true ] || fail 'claim issue does not match PR repository and closing reference'
+claim_rc=0
+GH_HOST=github.com bash "$ROOT/skills/quest-log/assets/tracker.sh" claim-verify \
+	--profile github --target "$repo" "$claim_issue" --token "$claim_token" >&2 || claim_rc=$?
+if [ "$claim_rc" -ne 0 ]; then
+	printf 'publication refused; local checkout: %s\n' "$PWD" >&2
+	exit "$claim_rc"
 fi
 comment_url=$(post_comment)
 read_stored_body "$comment_url"

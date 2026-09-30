@@ -813,13 +813,16 @@ already assert.
 ## 8. Ship It
 
 Verify gate **G4**: `claim-verify` before running `$deliver`; a lost gate
-halts per step 1's rule.
+halts per step 1's rule. Delivery also mechanically verifies before each issue-backed
+push/PR write, and both publication helpers verify before their comment write.
+Pass the exact claim/scope token unchanged; a prior successful gate does not replace
+the write-owner checks, and a lost later gate does not erase an already-completed push.
 
 In `build-complete`, re-read the build-to-review handoff before delivery. Only `required` and
 `not-required` may proceed; `required-failed` or any unreadable required
 artifact parks the quest before `$deliver`.
 
-Run `$deliver <issue-number>` to push the branch, create the PR, and drive it
+Run `$deliver <issue-number> --claim-token <scope-token>` to push the branch, create the PR, and drive it
 to green CI and mergeable state. Keep a compact public review summary — the
 fields below — as
 an ignored private mode-0600 file beside the forge ledger; do not put outer
@@ -902,12 +905,15 @@ Before any PR-body write, invoke the helper in validation-only mode with the exa
 arguments:
 
 ```sh
-skills/quest/scripts/publish-forge-review --preflight \
+skills/quest/scripts/publish-forge-review --preflight --claim-token "$SCOPE_TOKEN" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```
 
-Require its sole stdout line to be `preflight-ok`. This mode validates and composes only: it must
+Pass `SCOPE_TOKEN` from the parsed claim/scope binding, never from an untrusted
+holder payload. Both helper modes require it; only normal publication verifies the
+claim. Review preflight remains network-free. Handoff preflight retains its existing
+bounded read-only discovery and composition. Require its sole stdout line to be `preflight-ok`. This mode validates and composes only: it must
 not call GitHub, append the ledger, dispose a source, or retain its temporary body. On nonzero or
 any other output, park with the `build-complete` handoff and retained evidence; do not write the PR
 body or `publication-in-progress`. That is a local pre-write failure, not a consumed publication
@@ -915,7 +921,8 @@ attempt.
 
 Then make the one named PR-body write, ADR 0028's second destination: read the
 delivered PR body, append a blank line, the `## Review exit payloads` heading, and the
-payload file's contents, write the result back with `gh pr edit --body-file`, and
+payload file's contents, write the result back with the installed `skills/deliver/scripts/deliver-write
+--claim-token "$SCOPE_TOKEN" "$REPO" "$ISSUE" pr-edit "$PR" BODY-FILE`, and
 require the readback to match the composed body byte-for-byte apart from at most one
 trailing newline, which GitHub's PR-body storage adds. This is the only moment the PR body gains the section — before the
 `publication-in-progress` handoff rewrite, so the write never happens in the terminal
@@ -940,7 +947,7 @@ before posting. Transfer the summary file's lifecycle to the publication helper
 and invoke it exactly once:
 
 ```sh
-skills/quest/scripts/publish-forge-review \
+skills/quest/scripts/publish-forge-review --claim-token "$SCOPE_TOKEN" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```

@@ -137,6 +137,7 @@ api)
 	endpoint=''
 	while [ "$#" -gt 0 ]; do
 		case $1 in
+		--jq) shift 2 ;;
 		--hostname) shift 2 ;;
 		*)
 			endpoint=$1
@@ -144,6 +145,19 @@ api)
 			;;
 		esac
 	done
+	case $endpoint in
+	*/labels/quest-claim%2F*)
+		printf 'claim-read\n' >>"$state/events"
+		printf '%s\n' "${GH_HOST:-}" >"$state/claim-host"
+		case ${CLAIM_MODE:-held} in
+		held) printf 'q308-12345678;producer;1\n' ;;
+		foreign) printf 'foreign-token;producer;1\n' ;;
+		malformed) printf 'bad;description\n' ;;
+		absent) printf 'gh: Not Found (HTTP 404)\n' >&2; exit 1 ;;
+		transport) printf 'gh: unavailable (HTTP 502)\n' >&2; exit 1 ;;
+		esac
+		exit 0 ;;
+	esac
 	printf '%s\n' "$endpoint" >"$state/api-path"
 	# Two endpoints share this arm and differ only in the segment after
 	# `issues`, so dispatch on the path shape. A prefix match would answer the
@@ -220,12 +234,17 @@ new_case() { # -- sets CASE, WORK, STATE, BIN, NOTES, HEAD_SHA
 
 run_helper() { # [args...] -- sets RUN_STATUS, RUN_OUT, RUN_ERR
 	local closes
+	local -a mode_args=()
+	if [ "${1-}" = --preflight ]; then
+		mode_args=(--preflight)
+		shift
+	fi
 	# Built here, not in a ${VAR:-default}: a literal `}` inside such a default
 	# closes the expansion early and the JSON reaches jq as `[{"number": 308]}`,
 	# which fakes a failure that has nothing to do with the helper.
 	closes=${FAKE_CLOSES:-}
 	if [ -z "$closes" ]; then
-		closes=$(printf '[{"number": %s}]' "$ISSUE")
+		closes=$(printf '[{"number": %s,"repository":{"name":"widgets","owner":{"login":"acme"}}}]' "$ISSUE")
 	fi
 	RUN_STATUS=0
 	set +e
@@ -248,7 +267,7 @@ run_helper() { # [args...] -- sets RUN_STATUS, RUN_OUT, RUN_ERR
 			FAKE_CLOSES="$closes" \
 			FAKE_ISSUE_MODE="${FAKE_ISSUE_MODE:-present}" \
 			FAKE_CANONICAL_REPO="${FAKE_CANONICAL_REPO:-}" \
-			"${HELPER_PATH:-$SCRIPT}" "$@"
+			"${HELPER_PATH:-$SCRIPT}" ${mode_args[@]+"${mode_args[@]}"} --claim-token "${CLAIM_TOKEN-q308-12345678}" "$@"
 	) >"$CASE/out" 2>"$CASE/err"
 	RUN_STATUS=$?
 	set -e
@@ -269,6 +288,7 @@ short_bound_helper() { # -- sets HELPER_PATH
 	root="$CASE/bounded-root"
 	copy="$root/skills/return-to-town/scripts/publish-handoff"
 	mkdir -p "$root/skills/return-to-town/scripts" "$root/scripts"
+	cp -R "$SCRIPT_DIR/../../../skills/quest-log" "$root/skills/quest-log"
 	printf '#!/usr/bin/env bash\nexit 0\n' >"$root/scripts/check-public-safety.sh"
 	chmod +x "$root/scripts/check-public-safety.sh"
 	sed 's/^NETWORK_BOUND_SECONDS=30$/NETWORK_BOUND_SECONDS=2/' "$SCRIPT" >"$copy"
@@ -543,6 +563,10 @@ case_preflight() {
 	new_case
 	run_helper --preflight "$REPO" "$ISSUE" "$PR" "$NOTES"
 	expect_status "$label" 0 || return 0
+	[ ! -e "$STATE/claim-host" ] || {
+		fail_case "$label" 'preflight verified a claim'
+		return 0
+	}
 	[ "$RUN_OUT" = preflight-ok ] || {
 		fail_case "$label" "stdout was '$RUN_OUT', expected preflight-ok"
 		return 0
@@ -861,7 +885,7 @@ case_missing_command() {
 	(
 		cd "$WORK" || exit 90
 		PATH="$minimal" FAKE_STATE=$STATE FAKE_BRANCH=$BRANCH \
-			"$SCRIPT" "$REPO" "$ISSUE" "$PR" "$NOTES"
+			"$SCRIPT" --claim-token q308-12345678 "$REPO" "$ISSUE" "$PR" "$NOTES"
 	) >"$CASE/out" 2>"$CASE/err"
 	RUN_STATUS=$?
 	set -e
@@ -887,7 +911,7 @@ case_missing_sleep() {
 	(
 		cd "$WORK" || exit 90
 		PATH="$minimal" FAKE_STATE=$STATE FAKE_BRANCH=$BRANCH \
-			"$SCRIPT" "$REPO" "$ISSUE" "$PR" "$NOTES"
+			"$SCRIPT" --claim-token q308-12345678 "$REPO" "$ISSUE" "$PR" "$NOTES"
 	) >"$CASE/out" 2>"$CASE/err" || RUN_STATUS=$?
 	RUN_ERR=$(cat "$CASE/err")
 	expect_status "$label" 2 || return 0
@@ -1132,6 +1156,7 @@ case_cdpath_does_not_steer_resolution() {
 	plug="$WORK/plug"
 	mkdir -p "$plug/skills/return-to-town/scripts" "$plug/scripts"
 	cp "$SCRIPT" "$plug/skills/return-to-town/scripts/publish-handoff"
+	cp -R "$SCRIPT_DIR/../../../skills/quest-log" "$plug/skills/quest-log"
 	chmod +x "$plug/skills/return-to-town/scripts/publish-handoff"
 	printf '#!/usr/bin/env bash\nexit 0\n' >"$plug/scripts/check-public-safety.sh"
 	chmod +x "$plug/scripts/check-public-safety.sh"
@@ -1152,6 +1177,54 @@ case_cdpath_does_not_steer_resolution() {
 	ok "$label"
 }
 
+case_claim_gate() {
+	local label='canonical claim gate blocks handoff writes' claim expected
+	for claim in absent foreign malformed transport; do
+		new_case
+		CLAIM_MODE=$claim run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+		case $claim in absent) expected=2 ;; transport) expected=4 ;; *) expected=6 ;; esac
+		if [ "$RUN_STATUS" -ne "$expected" ] || [ ! -f "$NOTES" ] ||
+			grep -q '^post$' "$STATE/events" || [ "$(cat "$STATE/claim-host")" != github.com ]; then
+			fail_case "$label" "$claim status/write/host/retention failed ($RUN_STATUS)"
+			return 0
+		fi
+		case $RUN_ERR in *'local checkout:'*) ;; *)
+			fail_case "$label" 'missing checkout diagnostic'
+			return 0
+			;;
+		esac
+	done
+	new_case
+	CLAIM_TOKEN=q999-12345678 run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	if [ "$RUN_STATUS" -eq 0 ] || [ -f "$STATE/events" ]; then
+		fail_case "$label" 'wrong token issue reached remote read/write'
+		return 0
+	fi
+	new_case
+	FAKE_CLOSES='[{"number":308,"repository":{"name":"other","owner":{"login":"acme"}}}]' \
+		run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+	if [ "$RUN_STATUS" -eq 0 ] || grep -q '^post$' "$STATE/events" || [ -e "$STATE/claim-host" ]; then
+		fail_case "$label" 'same-number foreign repository reached claim or comment'
+		return 0
+	fi
+	ok "$label"
+}
+
+case_invalid_claim_tokens() {
+	local label='invalid claim tokens stop before remote reads' token
+	for token in '' q0-12345678 q308-1234567g malformed; do
+		new_case
+		CLAIM_TOKEN=$token run_helper "$REPO" "$ISSUE" "$PR" "$NOTES"
+		if [ "$RUN_STATUS" -eq 0 ] || [ -e "$STATE/events" ]; then
+			fail_case "$label" 'invalid token reached GitHub'
+			return 0
+		fi
+	done
+	ok "$label"
+}
+
+case_invalid_claim_tokens
+case_claim_gate
 case_usage
 case_bad_repo
 case_bad_numbers

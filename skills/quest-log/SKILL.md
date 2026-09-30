@@ -347,7 +347,13 @@ claimants wins (ADR 0018 carries the probe evidence).
   authorization; `$resurrection` garbage-collects claims on closed issues
   and deletes orphaned claims on issues it resets. The one-writer-per-edge
   rule extends to claim edges with exactly these writers.
-- **Verify gates**: `$quest` verifies immediately after acquiring (before
+- **Verify gates**: `$deliver` mechanically verifies before each issue-backed push
+  and PR create/edit, and both publication helpers require `--claim-token` and verify
+  before comment creation. Canonical reads and public writes select github.com; no
+  acquisition/recovery is a gate fallback. Failed2/6 stops remaining writes with
+  holder/path diagnostics; a completed earlier push remains a remote artifact.
+  The required managed hook runs between push verification and its write, so no
+  atomic guarantee follows. `$quest` also verifies immediately after acquiring (before
   any issue mutation), after the `WORK:SCOPE` readback, before branch
   creation, and before pushing. Gate outcomes are exhaustive: held →
   proceed; absent or foreign → halt with no further issue mutation;
