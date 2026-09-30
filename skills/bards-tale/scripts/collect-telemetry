@@ -218,8 +218,9 @@ bounded_call() { # seconds out-file err-file command...
 # One bounded gh read into DESTINATION, setting the pair every caller of the six
 # fetch functions below reads. fetch_failed carries the call's own status -- gh's
 # exit code, or 124 for a bound exceeded -- so the two hard stops can print a
-# true number instead of a constant; fetch_timed_out says which of the two it
-# was, because 124 is bounded_call's internal signal and never a gh exit.
+# true number instead of a constant; fetch_timed_out marks the conservative
+# 124 classification. A completed gh exit 124 is indistinguishable from a bound
+# breach; network-bounds.md explicitly accepts that collision.
 #
 # gh's stderr reached this script's stderr before the bound and still does. That
 # channel is prose, so the braced redirect suppresses only the job notice bash

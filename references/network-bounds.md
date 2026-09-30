@@ -98,11 +98,11 @@ Adapt it to the call site. Eight properties are not adaptable.
   stderr while exiting 0, and two files where a site merged them once is what this preserves.
   A site that deliberately merges a diagnostic it discards on success — `cleared-dependencies.sh:102-104`
   records two — keeps doing that; the rule protects a captured *value*, not every stream.
-- **Discard the stdout capture on 124.** The writer was killed mid-stream, so a truncated
-  capture is indistinguishable from a complete short one. A half-written JSONL page parses
-  cleanly and reads as a smaller result set. Report; do not parse what arrived. The function
-  empties the file on that path so the obligation is structural rather than remembered — keep
-  that line.
+- **Refuse the stdout capture on 124.** A bound breach kills the writer mid-stream, so a
+  truncated capture is indistinguishable from a complete short one. A half-written JSONL page
+  parses cleanly and reads as a smaller result set. Report; do not parse what arrived. The
+  function empties stdout on escalation — keep that line. A completed command exiting 124
+  retains its capture, but callers must still refuse it under the accepted collision below.
 - **Escalate; never send a bare `KILL`.** `SIGKILL` cannot be handled, so a `git` severed by it
   never tears down the `ssh` or `git-remote-https` it spawned: the transport is reparented to
   init and holds the connection after the wrapper has returned. On `SIGTERM` `git` tears it down
@@ -118,8 +118,24 @@ Adapt it to the call site. Eight properties are not adaptable.
   script the moment the bound is exceeded — before the line that would classify the breach or
   print the diagnostic, which is the one thing this convention exists to make happen.
 
-`124` is this function's internal signal, borrowed from `timeout(1)`'s convention. It is never a
-script's exit status.
+### Accepted return-status collision
+
+`124` is the mechanism's internal bound-breach signal, borrowed from `timeout(1)`'s convention;
+callers translate it into their existing emitted exit classes below. It is also a possible
+wrapped-command exit status: normal completion returns the child's status unchanged. Return
+124 alone therefore cannot prove that the bound fired, even if stdout is complete.
+
+This collision is explicitly accepted for the five existing `git`/`gh` appliers. A shell
+return status offers no value outside the range a wrapped command can produce. Distinguishing
+the sources would require another result channel and coordinated caller changes; the current
+convention retains the simpler mechanism and conservative classification instead. This does
+not assume that `git` or `gh` cannot exit 124.
+
+The cost is a false timeout diagnosis and refusal of otherwise valid stdout when a command
+completes with 124. Writes receive the same indeterminate treatment as a bound breach: the
+write may have landed, and the caller does not retry it. Only escalation empties the capture
+structurally; callers refuse stdout on either source of 124. Review this limitation before
+extending the mechanism to a new command domain.
 
 ## The bound
 
