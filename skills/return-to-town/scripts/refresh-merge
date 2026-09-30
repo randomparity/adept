@@ -343,7 +343,8 @@ assignments_valid() {
 }
 base_gate() { # exit1 alone permits bounded recovery; other failures terminate.
 	local rc=0 duplicate
-	read_call 120 git fetch origin
+	# A successful generic fetch can omit base under narrowed consumer refspecs.
+	read_call 120 git fetch origin "refs/heads/$base:refs/remotes/origin/$base"
 	base_tip=$(git rev-parse "refs/remotes/origin/$base^{commit}") || finish 4 'cannot resolve fetched base'
 	assignments_valid
 	run "$deadline" git merge-base --is-ancestor "$base_tip" "$head" || rc=$?

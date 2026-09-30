@@ -74,12 +74,15 @@ fault**.
    any one alone skips part 2 over a repository whose checks are live elsewhere. Without
    that the gate deadlocks permanently wherever there are no automated checks.
 3. **Merge base current.** Recover the [refresh chain](#bounded-refresh-recovery) first.
-   Run `git fetch origin`, capture `BASE_TIP_SHA=$(git rev-parse "origin/<BASE_BRANCH>")`,
+   Run `git fetch origin "refs/heads/<BASE_BRANCH>:refs/remotes/origin/<BASE_BRANCH>"`,
+   capture `BASE_TIP_SHA=$(git rev-parse "refs/remotes/origin/<BASE_BRANCH>")`,
    then `git merge-base --is-ancestor "$BASE_TIP_SHA" "$HEAD_SHA"`.
    The fetch is part of this check, not preparation
    for it: this is a local test against a remote-tracking ref, and against a stale one it
    passes wrongly — the exact failure the part exists to catch — so re-fetch here even
-   though the block opened with one. Exit 0 passes — the base tip is already in the head,
+   though the block opened with one. The explicit source/destination prevents a narrowed
+   configured fetch set from silently leaving the base tracking ref stale.
+   Exit 0 passes — the base tip is already in the head,
    so the merge result is the commit CI ran on. Exit 1 means the base moved under a green
    check: apply bounded refresh recovery below before any merge-in or retry. An admitted
    refresh merges `BASE_BRANCH` in, regenerates artifacts, reruns full candidate guardrails

@@ -197,6 +197,18 @@ run_case() {
 	jq -e 'type=="object" and (.reason|type)=="string"' "$TEST_STATE/out" >/dev/null
 }
 no_writes() { [ ! -s "$TEST_STATE/events" ] || fail 'unexpected mutation'; }
+# A successful generic fetch may leave a base tracking ref stale in a consumer
+# checkout. The actual gate must fetch its selected base despite this config.
+new_case
+prior_base=$(git -C "$CASE/work" rev-parse origin/main)
+git -C "$CASE/work" config remote.origin.fetch '+refs/heads/feat/test:refs/remotes/origin/feat/test'
+tree=$(git -C "$CASE/work" rev-parse "$prior_base^{tree}")
+next=$(printf 'independent base\n' | git -C "$CASE/work" commit-tree "$tree" -p "$prior_base")
+git -C "$CASE/work" push -q origin "$next:refs/heads/main"
+[ "$(git -C "$CASE/work" rev-parse origin/main)" = "$prior_base" ] || fail 'fixture did not retain stale base'
+run_case 0
+[ "$(cat "$TEST_STATE/events")" = "$(printf 'refresh\nverified\npush\npublish\nmerge')" ] || fail 'narrow fetch skipped current base'
+[ "$(git -C "$CASE/work" rev-parse origin/main)" = "$next" ] || fail 'selected base was not refreshed'
 new_case
 run_case 0
 [ "$(cat "$TEST_STATE/events")" = merge ] || fail 'ordinary merge path'
