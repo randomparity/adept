@@ -742,7 +742,11 @@ github_claim_read() { # issue
 # state github_claim_read left behind.
 github_claim_conflict() { # issue
 	local issue=$1
-	if [[ $CLAIM_STATE == malformed ]]; then
+	if [[ $CLAIM_STATE == absent ]]; then
+		jq -n --arg i "$issue" \
+			'{error: "conflict", holder: null,
+			  message: ("expected claim on issue " + $i + " is absent")}' >&2
+	elif [[ $CLAIM_STATE == malformed ]]; then
 		jq -n --arg i "$issue" \
 			'{error: "conflict",
 			  holder: {token: null, producer: null, at: null, malformed: true},
@@ -928,7 +932,7 @@ profile_claim_release() {
 profile_claim_recover() {
 	github_require_target
 	(($# >= 1)) || die "$EXIT_USAGE" usage 'claim-recover needs an issue id'
-	local issue=$1 older_than='' force=0 rc=0 now age epoch desc
+	local issue=$1 older_than='' force=0 expect_token='' expect_seen=0 rc=0 now age epoch desc
 	github_require_id "$issue" 'issue id'
 	shift
 	local TOKEN PRODUCER
@@ -949,6 +953,12 @@ profile_claim_recover() {
 			older_than=$2
 			shift 2
 			;;
+		--expect-token)
+			(($# >= 2)) || die "$EXIT_USAGE" usage '--expect-token needs a value'
+			expect_token=$2
+			expect_seen=1
+			shift 2
+			;;
 		--force)
 			force=1
 			shift
@@ -963,7 +973,20 @@ profile_claim_recover() {
 	if [[ -n $older_than && ! $older_than =~ ^[0123456789]+$ ]]; then
 		die "$EXIT_USAGE" usage "--older-than must be seconds: $older_than"
 	fi
+	if ((force == 1)); then
+		[[ -n $expect_token ]] ||
+			die "$EXIT_USAGE" usage '--force needs --expect-token <holder-token>'
+		github_claim_validate_token "$expect_token"
+	else
+		((expect_seen == 0)) || die "$EXIT_USAGE" usage '--expect-token requires --force'
+	fi
 	github_claim_read "$issue" || github_die "$GH_ERR"
+	# This checks the direct read, not an atomic compare-delete: GitHub's
+	# unconditional DELETE can still race a holder change after this guard.
+	if ((force == 1)); then
+		[[ $CLAIM_STATE == held && $CLAIM_TOKEN == "$expect_token" ]] ||
+			github_claim_conflict "$issue"
+	fi
 	case $CLAIM_STATE in
 	held)
 		if ((force == 0)); then
@@ -984,15 +1007,7 @@ profile_claim_recover() {
 		# the same guard.
 		((rc == 0)) || github_die "$GH_ERR"
 		;;
-	malformed)
-		# No evaluable age: --older-than always refuses; only --force or a
-		# manual delete clears a malformed claim.
-		((force == 1)) || github_claim_conflict "$issue"
-		github_run "$github_bound_single" label delete "quest-claim/$issue" --repo "$TRACKER_TARGET" \
-			--yes || rc=$?
-		((rc != 124)) || die "$EXIT_PARTIAL" partial "$GH_ERR"
-		((rc == 0)) || github_die "$GH_ERR"
-		;;
+	malformed) github_claim_conflict "$issue" ;;
 	absent) : ;;
 	esac
 	epoch=$(date -u +%s)

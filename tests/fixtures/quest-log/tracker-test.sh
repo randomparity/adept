@@ -1239,8 +1239,7 @@ assert_exit 5 "$status" 'a label-ensure timeout'
 assert_error "$sandbox/err" partial 'a label-ensure timeout'
 
 # claim-recover's delete is reached for the first time on a timeout too. Seed a
-# malformed claim (no --token/--producer matching needed) so --force reaches
-# the delete without going through the token-matching held path.
+# parseable expected holder so guarded --force reaches the bounded delete.
 cat >"$sandbox/hang-bin/gh" <<'FAKE_GH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1249,7 +1248,7 @@ if [[ ${FAKE_GH_HANG:-} == "$1" || ${FAKE_GH_HANG:-} == "$1 ${2:-}" ]]; then
 fi
 if [[ $1 == api ]]; then
 	case " $* " in
-	*'/labels/quest-claim%2F'*) printf 'malformed-claim-body\n' ;;
+	*'/labels/quest-claim%2F'*) printf 'q101-oldholder;alice;1700000000\n' ;;
 	*) printf '5039780970\n' ;;
 	esac
 	exit 0
@@ -1260,10 +1259,10 @@ chmod +x "$sandbox/hang-bin/gh"
 status=0
 FAKE_GH_HANG='label delete' github_bound_single=1 PATH="$sandbox/hang-bin:$PATH" \
 	"$tracker" claim-recover --profile github --target example/repo 101 \
-	--force --token q101-abcdefab --producer someuser \
+	--force --expect-token q101-oldholder --token q101-abcdefab --producer someuser \
 	>"$sandbox/out" 2>"$sandbox/err" || status=$?
-assert_exit 5 "$status" 'a claim-recover delete timeout on a malformed claim'
-assert_error "$sandbox/err" partial 'a claim-recover delete timeout on a malformed claim'
+assert_exit 5 "$status" 'a claim-recover delete timeout on a matching holder'
+assert_error "$sandbox/err" partial 'a claim-recover delete timeout on a matching holder'
 
 # claim-release's delete timeout: a real, matching held claim so the delete is
 # actually reached, then a bound breach on the delete itself.
@@ -1405,7 +1404,7 @@ FAKE_GH
 		printf 'profile_link_blocks 7 101\n'
 		printf 'profile_claim_acquire 101 --token probetoken --producer probeuser\n'
 		printf 'profile_claim_release 101 --token probetoken\n'
-		printf 'profile_claim_recover 101 --force --token probetoken --producer probeuser\n'
+		printf 'profile_claim_recover 101 --force --expect-token probetoken --token probetoken --producer probeuser\n'
 		printf 'printf "SENTINEL_REACHED\\n"\n'
 	} >"$zsh_probe"
 	set +e

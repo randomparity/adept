@@ -299,7 +299,8 @@ claimants wins (ADR 0018 carries the probe evidence).
   a day in the future — the bound keeps age arithmetic inside int64 and
   defeats hand-crafted future timestamps). A description that fails
   any grammar check is a *malformed* claim: treated as foreign everywhere,
-  clearable only by `claim-recover --force` or a manual `gh label delete`.
+  never force-recoverable because no expected holder can be verified; clearing
+  requires explicitly authorized manual `gh label delete` reconciliation.
 - **Token binding**: the claim token **is** the `WORK:SCOPE` annotation
   token. A `WORK:SCOPE` annotation is authoritative only while its token
   matches the issue's live claim; an annotation whose token matches no live
@@ -308,6 +309,12 @@ claimants wins (ADR 0018 carries the probe evidence).
   consumer that reads `WORK:SCOPE` for authority or liveness applies the
   token match when a claim is present; on an issue with no claim at all the
   annotation rule stands unchanged.
+- **Campaign attribution** (ADR0076): campaign persists each assigned scope token
+  before dispatch and binds it to its worker in private manifest notes. Quest uses
+  that token and names Campaign identity in WORK:SCOPE provenance. A shared login
+  or public provenance does not prove ownership; unknown live tokens remain foreign.
+  Campaign-owned force needs that exact holder's durable binding, harness-observed
+  worker end, and an operator decision naming the expected token.
 - **Liveness** (ADR 0071): a well-formed claim is *live* when the issue is open
   **and** (its age < `CLAIM_GRACE=600` seconds **or** the issue carries an
   in-flight status: `status:in-progress`, `status:in-review`,
@@ -324,7 +331,13 @@ claimants wins (ADR 0018 carries the probe evidence).
   Exit class `EXIT_CONFLICT=6` reports a live foreign claim with a
   structured holder payload on stderr; `claim-verify` exits 0 held, 2
   absent, 6 foreign; `claim-recover` requires `--older-than <seconds>` or
-  `--force` (the structural carrier of an operator's recovery decision). A
+  `--force --expect-token <observed-holder-token>` (ADR0076). Force requires a
+  valid expected token before any GitHub call; expectation without force is usage
+  exit 1. Only a parseable matching current holder reaches deletion. Mismatch or
+  malformed holder conflicts with its holder payload; absence conflicts with
+  `holder: null`, all exit 6 without delete/create. Age-only absent recovery still
+  creates. GitHub read/delete is not atomic; a holder change after the guard's
+  read can still be deleted. Verify gates remain required. A
   recover that loses a race to another claimant mid-sequence exits
   `EXIT_PARTIAL` with `{"stage":"create"}`; the caller re-runs
   `claim-acquire`, whose read-back then reports the winner as an ordinary

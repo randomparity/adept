@@ -149,9 +149,11 @@ issue/repository derivation read also fails, stop before changing `status:*` or 
 Never include the external payload, authentication data, or private environment detail in that
 response.
 
-**Claim the issue before touching it.** Mint the scope token now, in the
-short form `q<issue-number>-<8 lowercase hex>` (the quest-log claim protocol
-constrains the grammar), and resolve the producer login
+**Claim the issue before touching it.** A campaign supplies its pre-recorded scope token
+and public-safe Campaign identity. Validate the supplied token as exactly
+`q<issue-number>-<8 lowercase hex>` before any claim or issue mutation; invalid or empty
+supplied tokens stop, never fall back to minting. Use the assigned token unchanged.
+A standalone quest mints its own token in that same form. Resolve the producer login
 (`gh api user --jq .login`; a failure is an auth failure — stop with the
 `gh` error). Then acquire the claim:
 
@@ -169,8 +171,11 @@ quest-log's liveness rule. An in-flight holder remains live regardless of age.
   terminal; leave its claim for resurrection cleanup.
 - Holder live, interactive root → stop. Report the holder's token,
   producer, age, and the issue's status; the human decides whether to wait
-  or authorize recovery (a re-invocation carrying that decision uses
-  `claim-recover --force`). Ask, never assume.
+  or authorize recovery of that exact observed token. A re-invocation carrying
+  that decision uses `claim-recover --force --expect-token <observed-holder-token>`.
+  A changed, malformed or absent holder conflicts without deletion. Under campaign,
+  unknown tokens stay foreign; campaign-owned recovery also requires the matching
+  recorded worker's observed end. Ask, never assume.
 - Holder live, unattended root → stop with no writes to the issue. This is
   the one exception to the park protocol: the issue belongs to a live
   quest, and any label or comment write on it is the interference the
@@ -206,6 +211,7 @@ Record all eight fields:
 - `outcome` -- the requested outcome;
 - `completion criteria` -- each criterion and its source;
 - `provenance` -- the source of every outcome, criterion, and user decision;
+  under campaign, include its exact supplied public-safe `Campaign identity`;
 - `exclusions` -- explicit exclusions and their owners, or explicit empty;
 - `surface` -- permitted change surface and direct dependencies;
 - `ambiguities` -- unresolved design-changing ambiguities, or explicit empty;
@@ -287,7 +293,7 @@ names only the parked phase and the need for human input.
 
 ### Posting the annotation
 
-Use the scope token minted for the claim (step 1) as the annotation token —
+Use the scope token assigned or minted for the claim (step 1) as the annotation token —
 claim and charter share one identity. Include it in the comment and capture
 the returned comment URL as the annotation's location, not its identity. Read
 the comment back and verify the token and all eight fields before continuing,
