@@ -62,7 +62,8 @@ empty), so renaming the step 3 heading breaks no link.
    An intermittent failure you cannot trigger on demand is not ready to be fixed —
    gather more data instead. A fix you cannot watch fail first is unfalsifiable.
    When access or evidence rules out a runnable repro, say what is missing and
-   stop with the cause unestablished. A missing repro is not permission to
+   stop with the cause unestablished — the no-root-cause section below applies
+   only after an investigation that ran. A missing repro is not permission to
    instrument a system you could not already change.
 
    **Reduce it only as far as the question needs.** When the repro carries inputs,
@@ -95,7 +96,9 @@ empty), so renaming the step 3 heading breaks no link.
    ```
 
 4. In step 4, append to the `**Write a failing test**` paragraph: `Build it from the reduced repro
-   where the project's tests can express it.`
+   where the project's tests can express it. When an existing check already fails on the exact
+   defect — a linter, a type checker, a focused test — that check is the failing test; write no
+   new one.`
 5. Replace the `**Verify**` paragraph with:
 
    ```markdown
@@ -128,11 +131,17 @@ Consumes the Task 1 skill text and the spec's DCR-1..6 table. Produces the evalu
    DCR-3, and DCR-6 as small runnable shell or Python fixtures with a seeded defect; DCR-4 a shell
    script with one unquoted expansion and its ShellCheck output; DCR-5 two frozen artifacts (no
    environment access; a prior identical failed correction).
-2. Dispatch one fresh agent per case with only the revised skill text and the case input, working
-   on a scratch copy, instructed to act and report its ordered commands, edits, and final decision.
-3. Score each trace against the spec table. On a failed case, revise the Task 1 text once, commit,
-   and rerun that case once; a second failure blocks shipping.
-4. Write `docs/workflow/evals/2026-10-05-detect-curse-exact-repro.md`: setup (model, skill commit,
-   one attempt per case), the case table with observed actions and verdict, and limits. No
-   absolute paths. Run `just verify`; expect exit 0. Commit `docs(evals): record detect-curse
+2. Dispatch one fresh agent per case. It reads `skills/detect-curse/SKILL.md` from the branch
+   checkout (relative references resolve there) and works only in the case's scratch directory,
+   then reports its ordered commands, edits, and final decision. For DCR-4 and DCR-5(b) the agent
+   acts as `$forge` and also reads the two `skills/forge/SKILL.md` paragraphs that route a failure:
+   the one beginning "First establish whether the cause is understood" (failing baseline) and the
+   one beginning "Stop on a genuine blocker" (resistant task), as DCF-1 and DCF-7 supplied caller
+   context.
+3. Score each trace against the spec table. On any failed case, revise the Task 1 text, commit,
+   and rerun all six cases against the new commit; a case failing twice blocks shipping.
+4. Write `docs/workflow/evals/2026-10-05-detect-curse-exact-repro.md`: setup (model, the skill
+   commit each case ran against, one attempt per case per round), a per-case table of observed
+   actions and verdict for the operator and branch reviewer to audit, and limits. No absolute
+   paths. Run `just verify`; expect exit 0. Commit `docs(evals): record detect-curse
    repro evaluation`.

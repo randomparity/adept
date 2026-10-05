@@ -36,8 +36,9 @@ Three edits to the skill, each inside the step that already owns the concern.
    kind or a neighbouring failure is a different bug and not evidence. Intermittent failures keep
    the existing "not ready to be fixed — gather more data" rule. When access or evidence rules out a
    runnable repro, the investigator names what is missing and ends with the cause unestablished,
-   which is the stop the #41 routing contract already handles; a missing repro grants no
-   permission to instrument systems it could not already change.
+   which is the stop the #41 routing contract already handles; the no-root-cause section applies
+   only after an investigation that ran. A missing repro grants no permission to instrument
+   systems it could not already change.
 2. **Step 1, Reduce.** A new paragraph: remove irrelevant inputs, setup, or steps one at a time,
    rerunning the same check after each; keep a removal only if the exact failure survives; stop
    when the repro distinguishes the remaining causes. An existing test that already isolates the
@@ -49,7 +50,9 @@ Three edits to the skill, each inside the step that already owns the concern.
    reduced check; re-rank. No quota. The existing revert-before-the-next-probe rule stays and now
    names the refuted probe explicitly.
 4. **Step 4, Fix and verify.** The failing regression test is built from the reduced repro where
-   the project's tests can express it. Verification reruns the original, unreduced command from
+   the project's tests can express it. When an existing check already fails on the exact defect —
+   a linter, type checker, or focused test — that check is the repro and the regression guard, so
+   no new test or harness is written. Verification reruns the original, unreduced command from
    step 1. A reduced case that passes while the original still fails is not fixed: it is a fix that
    did not work, so the existing three-failure count applies, and the investigation returns to step
    3 with that difference as evidence.
@@ -63,8 +66,11 @@ polling guidance, the no-root-cause section, and every caller's direct-repair bo
    - A model agent running `$detect-curse` in Claude Code or Codex, invoked directly or by forge,
      deliver, quest, or attunement, with a local checkout and the operator's existing permissions.
 2. Invariants and assets at stake
-   - The direct-repair route for a failure whose current artifact names the cause (#41/#104).
-   - The three-failure stop and the cause-unestablished stop: diagnosis never loops indefinitely.
+   - The callers' direct-repair route for a failure whose current artifact names the cause
+     (#41/#104); untouched because no caller text changes.
+   - The three-failure stop, the cause-unestablished stop for a missing repro, and the callers'
+     stop when the same correction fails with no new evidence. Probe count stays unbounded, as
+     before; no quota is added.
    - A fix is reported only after the original reported scenario passes.
    - Recorded repro evidence stays redacted before it reaches any public write.
 3. Accepted failure classes
@@ -91,20 +97,24 @@ latency, or token budget is introduced.
 
 Tool-using-agent dimensions: tool-use correctness, task completion, loop avoidance, instruction
 following. Each case below is severity 4 (a wrong outcome on a core workflow) and gets one bounded
-fresh-context run. A fresh tool-using agent receives the revised skill and a synthetic case — a
-small runnable fixture in a scratch directory outside the repository where the case needs one,
-otherwise a frozen failure artifact — and acts on it. Its ordered commands, edits, and final
-decision are the observed trace. The author scores each trace against the observable traits below
-and records the result; traces stay private. A failed case revises the skill and reruns that case
-once; a second failure blocks shipping. Scoring is on actions taken, never on matching wording.
+fresh-context run. A fresh tool-using agent loads the revised skill from the branch checkout, so its
+relative references resolve, and works in a scratch directory outside the repository holding the
+case — a small runnable fixture where the case needs one, otherwise a frozen failure artifact.
+DCR-4 and DCR-5's repeat arm exercise caller-owned routes, so, as DCF-1 and DCF-7 did, the agent
+acts as `$forge` and also receives forge's failure-handling paragraphs. Its ordered commands,
+edits, and final decision are the observed trace. The author scores each trace against the
+observable traits below; the record carries a per-case observed-actions table for the operator and
+branch reviewer to audit, and full traces stay private. After any skill revision, all six cases
+rerun against the revised commit; a case failing twice blocks shipping. Scoring is on actions
+taken, never on matching wording.
 
 | Case | Input | Pass trait | Forbidden trait |
 |---|---|---|---|
 | DCR-1 nearby symptom | Report names one error; the obvious command fails with a different one | Rejects that failure as evidence; finds or reports the exact symptom | Diagnoses or fixes from the nearby failure |
 | DCR-2 oversized fixture | Fixture reproduces the exact symptom with several irrelevant inputs | Removes elements one at a time, rerunning after each, keeps the exact failure | Removes several at once; changes the symptom unnoticed |
 | DCR-3 two causes | Two plausible causes fit; one probe refutes the first | States distinguishing predictions; one-variable probes; reverts the refuted change first | Stacks the refuted change under the next probe |
-| DCR-4 obvious lint | ShellCheck output names `SC2086` on one line | Applies the prescribed fix directly using the lint command as the check | Builds a hypothesis list or a new harness |
-| DCR-5 no repro / repeat | No access to the failing environment; or the same correction already failed with no new evidence | Names what is missing; stops with cause unestablished or at the existing stop | Proposes a speculative fix or loops diagnosis |
+| DCR-4 obvious lint | As `$forge`: ShellCheck output names `SC2086` on one line | Applies the prescribed fix directly; the lint command is the check | Builds a hypothesis list or a new harness |
+| DCR-5 no repro / repeat | (a) No access to the failing environment; (b) as `$forge`: the same correction already failed with no new evidence | Names what is missing; stops with cause unestablished or at the existing blocker | Proposes a speculative fix or another diagnose-fix cycle |
 | DCR-6 partial fix | Reduced case passes after a fix; original scenario still fails | Reruns the original; does not declare fixed; returns to hypotheses | Reports the bug fixed |
 
 `just verify` (including `just shape-check`) remains the structural guardrail; no new gate.
