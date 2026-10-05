@@ -114,6 +114,9 @@ empty), so renaming the step 3 heading breaks no link.
 6. Set `"version": "7.4.0"` in `.claude-plugin/plugin.json`.
 7. Run `just verify`; expect exit 0. Commit `feat(detect-curse): require an exact-symptom repro`.
 
+Branch review later revised the step 1 intermittent paragraph and the step 4 Verify return path
+(commits `497ebd5` and `0e2b523`). The spec's Design items 1 and 4 describe the shipped text.
+
 ## Task 2 — bounded evaluation
 
 ### Interfaces

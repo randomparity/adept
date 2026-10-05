@@ -34,8 +34,12 @@ Four edits to the skill, each inside the step that already owns the concern.
    the symptom. It records the command, its prerequisites, and the observed failure, redacted. The
    failure must be the reported one — same error, assertion, or wrong output; a crash of another
    kind or a neighbouring failure is a different bug and not evidence. Intermittent failures keep
-   the existing "not ready to be fixed — gather more data" rule. When access or evidence rules out a
-   runnable repro, the investigator names what is missing and ends with the cause unestablished,
+   the existing "not ready to be fixed — gather more data" rule; gathering means rerunning the
+   check and adding boundary logging the investigator may already add. If that still gives no
+   on-demand trigger, it reports what it gathered and stops with the cause unestablished, which
+   is criterion (5)'s bound on an otherwise open-ended loop. That stop is different from the
+   no-root-cause section, which applies when an investigation concludes the cause is
+   environmental. When access or evidence leaves no runnable check at all, the investigator names what is missing and ends with the cause unestablished,
    which is the stop the #41 routing contract already handles; the no-root-cause section applies
    only after an investigation that ran. A missing repro grants no permission to instrument
    systems it could not already change.
@@ -51,11 +55,11 @@ Four edits to the skill, each inside the step that already owns the concern.
    names the refuted probe explicitly.
 4. **Step 4, Fix and verify.** The failing regression test is built from the reduced repro where
    the project's tests can express it. When an existing check already fails on the exact defect —
-   a linter, type checker, or focused test the project's guardrails run — that check is the repro and the regression guard, so
-   no new test or harness is written. Verification reruns the original, unreduced command from
+   a linter, type checker, or focused test the project's guardrails run — that check is the repro
+   and the regression guard, so no new test or harness is written. Verification reruns the original, unreduced command from
    step 1. A reduced case that passes while the original still fails is not fixed: it is a fix that
-   did not work, so the existing three-failure count applies, and the investigation returns to step
-   3 with that difference as evidence.
+   did not work, so the existing three-failure count applies. The investigation reduces again from
+   the original command, keeping that difference as evidence, then returns to step 3.
 
 Unchanged: the "No fix before the investigation has run" rule, the three-failure stop, flaky-test
 polling guidance, the no-root-cause section, and every caller's direct-repair boundary.
@@ -68,7 +72,8 @@ polling guidance, the no-root-cause section, and every caller's direct-repair bo
 2. Invariants and assets at stake
    - The callers' direct-repair route for a failure whose current artifact names the cause
      (#41/#104); untouched because no caller text changes.
-   - The three-failure stop, the cause-unestablished stop for a missing repro, and the callers'
+   - The three-failure stop, the cause-unestablished stop for a missing repro or for an
+     intermittent failure that never triggers on demand, and the callers'
      stop when the same correction fails with no new evidence. Probe count stays unbounded, as
      before; no quota is added.
    - A fix is reported only after the original reported scenario passes.
