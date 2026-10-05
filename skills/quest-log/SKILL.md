@@ -268,8 +268,8 @@ per-repair gate; an unattended actor parks before design or merge as appropriate
 Recheck at scope freeze, before design, after review against the actual diff,
 and immediately before the final commit-bound merge gate. Each recheck rereads every
 accepted location, so a section added elsewhere is a duplication even when the recorded
-blob is unchanged. A changed exclusion
-or owner set requires a freshly validated exact packet, never silent reuse.
+blob is unchanged. A changed exclusion or owner set requires a freshly validated exact
+packet, never silent reuse.
 
 The rubric's labels stay truthful. Shared code remains `risk:night-watch` even
 when its changed contract has decisive automated proof for the identified

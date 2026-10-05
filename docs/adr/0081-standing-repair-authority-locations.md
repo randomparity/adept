@@ -37,8 +37,8 @@ cover `.claude/` now covers an authority location: a repair it admits there coul
 an earlier approved blob of the declaring file. ADR 0064 names no control for that replay
 at the root locations either; this record accepts it for `.claude/CLAUDE.md` on the same
 terms and leaves a rule barring repairs to accepted locations to a follow-up. Instruction
-files elsewhere — nested
-directories, `CLAUDE.local.md`, user-level files — still declare nothing.
+files elsewhere — nested directories, `CLAUDE.local.md`, user-level files — still declare
+nothing.
 
 ## Considered & rejected
 
