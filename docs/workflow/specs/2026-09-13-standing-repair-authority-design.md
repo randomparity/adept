@@ -1,5 +1,7 @@
 # Standing authority for bounded repairs — issue #363
 
+Location rule extended by [ADR 0081](../../adr/0081-standing-repair-authority-locations.md).
+
 Charter: issue #363 `WORK:SCOPE` token `q363-c86a027f`; operator-approved
 exclusions and epic #360 direction are retained there. Design denominator:
 1000 changed lines (L), from the cross-workflow authority assessment.
