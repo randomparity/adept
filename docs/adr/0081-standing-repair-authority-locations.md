@@ -24,15 +24,17 @@ file it points at is read only if that file is itself at an accepted path.
 The `## Standing repair authority` section must occur exactly once across the union of
 those files. None means no opt-in. More than one, within one file or across files, is a
 duplicate and fails closed. The authority's source is the one file that holds the section:
-its path and Git blob ID are what a worker records and what maintainer approval binds.
-Adding the section to a second accepted location on the base therefore revokes standing
-authority until one copy is removed.
+a worker records its path and Git blob ID, and maintainer approval binds that blob as in
+ADR 0064. Adding the section to a second accepted location on the base therefore revokes
+standing authority until one copy is removed.
 
 ## Consequences
 
-A plugin repository can opt in through the instruction file it actually uses. Adding a
-location widens no self-grant path, because the read stays on the protected base and the
-approval stays bound to the declaring file's blob. Instruction files elsewhere — nested
+A plugin repository can opt in through the instruction file it actually uses. A branch
+edit to the new location grants nothing, because the read stays on the protected base and
+the approval stays bound to the declaring file's blob. A policy whose permitted surfaces
+cover `.claude/` now covers an authority location; a repair it merges there meets ADR 0064's
+existing blob-replay residual, not a new one. Instruction files elsewhere — nested
 directories, `CLAUDE.local.md`, user-level files — still declare nothing.
 
 ## Considered & rejected

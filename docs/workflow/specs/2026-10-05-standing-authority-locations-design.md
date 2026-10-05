@@ -19,8 +19,9 @@ quest-log accepts the `## Standing repair authority` section only in a tracked r
   ADR 0081 under its title. The body is untouched.
 - `.claude-plugin/plugin.json`: 7.4.0 → 7.5.0.
 - Unchanged, checked: `skills/quest/SKILL.md`, `skills/campaign/SKILL.md`, and
-  `skills/return-to-town/SKILL.md` name "the live instruction-file blob" or "tracked base
-  instruction path" without restating locations, so they already cover the new path.
+  `skills/sort-board/SKILL.md` name the instruction-file blob or path without restating
+  locations; `skills/return-to-town/SKILL.md` names only the live standing policy. All
+  already cover the new path.
 - Ownership: quest-log keeps the rule; no caller migrates and no path becomes obsolete.
 
 ## Failure model
@@ -31,7 +32,10 @@ quest-log accepts the `## Standing repair authority` section only in a tracked r
    bound to its blob on the protected base; the duplicate check spans all three paths.
 3. Accepted failure classes: a repository with the section in two accepted files loses
    standing authority until one is removed — fail closed by design; a section under a
-   different heading level is not a declaration — held by the existing heading rule.
+   different heading level is not a declaration — held by the existing heading rule; a
+   policy-admitted repair merged into `.claude/CLAUDE.md` that restores an approved blob is
+   ADR 0064's existing replay residual, and no repository here declares the section, so no
+   policy's surfaces predate this location.
 4. Covered elsewhere: tracker resolution reading `AGENTS.md` (excluded; separate issue);
    nested or user-level instruction paths (excluded; future ADR).
 
