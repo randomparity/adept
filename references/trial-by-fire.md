@@ -47,6 +47,46 @@ After you implement, the direction of repair reverses: when the test fails, the
 code is wrong. Changing the assertion to match what the code did is how a suite
 stops meaning anything.
 
+## Where the expected value comes from
+
+Watching a test fail proves it can fail. It does not prove the expected value is
+right. A test that computes its answer the same way the code does goes red before
+the code exists and green afterwards, and it still checks nothing. Whatever mistake
+is in the calculation is on both sides of the assertion.
+
+Ground each consequential expected value in something that can disagree with the
+implementation:
+
+- **the requirement or contract** — the value the spec, issue, or interface states;
+- **a worked example** — the arithmetic or reasoning done by hand from that contract;
+- **a known-good result established independently** — a reference dataset, a
+  value checked against another system, a recorded output a person verified;
+- **a genuinely independent reference** — a different algorithm or library that does
+  not share the code's logic.
+
+A circular oracle is one that cannot disagree. Common forms:
+
+- the test calls the subject under test, or its helper, to build the expected value;
+- both sides use the same calculation, so a defect in it cancels out;
+- the assertion copies the production algorithm instead of stating the result;
+- a snapshot is regenerated and accepted without anyone checking that its contents
+  match the contract.
+
+For example, the contract says a 10% discount on 10,000 cents gives 9,000 cents.
+`assert price(10_000, 0.10) == apply_discount(10_000, 0.10)` asks the discount helper
+to grade itself. `assert price(10_000, 0.10) == 9_000` takes the worked answer from
+the contract, and it fails if the discount is applied the wrong way (11,000).
+
+Not every oracle needs a literal value. An independently specified property is a
+sound oracle: the output of a sort is in order and contains exactly the input's
+elements. So is a metamorphic relation, such as doubling the price doubles the
+discount, even though it calls the subject on both sides. A computed expectation is
+not circular just because it is computed. Ask whether it could disagree with the
+implementation for the defect that matters. If it could not, it is circular.
+
+Regenerating a snapshot you invalidated is still required. Regenerating it does not
+validate it. Read the new contents against the contract before accepting them.
+
 ## What a good test looks like
 
 **One behaviour per test.** An "and" in the name is the signal — split it. A test
