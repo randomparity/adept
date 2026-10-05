@@ -55,9 +55,29 @@ No hit is a normal result and costs one command — as is no `docs/solutions/` a
 all (`rg` exits 2 on the missing path; that means "nothing recorded here yet",
 not a failure). Note it and continue.
 
-**Reproduce it.** Establish the exact steps and whether it happens every time.
+**Reproduce it with a check you have run.** Establish one command that fails on
+the *reported* symptom, and run it: an existing focused test, a replay, a CLI
+invocation against a fixture, or — only when nothing existing reaches the
+symptom — a small temporary harness. Record the command, what it needs to run,
+and the failure it produced, with hosts, credentials, and private paths
+redacted. The failure must be the one reported: the same error, assertion, or
+wrong output. A command that crashes some other way, or fails on a neighbouring
+symptom, is a different bug — it is not evidence for this one.
+
 An intermittent failure you cannot trigger on demand is not ready to be fixed —
 gather more data instead. A fix you cannot watch fail first is unfalsifiable.
+When access or evidence rules out a runnable repro, say what is missing and
+stop with the cause unestablished — the no-root-cause section below applies
+only after an investigation that ran. A missing repro is not permission to
+instrument a system you could not already change.
+
+**Reduce it only as far as the question needs.** When the repro carries inputs,
+setup, or steps that may not matter, remove them one at a time and rerun the
+same check after each. Keep a removal only if the exact failure survives it; an
+element whose removal changes or clears the failure is evidence — restore it
+and note it. Stop once the repro can tell the remaining candidate causes apart.
+An existing test that already isolates the failure needs no reduction and no
+new harness.
 
 **Find what changed.** The diff, the recent commits, a new dependency, a config
 edit, a difference between the machine where it works and the one where it does
@@ -91,7 +111,7 @@ time and check for the artifact after each — the file, the directory, the stra
 process. The first run that produces it names the culprit. Check before each run
 too, so a pre-existing artifact is not blamed on the next test.
 
-## 3. Form one hypothesis and test it
+## 3. Hypothesise and test one variable at a time
 
 **Find something similar that works.** In the same codebase, ideally. If you are
 applying a pattern from a reference implementation, read it completely — a
@@ -103,13 +123,19 @@ sure cannot matter. That certainty is where the cause hides.
 **Establish what the thing depends on** — configuration, environment, other
 components, and the assumptions it makes about them.
 
-Then state one hypothesis, specifically, in writing: *this* is the cause,
-because *that*. Test it with the smallest change that would distinguish true
-from false, changing one variable.
+Then write the hypothesis down, specifically: *this* is the cause, because
+*that*. When the evidence already demonstrates the cause, that one line is the
+whole list — do not invent rivals to it. When the cause is still uncertain and
+more than one explanation fits, list the plausible ones, most likely first, each
+with a prediction the repro can falsify: if this is the cause, then *this*
+change or measurement gives *that* result. Pick the probe whose result
+separates the leading candidates, change one variable, rerun the reduced
+check, and re-rank from what it showed. There is no quota; two candidates is a
+normal list.
 
-If it was wrong, form a new hypothesis. Do not leave the failed change in place
-and add another on top — two speculative changes interact, and now you cannot
-attribute either result.
+When a probe refutes its hypothesis, revert its change before the next probe.
+Do not leave the failed change in place and add another on top — two
+speculative changes interact, and now you cannot attribute either result.
 
 If you do not understand something, say so. "I don't understand why X happens" is
 a usable state that leads to an answer; proceeding as though you do is not.
@@ -119,15 +145,21 @@ a usable state that leads to an answer; proceeding as though you do is not.
 **Write a failing test that reproduces the bug, before fixing it.** See
 [trial-by-fire](../../references/trial-by-fire.md) for what makes such a test
 worth having. Without it you cannot demonstrate the fix worked, and nothing stops
-the bug returning quietly.
+the bug returning quietly. Build it from the reduced repro where the project's
+tests can express it. When an existing check already fails on the exact defect —
+a linter, a type checker, or a focused test the project's guardrails run — that
+check is the failing test; write no new one.
 
 **Make one fix, addressing the cause you identified.** No "while I'm here"
 improvements, no refactoring bundled in. Both make the change impossible to
 evaluate and impossible to revert cleanly.
 
 **Verify** — the new test passes, nothing else broke, and the originally
-reported problem is actually gone. Read
-[true-seeing](../../references/true-seeing.md) before saying so.
+reported problem is actually gone: rerun the original, unreduced command from
+step 1. A reduced case that passes while the original still fails is not
+fixed — the reduced case stopped representing the reported problem, and this
+was a fix that did not work. Return to step 3 with that difference as evidence.
+Read [true-seeing](../../references/true-seeing.md) before saying so.
 
 ### Three failed fixes means the architecture, not the bug
 
