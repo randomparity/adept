@@ -29,8 +29,10 @@ was refuted.
 | DCR-5(b) repeat correction (as forge) | Reran the focused test and saw the identical assertion. It cited forge's same-artifact rule and stopped as a blocker without a new investigation or edit, leaving an unverified lead for the caller. | pass |
 | DCR-6 partial fix | Reran the original unreduced command: still `mean=nan`. The agent did not declare it fixed. A one-row probe (temporary file, removed afterwards) isolated `d,nan`; it wrote a failing test, fixed it, and reran both inputs. | pass |
 
-Every case had a valid run that observed its pass trait. No forbidden trait was observed in any
-run. DCR-4's spec trait reads "applies"; the observed route proposed the fix and waited, because
+Every case had a valid run that observed its pass trait. One forbidden trait appeared: DCR-2 r2's
+flag-drop probes apparently dropped the input path with each flag, so they removed two elements at
+once. Criterion (2) therefore rests on that run's later one-at-a-time key and field removals.
+DCR-4's spec trait reads "applies"; the observed route proposed the fix and waited, because
 forge's unchanged interactive rule asks first. That matches criterion (4) and DCF-1.
 
 Limits. These are single model-decision runs on synthetic fixtures, not measured rates. In
@@ -39,4 +41,6 @@ succeeds with either flag removed on unchanged data. So its conclusion that ever
 needed is unsupported, though the error was on the safe side (it kept elements rather than
 dropping them). Round 2 fixtures were built after seeing round 1, and the DCR-3 r2 resume state
 names both hypotheses rather than leaving the agent to rank them. The author both wrote the skill
-text and scored the traces; the operator and branch reviewer can audit the table above.
+text and scored the traces; the operator and branch reviewer can audit the table above. After the
+runs, branch review added one clarifying clause to step 1 (intermittent failures keep gathering
+data; the stop is for when no runnable check exists); no case was rerun against it.
