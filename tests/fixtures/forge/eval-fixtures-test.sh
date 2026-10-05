@@ -61,7 +61,7 @@ status=0
 
 build normal
 [ "$(trailers -1)" = "task-4.1" ] || fail "normal: trailer is $(trailers -1)"
-[ "$(changed 'HEAD~1..HEAD' | sort | tr '\n' ' ')" = "impl-test.sh impl.sh " ] ||
+[ "$(changed 'HEAD~1..HEAD' | LC_ALL=C sort | tr '\n' ' ')" = "impl-test.sh impl.sh " ] ||
 	fail "normal: changed set is $(changed 'HEAD~1..HEAD' | tr '\n' ' ')"
 
 assert_artefacts normal
@@ -83,7 +83,7 @@ assert_artefacts foreign-unit
 	fail "foreign-unit: emitted a late report for a shape with no race"
 
 build both-attempts
-[ "$(trailers 'HEAD~2..HEAD' | sort | tr '\n' ' ')" = "task-4.1 task-4.2 " ] ||
+[ "$(trailers 'HEAD~2..HEAD' | LC_ALL=C sort | tr '\n' ' ')" = "task-4.1 task-4.2 " ] ||
 	fail "both-attempts: trailers are $(trailers 'HEAD~2..HEAD' | tr '\n' ' ')"
 assert_artefacts both-attempts
 [ -f "$REPO/report-late.md" ] || fail "both-attempts: no late report to reconcile against"

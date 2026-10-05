@@ -170,7 +170,7 @@ then test in a new session. See the
 [OpenAI plugin documentation](https://learn.chatgpt.com/docs/plugins) for the current
 Codex plugin workflow.
 
-`CLAUDE.md` carries the rules that govern what may ship here — in particular that a skill
+[`.claude/CLAUDE.md`](.claude/CLAUDE.md) carries the rules that govern what may ship here — in particular that a skill
 is instructions rather than a program, that no skill runs a long-lived process, and that
 nothing automated asserts on prose.
 
