@@ -33,8 +33,11 @@ standing authority until one copy is removed.
 A plugin repository can opt in through the instruction file it actually uses. A branch
 edit to the new location grants nothing, because the read stays on the protected base and
 the approval stays bound to the declaring file's blob. A policy whose permitted surfaces
-cover `.claude/` now covers an authority location; a repair it merges there meets ADR 0064's
-existing blob-replay residual, not a new one. Instruction files elsewhere — nested
+cover `.claude/` now covers an authority location: a repair it admits there could restore
+an earlier approved blob of the declaring file. ADR 0064 names no control for that replay
+at the root locations either; this record accepts it for `.claude/CLAUDE.md` on the same
+terms and leaves a rule barring repairs to accepted locations to a follow-up. Instruction
+files elsewhere — nested
 directories, `CLAUDE.local.md`, user-level files — still declare nothing.
 
 ## Considered & rejected

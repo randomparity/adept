@@ -33,9 +33,10 @@ quest-log accepts the `## Standing repair authority` section only in a tracked r
 3. Accepted failure classes: a repository with the section in two accepted files loses
    standing authority until one is removed — fail closed by design; a section under a
    different heading level is not a declaration — held by the existing heading rule; a
-   policy-admitted repair merged into `.claude/CLAUDE.md` that restores an approved blob is
-   ADR 0064's existing replay residual: while another accepted file keeps its copy the new
-   one fails closed as a duplicate, and removing that copy is already an ADR 0064 edit.
+   policy-admitted repair merged into `.claude/CLAUDE.md` that restores an earlier approved
+   blob — ADR 0064 has no control for this replay at the root locations either; it is
+   accepted on the same terms, and a rule barring repairs to accepted locations is a
+   follow-up candidate.
 4. Covered elsewhere: tracker resolution reading `AGENTS.md` (excluded; separate issue);
    nested or user-level instruction paths (excluded; future ADR).
 
