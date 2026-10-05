@@ -65,9 +65,10 @@ wrong output. A command that crashes some other way, or fails on a neighbouring
 symptom, is a different bug — it is not evidence for this one.
 
 An intermittent failure you cannot trigger on demand is not ready to be fixed —
-gather more data instead. A fix you cannot watch fail first is unfalsifiable.
-When access or evidence rules out a runnable repro, say what is missing and
-stop with the cause unestablished — the no-root-cause section below applies
+gather more data instead: rerun the check, add boundary logging. A fix you
+cannot watch fail first is unfalsifiable. When access or evidence leaves no
+runnable check at all, say what is missing and stop with the cause
+unestablished — the no-root-cause section below applies
 only after an investigation that ran. A missing repro is not permission to
 instrument a system you could not already change.
 
