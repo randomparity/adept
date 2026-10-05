@@ -106,6 +106,8 @@ The bump rule needs `BASE_SHA`, which CI sets and a local run does not. `just ve
 
 ## Instruction files
 
-`CLAUDE.md` is the only repository instruction file. There is deliberately no `AGENTS.md` duplicating it: two documents stating the same rules is the drift problem this project spent real effort removing.
+`.claude/CLAUDE.md` is the only repository instruction file. There is deliberately no `AGENTS.md` duplicating it: two documents stating the same rules is the drift problem this project spent real effort removing.
+
+It lives under `.claude/` rather than at the repository root because the root is also the plugin root. `claude plugin validate --strict` warns that a root `CLAUDE.md` is not loaded as plugin context, and `just plugin-check` treats that warning as a defect. Claude Code loads `.claude/CLAUDE.md` as project instructions all the same. Do not add a root `CLAUDE.md`.
 
 `.codex-plugin/plugin.json` lets Codex consume the skills in this repo; Codex reads the same `.claude-plugin/marketplace.json` to find the plugin. That is Codex consuming adept, not Codex developing it — if development work ever happens here through Codex, decide then whether to point `AGENTS.md` at this file rather than copy it.
