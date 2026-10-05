@@ -26,7 +26,7 @@ the debugging procedure stays owned by `$detect-curse` and its callers are untou
 
 ## Design
 
-Three edits to the skill, each inside the step that already owns the concern.
+Four edits to the skill, each inside the step that already owns the concern.
 
 1. **Step 1, Reproduce.** Replace the "exact steps" paragraph with a runnable-check requirement.
    The investigator establishes one command and runs it: an existing focused test, a replay, a CLI
@@ -51,7 +51,7 @@ Three edits to the skill, each inside the step that already owns the concern.
    names the refuted probe explicitly.
 4. **Step 4, Fix and verify.** The failing regression test is built from the reduced repro where
    the project's tests can express it. When an existing check already fails on the exact defect —
-   a linter, type checker, or focused test — that check is the repro and the regression guard, so
+   a linter, type checker, or focused test the project's guardrails run — that check is the repro and the regression guard, so
    no new test or harness is written. Verification reruns the original, unreduced command from
    step 1. A reduced case that passes while the original still fails is not fixed: it is a fix that
    did not work, so the existing three-failure count applies, and the investigation returns to step

@@ -97,15 +97,16 @@ empty), so renaming the step 3 heading breaks no link.
 
 4. In step 4, append to the `**Write a failing test**` paragraph: `Build it from the reduced repro
    where the project's tests can express it. When an existing check already fails on the exact
-   defect — a linter, a type checker, a focused test — that check is the failing test; write no
-   new one.`
+   defect — a linter, a type checker, or a focused test the project's guardrails run — that
+   check is the failing test; write no new one.`
 5. Replace the `**Verify**` paragraph with:
 
    ```markdown
    **Verify** — the new test passes, nothing else broke, and the originally
    reported problem is actually gone: rerun the original, unreduced command from
    step 1. A reduced case that passes while the original still fails is not
-   fixed — the reduction dropped a cause, and this was a fix that did not work.
+   fixed — the reduced case stopped representing the reported problem, and this
+   was a fix that did not work.
    Return to step 3 with that difference as evidence. Read
    [true-seeing](../../references/true-seeing.md) before saying so.
    ```
