@@ -65,12 +65,13 @@ wrong output. A command that crashes some other way, or fails on a neighbouring
 symptom, is a different bug — it is not evidence for this one.
 
 An intermittent failure you cannot trigger on demand is not ready to be fixed —
-gather more data instead: rerun the check, add boundary logging. A fix you
-cannot watch fail first is unfalsifiable. When access or evidence leaves no
-runnable check at all, say what is missing and stop with the cause
-unestablished — the no-root-cause section below applies
-only after an investigation that ran. A missing repro is not permission to
-instrument a system you could not already change.
+gather more data instead: rerun the check, add boundary logging where you
+already may. If that still gives no on-demand trigger, report what you gathered
+and stop with the cause unestablished. A fix you cannot watch fail first is
+unfalsifiable. When access or evidence leaves no runnable check at all, say
+what is missing and stop with the cause unestablished — the no-root-cause
+section below applies only after an investigation that ran. A missing repro is
+not permission to instrument a system you could not already change.
 
 **Reduce it only as far as the question needs.** When the repro carries inputs,
 setup, or steps that may not matter, remove them one at a time and rerun the
@@ -159,7 +160,8 @@ evaluate and impossible to revert cleanly.
 reported problem is actually gone: rerun the original, unreduced command from
 step 1. A reduced case that passes while the original still fails is not
 fixed — the reduced case stopped representing the reported problem, and this
-was a fix that did not work. Return to step 3 with that difference as evidence.
+was a fix that did not work. Reduce again from the original command, keeping
+that difference as evidence, then return to step 3.
 Read [true-seeing](../../references/true-seeing.md) before saying so.
 
 ### Three failed fixes means the architecture, not the bug
