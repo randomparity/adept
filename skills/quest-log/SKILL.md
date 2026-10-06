@@ -286,8 +286,7 @@ affected consumers. A separate policy-bound merge predicate may admit that
 specific repair only when the current policy permits it, the actual diff fits
 the frozen packet and touches no accepted location, the affected-consumer set and
 proof are complete, and no `daytime-only` or protected external-contract criterion
-applies. Uncertain
-consumer identification or test coverage fails closed. The predicate runs
+applies. Uncertain consumer identification or test coverage fails closed. The predicate runs
 before, never instead of, the existing review and four-part commit-bound gate;
 it does not relabel the repair `night-safe` or grant a blanket refactor pass.
 Policy authority never waives claim ownership, review, issue-creation approval,
