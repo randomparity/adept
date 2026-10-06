@@ -183,7 +183,8 @@ triage before any fix dispatch.
 For an unattended repository with quest-log's admitted standing repair authority,
 `Approval provenance` may instead record the policy identity/revision, tracked
 base instruction path and exact blob ID, independently verified maintainer
-approval of that blob, and this row's exact exclusion/owner set and class fit.
+approval of that blob, and this row's exact exclusion/owner set and class fit;
+a repair that quest-log's accepted-location bar excludes has no class fit.
 This is an alternative provenance value in the **existing row**, not a second
 store or blanket approval of later discoveries. On resume and before dispatch,
 re-read the live base, approval evidence and exact proposed set. A changed
@@ -343,8 +344,9 @@ approval carries across workers and campaign resume only while its normalized ex
 owners remain unchanged; an exclusion delta returns the row to `pending`.
 An unattended root may move a `pending` row to policy-bound provenance only
 after validating quest-log's live protected-base authority for that issue and
-its exact exclusions/owners; read the row back before dispatch. No policy,
-inconclusive proof, or out-of-class evidence leaves it `pending` and held.
+its exact exclusions/owners under quest-log's accepted-location bar; read the
+row back before dispatch. No policy, inconclusive proof, or out-of-class
+evidence leaves it `pending` and held.
 Before unattended dispatch, also read the issue's single-active `risk:` value.
 An absent, ambiguous, or more restrictive value than the proposed repair
 permits holds the row; a policy packet does not fill an absent risk label.
@@ -579,10 +581,12 @@ external contract or any `daytime-only` criterion parks for a separate
 operator decision. Shared code stays `risk:night-watch`; allow its automatic
 merge only if the policy explicitly admits that repair and decisive tests
 cover the identified affected consumers of its changed contract. An
-unidentified or unproved consumer, a new path outside the packet, changed
-exclusions, stale policy blob, or incomplete approval evidence holds that
-merge. Run these checks before the **final** four-part gate and require its
-`HEAD_SHA` to equal the policy-evaluated SHA. If the head changes, the base is
+unidentified or unproved consumer, a new path outside the packet, a path at an
+accepted instruction location in quest-log's `--no-renames` path set (not the
+`gh pr diff --name-only` list, which drops a rename's source), changed
+exclusions, stale policy blob, or incomplete approval evidence holds that merge.
+Run these checks before the **final** four-part gate and require its `HEAD_SHA`
+to equal the policy-evaluated SHA. If the head changes, the base is
 refreshed, or `$return-to-town`'s repeated gate sees another SHA, redo policy,
 diff and consumer evaluation for the new head before any merge; never reuse
 the old verdict. The gate's fresh-base check keeps its immediately-before-merge
