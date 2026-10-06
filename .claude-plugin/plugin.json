@@ -1,8 +1,26 @@
 {
+  "$schema": "https://claude-plugin.schema.dev/plugin.json",
   "name": "adept",
-  "version": "7.6.0",
-  "description": "Development-workflow skills: design, TDD, adversarial review, shipping, and campaign orchestration for Claude Code and Codex.",
-  "author": {
-    "name": "David Christensen"
-  }
+  "version": "0.2.0",
+  "description": "Claude Code plugin: quest log, campaign board, return-to-town, standing repair authority",
+  "author": "randomparity",
+  "repository": "https://github.com/randomparity/adept",
+  "skills": [
+    {
+      "name": "quest-log",
+      "description": "Processes repair actions end-to-end: evaluates intent, enforces policy, and manages standing-repair state.",
+      "path": "skills/quest-log/SKILL.md"
+    },
+    {
+      "name": "campaign-board",
+      "description": "Tracks multi-repair campaigns and their collective status.",
+      "path": "skills/campaign-board/SKILL.md"
+    },
+    {
+      "name": "return-to-town",
+      "description": "Handles post-campaign cleanup, policy updates, and instruction file maintenance.",
+      "path": "skills/return-to-town/SKILL.md"
+    }
+  ],
+  "adapters": []
 }
