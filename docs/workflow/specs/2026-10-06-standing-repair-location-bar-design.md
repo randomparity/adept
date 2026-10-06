@@ -27,8 +27,8 @@ earlier approved blob of the declaring file, reviving revoked authority without 
 
 The touched-path set is `git diff --no-renames --name-only <base>...<head>`: three-dot so
 base-only changes are excluded, `--no-renames` so a rename lists both paths, and mode-only
-changes are listed. Before a diff exists, the packet's permitted surface is barred when it
-names or could match an accepted path; unknown fit falls back, as today.
+changes are listed. Before a diff exists, a packet whose frozen `surface` (a campaign row's
+file scope) names or could match an accepted path is barred; unknown fit falls back, as today.
 
 ## Failure model
 

@@ -20,17 +20,19 @@ Extend ADR 0064 and ADR 0081; every other guarantee of both stands unchanged. A 
 diff adds, edits, removes, or renames a path at any accepted instruction location — compared as
 exact repo-relative paths, on both sides of a rename — receives no standing-policy admission
 and no policy-bound merge, whatever the policy's permitted surfaces say. It takes the ordinary
-per-repair human gate. The bar is checked against the frozen packet's surface at admission and
-against the actual diff at every later recheck, including immediately before the final merge
-gate.
+per-repair human gate. The bar is checked against the frozen packet's `surface` until a diff
+exists and against the actual diff at every later recheck, including immediately before the
+final merge gate.
 
 ## Consequences
 
 Changing a file that holds or could hold authority always needs a human, which is what a
 policy approval of that file already asserts. A policy whose permitted surfaces cover an
 accepted location stays valid for every other repair. The bar covers all three locations, not
-only the declaring file, because adding the section elsewhere changes authority too. Other
-instruction files — nested, local, or user-level — declare nothing and are not barred.
+only the declaring file, because adding the section elsewhere changes authority too. The
+diff-time checks repeat the existing packet-fit rule on purpose, as a backstop for a wrong
+surface-fit judgment at admission. Other instruction files — nested, local, or user-level —
+declare nothing and are not barred.
 
 ## Considered & rejected
 

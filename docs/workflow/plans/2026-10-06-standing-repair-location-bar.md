@@ -56,8 +56,8 @@ the quest-log paragraph opens with the bold lead **Accepted locations are outsid
    standing-policy admission and no policy-bound merge, whatever the policy's permitted
    surfaces say; it takes the ordinary per-repair gate. Compare exact repo-relative paths in
    `git diff --no-renames --name-only <base>...<head>`, which lists both sides of a rename and
-   mode-only changes. Before a diff exists, a packet whose permitted surface names or could
-   match one of those paths is not admitted.
+   mode-only changes. Before a diff exists, a packet whose frozen `surface` (a campaign row's
+   file scope) names or could match one of those paths is not admitted.
    ```
 
 2. In the same section, after "immediately before the final commit-bound merge gate.", add
@@ -65,8 +65,8 @@ the quest-log paragraph opens with the bold lead **Accepted locations are outsid
    and to the actual diff after."
 3. In the policy-bound merge predicate, replace "the actual diff fits the frozen packet," with
    "the actual diff fits the frozen packet and touches no accepted location,".
-4. In `skills/quest/SKILL.md`, after "exact** proposed exclusion/owner set." add "A repair whose
-   permitted surface could reach an accepted instruction location is never admitted
+4. In `skills/quest/SKILL.md`, after "exact** proposed exclusion/owner set." add "A packet whose
+   frozen `surface` could reach an accepted instruction location is never admitted
    (quest-log's accepted-location bar)." Replace "Recheck the built diff after review before"
    with "Recheck the built diff after review, including that bar, before".
 5. In `skills/campaign/SKILL.md`: end the policy-provenance list "exact exclusion/owner set
@@ -76,7 +76,8 @@ the quest-log paragraph opens with the bold lead **Accepted locations are outsid
    "a path at an accepted instruction location," after "a new path outside the packet,".
 6. Run `BASE_SHA=$(git rev-parse origin/main) just version-check`; expect exit 1. Set the
    version to `7.6.0`; rerun; expect exit 0.
-7. Run `just records` and `just plugin-check`; expect exit 0 each. Commit as
+7. Run `just records` and `just plugin-check`; expect exit 0 each. `just verify` is run by the
+   managed pre-push hook at push; run it bare if the hook is absent. Commit as
    `docs(quest-log): bar standing repairs at instruction locations`.
 
 Rollback: revert the commit; no state outside the tree changes.
