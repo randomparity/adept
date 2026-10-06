@@ -582,10 +582,11 @@ operator decision. Shared code stays `risk:night-watch`; allow its automatic
 merge only if the policy explicitly admits that repair and decisive tests
 cover the identified affected consumers of its changed contract. An
 unidentified or unproved consumer, a new path outside the packet, a path at an
-accepted instruction location, changed exclusions, stale policy blob, or
-incomplete approval evidence holds that merge. Run these checks before the
-**final** four-part gate and require its
-`HEAD_SHA` to equal the policy-evaluated SHA. If the head changes, the base is
+accepted instruction location in quest-log's `--no-renames` path set (not the
+`gh pr diff --name-only` list, which drops a rename's source), changed
+exclusions, stale policy blob, or incomplete approval evidence holds that merge.
+Run these checks before the **final** four-part gate and require its `HEAD_SHA`
+to equal the policy-evaluated SHA. If the head changes, the base is
 refreshed, or `$return-to-town`'s repeated gate sees another SHA, redo policy,
 diff and consumer evaluation for the new head before any merge; never reuse
 the old verdict. The gate's fresh-base check keeps its immediately-before-merge
