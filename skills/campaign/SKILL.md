@@ -184,7 +184,7 @@ For an unattended repository with quest-log's admitted standing repair authority
 `Approval provenance` may instead record the policy identity/revision, tracked
 base instruction path and exact blob ID, independently verified maintainer
 approval of that blob, and this row's exact exclusion/owner set and class fit;
-a repair under quest-log's accepted-location bar has no class fit.
+a repair that quest-log's accepted-location bar excludes has no class fit.
 This is an alternative provenance value in the **existing row**, not a second
 store or blanket approval of later discoveries. On resume and before dispatch,
 re-read the live base, approval evidence and exact proposed set. A changed
