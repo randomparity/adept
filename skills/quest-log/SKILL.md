@@ -249,6 +249,14 @@ approval independently; do not let the actor proposing the repair approve its
 own policy. That instruction file is already the repository's instruction authority;
 do not create a separate policy or approval store.
 
+**Accepted locations are outside every policy (ADR 0082).** A repair whose diff adds,
+edits, removes, or renames `AGENTS.md`, `CLAUDE.md`, or `.claude/CLAUDE.md` receives no
+standing-policy admission and no policy-bound merge, whatever the policy's permitted
+surfaces say; it takes the ordinary per-repair gate. Compare exact repo-relative paths in
+`git diff --no-renames --name-only <base>...<head>`, which lists both sides of a rename and
+mode-only changes. Before a diff exists, a packet whose frozen `surface` (a campaign row's
+file scope) names or could match one of those paths is not admitted.
+
 Record the source path, live blob ID, policy identity/revision, approval evidence,
 and case-specific class/risk grounds in the existing risk rationale and, for a
 quest, the existing `WORK:SCOPE` provenance.
@@ -266,17 +274,19 @@ Removal, duplication, ambiguous approval, unreadable base content, unknown
 class fit, or a policy change between checkpoints falls back to the ordinary
 per-repair gate; an unattended actor parks before design or merge as appropriate.
 Recheck at scope freeze, before design, after review against the actual diff,
-and immediately before the final commit-bound merge gate. Each recheck rereads every
-accepted location, so a section added elsewhere is a duplication even when the recorded
-blob is unchanged. A changed exclusion or owner set requires a freshly validated exact
-packet, never silent reuse.
+and immediately before the final commit-bound merge gate. Each recheck applies the
+accepted-location bar, to the packet surface until a diff exists and to the actual diff
+after. Each recheck rereads every accepted location, so a section added elsewhere is a
+duplication even when the recorded blob is unchanged. A changed exclusion or owner set
+requires a freshly validated exact packet, never silent reuse.
 
 The rubric's labels stay truthful. Shared code remains `risk:night-watch` even
 when its changed contract has decisive automated proof for the identified
 affected consumers. A separate policy-bound merge predicate may admit that
 specific repair only when the current policy permits it, the actual diff fits
-the frozen packet, the affected-consumer set and proof are complete, and no
-`daytime-only` or protected external-contract criterion applies. Uncertain
+the frozen packet and touches no accepted location, the affected-consumer set and
+proof are complete, and no `daytime-only` or protected external-contract criterion
+applies. Uncertain
 consumer identification or test coverage fails closed. The predicate runs
 before, never instead of, the existing review and four-part commit-bound gate;
 it does not relabel the repair `night-safe` or grant a blanket refactor pass.
