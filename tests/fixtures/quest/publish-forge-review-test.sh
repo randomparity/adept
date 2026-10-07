@@ -118,7 +118,10 @@ api)
 	read-hang) printf '%s\n' $$ >"$state/hang-pid"; exec sleep 30 ;;
 	read-fail) exit 1 ;;
 	read-mismatch) jq -n --arg body mismatch '{body: $body}' ;;
-	*) jq -n --rawfile body "$state/comment-body" '{body: $body}' ;;
+	*) jq -n --rawfile body "$state/comment-body" \
+		--arg url "${COMMENT_URL:-https://github.com/acme/widgets/pull/42#issuecomment-73}" \
+		--arg issue "${COMMENT_ISSUE:-https://api.github.com/repos/acme/widgets/issues/42}" \
+		'{body: $body, html_url: $url, issue_url: $issue}' ;;
 	esac
 	;;
 *) exit 95 ;;
@@ -237,6 +240,7 @@ new_case() {
 	REVIEW="$repo/.agent/sdd/review.md"
 	SUMMARY="$repo/.agent/sdd/summary.md"
 	PAYLOAD=''
+	RECONCILE_ARGS=()
 	LEDGER="$repo/.agent/sdd/ledger"
 	STATE="$repo/state"
 	FAKES="$repo/fakes"
@@ -253,7 +257,7 @@ run_helper() {
 	OUTPUT=$(PATH="$FAKES:$ORIGINAL_PATH" \
 		FAKE_STATE="$STATE" FAKE_LEDGER="$LEDGER" REAL_CAT="$SYSTEM_CAT" \
 		REAL_ICONV="$SYSTEM_ICONV" REAL_TAIL="$SYSTEM_TAIL" REAL_UNAME="$SYSTEM_UNAME" \
-		"$@" "$SCRIPT" --claim-token "${CLAIM_TOKEN-q101-12345678}" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
+		"$@" "$SCRIPT" ${RECONCILE_ARGS[@]+"${RECONCILE_ARGS[@]}"} --claim-token "${CLAIM_TOKEN-q101-12345678}" acme/widgets 42 "$mode" "$source" "$LEDGER" "$SUMMARY" \
 		${payload_args[@]+"${payload_args[@]}"} \
 		2>"$REPO/error") || STATUS=$?
 }
@@ -1171,7 +1175,95 @@ case_invalid_claim_tokens() {
 	ok "$name"
 }
 
+case_reconcile_verified_publication() {
+	local name='PFR-24 reconcile absent and present records without another comment'
+	local fault mode source body line count
+	for fault in absent present; do
+		for mode in required not-required; do
+			new_case
+			source=$REVIEW
+			[ "$mode" = required ] || source='cast required no whole-branch review'
+			PAYLOAD="$REPO/.agent/sdd/payload.md"
+			printf 'outstanding notes: none\n' >"$PAYLOAD"
+			chmod 600 "$PAYLOAD"
+			if [ "$fault" = absent ]; then
+				cat >"$REPO/append-fault" <<'EOF'
+printf() {
+	case "$*" in *review-publication-verified:*) return 1 ;; esac
+	builtin printf "$@"
+}
+EOF
+				run_helper "$mode" "$source" env BASH_ENV="$REPO/append-fault"
+			else
+				run_helper "$mode" "$source" env TAIL_MODE=fail
+			fi
+			body=$(body_file) || body=''
+			line='review-publication-verified: https://github.com/acme/widgets/pull/42#issuecomment-73'
+			count=$(grep -cxF "$line" "$LEDGER") || count=0
+			if [ "$STATUS" -eq 0 ] || [ "$(post_count)" != 1 ] || [ -z "$body" ] ||
+				{ [ "$fault" = absent ] && [ "$count" != 0 ]; } ||
+				{ [ "$fault" = present ] && [ "$count" != 1 ]; }; then
+				fail "$name" 'did not reproduce the intended post-verification ledger failure'
+				return
+			fi
+			RECONCILE_ARGS=(--reconcile https://github.com/acme/widgets/pull/42#issuecomment-73 "$body")
+			run_helper "$mode" "$source" env
+			count=$(grep -cxF "$line" "$LEDGER") || count=0
+			if [ "$STATUS" -ne 0 ] || [ "$(comment_invocation_count)" != 1 ] ||
+				[ "$OUTPUT" != 'https://github.com/acme/widgets/pull/42#issuecomment-73' ] ||
+				[ "$count" != 1 ] || [ -e "$SUMMARY" ] || [ -e "$body" ] || [ -e "$PAYLOAD" ]; then
+				fail "$name" 'reconciliation failed, reposted, duplicated verification or retained owned inputs'
+				return
+			fi
+			line="review-publication-disposed: $SUMMARY $body $PAYLOAD"
+			[ "$mode" != required ] || line="review-publication-disposed: $REVIEW $SUMMARY $body $PAYLOAD"
+			if ! grep -qxF "$line" "$LEDGER"; then
+				fail "$name" 'closing record lost original body identity or owned order'
+				return
+			fi
+		done
+	done
+	ok "$name"
+}
+
+case_reconcile_rejects_mismatched_evidence() {
+	local name='PFR-25 reconcile rejects wrong remote or private evidence' fault body before
+	for fault in body url issue read source permissions outside duplicate; do
+		new_case
+		run_helper required "$REVIEW" env TAIL_MODE=fail
+		body=$(body_file)
+		RECONCILE_ARGS=(--reconcile https://github.com/acme/widgets/pull/42#issuecomment-73 "$body")
+		case $fault in
+		source) printf 'substituted review\n' >"$REVIEW" ;;
+		permissions) chmod 644 "$body" ;;
+		outside)
+			cp "$body" "$REPO/other-body"
+			chmod 600 "$REPO/other-body"
+			RECONCILE_ARGS[2]="$REPO/other-body"
+			;;
+		duplicate) printf '%s\n' 'review-publication-verified: https://github.com/acme/widgets/pull/42#issuecomment-73' >>"$LEDGER" ;;
+		esac
+		before=$(cat "$LEDGER")
+		case $fault in
+		body) run_helper required "$REVIEW" env GH_MODE=read-mismatch ;;
+		url) run_helper required "$REVIEW" env COMMENT_URL=https://github.com/acme/widgets/pull/42#issuecomment-74 ;;
+		issue) run_helper required "$REVIEW" env COMMENT_ISSUE=https://api.github.com/repos/acme/widgets/issues/43 ;;
+		read) run_helper required "$REVIEW" env GH_MODE=read-fail ;;
+		*) run_helper required "$REVIEW" env ;;
+		esac
+		if [ "$STATUS" -eq 0 ] || [ "$(comment_invocation_count)" != 1 ] ||
+			[ "$(cat "$LEDGER")" != "$before" ] || [ ! -f "$body" ] ||
+			[ ! -f "$REVIEW" ] || [ ! -f "$SUMMARY" ]; then
+			fail "$name" "accepted or mutated evidence for $fault"
+			return
+		fi
+	done
+	ok "$name"
+}
+
 printf 'publish-forge-review\n\n'
+case_reconcile_verified_publication
+case_reconcile_rejects_mismatched_evidence
 case_foreign_claim_stops_publication
 case_claim_states_and_destinations
 case_invalid_claim_tokens

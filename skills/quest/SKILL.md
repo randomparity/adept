@@ -1033,7 +1033,57 @@ finish, resume, ship, merge, or run a campaign. A parsed `publication-in-progres
 make one recovery attempt only when the human explicitly authorizes recovery of that exact PR's
 forge-review publication.
 
-Revalidate the handoff and forge-result record under step 5, then require all of the following:
+Revalidate the handoff and forge-result record under step 5. There are two exclusive routes:
+reconcile an already-existing verified comment below, or make the existing absence-only
+publication attempt. Both consume the same single recovery allowance; a failed reconciliation
+never falls through to publication.
+
+#### Reconcile an existing verified publication
+
+Use this route only when the retained failure evidence identifies a comment the helper already
+read back successfully, but verification-ledger append or readback failed before disposal.
+The human must explicitly authorize reconciliation of that exact PR and comment URL. Require:
+
+- the live repository, PR number, branch, base and full `headRefOid` equal the handoff, including
+  `delivered-head-sha:`; revalidate original private review/reason, ledger, summary and payload
+  under step 5, preserving the legacy explicit payload reconciliation rule below;
+- the original retained helper body is a regular private mode-0600 direct child of the physical
+  ledger directory, named `.publish-forge-review.` plus its original six-character suffix;
+  establish its identity from retained failure evidence, never by newest-file selection;
+- after the exact `forge-result-record`, no disposal, undisposed or recovery-authorization
+  record exists; admit either no verification line or one whole exact
+  `review-publication-verified: <selected URL>` line, rejecting partial, different or duplicate
+  verification records; the ledger remains readable text with complete newline-terminated lines;
+- a complete bounded read of PR comments identifies exactly one complete `WORK:REVIEW` comment
+  matching the original summary, and that comment is the selected URL; unreadable, inconclusive,
+  duplicate or mismatched evidence parks;
+- read that exact comment with `gh api --hostname github.com` at its numeric comment endpoint;
+  require its `html_url` to equal the selected URL, its `issue_url` to identify this repository
+  and PR, and its body to equal the original retained helper body byte-for-byte; and
+- the normal validation-only helper preflight succeeds with the exact original inputs.
+
+Before consuming the allowance, repeat the PR identity/HEAD and complete-comment checks. Append
+and read back the existing `review-publication-recovery-authorized: pr <number> head <full-sha>`
+line once. Then invoke only this mode, once, with the verified original body and URL:
+
+```sh
+"<plugin root>/skills/quest/scripts/publish-forge-review" \
+  --reconcile "$VERIFIED_COMMENT_URL" "$ORIGINAL_HELPER_BODY" --claim-token "$SCOPE_TOKEN" \
+  "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
+  "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
+```
+
+This mode recomposes and compares the original inputs, reads the existing comment, records or
+reuses its exact verification line, and closes disposal for the original owned paths. It never
+creates a comment. A failure retains evidence and parks with the allowance consumed; do not
+invoke normal publication. On success apply every existing verified-URL, closing-partition,
+unchanged-HEAD and atomic `publication-verified` handoff check above, then continue to step 9.
+The unchanged-HEAD check still runs after reconciliation; a changed head parks without reposting.
+ADR0083 amends only ADR0048's existing-comment exclusion for this route.
+
+#### Recover only when publication is absent
+
+Require all of the following:
 
 - the live repository, PR number, head branch, base branch, and full `headRefOid` equal the
   handoff, including `delivered-head-sha:`;
