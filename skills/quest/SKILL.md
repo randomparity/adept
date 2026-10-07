@@ -155,10 +155,12 @@ and public-safe Campaign identity. Validate the supplied token as exactly
 supplied tokens stop, never fall back to minting. Use the assigned token unchanged.
 A standalone quest mints its own token in that same form. Resolve the producer login
 (`gh api user --jq .login`; a failure is an auth failure — stop with the
-`gh` error). Then acquire the claim:
+`gh` error). Then acquire the claim — `<plugin root>` is the installed plugin's own
+root, the directory two levels above this skill's own directory, which the harness
+names when it loads the skill, and never the target repository:
 
 ```sh
-skills/quest-log/assets/tracker.sh claim-acquire --target <owner/name> \
+"<plugin root>/skills/quest-log/assets/tracker.sh" claim-acquire --target <owner/name> \
   <issue-number> --token <scope-token> --producer <login>
 ```
 
@@ -464,8 +466,12 @@ to detect arbitrary out-of-band edits.
 
 ## 5. Build With Contract Evidence
 
-Before calling `$forge`, resolve its workspace with `scripts/sdd-workspace` and
-set `FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
+Before calling `$forge`, resolve its workspace with
+`"<plugin root>/skills/forge/scripts/sdd-workspace"` — `<plugin root>` is the
+installed plugin's own root, the directory two levels above this skill's own
+directory, which the harness names when it loads the skill; the script ships
+beside `$forge` there, not in the target repository — and set
+`FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
 the frozen `WORK:SCOPE` annotation token that this quest already validated, then
 set `FORGE_HANDOFF=<workspace>/quest-forge-handoff-<issue>-<scope-token>.md`.
 The workspace must be a regular private mode-0700 directory; the ledger,
@@ -898,8 +904,8 @@ its own — atomically rename it only after the write, reject carriage return, N
 outer annotation markers, and keep the temporary and installed payload in mode 0600.
 A run with nothing to carry creates no payload file and skips every payload step below.
 
-The publication helper and its `scripts/check-public-safety` scanner ship together in this
-skill. Resolve both from the installed skill directory; never search the target repository for
+The publication helper and its
+`"<plugin root>/skills/quest/scripts/check-public-safety"` scanner ship together in this skill. Resolve both from the installed skill directory; never search the target repository for
 Adept maintenance scripts. The scanner requires `rg` and `jq`; the helper checks these alongside
 its other commands before composing content. Missing commands name an installation/PATH remedy.
 A missing bundled scanner requires repairing the installed skill, not substituting a repository gate.
@@ -917,7 +923,7 @@ Before any PR-body write, invoke the helper in validation-only mode with the exa
 arguments:
 
 ```sh
-skills/quest/scripts/publish-forge-review --preflight --claim-token "$SCOPE_TOKEN" \
+"<plugin root>/skills/quest/scripts/publish-forge-review" --preflight --claim-token "$SCOPE_TOKEN" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```
@@ -933,7 +939,7 @@ attempt.
 
 Then make the one named PR-body write, ADR 0028's second destination: read the
 delivered PR body, append a blank line, the `## Review exit payloads` heading, and the
-payload file's contents, write the result back with the installed `skills/deliver/scripts/deliver-write
+payload file's contents, write the result back with the installed `"<plugin root>/skills/deliver/scripts/deliver-write"
 --claim-token "$SCOPE_TOKEN" "$REPO" "$ISSUE" pr-edit "$PR" BODY-FILE`, and
 require the readback to match the composed body byte-for-byte apart from at most one
 trailing newline, which GitHub's PR-body storage adds. This is the only moment the PR body gains the section — before the
@@ -959,7 +965,7 @@ before posting. Transfer the summary file's lifecycle to the publication helper
 and invoke it exactly once:
 
 ```sh
-skills/quest/scripts/publish-forge-review --claim-token "$SCOPE_TOKEN" \
+"<plugin root>/skills/quest/scripts/publish-forge-review" --claim-token "$SCOPE_TOKEN" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```

@@ -131,8 +131,12 @@ Set this up before either execution mode runs.
 ### Shared-tree placement policy
 
 This is the shared policy for `$quest` and `$forge`. Evaluate it before the first branch,
-worktree, or file mutation, including project setup and `scripts/sdd-workspace`. Quest reads
-this subsection during preflight and revalidates at branch setup; neither invokes forge early.
+worktree, or file mutation, including project setup and
+`"<plugin root>/skills/forge/scripts/sdd-workspace"`. `<plugin root>` is the installed
+plugin root, the directory two levels above this
+skill's own directory named by the harness when it loads the skill. Substitute that
+absolute directory before invoking a helper; it is never the target repository.
+Quest reads this subsection during preflight and revalidates at branch setup; neither invokes forge early.
 
 Consume attunement's `SHARED_TREE` for this checkout. If absent, from another checkout, or
 invalidated by observed changes, run `$attunement` before deciding; retain each unknown half
@@ -373,7 +377,8 @@ and incrementing would spend a replacement budget no recovery consumed.
 
 ### The per-task loop
 
-1. Generate the task brief: `scripts/task-brief PLAN_FILE N` writes it to a
+1. Generate the task brief:
+   `"<plugin root>/skills/forge/scripts/task-brief" PLAN_FILE N` writes it to a
    uniquely named file and prints the path.
 2. Dispatch an implementer with [implementer-prompt.md](implementer-prompt.md),
    carrying the placement contract from *What goes in a dispatch*: the
@@ -419,14 +424,17 @@ and incrementing would spend a replacement budget no recovery consumed.
    and non-structural. Missing or incomplete evidence is `NEEDS_CONTEXT`.
 
    A focused entry's red half is then re-derived rather than read. Two
-   resolutions, and they are separate: resolve `scripts/verify-red` to an
-   absolute path against **this skill's own directory** first — the script ships
-   beside this skill, not in the target repository, the same as
-   `scripts/task-brief` and `scripts/review-package` — then run that absolute
-   path with the **assigned worktree** as the working directory. For each
-   focused entry:
+   resolutions, and they are separate: resolve
+   `<plugin root>/skills/forge/scripts/verify-red` to an absolute path against
+   **the installed plugin's own root** first — `<plugin root>` is the directory
+   two levels above this skill's own directory, which the harness names when it
+   loads the skill, and the script ships there, not in the target repository, the
+   same as `<plugin root>/skills/forge/scripts/task-brief` and
+   `<plugin root>/skills/forge/scripts/review-package` — then run that absolute
+   path with the **assigned worktree** as the working directory. For each focused
+   entry:
 
-       scripts/verify-red --base <BASE> --head <HEAD> --test <the entry's test file> -- <the inventory entry's exact command>
+       "<plugin root>/skills/forge/scripts/verify-red" --base <BASE> --head <HEAD> --test <the entry's test file> -- <the inventory entry's exact command>
 
    The command comes from the **plan's** Verification inventory, never from the
    implementer's report. A focused entry names a test file, an expected red,
@@ -565,12 +573,14 @@ asked report it as a blocker and return. Never default to `main`.
    file is still on disk. Do not match a generic marker, prefix, substring, or an
    older range's closing record. Do not infer completion from a missing review
    file or from the historical review line alone.
-2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
-   and print a non-zero commit count and a non-zero byte count. Report and stop
-   rather than dispatching: this file is the reviewer's whole input.
+2. `"<plugin root>/skills/forge/scripts/review-package" <fork-point> HEAD` for
+   `[DIFF_FILE]`. It must exit 0 and print a non-zero commit count and a non-zero
+   byte count. Report and stop rather than dispatching: this file is the
+   reviewer's whole input.
 3. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
-   directory `scripts/sdd-workspace` prints. Remove anything already at that
-   path before dispatching, so a file there afterwards is this dispatch's.
+   directory `"<plugin root>/skills/forge/scripts/sdd-workspace"` prints.
+   Remove anything already at that path before dispatching, so a file there
+   afterwards is this dispatch's.
 4. When the reviewer returns, `[REVIEW_FILE]` must exist and be non-empty.
 5. **Append the ledger line once that check passes**, before the fix wave —
    `Final review <base-sha>..<head-sha>: <verdict> (review <path>)` — and a
@@ -817,10 +827,13 @@ knows which tasks finished will hand out work already done, sometimes a whole
 run of it — the costliest failure this process has produced. Keep the record in
 a ledger; todos alone are not enough.
 
-Resolve the workspace with `scripts/sdd-workspace`, which prints its absolute
-path, and check for `<workspace>/progress.md`. Tasks marked complete there are
-done: resume at the first that is not, and never re-dispatch one the ledger has
-already closed.
+Resolve the workspace with `"<plugin root>/skills/forge/scripts/sdd-workspace"` —
+`<plugin root>` is the installed plugin's own root, the directory two levels above
+this skill's own directory, which the harness names when it loads the skill; every
+script this skill runs ships there rather than in the target repository — which
+prints its absolute path, and check for `<workspace>/progress.md`. Tasks marked
+complete there are done: resume at the first that is not, and never re-dispatch
+one the ledger has already closed.
 
 On a resumed ledger, reconcile the same
 [handoff evidence](../quest-log/SKILL.md#receiving-the-handoff) before the first uncompleted

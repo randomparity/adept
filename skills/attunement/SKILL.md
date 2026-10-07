@@ -26,10 +26,13 @@ supply-chain rules that are no longer inline in `AGENTS.md`.
 
 ## 2. Record architecture context
 
-Run `scripts/detect-host-architecture` from this installed preflight package. Capture its
-stdout and exit status even when it returns 2 or 3; do not merge stderr into the payload
-and do not evaluate the payload as shell code. Accept only these status/payload
-pairs, carried by stdout's first line:
+Run `"<plugin root>/skills/attunement/scripts/detect-host-architecture"`. `<plugin root>` is
+the installed plugin's own root — the directory two levels above this skill's own directory,
+which the harness names when it loads the skill. Substitute it before running the command; it
+is never the target repository, which has a `scripts/` of its own. Capture the script's stdout
+and exit status even when it returns 2 or 3; do not merge stderr into the payload and do not
+evaluate the payload as shell code. Accept only these status/payload pairs, carried by
+stdout's first line:
 
 - exit 0 with `ok<TAB><normalized>`;
 - exit 2 with `unsupported<TAB><raw-or-empty>`; or
@@ -83,9 +86,10 @@ an overridden declaration. Contradictory effective declarations remain unresolve
 
 Pass the detector status and value, the target state (`conflict`, `none`, or `declared`),
 and each preserved declaration as a separate argument to
-`scripts/resolve-architecture-context`. Use its `HOST_ARCHITECTURE` and
-`TARGET_ARCHITECTURES` records and its final `ARCHITECTURE_RELATIONSHIP` record as one
-context result. The resolver implements this first-match table:
+`"<plugin root>/skills/attunement/scripts/resolve-architecture-context"`, resolved the same
+way. Use its `HOST_ARCHITECTURE` and `TARGET_ARCHITECTURES` records and its final
+`ARCHITECTURE_RELATIONSHIP` record as one context result. The resolver implements this
+first-match table:
 
 | Priority | Condition | Value |
 |---:|---|---|

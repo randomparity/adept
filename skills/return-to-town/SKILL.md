@@ -98,9 +98,13 @@ request, requiring the issue to be one the pull request closes. It asserts every
 condition the merge gate checks, first on the body it composed and again on the copy GitHub
 stored, and prints the verified comment URL.
 
+`<plugin root>` is the installed plugin root, the directory two levels above this
+skill's own directory named by the harness when it loads the skill. Substitute that
+absolute directory before invoking a helper; it is never the target repository.
+
 ```sh
-"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" --preflight --claim-token <scope-token> <owner/name> <issue> <PR> <notes-file>
-"$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/publish-handoff" --claim-token <scope-token> <owner/name> <issue> <PR> <notes-file>
+"<plugin root>/skills/return-to-town/scripts/publish-handoff" --preflight --claim-token <scope-token> <owner/name> <issue> <PR> <notes-file>
+"<plugin root>/skills/return-to-town/scripts/publish-handoff" --claim-token <scope-token> <owner/name> <issue> <PR> <notes-file>
 ```
 
 Both modes require the caller's exact claim/scope token for this issue; never acquire
@@ -113,7 +117,7 @@ recovery rules still govern subsequent attempts. The verification/write interval
 non-atomic. Use one coherent installed plugin bundle for helper and tracker assets.
 
 Run it from the checkout whose `origin` is the repository being handed off. The path and the
-working directory are two different places: `$CLAUDE_PLUGIN_ROOT` locates the executable inside
+working directory are two different places: `<plugin root>` locates the executable inside
 the plugin cache, while the head SHA is read from `origin` at your working directory. A
 repository-relative path would resolve at neither.
 
@@ -264,7 +268,10 @@ reconciliation below only after verified closure.
 #### Release cleared dependents
 
 After verifying the merged issue is closed, run the `quest-log` skill's canonical
-recipe in Bash: `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name>`. This is the primary
+recipe in Bash: `bash "<plugin root>/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name>`.
+`<plugin root>` is the installed plugin's own root, the directory two levels above this
+skill's own directory, which the harness names when it loads the skill; it is never the
+target repository. This is the primary
 owner of the cleared-dependency `status:blocked → status:ready` edge. Report every readied
 dependent and every retained dependent with its actionable reason. Do not limit the scan to
 the merged issue's prose or comments: the recipe exhaustively evaluates canonical

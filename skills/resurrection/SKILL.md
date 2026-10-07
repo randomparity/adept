@@ -12,8 +12,11 @@ actively working the same repo. Read → plan → one confirmation → apply.
 
 1. **Resolve repo.** `gh repo view --json nameWithOwner --jq .nameWithOwner` → `owner/name`.
 2. **Sweep in-flight issues.** Fetch quest claims once
-   (`skills/quest-log/assets/tracker.sh claim-list --target <owner/name>`) for
-   the checks below. Do **not** filter with `gh issue list --label status:...` —
+   (`"<plugin root>/skills/quest-log/assets/tracker.sh" claim-list --target <owner/name>`)
+   for the checks below. `<plugin root>` is the installed plugin's own root, the directory
+   two levels above this skill's own directory, which the harness names when it loads the
+   skill; it is never the target repository. Do **not** filter with
+   `gh issue list --label status:...` —
    `gh` mis-encodes the colon and multiple `--label` flags AND (see the skill's colon-label
    gotcha), so either returns nothing. List by state once and filter **client-side**:
    `gh issue list --repo <owner/name> --state open --json number,labels,title --limit 500`,
@@ -45,7 +48,7 @@ actively working the same repo. Read → plan → one confirmation → apply.
    in-flight issue stale.
 4. **Reconcile blocked dependencies; hold other parked work.** Run the
    `quest-log` recipe in Bash:
-   `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>`. Add every returned issue to the
+   `bash "<plugin root>/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>`. Add every returned issue to the
    reconciliation table as `status:blocked → status:ready (all canonical blockers closed)`.
    This is the repair owner for a primary return-to-town edge that was interrupted or omitted.
    List all other `blocked`/`needs-human` issues as *held* with their parked-phase note (from
@@ -67,7 +70,7 @@ actively working the same repo. Read → plan → one confirmation → apply.
 6. **Plan → confirm → apply.** Present the full reconciliation table (`#issue → action`).
    List any branch before touching it. After one explicit confirmation, apply per issue;
    pass all and only the confirmed cleared-dependency issue numbers to
-   `bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name> <number>...`, then verify every
+   `bash "<plugin root>/skills/quest-log/assets/cleared-dependencies.sh" apply <owner/name> <number>...`, then verify every
    reported transition. Re-evaluation may retain an issue whose state changed after
    planning. A per-issue failure does not abort the sweep.
 

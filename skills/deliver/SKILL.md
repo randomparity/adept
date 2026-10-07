@@ -23,7 +23,11 @@ An issue-backed invocation requires its caller's exact scope token: `$deliver <i
 never acquire, recover or infer another holder's token. Issue-free invocation retains
 its existing direct commands.
 
-Use the installed plugin's `skills/deliver/scripts/deliver-write` for issue-backed
+`<plugin root>` is the installed plugin root, the directory two levels above this
+skill's own directory named by the harness when it loads the skill. Substitute that
+absolute directory before invoking a helper; it is never the target repository.
+
+Use `"<plugin root>/skills/deliver/scripts/deliver-write"` for issue-backed
 push and every PR creation/body update, with `--claim-token TOKEN REPO ISSUE` followed
 by one fixed operation: `push`, `pr-create BASE TITLE BODY-FILE`, or `pr-edit PR BODY-FILE`.
 The helper binds the current feature branch/origin and destination, then invokes the

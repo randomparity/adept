@@ -150,10 +150,14 @@ that is not a record at all, not a record's own shape.
 from the repository root, never in CI. It is one of the six gate assets below, so a repo that
 adopted the gate runs its own copy and needs nothing from this skill:
 
+`<plugin root>` is the installed plugin root, the directory two levels above this
+skill's own directory named by the harness when it loads the skill. Substitute that
+absolute directory before invoking a helper; it is never the target repository.
+
 ```sh
 # from the skill, in a repo that has not adopted the gate
-RECORD_PROFILES="adr debt" assets/migrate-records.sh
-RECORD_PROFILES="adr debt" assets/migrate-records.sh --write
+RECORD_PROFILES="adr debt" "<plugin root>/skills/tome-of-lore/assets/migrate-records.sh"
+RECORD_PROFILES="adr debt" "<plugin root>/skills/tome-of-lore/assets/migrate-records.sh" --write
 
 # from an adopted copy
 RECORD_PROFILES="adr debt" ./.github/scripts/migrate-records.sh --write
@@ -195,8 +199,11 @@ unattended (`$trial-loop` inside `$quest` or `$campaign`) wants it, because ther
 agent that wrote a record is the agent that would benefit from erasing it, and no human
 sees the intermediate state.
 
-Copy six files out of this skill's `assets/` directory. Resolve that directory from the
-installed skill package before copying rather than assuming a client-specific config root:
+Copy six files out of `<plugin root>/skills/tome-of-lore/assets/`. `<plugin root>` is the
+installed plugin's own root — the directory two levels above this skill's own directory,
+which the harness names when it loads the skill — so that names the directory from any
+install location; never assume a client-specific config root, and never read the copies from
+the adopting repository's own tree. The destinations below *are* repository-relative:
 
 | asset | destination |
 |---|---|

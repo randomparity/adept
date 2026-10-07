@@ -78,14 +78,15 @@ Rules:
 ### Recipe: reconcile cleared dependencies
 
 Resolve the asset path from the installed plugin package before invoking it rather than
-assuming a cache directory: the harness exports `${CLAUDE_PLUGIN_ROOT}` to the plugin's
-install root whenever a skill runs, so
-`"$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh"` names the asset
-from any install location. Invoke it directly in Bash — never zsh; the array and
+assuming a cache directory: `<plugin root>` is the installed plugin's own root — the
+directory two levels above this skill's own directory, which the harness names when it
+loads the skill — so `"<plugin root>/skills/quest-log/assets/cleared-dependencies.sh"`
+names the asset from any install location. Substitute it before running the command; it
+is never the target repository. Invoke it directly in Bash — never zsh; the array and
 regular-expression behavior is intentionally Bash-specific:
 
 ```bash
-bash "$CLAUDE_PLUGIN_ROOT/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>
+bash "<plugin root>/skills/quest-log/assets/cleared-dependencies.sh" plan <owner/name>
 ```
 
 `plan` prints the repair set without writes;
