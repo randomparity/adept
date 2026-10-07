@@ -397,10 +397,11 @@ it holding `*` -- temp file in `.agent/`, exit cleanup, atomic same-directory
 rename. Then verify from the worktree root that `.agent/oathbind/` is
 ignored; stop if the query is unanswerable or the path is exposed.
 
-Pick a fresh report path there and dispatch a fresh reviewer task running
-`$oathbind` -- no prior verdicts, proposed fixes, or review history in its
-brief. Inherited history is non-authoritative and cannot supply scope; the
-workflow makes no context-isolation guarantee.
+Pick a fresh report path there and dispatch a fresh-context worker running
+`$oathbind` -- never a fork, per `$trial-loop` step 1 -- with no prior verdicts,
+proposed fixes, or review history in its brief. Inherited history is
+non-authoritative and cannot supply scope. No parent conversation is carried into the
+auditor; its own system prompt, project instructions and supplied brief still apply.
 
 Pass the artifact lane as routing evidence outside the frozen charter:
 
@@ -628,7 +629,8 @@ contract and reason are evidenced; a delegating public facade with an accepted c
 finding merely because it remains in a separate file.
 
 On `iterating`, run `$trial-loop --reviewer gauntlet --base <BASE_BRANCH> <composed focus>`. On
-`single-pass`, dispatch the one `gauntlet` pass the reference specifies, with the same `--base`
+`single-pass`, dispatch the one `gauntlet` pass the reference specifies in a fresh-context
+worker — never a fork, per `$trial-loop` step 1 — with the same `--base`
 and composed focus, and give each finding its single disposition. On either route the review
 block's `failure model:` line names the reviewed spec's `Failure model` section by
 repo-relative path and heading — the loop's `failure_model` input — or `none` on a `no-spec`
@@ -744,7 +746,8 @@ record-and-close rather than the open queue). Adjacent findings take the routes
 defined below. Non-blocking: `needs-attention` is work to do, never a reason to
 park.
 
-Dispatch it the way `$trial-loop` dispatches its reviewer -- a subagent running
+Dispatch it the way `$trial-loop` dispatches its reviewer -- a fresh-context worker,
+never a fork, for the reason step 1 of that skill gives -- running
 `$detect-evil --json --out <path> --base <BASE_BRANCH> <security lens focus>` under
 [review lenses](../../references/review-lenses.md), artifact on a scratchpad path outside the
 repo tree. Keep the existing `detect-evil` route: a focus string named `security` is not a reason
@@ -797,7 +800,7 @@ description of itself. The diff qualifies when it:
   security-relevant default.
 
 When none apply, skip the pass. When you genuinely cannot tell, run it -- one
-subagent and a compact object, so the asymmetry favors running. Do not run it
+worker and a compact object, so the asymmetry favors running. Do not run it
 on every diff to be safe: a pass that finds nothing on everything teaches the
 operator to skim.
 

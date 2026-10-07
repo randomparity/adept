@@ -242,7 +242,9 @@ For each queued issue, check for artifacts from prior runs:
 - **Existing branch/PR incomplete** → **recover branch first**: if a PR exists, resolve its number from the issue link, then `gh pr view <PR> --json headRefName`; else match `feat/<short-slug>-<issue-number>` in `git branch` or `git ls-remote --heads origin` (full shape, not `*-<n>` suffix — #1 must not match ...-11). Persist to manifest. **PR-linked branch → reuse by default** (the PR explicitly names it, satisfying `$quest`'s reuse rule). **Convention-only branch → ask the user** reuse-or-restart before dispatch, and carry the operator's decision in the prompt. Deleting any branch requires explicit user confirmation
 - **No artifacts** → triage normally
 
-**Dispatch read-only triage workers** (up to 5 parallel). Each prompt carries completion notes
+**Dispatch read-only triage workers** (up to 5 parallel), each a fresh-context worker and never
+a fork, per `$trial-loop` step 1: a fork inherits this orchestrator's active dispatch, merge,
+and label instructions. Each prompt carries completion notes
 verbatim (private dispatch context — safe inside prompts). The worker investigates issue body,
 linked PRs/commits, and current code. When the issue has a native parent epic, it also reads the
 epic's goals, non-goals, decomposition, and relevant upcoming open sub-issues. Those are direction

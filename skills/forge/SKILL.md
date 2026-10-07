@@ -542,8 +542,9 @@ impact cannot be bounded, or repository policy requires the full suite here,
 run it and record why. Otherwise keep the full local suite for the final candidate
 after review fixes and simplification. This check is the first executable check
 that has seen every task's work together. Then dispatch the whole-branch review
-with [code-reviewer.md](code-reviewer.md), on the most capable model. It is the
-branch's only adversarial pass.
+with [code-reviewer.md](code-reviewer.md), on the most capable model, in a fresh-context
+worker — never a fork, per `$trial-loop` step 1, because a fork here would carry this
+run's own build instructions into the worker reviewing them. It is the branch's only adversarial pass.
 
 Its base is the branch's fork point — `git merge-base HEAD <BASE_BRANCH>`,
 recomputed here rather than carried forward, because a rebase moves it. Capture

@@ -277,9 +277,64 @@ malformed compact object follows step 2 instead, because a report that arrived i
 worker. Do not use step 2's malformed-return retry to replace a worker whose end was not observed.
 
 1. **Petition the council** — read the installed selected reviewer in full, then run it in a
-   **subagent** with
+   **fresh-context worker** with
    `--json --out <findings-path> <challenge-args>`, then the exact
    `CHARTER` block above as the labeled trailing block.
+
+   **Fresh context is the requirement, not a preference.** Dispatch a worker that starts with
+   **no parent conversation** — inheriting none of this session's conversation and none of its
+   active skill instructions. State it that way, never as an "empty" window: a non-fork
+   subagent's context is documented as starting fresh but *not* empty — it carries its own
+   system prompt, your dispatch prompt, project instructions, and tool definitions — so a
+   requirement worded as "empty" is satisfied by nothing and blocks every review.
+
+   **Never a fork** (`subagent_type: "fork"`): it inherits the caller's context,
+   and with it the caller's *active, write-capable workflow instructions*. A fork dispatched
+   from inside `$quest` reads `$quest`'s own text telling it to apply fixes, commit, push and
+   hand off, and follows it — observed four times out of four on randomparity/adept#334, under
+   a dispatch prompt that said "no correctness review, no git/PR/merge actions" in those
+   words. The prompt is not the layer where this holds. Never reuse a prior pass's reviewer as
+   this pass's either, on its own ground: that worker carries its own findings and verdict,
+   which the naivety rule below forbids. The one direct liveness probe
+   [dispatch liveness](../../references/dispatch-liveness.md) permits is not a dispatch and is
+   unaffected.
+
+   **Any mechanism providing it qualifies.** Say **worker**, not *subagent*, wherever the
+   mechanism is not the point: `subagent` names one harness's capability, and a contract that
+   demands it is unfollowable on a harness that has no such thing. A named fresh-context
+   subagent type is the usual mechanism; on Claude Code, `general-purpose` is a built-in that
+   satisfies the property. Treat that name as an example, not the contract — a roster is
+   per-installation, and even a built-in can be withdrawn. A **fresh** non-interactive process
+   of the same agent qualifies too.
+
+   **A process only qualifies while it is fresh.** Resuming a stored session is as
+   disqualifying as forking one, and for the identical reason: the session id *is* the handle
+   to the parent conversation, so the process boundary buys nothing. **Apply the test, not a
+   list:** a mechanism is out when the worker starts with the parent conversation, whatever
+   the subcommand is called. Both harnesses spell it more than one way — Claude Code has
+   `subagent_type: "fork"` and a documented subagent resume, Codex has `fork` and `resume` at
+   the top level and again under `exec` — so any enumeration here is a sample, and a reader
+   who stops at it will miss the spelling their harness added last.
+
+   **A process needs an isolated return path and an observed end.** Pass the reviewer's
+   `--out` and the agent's last-message file flag (`-o`/`--output-last-message` on Codex).
+   Capture **both stdout and stderr to private files at invocation**; the last-message flag
+   does not suppress either stream. Read only the compact final return into the caller, then
+   read the findings artifact for disposition. Do not replay the captured event/tool streams.
+   On failure, inspect only the bounded diagnostic needed to report the error, not the full log.
+
+   Run the process as one awaited invocation and retain its exit status. A tool returning a
+   session handle is still running: await that same invocation to completion. A completed
+   process exit is its observed end; a timeout, missing file or silence is not. Do not detach
+   it and infer completion from file timestamps, launch a replacement while its end is
+   unknown, or use a process ID as evidence about a harness worker. Harness-managed workers
+   retain the existing [dispatch-liveness](../../references/dispatch-liveness.md) contract.
+
+   Only where the harness offers no such mechanism, **stop as blocked** and report that it
+   cannot carry a review dispatch; a fork under a stronger prompt is not the fallback. Absence
+   means its dispatch surface documents nothing that starts a worker with no parent
+   conversation — not that you did not recognise a name on a roster it does have, and not that
+   a qualifying mechanism is spelled as a subcommand rather than a type.
 
    Restating the focus inside the block is deliberate — it keeps the charter
    self-contained for the reviewer, and both supported reviewers read the duplicate as one
@@ -412,14 +467,27 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    a concern and its owner, which is what the exclusions already say — and it is bounded,
    because a record carries no verdicts, no finding history, and no intended fixes.
 
-   The reviewer worker is read-only with respect to the target and git state
-   but **its tool allowlist must include `Write`** — `--out` writes the findings
-   file (the selected reviewer's sole write exception); without `Write`, `--out` silently
-   no-ops and the loop dead-ends. The worker's context (not this one) holds the
-   full findings; it returns only `{verdict, findings_count, blocking_count, suppressed_count,
-   path, run_id}` — `run_id` included, because steps 4 and 5 assert it against the
-   artifact and a four-field contract degrades that check to a no-op. That isolation
-   keeps the loop from stacking a full payload per pass in the caller's window.
+   **Fresh context removes inherited workflow instructions; it is not a permission sandbox.**
+   The dispatch must also carry the selected reviewer's read-only contract and a return path
+   that keeps intermediate tool output out of the caller's context.
+
+   *Read-only with respect to the target and git state.* With no parent conversation, the
+   worker does not inherit this run's active instructions to fix, commit, push or ship.
+   Project instructions, its own system prompt and tools still exist. Explicitly restrict
+   the task to review and the sole findings-file write. Where the harness exposes tool or
+   permission controls, select controls consistent with that task; do not claim fresh context
+   enforces filesystem or network access. The worker needs a supported write capability for
+   `--out` (`Write` on a harness that names it that way), with the findings destination
+   writable under the chosen permissions. If those requirements cannot coexist, stop as
+   blocked rather than run without a findings artifact or silently widen permissions.
+
+   *Payload isolation.* The worker holds the full findings and returns only
+   `{verdict, findings_count, blocking_count, suppressed_count, path, run_id}`. `run_id`
+   remains required because steps 4 and 5 match it to the artifact. The native return channel
+   must omit intermediate output; a process instead uses step 1's captured streams and final
+   return file. No-parent-context and compact output are separate preconditions: neither
+   follows from the other. The caller reads the artifact later for disposition, as step 2
+   requires; this avoids streaming each review's intermediate work into its conversation.
 
    **One exception, and it is the whole point of the error path.** Both supported reviewers use
    `$gauntlet`'s target-resolution taxonomy; when the selected reviewer
