@@ -5,18 +5,19 @@ malformed report: keep any caller-specific validation or malformed-return retry 
 
 ## Probe and hold
 
-**Ask the cheap question first.** Tracker state, a pushed branch, a file the worker writes — these
-answer "has it moved?" for the price of a shell command, not a dispatcher turn. Ask them from a
-background task, not from the model.
+**Diagnose from evidence when needed.** A blocker, failure, user request or task-appropriate
+deadline can trigger one reconciliation of reports, tracker/branch artifacts and harness state.
+Healthy waiting needs no discretionary status reads. An unchanged wait timeout is not a
+diagnostic trigger; a deadline permits diagnosis, never replacement by itself.
 
 **Nothing derived from a timestamp distinguishes alive from ended.** Commit age, elapsed time,
 tracker inactivity, and a missing artifact narrow which waits are worth a second look and do
 nothing else. None of them authorizes replacement, and a run that has started treating the commit
 stream as its liveness signal has already left this contract.
 
-**One probe per worker per run.** After roughly ten minutes of silence a dispatcher may send the
-worker one direct, non-destructive probe, then wait through the next normal collection point — no
-more than roughly ten further minutes — for the reply. A reply of any content proves the worker
+**One probe per worker per run.** When diagnosing unexpected silence of roughly ten minutes,
+a dispatcher may send the worker one direct, non-destructive probe, then wait through the next
+normal collection point — no more than roughly ten further minutes — for the reply. A reply of any content proves the worker
 alive. No reply proves nothing, and it ends the probe budget: the wait becomes a hold.
 
 **A report proves the worker was alive when it wrote the report, and nothing more.** Its content is
@@ -40,15 +41,44 @@ at reconciliation with the same replacement budget.
 
 ## Waiting mechanics
 
-**Never wait by foreground sleep polling.** Every wake of a sleep-and-check loop replays the
-dispatcher's full context — skill text, run history and all — through the model, so an hour of
-five-minute sleeps costs more than the report it waits for. A wait must cost zero model turns
-until it ends.
+1. **Record the handoff.** In the owning workflow's existing record, retain the worker, expected
+   compact report/artifacts, wait site, task-appropriate deadline and recovery-chain budgets.
+2. **Do useful independent work.** Dispatch through the available interface, then drain eligible
+   work. Serial ordering means awaiting the required result before advancing dependent work;
+   it does not require a blocking-dispatch field.
+3. **Await the needed event.** Prefer native completion notification or the exposed bounded wait.
+   A supported foreground dispatch also works when its result is needed immediately. Select
+   intervals within the actual schema and higher-priority progress requirements. With nothing
+   else eligible, say what is pending and wait; do not manufacture status reads.
+4. **Continue an unchanged wait.** A timeout with no new event leaves the same worker pending.
+   Re-enter the supported wait without extra diagnostics. Required progress messages use known
+   evidence. Count such turns separately; notification, timeout and progress costs depend on
+   the harness. Neither a waiting indicator nor elapsed time establishes token usage.
+5. **Reconcile once, then act.** On the needed event or diagnostic trigger above, validate the
+   report and relevant artifacts, update the existing record, and advance or diagnose. Report
+   receipt, task success and observed end are separate facts; apply the recovery rules below.
 
-Two mechanisms cost zero. Prefer the harness's completion notification. Where the workflow waits
-on durable state rather than on a report — a tracker row, a pull request, a pushed branch — put
-the entire wait in **one** background shell task that blocks until the condition holds or its own
-deadline expires, and read it once when it returns:
+Check the active schema rather than copying a flag from another harness:
+
+- **Codex native agents:** the observed `collaboration.spawn_agent` is asynchronous with no
+  blocking field. Keep its identity and use `collaboration.wait_agent(timeout_ms: 60000)` when
+  that interval fits the active instructions; consume mailbox updates and final notifications.
+  A mailbox wake may be a message rather than an end. Other surfaces may expose different tools.
+- **Claude Code native agents:** when `Agent` exposes `run_in_background`, `false` requests
+  foreground execution; background agents notify on completion. Some modes omit that field.
+  Use the exposed notification/wait path, never an invented `background: false` argument.
+- **CLI workers:** `codex exec` or `claude -p` is a subprocess. Await its original process handle
+  and collect its exit/report. A completed process exit observes that process's end, not the
+  end of independently backgrounded workers. A yielded handle or timeout proves neither.
+- **A worker's inner tool wait:** retain the long command's handle and await that invocation.
+  A coordinator wait/progress turn does not restart the command or imply the worker can reply.
+
+These examples were checked against the [bounded capability evidence](../docs/benchmarks/positive-monitoring-344.md).
+Unsupported notification, wait or usage capabilities must be stated, not assumed.
+
+For a wait on durable state rather than a worker report, use **one** bounded background shell
+operation for the whole condition wait, then read its result. Never foreground sleep-and-check
+polling. This avoids discretionary model checks, not a promise of zero model turns or tokens.
 
 Use the Bash 3.2 `bounded_call` function from [network bounds](network-bounds.md#the-mechanism)
 in that background task; it needs no `timeout` or `gtimeout` command. Define that function first,
@@ -67,7 +97,7 @@ printf 'wait ended: %s\n' "$rc"
 exit "$rc"
 ```
 
-The `sleep` runs in the shell, where it is free. Set the outer bound to the longest the wait
+The `sleep` runs inside the shell operation. Set the outer bound to the longest the wait
 could legitimately take, so the read returns a result rather than a reason to open another wait.
 The bound covers the whole child shell, including a condition that does not return; checking a
 deadline only between condition attempts would not. A nonzero condition status means pending in
@@ -82,8 +112,9 @@ busy.
 
 ## Observed end and reconciliation
 
-Only the harness's end-of-run notification, or a dispatcher-requested stop followed by that
-notification, proves the worker ended. Before replacement, enumerate the durable evidence the
+For a native agent, only the harness's end-of-run notification, or a dispatcher-requested stop
+followed by that notification, proves the worker ended. For a CLI worker, require the completed
+process exit described above. Before replacement, enumerate the durable evidence the
 dispatcher can reach: reports, tracker state, branch or commit state, and worktree changes. Record
 the disposition of each artifact, establish ownership, resolve conflicts or inaccessible required
 evidence, and check once more for a late valid report.

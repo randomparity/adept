@@ -345,16 +345,10 @@ either choice could be wrong.
 
 ### Silent party workers
 
-**The party's dispatches are serial, so dispatch them blocking** — set `background: false` on the
-implementer, the whole-branch review, and the fix worker that follows it. Nothing here can proceed
-until the current worker returns: the next task builds on the previous one's commits, the review
-package needs every task's commits, and the fix worker needs the review. A backgrounded dispatch
-buys no parallelism there and costs a turn every time this session wonders how it is going. A
-dispatcher blocked on a worker cannot poll it, which removes the failure mode instead of governing
-it.
-
-The contract below still applies to a blocking dispatch, because a blocking dispatch can still end
-without a report.
+**The party's dispatches are serial.** Await the implementer before the next task, every task
+before the whole-branch review, and that review before its fix worker. Use a supported foreground
+dispatch when the result is needed immediately, or asynchronous dispatch followed by the exposed
+notification/wait path. Follow the shared procedure below; no blocking flag is portable.
 
 The implementer, whole-branch reviewer, and fix worker are separate report waits.
 Apply [dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md) to
