@@ -316,25 +316,19 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    the top level and again under `exec` — so any enumeration here is a sample, and a reader
    who stops at it will miss the spelling their harness added last.
 
-   **Two things a process route owes that a subagent gets for free.** Neither follows from the
-   absent parent conversation, so requiring the property alone is not enough when the
-   mechanism is a process.
+   **A process needs an isolated return path and an observed end.** Pass the reviewer's
+   `--out` and the agent's last-message file flag (`-o`/`--output-last-message` on Codex).
+   Capture **both stdout and stderr to private files at invocation**; the last-message flag
+   does not suppress either stream. Read only the compact final return into the caller, then
+   read the findings artifact for disposition. Do not replay the captured event/tool streams.
+   On failure, inspect only the bounded diagnostic needed to report the error, not the full log.
 
-   *Route the return through a file, never the dispatcher's stdout.* A subagent returns only
-   its final message; a process writes its result to stdout, and a foreground invocation hands
-   that straight to the dispatcher — which puts the full findings payload in the caller's
-   context, defeating `--out` and the compact object silently, once per pass. Pass `--out` and
-   the agent's own last-message file flag (`-o`/`--output-last-message` on Codex), and read the
-   compact object from that file rather than from the invocation's output.
-
-   *Run it in the foreground, so its exit is the observed end.*
-   [Dispatch liveness](../../references/dispatch-liveness.md) is written for a harness-managed
-   run: it wants an end-of-run notification, permits one direct probe, and budgets one
-   replacement. A spawned process has none of those — no notification, no inbound channel, no
-   agent run-state — so a backgrounded one leaves the dispatcher with no way to establish an
-   observed end, and nothing derived from a timestamp is allowed to substitute. A blocking
-   invocation removes the question instead of governing it: the process returns, its exit
-   status is the observed end, and there is no wait to recover from.
+   Run the process as one awaited invocation and retain its exit status. A tool returning a
+   session handle is still running: await that same invocation to completion. A completed
+   process exit is its observed end; a timeout, missing file or silence is not. Do not detach
+   it and infer completion from file timestamps, launch a replacement while its end is
+   unknown, or use a process ID as evidence about a harness worker. Harness-managed workers
+   retain the existing [dispatch-liveness](../../references/dispatch-liveness.md) contract.
 
    Only where the harness offers no such mechanism, **stop as blocked** and report that it
    cannot carry a review dispatch; a fork under a stronger prompt is not the fallback. Absence
@@ -473,28 +467,27 @@ worker. Do not use step 2's malformed-return retry to replace a worker whose end
    a concern and its owner, which is what the exclusions already say — and it is bounded,
    because a record carries no verdicts, no finding history, and no intended fixes.
 
-   **Two properties this loop depends on rest on step 1's dispatch, not on the reviewer's
-   prompt.** Each is written below as what the absent inheritance buys and what restoring it
-   costs. A reader who satisfies them by telling the worker to be read-only has satisfied
-   neither. Read-only follows from the absent parent conversation alone; payload isolation
-   also needs step 1's file-mediated return, which is why a process route has to be told to
-   use one.
+   **Fresh context removes inherited workflow instructions; it is not a permission sandbox.**
+   The dispatch must also carry the selected reviewer's read-only contract and a return path
+   that keeps intermediate tool output out of the caller's context.
 
-   *Read-only with respect to the target and git state.* A context with no parent
-   conversation carries no instruction to commit, push, or ship, so the only workflow the worker
-   can act on is the one its own prompt gives it. Restore the inheritance and the
-   prompt loses to it. The single write it does make is the findings file, so **its
-   tool allowlist must include `Write`** — `--out` writes that file (the selected
-   reviewer's sole write exception); without `Write`, `--out` silently no-ops and the
-   loop dead-ends.
+   *Read-only with respect to the target and git state.* With no parent conversation, the
+   worker does not inherit this run's active instructions to fix, commit, push or ship.
+   Project instructions, its own system prompt and tools still exist. Explicitly restrict
+   the task to review and the sole findings-file write. Where the harness exposes tool or
+   permission controls, select controls consistent with that task; do not claim fresh context
+   enforces filesystem or network access. The worker needs a supported write capability for
+   `--out` (`Write` on a harness that names it that way), with the findings destination
+   writable under the chosen permissions. If those requirements cannot coexist, stop as
+   blocked rather than run without a findings artifact or silently widen permissions.
 
-   *Payload isolation.* The worker's context (not this one) holds the full findings;
-   it returns only `{verdict, findings_count, blocking_count, suppressed_count, path,
-   run_id}` — `run_id` included, because steps 4 and 5 assert it against the artifact
-   and a four-field contract degrades that check to a no-op. What that buys is a
-   caller window carrying verdicts instead of payloads, one pass after another. A
-   worker that inherited the caller's window has already spent the saving, whatever
-   it returns.
+   *Payload isolation.* The worker holds the full findings and returns only
+   `{verdict, findings_count, blocking_count, suppressed_count, path, run_id}`. `run_id`
+   remains required because steps 4 and 5 match it to the artifact. The native return channel
+   must omit intermediate output; a process instead uses step 1's captured streams and final
+   return file. No-parent-context and compact output are separate preconditions: neither
+   follows from the other. The caller reads the artifact later for disposition, as step 2
+   requires; this avoids streaming each review's intermediate work into its conversation.
 
    **One exception, and it is the whole point of the error path.** Both supported reviewers use
    `$gauntlet`'s target-resolution taxonomy; when the selected reviewer

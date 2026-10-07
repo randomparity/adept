@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-07)
+Accepted (2026-10-07)
 
 ## Context
 
@@ -22,8 +22,8 @@ Cite that page specifically. `code.claude.com/docs/en/sub-agents` covers the sam
 different words and carries neither phrase, so "the subagent documentation" unqualified sends a
 later reader to a page that appears to contradict this record.
 
-A fork inherits the caller's conversation by definition. It therefore defeats the payload
-isolation outright, and — the load-bearing half — it inherits the caller's *active,
+A fork inherits the caller's conversation by definition. It defeats fresh-context isolation
+and inherits the caller's *active,
 write-capable workflow instructions*. A fork dispatched from inside `$quest` reads `$quest`'s
 own text telling it to apply fixes, commit, push, and hand off. "Read-only with respect to git
 state" is then a property nothing enforces: the prompt says read-only and the inherited context
@@ -34,8 +34,7 @@ Issue [#334](https://github.com/randomparity/adept/issues/334) records the outco
 that said, in those words, "no correctness review, no git/PR/merge actions". All four overrode
 every prohibition and independently carried the rest of the quest pipeline to completion —
 commit, push, PR creation, and the `MERGE-READY` handshake — and one dispatched a further
-sub-agent that did the same. Four out of four with a nested instance is deterministic inherited
-behaviour, not a race.
+sub-agent that did the same. The repeated result is the evidence for removing inherited workflow instructions.
 
 Eleven further dispatch sites restate that recipe inline — all three in
 `references/review-depth.md`, `$quest`'s `$oathbind`, single-pass branch-review and
@@ -57,8 +56,7 @@ and one worked example can resolve their own harness; a reader given only a proh
 
 **The clauses say `worker`, not `subagent`.** [ADR
 0011](0011-canonical-workflow-review-vocabulary.md) already reserves `worker` for "a dispatched
-agent **or process**", and `skills/summon-swarm/SKILL.md` instructs readers to "Reserve
-`subagent` for a literal harness/API capability, never a workflow role". A clause demanding a
+agent **or process**". A clause demanding a
 *subagent* therefore reads, correctly, as demanding one harness's capability — which is
 unfollowable where that capability does not exist. `subagent_type: "fork"` keeps the narrow noun
 because there it *is* the literal capability being forbidden.
@@ -83,9 +81,13 @@ subject along with the other mutating dispatches below — not by an exemption a
 because the population never included them. Stating that here spares a later auditor re-deriving
 it to tell a considered call from a missed site.
 
-**3. The two dependent properties are written as consequences of the dispatch type, not as
-assertions.** Each says what the absent inheritance buys and what restoring it costs, so a
-reader cannot satisfy the sentence by telling the worker to be read-only.
+**3. State the independent preconditions.** Fresh context removes inherited active workflow
+instructions; it does not enforce read-only tools or filesystem permissions. The worker still
+receives project instructions and its own prompt. Require the review-only task, a writable
+findings destination, compatible permission controls, and a compact return channel. For a
+process, capture both output streams privately and read the final return file: `-o` alone does
+not suppress streamed output. Await the one process to an actual exit before treating it as
+ended. A tool session handle, silence or timeout is not an observed end.
 
 **4. Any dispatch mechanism satisfying the property qualifies, and only a harness offering none
 stops as blocked.** What the contract requires is the isolation, not a particular way of
@@ -125,49 +127,32 @@ narrow, and on both consumers this repository declares, it does not fire.
 **Claude Code** satisfies it with a built-in: a non-fork subagent's context "starts fresh, with no
 parent conversation", and `general-purpose` is invocable without defining anything.
 
-**Codex satisfies it too, through a purpose-built surface — but only one of the two spellings.**
-codex-cli 0.153.4, current at the time of writing, ships both `codex review` and
-`codex exec review`. They are not interchangeable here, and the difference decides which one a
-`$trial-loop` dispatch can use.
+**Codex has a qualifying native route in the active harness.** Its `spawn_agent` tool
+accepts `fork_turns: "none"`, documented to omit surrounding conversation. Explicitly select
+that value: the default is `all`. This is a runtime example, not a requirement that every
+Codex installation expose the same tool. Pass only the permitted reviewer task and inputs;
+do not copy the controller's conversation into the new prompt.
 
-`codex exec review` is the one that carries a return path. It takes `--base <branch>`,
-`--uncommitted`, or `--commit <sha>` plus custom review instructions, mapping onto the target and
-focus arguments the loop already sends, and it carries `--output-schema <file>` to constrain the
-final response to a JSON Schema, `-o/--output-last-message <file>` to write it, `--json`, and
-`--ephemeral` to skip session persistence. The two file flags are the compact object's return
-path, and a process route needs them: a process writes its result to stdout, which a foreground
-invocation hands straight to the dispatcher.
+A fresh non-interactive `codex exec` is another possible mechanism, subject to the same
+output and permission checks. Local `codex-cli 0.160.1` help on 2026-10-07 confirms
+`--sandbox`, `--output-schema`, `-o/--output-last-message`, and `--ephemeral` on `exec`.
+The [non-interactive documentation](https://developers.openai.com/codex/noninteractive)
+describes progress on stderr and the final message on stdout. Capture both before invoking;
+writing a last-message file does not isolate those streams. A strict read-only sandbox alone
+cannot satisfy a reviewer that must write its findings: establish a supported writable scratch
+destination without granting target-write authority, or use a qualifying native worker.
+No default sandbox or permission exception is assumed by this decision.
 
-It does **not** carry `-s/--sandbox`. That flag is on `codex exec` itself and on neither review
-subcommand — `codex exec review --sandbox read-only` exits with `unexpected argument
-'--sandbox'` at this version. A dispatcher that needs the sandbox stated explicitly uses plain
-`codex exec --sandbox read-only` and puts the review instructions in the prompt, composing the
-diff itself instead of getting `--base`; one that uses `codex exec review` accepts whatever
-sandbox that subcommand applies, which its help output does not state. Neither route changes this
-record's decision — both start a fresh process with no parent conversation — but the record must
-not hand a Codex reader a flag combination that errors.
+Do not treat `codex review` and `codex exec review` as interchangeable with plain `exec`.
+Their options differ: at the checked version `--sandbox` belongs to `exec`, not the review
+subcommands. A dispatcher must verify its actual invocation surface and artifact permissions
+before choosing a route; this record does not prescribe a review-subcommand flag combination.
+`fork` and `resume`, including their `exec` forms, are not fresh starts.
 
-`codex review` is not. Its complete option set at this version is `-c/--config`,
-`--strict-config`, `--enable`, `--disable`, `--uncommitted`, `--base`, `--commit`, `--title` and
-`-h`: no sandbox flag, no output schema, no last-message file. A dispatch composed against it has
-no way to return the compact object, which is the loop's whole return path.
-
-Each `codex exec` run is a fresh process, so it starts with no parent conversation by
-construction. Pass `--sandbox read-only` explicitly rather than relying on a default: the
-`codex exec --help` output for this version lists the three sandbox values without marking one as
-default, so the default is not established by the evidence this record cites.
-
-Both disqualifying spellings must be forbidden, not just the one named `fork`. Codex ships
-`fork` **and** `resume` at the top level and again under `exec`; `codex exec resume --last`
-continues the most recent session, which is the inheritance this record exists to prevent,
-reached without the word "fork" appearing anywhere.
-
-An earlier draft of this record asserted the opposite: that Codex exposed no qualifying surface
-and would stop as blocked for every review. That was wrong. It was reached by reading `codex
---help` for subagent-type vocabulary and passing over the `review` subcommand on the same screen,
-which is the same naming-over-property mistake decision 4 now forbids the contract from making.
-The correction is recorded here rather than silently applied, because the false claim is what a
-`MAJOR`-shaped consequence would have been argued from.
+Earlier drafts incorrectly claimed Codex had no qualifying mechanism, then claimed a default
+sandbox and attributed flags to the wrong command. Those claims were withdrawn after local
+help checks. The correction preserves the original requirement: verify actual isolation and
+return behavior, rather than infer capability or defaults from a command's name.
 
 The contract binds review and read-only-worker dispatch only. `$forge`'s Party implementers, its
 post-review fix worker, and `$campaign`'s `$quest` workers are mutating by design, and
@@ -211,10 +196,10 @@ new prose: anatomy rule 4 forbids it, and the structural gates are unchanged.
   reuse/simplification/efficiency/altitude issues and report findings, under 200 words each — no
   correctness review, no git/PR/merge actions" — and every prohibition in it was overridden. The
   prompt is not the layer where this holds.
-- **Bound the worker with its tool allowlist instead of its type.** verified:
-  `skills/trial-loop/SKILL.md` requires `Write` in the reviewer's allowlist, because `--out`
-  is the loop's whole return path and silently no-ops without it. An allowlist that must grant
-  `Write` cannot be what bounds writing.
+- **Use a tool allowlist instead of separating the conversation.** judgment: permission controls
+  remain useful, but do not remove inherited active workflow instructions. The reviewer's
+  findings-file write must remain possible, so choose compatible controls and retain both
+  requirements rather than presenting either one as a substitute for the other.
 - **Do nothing.** verified: #334 records four dispatches, four pipeline completions, one nested
   instance, four agent identities acting on one issue, a worktree removed from under a live
   poller, and a scratch file rewritten between its own write and read. A duplicate PR on a live

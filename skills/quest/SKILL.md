@@ -400,8 +400,8 @@ ignored; stop if the query is unanswerable or the path is exposed.
 Pick a fresh report path there and dispatch a fresh-context worker running
 `$oathbind` -- never a fork, per `$trial-loop` step 1 -- with no prior verdicts,
 proposed fixes, or review history in its brief. Inherited history is
-non-authoritative and cannot supply scope, and the absent parent conversation is
-what makes the brief the whole of what the auditor has.
+non-authoritative and cannot supply scope. No parent conversation is carried into the
+auditor; its own system prompt, project instructions and supplied brief still apply.
 
 Pass the artifact lane as routing evidence outside the frozen charter:
 

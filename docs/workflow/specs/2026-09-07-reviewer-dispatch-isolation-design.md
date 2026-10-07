@@ -14,7 +14,7 @@ and is satisfied by any dispatch mechanism providing it.
 Scope is skill and reference prose. Mutating-worker dispatch — `$forge`'s Party implementers and
 post-review fix worker, `$campaign`'s `$quest` workers — is an approved non-goal, as are any
 script or harness change, any automated gate over the new prose (anatomy rule 4), and
-`$summon-swarm`'s external `codex exec` workers, which are not harness subagents.
+the removed `$summon-swarm` dispatch sites.
 
 ## Requirements
 
@@ -44,9 +44,10 @@ already sent them to step 1.
 
 **R3.** The passage at `skills/trial-loop/SKILL.md` that today asserts the reviewer worker "is
 read-only with respect to the target and git state" and that its context isolation "keeps the
-loop from stacking a full payload per pass" is rewritten as precondition-plus-consequence. Each
-property says what the absent inheritance buys and what restoring it costs. Neither reads
-as something the prompt establishes.
+loop from stacking a full payload per pass" is rewritten as precondition-plus-consequence. Fresh context removes inherited active workflow instructions, not permission capabilities.
+A review-only task and compatible writable findings destination are also required. Native
+returns omit intermediate output; process routes capture both streams and read only the final
+return file, then await the process exit. No default sandbox is assumed.
 
 **R4.** Every site that restates the dispatch inline carries a clause stating the fresh-context
 requirement and the `fork` prohibition, and cites `$trial-loop` step 1 for the reason. **A site
@@ -83,13 +84,21 @@ as self-sufficient, so the clause belongs wherever such a dispatch call is compo
 with no exceptions is shorter to apply than one with a defended exemption.
 
 The clauses say **worker**, not *subagent*. ADR 0011 already reserves `worker` for "a dispatched
-agent or process", and `$summon-swarm` instructs readers to reserve `subagent` for a literal
-harness capability, so a clause demanding a subagent is unfollowable where no such capability
-exists. `subagent_type: "fork"` keeps the narrow noun, because there it names the capability
+agent or process", so a clause demanding a subagent is unfollowable where no such capability exists. `subagent_type: "fork"` keeps the narrow noun, because there it names the capability
 being forbidden.
 
 `skills/forge/SKILL.md`'s "Subagents inherit nothing" is the same voidable assertion at a
 mutating-worker site, inside the approved exclusion. It is carried as a follow-up candidate.
+
+## Failure model
+
+Inherited parent conversation and active write-capable workflow instructions, resuming an old
+review, leaking process output into the caller, and incompatible findings-file permissions are
+reachable failures. Require a fresh worker, an independent review-only task, captured process
+streams or a compact native return, and a writable private findings artifact. A timeout does
+not prove worker termination. General model disobedience and malicious project instructions
+are not solved by context separation; this change claims no permission sandbox. Mutating-worker
+dispatch remains excluded by the operator, with the forge assertion reported as a follow-up.
 
 ## Validation
 
@@ -116,4 +125,4 @@ they take a focused mode rather than hiding behind the prose reason.
   `.claude-plugin/plugin.json` left at the base version and `BASE_SHA` set to the merge base,
   `just version-check` exits non-zero naming the unbumped version. Expected green after the bump:
   `BASE_SHA=$(git merge-base HEAD origin/main) just version-check` exits 0.
-- **Whole-change gate.** `just verify` exits 0.
+- **Whole-change gate.** The managed pre-push `just ci` tests the final candidate; CI runs independently.
