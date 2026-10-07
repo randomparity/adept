@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-10-07). Amends ADR0048's existing-comment recovery exclusion only.
+Accepted (2026-10-07)
 
 ## Context
 
@@ -12,6 +12,8 @@ the verified line is present, no closing record exists and original inputs remai
 ADR0048's publication-absence recovery cannot admit that state.
 
 ## Decision
+
+Amends ADR0048's existing-comment recovery exclusion only.
 
 Add a separate human-authorized reconciliation route for exactly one existing matching
 comment, unchanged delivered PR HEAD and original retained private inputs. Quest
