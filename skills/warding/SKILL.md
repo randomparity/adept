@@ -48,7 +48,10 @@ require one explicit user confirmation before any GitHub write, branch push, or 
 
    - **Warn** — no `stale` label, and `updatedAt` older than `STALE_AFTER` (default 90 days):
      post a `GROOM:STALE` annotation naming the grace period and the reopen path, **then** add
-     `stale`. Never close on this pass.
+     `stale`. Compose it with both markers — `<!-- GROOM:STALE -->` and
+     `<!-- STALE:COMPLETE -->`, the one pair that does not start with `WORK:` — and post it
+     through the [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation),
+     which refuses a block missing either. Never close on this pass.
    - **Close** — carries `stale`, applied longer ago than `GRACE` (default 30 days), with no
      activity since: close as **not planned**, keeping the `stale` label.
    - **Revive** — carries `stale`, with activity after the label was applied: remove `stale`

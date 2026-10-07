@@ -70,23 +70,30 @@ Unit tests support two refinements while iterating:
   assertion line — for inspecting a failure or a suspiciously quiet pass (the quiet
   default hides warnings a passing suite printed).
 
-Selection speeds up iteration; it never substitutes for `just verify` before shipping —
-CI and the pre-push hook always run the full suite set.
+Selection speeds up iteration; it never substitutes for final full coverage.
+The managed pre-push hook runs `just ci` against the pushed commit and owns
+this repository's final full local gate after review and simplification. Do not
+run an equivalent `just verify` immediately before `git push` merely to repeat
+it. CI independently runs the full suite. If the hook is absent or does not
+cover the pushed commit, run `just verify` on the final candidate before
+shipping; never bypass a required hook or treat a failed hook as a pass.
 
 The recipe uses just's `[positional-arguments]` attribute, so it requires `just` ≥ 1.29
 (the release that added the attribute); older binaries fail at parse time.
 
 `just plugin-check` runs `claude plugin validate ./ --strict`, which passes at exit 0 with no warnings. Any warning is a defect.
 
-`just version-check` runs `scripts/check-plugin-version.sh`. `.claude-plugin/plugin.json` declares a `version`, and **every change bumps it** — see [ADR 0022](docs/adr/0022-versioned-manifest-and-bump-gate.md). The field pins the plugin: the harness skips an update when the installed version matches the declared one, so a version left alone is a change that never reaches an installed copy, silently. The gate's three rules are that the version exists, that it is `MAJOR.MINOR.PATCH` with no prerelease or build suffix, and that it is strictly greater than the base ref's whenever the tree differs from `BASE_SHA` at all.
+`just version-check` runs `scripts/check-plugin-version.sh`. `.claude-plugin/plugin.json` declares a `version`, and **every change bumps it** — see [ADR 0022](../docs/adr/0022-versioned-manifest-and-bump-gate.md). The field pins the plugin: the harness skips an update when the installed version matches the declared one, so a version left alone is a change that never reaches an installed copy, silently. The gate's three rules are that the version exists, that it is `MAJOR.MINOR.PATCH` with no prerelease or build suffix, and that it is strictly greater than the base ref's whenever the tree differs from `BASE_SHA` at all.
 
 Bump `MAJOR` when a skill is removed or renamed or an invocation's contract breaks, `MINOR` when a skill or reference is added or gains a capability, `PATCH` otherwise. The version lives in `.claude-plugin/plugin.json` only; `plugin.json` outranks the marketplace entry in the harness's resolution order, so a second copy could only disagree with the first.
+
+Under ADR 0022, `.claude-plugin/plugin.json` is this repository's mandatory shared per-PR edit. A campaign reserves one distinct version per row in ascending planned merge order. A blocked row's reservation is skipped, never recycled; only the orchestrator reassigns a reservation made stale by a moved base.
 
 The bump rule needs `BASE_SHA`, which CI sets and a local run does not. `just verify` on a workstation therefore checks the first two rules only and says so; the forgotten bump is caught by the required check in CI.
 
 `just records` enables only the `adr` profile. A record profile fails when its directory exists at neither the base ref nor the tree, and `docs/debt/` cannot be created empty — the debt profile exempts no `README.md` the way the adr profile does. Add `debt` to the profile list in the same commit as the first deferral record.
 
-`git push` runs the managed pre-push hook (`scripts/pre-push-hook`, installed by `just hooks`), which re-runs the entire `just verify` suite in an isolated worktree — this regularly exceeds a 2-minute default tool timeout and is not a hang. Run `git push` as a background task with a long timeout (or a foreground call with `timeout` raised well above 2 minutes) rather than re-invoking it after an apparent timeout, which only restarts the same suite.
+`git push` runs the managed pre-push hook (`scripts/pre-push-hook`, installed by `just hooks`), which re-runs the entire `just verify` suite in an isolated worktree — this regularly exceeds a 2-minute default tool timeout and is not a hang. Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification. For `git push`, raise the timeout well above 2 minutes rather than re-invoking it after an apparent timeout, which only restarts the same suite.
 
 ## Conventions
 
@@ -99,6 +106,8 @@ The bump rule needs `BASE_SHA`, which CI sets and a local run does not. `just ve
 
 ## Instruction files
 
-`CLAUDE.md` is the only repository instruction file. There is deliberately no `AGENTS.md` duplicating it: two documents stating the same rules is the drift problem this project spent real effort removing.
+`.claude/CLAUDE.md` is the only repository instruction file. There is deliberately no `AGENTS.md` duplicating it: two documents stating the same rules is the drift problem this project spent real effort removing.
+
+It lives under `.claude/` rather than at the repository root because the root is also the plugin root. `claude plugin validate --strict` warns that a root `CLAUDE.md` is not loaded as plugin context, and `just plugin-check` treats that warning as a defect. Claude Code loads `.claude/CLAUDE.md` as project instructions all the same. Do not add a root `CLAUDE.md`.
 
 `.codex-plugin/plugin.json` lets Codex consume the skills in this repo; Codex reads the same `.claude-plugin/marketplace.json` to find the plugin. That is Codex consuming adept, not Codex developing it — if development work ever happens here through Codex, decide then whether to point `AGENTS.md` at this file rather than copy it.

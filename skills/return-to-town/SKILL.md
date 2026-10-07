@@ -21,7 +21,10 @@ integration is advisory evidence for the observed head/base snapshot: GitHub's g
 atomically protects only the head, so report the residual base-advance race and never claim the
 landed base combination was locally tested.
 
-PR-only tracking uses complete `WORK:TRAJECTORY` blocks on the pull request. Each transition first
+PR-only tracking uses complete `WORK:TRAJECTORY` blocks on the pull request. Compose every block
+under this contract with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a block
+missing either. Each transition first
 posts and reads back `outcome: pending`, changes and reads back labels, then posts and reads back a
 matching `outcome: applied`. Labels are current state; a pending block without its matching applied
 block is interrupted intent to reconcile. Use the caller's stable run token and include version,
@@ -72,16 +75,73 @@ When the `OPEN` route satisfies `$deliver`'s exit condition, you are at the hand
 ## Record the author handshake
 
 Before choosing the default or operator-authorized path, record the hand-off (quest-log
-skill): post a `WORK:TRAJECTORY` comment on the
-issue with `outcome: handed off — PR #N green+mergeable, awaiting human merge`, guardrail
-status, and any surprises.
+skill). Write the narrative to a notes file — `outcome: handed off — PR #N green+mergeable,
+awaiting human merge`, guardrail status, and any surprises — and let the helper post it. Write
+it only once the work is finished; "the pull request is green" is not that moment.
 
-**That comment carries the handshake.** Add a whole line reading `MERGE-READY: #<N> @
-<HEAD_SHA>`, where `HEAD_SHA` is the full 40-character SHA from `git ls-remote origin
-"refs/heads/<branch>" | cut -f1` — never `headRefOid`, never an abbreviation. Write it only
-once the work is finished; "the pull request is green" is not that moment. Read the complete
-comment back and verify the markers, pull request number, and exact SHA. A failed, partial, or
-unverifiable write holds both paths; it never authorizes a merge.
+Put that file **outside the checkout**, in a directory of its own —
+`notes_dir=$(mktemp -d)`, which the helper's own scratch directory already models — and remove
+it once the helper has exited 0. Two reasons, and the second is not the obvious one. An
+untracked file left in the branch's worktree makes the `git worktree remove` below refuse, and
+the `--force` that would clear it is forbidden there for reasons that have nothing to do with
+this file. And a bare `/tmp` is world-writable on a shared host: the narrative is read again
+after two network round trips, so a file another local user can replace is a file whose
+published bytes are not the bytes that were checked. `mktemp -d` is 0700 and costs one word.
+
+**The helper owns the annotation, and you own only the narrative.** `publish-handoff` writes
+the opening marker, the closing sentinel, and the `MERGE-READY` handshake line itself; your
+notes file must contain none of the three, and it is refused if it does. It reads the head SHA
+from `git ls-remote origin` — never `headRefOid`, never an abbreviation — requires GitHub's
+`headRefOid` to agree with it, and refuses when they disagree, because that is the moment the
+SHA a handshake would bind has already gone stale. It binds the destination to the pull
+request, requiring the issue to be one the pull request closes. It asserts every byte-level
+condition the merge gate checks, first on the body it composed and again on the copy GitHub
+stored, and prints the verified comment URL.
+
+`<plugin root>` is the installed plugin root, the directory two levels above this
+skill's own directory named by the harness when it loads the skill. Substitute that
+absolute directory before invoking a helper; it is never the target repository.
+
+```sh
+"<plugin root>/skills/return-to-town/scripts/publish-handoff" --preflight --claim-token <scope-token> <owner/name> <issue> <PR> <notes-file>
+"<plugin root>/skills/return-to-town/scripts/publish-handoff" --claim-token <scope-token> <owner/name> <issue> <PR> <notes-file>
+```
+
+Both modes require the caller's exact claim/scope token for this issue; never acquire
+or recover a claim here. Preflight retains bounded read-only discovery/full composition
+and performs no claim verification or write. Normal publication verifies through the
+same-root canonical tracker on github.com immediately before comment creation. Lost
+claims preserve exit2/6, holder diagnostics and the local checkout path, with no comment;
+transport4 does not authorize reacquisition. Existing one-time publication and explicit
+recovery rules still govern subsequent attempts. The verification/write interval is
+non-atomic. Use one coherent installed plugin bundle for helper and tracker assets.
+
+Run it from the checkout whose `origin` is the repository being handed off. The path and the
+working directory are two different places: `<plugin root>` locates the executable inside
+the plugin cache, while the head SHA is read from `origin` at your working directory. A
+repository-relative path would resolve at neither.
+
+Exit 0 succeeds, 1 means a condition failed, 2 means the helper could not run. A nonzero exit
+holds both paths and never authorizes a merge. Re-run it once — unless the exit names an exceeded network bound, which has its own rule below —
+rather than diagnosing the block by hand. **If the identical condition fails a second time the failure is deterministic** — stop
+re-running and inspect the issue. If a complete block is there, the hand-off is published: proceed
+from it. If there is none, nothing was posted: report the failure and stop. A nonzero exit does not
+by itself mean nothing was posted; some conditions are checked after the comment is created, so an
+unbounded retry appends one more public comment per pass while the merge stays held. The named
+instance is a stored comment differing byte-for-byte from the composed body while every gate
+condition still holds on it: a usable block is already on the issue. It is the example, not the
+whole set — and the exits checked *before* the write are why the instruction above is to inspect
+first rather than to proceed.
+
+Every network call it makes is bounded per
+[network bounds](../../references/network-bounds.md), and a call that exceeds its bound exits 2
+naming itself. **A timeout on its own is never the reason to re-run.** The instruction above covers
+conditions the helper checked and found false; a timeout checked nothing, so what you do next comes
+from which call the diagnostic names, not from the exit status. The three calls before the write
+say nothing was posted — re-run once. The write says it may or may not have landed, and the
+readback names a comment it created but could not verify: for those two, inspect the issue first.
+If a complete block is there the hand-off is published, so proceed from it; if there is none,
+re-run once.
 
 ## Default: hand off, do not self-merge
 
@@ -100,8 +160,11 @@ authorization holds in exactly two cases:
 - a direct human instruction this session (including a goal you typed asking for
   these issues to be *merged* — distinct from a `$trial-loop` stop goal, which
   never authorizes a merge), or
-- you are the **`$campaign` orchestrator itself** and merging is its stated
-  completion condition.
+- you are the **`$campaign` orchestrator itself** and it carries a human
+  invocation, an issue-specific operator merge grant, or a live standing-policy
+  admission for this exact row and remote head SHA. A re-run of this skill's
+  merge gate that observes a different SHA returns to campaign for fresh
+  policy, diff and affected-consumer evaluation before any merge.
 
 Authorization does **not** inherit through delegation. If you are a `$quest`
 run that a `$campaign` dispatched — inline or as a subagent — you are **not**
@@ -111,6 +174,18 @@ When you do merge:
 Before every authorized issue-backed merge, apply
 [the commit-bound merge gate](../../references/merge-gate.md). The reference is the complete
 normative gate; restock PR-only mode retains its separate caller-bound head contract.
+
+For a human grant covering the refresh/merge sequence, use the shared reference's
+[finite root-owned execution](../../references/merge-gate.md#finite-root-owned-execution)
+from the caller's clean, reclaimed feature worktree. Establish actual observed worker end
+before takeover, eligible order, scope and exact mandatory assignments; write the private v1
+context from those facts and the retained refresh chain. Invoke the installed `refresh-merge`
+once with the retained claim token and context path. It owns the ordinary refresh, full
+candidate verification/push, CI wait, gate, derivative and guarded merge sequence. Read its
+terminal result on completion, retain its packet on hold, and use the existing trajectory/
+status path before stopping. Only verified MERGED proceeds to tracking and cleanup below.
+The worker's handoff does not grant the worker this invocation. Standing-policy admission
+bound to one head stays with campaign's manual gate/evaluation route; restock stays PR-only.
 
 - Use the repo's required merge method. Per common convention, **do not squash
   code PRs** — squashing collapses the small logically-scoped commits that
@@ -122,16 +197,23 @@ normative gate; restock PR-only mode retains its separate caller-bound head cont
   issue-backed merge binds the gate's `HEAD_SHA`; restock PR-only mode binds the caller's
   `$EXPECTED_HEAD_SHA`, which was already validated at entry and is deliberately not
   re-read here. Never pass the synthetic local-integration commit as the pull-request head.
-- When several sibling PRs are in flight, **merge serially**: merge one, then
-  for each remaining PR re-check `mergeStateStatus`; if it went
-  `BEHIND`/`DIRTY`, merge the updated `BASE_BRANCH` into it — never rebase a
-  pushed branch: force-push is denied. Regenerate generated artifacts, rerun
-  guardrails, and confirm green + mergeable again before merging it. If the
+- When several sibling PRs are in flight, **merge serially**: after one lands,
+  gate only the next eligible PR in the caller's existing landing order. Leave waiting
+  siblings' heads alone. Issue-backed refreshes follow the shared gate's
+  [bounded recovery](../../references/merge-gate.md#bounded-refresh-recovery); retain the
+  chain in existing private workflow notes (campaign retains its own row notes).
+  The third distinct proven failure holds before another refresh; post/read back the
+  existing complete trajectory before its blocked/needs-human transition. A standalone
+  run keeps those notes for resume; it does not invent missing history as zero.
+  Restock PR-only mode retains its separate caller-bound contract above.
+  An admitted refresh merges the updated `BASE_BRANCH` in — never rebase a pushed
+  branch: force-push is denied. Regenerate artifacts, rerun full candidate guardrails
+  and CI, and repeat the whole gate against the new head before merging it. If the
   repo forbids merge commits (linear history) so a base merge-in is
   unacceptable and a pushed-branch rebase is denied, stop with a named
   blocker. Never merge an unmergeable PR on the strength of
-  previously-green checks. Re-run the whole merge gate against each sibling's new head
-  after every merge; the refresh invalidates the previous SHA, checks, and handshake.
+  previously-green checks. A refresh invalidates the previous SHA, checks, and handshake;
+  it never resets the recovery chain or supplies original author approval.
 
 **What the completion report covers.** Merging lands the change; it does not
 establish what the merge triggered. A workflow that runs on `BASE_BRANCH` — a
@@ -154,9 +236,17 @@ standalone, the same applies: once cleanup is verified, report and stop.
 The default hand-off path already posted its `WORK:TRAJECTORY` above. This section covers the
 operator-merge path only:
 
-- **Operator-merge path** (you merged, above): if `Closes #N` did not auto-close the issue,
-  close it; strip its `status:` labels; post a `WORK:TRAJECTORY` comment on the issue with
-  `outcome: merged via PR #N`, guardrail status, and any surprises.
+- **Operator-merge path** (you merged, above): read the issue's state. If `Closes #N`
+  did not auto-close it, close it only when this was a human-run merge or an
+  independently verified operator grant covers closure of this exact issue.
+  A standing repair policy grants no separate close action. Without closure
+  authority, return `MERGED_ISSUE_OPEN` to campaign with the actual PR and issue
+  state; leave its labels intact and let campaign park it for operator
+  reconciliation. After verified closure, strip its `status:` labels and post
+  a `WORK:TRAJECTORY` comment with `outcome: merged via PR #N`, guardrail
+  status, and any surprises. Compose it with both markers and post it through the
+  [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+  refuses a block missing either.
 - **Restock PR-only path:** do not invent or close an issue and do not reconcile cleared
   dependents. After the guarded merge, complete the pending/applied terminal trajectory on the pull
   request and remove its `status:` labels. Terminal tracking precedes unit cleanup.
@@ -171,7 +261,9 @@ operator-merge path only:
 
 The operator-path issue writes above run only when this invocation performed the merge. On an
 entry snapshot that was already `MERGED`, do not repeat them; verify the merged issue's current
-closed state, then perform the shared dependent reconciliation below.
+closed state. A merged-but-open issue returns `MERGED_ISSUE_OPEN` for operator
+reconciliation without an inferred close grant. Perform shared dependent
+reconciliation below only after verified closure.
 
 #### Release cleared dependents
 
@@ -182,8 +274,9 @@ skill's own directory, which the harness names when it loads the skill; it is ne
 target repository. This is the primary
 owner of the cleared-dependency `status:blocked → status:ready` edge. Report every readied
 dependent and every retained dependent with its actionable reason. Do not limit the scan to
-the merged issue's prose or comments: the recipe exhaustively evaluates canonical whole-line
-`Blocked by #N` records on all open blocked, non-epic issues. A per-dependent failure does
+the merged issue's prose or comments: the recipe exhaustively evaluates canonical
+`Blocked by #N` records, including records with an exact ` — ` explanation suffix, on all
+open blocked, non-epic issues. A per-dependent failure does
 not prevent other dependents from being evaluated.
 
 ## After a merge (yours or the user's)

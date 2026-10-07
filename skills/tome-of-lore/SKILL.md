@@ -20,7 +20,11 @@ owner.
 
 ## Architecture Decision Records
 
-`docs/adr/NNNN-slug.md`, numbered one above the highest present.
+`docs/adr/NNNN-slug.md`: use the campaign/quest's exact supplied and published assignment.
+For issue-backed allocation, apply the shared
+[visible-number reservation scan](../../references/numbered-reservations.md) before choosing or creating the file; a local directory's highest number alone is incomplete.
+Direct offline authoring may take one above the highest present as a local candidate,
+with no cross-run uniqueness promise; resolve it through the scan before issue-backed use.
 
 ```markdown
 # NNNN — one line naming the decision
@@ -145,6 +149,10 @@ that is not a record at all, not a record's own shape.
 `migrate-records.sh` brings a merged record's markers into the current form. Run it locally
 from the repository root, never in CI. It is one of the six gate assets below, so a repo that
 adopted the gate runs its own copy and needs nothing from this skill:
+
+`<plugin root>` is the installed plugin root, the directory two levels above this
+skill's own directory named by the harness when it loads the skill. Substitute that
+absolute directory before invoking a helper; it is never the target repository.
 
 ```sh
 # from the skill, in a repo that has not adopted the gate

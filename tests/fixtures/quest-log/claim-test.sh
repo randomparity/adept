@@ -124,6 +124,12 @@ assert_exit() {
 		fail "$label: expected exit $expected, got $actual"
 }
 
+assert_no_claim_writes() {
+	local rc=0
+	rg --no-config -q '^label (delete|create) ' "$GH_CALL_LOG" || rc=$?
+	[[ $rc == 1 ]] || fail "$1: unexpected write or unreadable call log"
+}
+
 new_store() {
 	rm -rf "${GH_STORE:?}"
 	mkdir -p "$GH_STORE"
@@ -248,9 +254,63 @@ case $stored in
 q101-y0ung00\;*) ;;
 *) fail 'refused recovery clobbered the live claim' ;;
 esac
+# Forced recovery names the holder, not merely its shared producer account.
+cp "$GH_STORE/quest-claim/101/description" "$sandbox/before"
+: >"$GH_CALL_LOG"
 run claim-recover --profile github --target example/repo 101 \
-	--token q101-n3wn3w --producer bob --force
-assert_exit 0 "$RUN_STATUS" '--force overrides a live claim'
+	--token q101-n3wn3w --producer alice --force
+assert_exit 1 "$RUN_STATUS" 'force requires an expected holder'
+[[ ! -s $GH_CALL_LOG ]] || fail 'missing expectation made a GitHub call'
+cmp "$sandbox/before" "$GH_STORE/quest-claim/101/description" ||
+	fail 'missing expectation changed holder'
+
+for expected in '' 'bad token!' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; do
+	: >"$GH_CALL_LOG"
+	run claim-recover --profile github --target example/repo 101 \
+		--token q101-n3wn3w --producer alice --force --expect-token "$expected"
+	assert_exit 1 "$RUN_STATUS" 'invalid expected token is usage'
+	[[ ! -s $GH_CALL_LOG ]] || fail 'invalid expectation made a GitHub call'
+done
+for expected in '' q101-y0ung00; do
+	: >"$GH_CALL_LOG"
+	run claim-recover --profile github --target example/repo 101 \
+		--token q101-n3wn3w --producer alice --expect-token "$expected" --older-than 60
+	assert_exit 1 "$RUN_STATUS" 'expectation without force is usage'
+	[[ ! -s $GH_CALL_LOG ]] || fail 'non-force expectation made a GitHub call'
+done
+: >"$GH_CALL_LOG"
+run claim-recover --profile github --target example/repo 101 \
+	--token q101-n3wn3w --producer alice --force --expect-token
+assert_exit 1 "$RUN_STATUS" 'expected-token flag needs a value'
+[[ ! -s $GH_CALL_LOG ]] || fail 'missing expected value made a GitHub call'
+
+: >"$GH_CALL_LOG"
+run claim-recover --profile github --target example/repo 101 \
+	--token q101-n3wn3w --producer alice --force --expect-token q101-pr10r00 \
+	--older-than 0
+assert_exit 6 "$RUN_STATUS" 'changed same-login holder refuses forced recovery'
+jq -e '.error == "conflict" and .holder.token == "q101-y0ung00"
+	and .holder.producer == "alice" and .holder.malformed == false' \
+	>"$sandbox/jq-out" <"$sandbox/err" || fail 'mismatch payload lost current holder'
+cmp "$sandbox/before" "$GH_STORE/quest-claim/101/description" ||
+	fail 'mismatch changed holder'
+assert_no_claim_writes 'mismatched force'
+
+run claim-recover --profile github --target example/repo 101 \
+	--token q101-n3wn3w --producer bob --force --expect-token q101-y0ung00
+assert_exit 0 "$RUN_STATUS" 'matching force replaces a live claim'
+run claim-verify --profile github --target example/repo 101 --token q101-n3wn3w
+assert_exit 0 "$RUN_STATUS" 'forced replacement owns claim'
+
+new_store
+: >"$GH_CALL_LOG"
+run claim-recover --profile github --target example/repo 101 \
+	--token q101-n3wn3w --producer bob --force --expect-token q101-y0ung00
+assert_exit 6 "$RUN_STATUS" 'absent holder refuses force'
+jq -e '.error == "conflict" and .holder == null' \
+	>"$sandbox/jq-out" <"$sandbox/err" || fail 'absent conflict payload wrong'
+[[ ! -d $GH_STORE/quest-claim/101 ]] || fail 'absent force created a claim'
+assert_no_claim_writes 'absent force'
 
 new_store
 run claim-recover --profile github --target example/repo 101 \
@@ -302,9 +362,16 @@ assert_exit 6 "$RUN_STATUS" 'malformed verify is foreign, never held'
 run claim-recover --profile github --target example/repo 101 \
 	--token q101-aaaaaaaa --producer alice --older-than 1
 assert_exit 6 "$RUN_STATUS" 'malformed refuses --older-than at any age'
+cp "$GH_STORE/quest-claim/101/description" "$sandbox/before"
+: >"$GH_CALL_LOG"
 run claim-recover --profile github --target example/repo 101 \
-	--token q101-aaaaaaaa --producer alice --force
-assert_exit 0 "$RUN_STATUS" 'malformed yields to --force'
+	--token q101-aaaaaaaa --producer alice --force --expect-token q101-aaaaaaaa
+assert_exit 6 "$RUN_STATUS" 'malformed refuses forced recovery'
+jq -e '.holder.malformed == true and .holder.token == null' \
+	>"$sandbox/jq-out" <"$sandbox/err" || fail 'malformed conflict payload wrong'
+cmp "$sandbox/before" "$GH_STORE/quest-claim/101/description" ||
+	fail 'malformed force changed holder'
+assert_no_claim_writes 'malformed force'
 
 # --- failure-mode classification ------------------------------------------------
 new_store
@@ -412,9 +479,15 @@ jq -e '.[] | select(.issue == "103")
 	>"$sandbox/jq-out" <"$sandbox/out" || fail 'claim-list malformed entry'
 
 # --- liveness boundary ages ---------------------------------------------------------
+# The reference timestamp is taken fresh, immediately before each seed, rather
+# than reusing the file-level $now captured roughly 270 lines above: that
+# stale $now raced the whole intervening suite, not the single seed-then-run
+# pair this loop actually bounds, and a loaded runner reliably lost the race
+# by a handful of seconds beyond the window's own +30s slack.
 new_store
 for age in 100 700 50000; do
-	seed_claim 101 q101-aaaaaaaa alice "$((now - age))"
+	seed_now=$(date -u +%s)
+	seed_claim 101 q101-aaaaaaaa alice "$((seed_now - age))"
 	run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
 	assert_exit 0 "$RUN_STATUS" "verify at age $age"
 	reported=$(jq -r '.age_seconds' <"$sandbox/out")

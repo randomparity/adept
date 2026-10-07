@@ -1,21 +1,24 @@
 ---
 name: spellcraft
-description: "Design a non-trivial code change before implementation by writing a spec or ADR, producing an implementation plan, and adversarially reviewing the whole design set in one loop. Use for issues or changes involving public contracts, schemas, auth, concurrency, migrations, persistence, dependencies, AI surfaces, security boundaries, or external services."
+description: "Design a non-trivial code change before implementation by selecting a bounded light spec or full spec and plan, recording warranted decisions, and adversarially reviewing the whole design set in one bounded phase. Use for issues or changes involving public contracts, schemas, auth, concurrency, migrations, persistence, dependencies, AI surfaces, security boundaries, or external services."
 ---
 # Design First
 
 Tighten the design before writing code. Defects are cheapest to fix in the
-spec, then the plan, then the source. This covers the full design phase:
-spec + ADR, implementation plan, and one adversarial review over the whole
-design set.
+spec, then the plan when one is required, then the source. This covers both
+design lanes: a bounded light spec, or a full spec plus implementation plan,
+with any warranted ADR and one adversarial review over the whole design set.
 
 Skip this entire command only for a trivial bugfix (all acceptance criteria
 clear; no API, schema, auth, permission, concurrency, migration, dependency,
 persistence, or external-service behavior changes; touches one or two files;
-no new public contract).
+no new public contract), or a caller-revalidated `governed-small-change`.
 
 If the user supplies an issue number, read it with `gh issue view <issue-number>
---json title,body,labels` for requirements and acceptance criteria.
+--json title,body,labels,parent` for requirements and acceptance criteria. When it has a native
+parent epic, read that epic's goals, non-goals, decomposition, and relevant upcoming open
+sub-issues before proposing scope. This is direction evidence: it can reveal an ambiguity or a
+compatibility constraint, but it cannot add the sibling's work to this change.
 Otherwise, work from the session context or ask the user what to design.
 
 If you are running as part of a larger workflow (e.g. `$quest`),
@@ -28,21 +31,58 @@ and identify the repo's check suite.
 means proceed to the next step — do not end your turn. Stop only on a genuine
 blocker you have named.
 
+The artifact lane and design denominator are routing evidence beside the charter, never ninth or
+tenth authority fields. Use the caller's validated lane and denominator when supplied; on a
+standalone invocation, derive classification, complexity, and hazards from the live request and
+repository first.
+Accept `light-spec` only for a non-trivial change whose validated complexity is `S` or `M`
+and whose change hazards are exactly `none`; otherwise use `full-spec`. An absent or
+unprovable hazard assessment after the caller's live derivation uses the full lane. Public API or
+contract changes, migrations, auth/permission behavior, concurrency, irreversibility, and
+external services are hazards and therefore never enter the light lane.
+
+Before writing an ADR, specification, or plan, require a validated complexity and map it exactly:
+`S = 100`, `M = 250`, or `L = 1000` changed lines. This fixed number is the design denominator.
+It is derived from the assessment, not stored in `WORK:DIVINATION`, and neither the design nor a
+plan estimate may revise it. A caller-supplied number must match the mapping and carry the
+public-safe assessment provenance frozen in `WORK:SCOPE`. Validate that provenance by confirming
+it still identifies the same valid assessment evidence, not by requiring unchanged citation text
+or line numbers. A mismatch or unknown complexity returns to `SCOPE CHECKPOINT` before design.
+
+On a standalone invocation, freeze the mapped number, complexity, and public-safe evidence in the
+same local scope record as the charter and read them back before step 1. A material scope change
+starts a new explicitly re-scoped design cycle with a new denominator. Never retroactively resize
+the current gate, and never treat a plan estimate or an oversized design as scope evidence.
+
 ## External scope authority
 
 Use a complete caller-supplied charter unchanged. It contains `interaction`, `scope
 identity`, `outcome`, `completion criteria`, `provenance`, `exclusions`, `surface`, and
 `ambiguities`. A reviewed or generated artifact is never a substitute for a missing field.
 
-An interactive direct invocation freezes its quoted request into all eight fields.
+On every entry path, verify that `provenance` records the operator's explicit approval of the
+exact exclusions and their owners. This includes a charter supplied by interactive `$quest` or
+`$campaign`, not only direct and unattended invocations. Reuse a valid approval under the rule
+below; otherwise return `SCOPE CHECKPOINT` before design.
+
+An interactive direct invocation freezes its quoted request and approved exclusions into all
+eight fields.
 An unattended direct invocation without a complete charter parks before design.
 
 For a direct human invocation, establish `interaction: interactive`. Before freezing, ask
 one question at a time about any omission or conflict that could change a charter field or
-normative guarantee. Record the quoted request, answers, and their provenance; use an
-explicit empty value when no exclusion or ambiguity exists. An unattended caller must
-supply every field. Missing, incomplete, or unresolvable input returns `SCOPE CHECKPOINT`
-or parks and never derives authority from a spec, ADR, or plan.
+normative guarantee. Present the proposed non-goals — including an explicitly empty set — and
+obtain the operator's approval before creating an ADR, spec, or plan. Record the quoted request,
+answers, approved exclusions and their owners, and provenance. Issue and epic prose are evidence
+for the proposal, never implicit approval. An unattended caller must supply every field and
+provenance for the operator's approval of its exact exclusions. Missing, incomplete, or
+unresolvable input returns `SCOPE CHECKPOINT` or parks and never derives authority from a spec,
+ADR, plan, or issue body.
+
+Approval may cross a dispatch or resume while the normalized exclusions are unchanged: compare an
+order-independent set of exclusion/owner pairs after collapsing whitespace. Recheck that set
+against the live scope evidence before reuse. Unrelated edits do not invalidate approval; a
+changed set requires a new operator decision before design.
 
 A normative guarantee is a promise that downstream implementation or review must preserve.
 Each guarantee must cite a frozen requirement, a later explicit user decision, or a
@@ -72,7 +112,7 @@ cheapest to correct before the first question rather than after the design.
 Then check size before detail. A request spanning several independent
 subsystems gets decomposed, not refined: name the independent pieces, say how
 they relate and what order they should be built in, then take the first one
-through this phase alone. Each sub-project earns its own spec, plan, and
+through this phase alone. Each sub-project earns its own lane-selected artifact set and
 implementation cycle. Spending the whole dialogue on the details of a project
 that needed splitting is the expensive mistake at this stage.
 
@@ -95,7 +135,14 @@ understood and tested by itself. If you cannot say what a unit does without
 reading its internals, or cannot change those internals without breaking its
 callers, the boundary is in the wrong place. In an existing codebase, follow
 the patterns already there and fold in targeted improvements to the code this
-change actually touches — and propose no unrelated refactoring.
+change actually touches — and propose no unrelated refactoring. When affected
+responsibilities or callers reveal duplicated policy, misplaced ownership, or avoidable
+indirection, compare a clean extension with credible reuse, move, consolidation,
+replacement, or deletion. Choose the simpler coherent design linked to frozen criteria.
+A clean extension needs no move; a justified move is not out of scope merely because it
+touches more files. Keep protected public, persisted, and security contracts and accepted
+decisions unless the frozen charter or a later explicit decision authorizes changing them;
+otherwise return to SCOPE CHECKPOINT.
 
 Cut ruthlessly while the design is still cheap to cut. A feature nobody asked
 for costs the same to maintain as one somebody did.
@@ -108,7 +155,23 @@ small change is the design's *length* — a few sentences is a complete design
 when the change is genuinely small. Skipping it is not.
 
 Write or update the design doc under `docs/workflow/specs/`, named
-`YYYY-MM-DD-<topic>-design.md`. For decisions with viable alternatives — layer
+`YYYY-MM-DD-<topic>-design.md`. In the light lane it contains exactly four second-level
+sections: `Problem`, `Scope`, `Success`, and `Validation`, with the failure model required
+below as a third-level subsection of `Scope`. It is one independently implementable unit,
+not a task breakdown. Its Validation section inventories every material
+changed contract using the same `focused-test` and `task-test-not-applicable` fields the full
+plan requires below, including the concrete non-applicability reason rather than a prose test.
+For a selected ownership change, use those same Scope and Validation sections to name the
+current and intended owner, affected callers and their migration, obsolete paths to remove,
+and retained compatibility paths with their protected contract and reason. Link each to the
+criterion it serves; a clean extension records that no transition is needed. Add no section.
+One page means no more than 500 words and 60 physical lines, including headings and blank lines;
+check both counts before review. Cut redundant design before approaching either cap. If the design
+cannot stay complete within both caps, or needs more than one implementation unit, return to the
+scope and assessment checkpoint. Re-derive complexity, hazards, and decomposition from the
+demonstrated change; artifact length alone never authorizes `full-spec`.
+
+For decisions with viable alternatives — layer
 boundaries, interface or ownership splits, concurrency invariants, failure
 contracts, migration sequencing, rollback strategy — write or update an ADR
 under `docs/adr/` with:
@@ -175,14 +238,23 @@ what you find inline:
   vague to fail against.
 - **Internal contradiction** — sections that disagree, or an architecture that
   does not match the features described against it.
-- **Scope** — is this one implementation plan's worth of work, or does it still
-  need decomposing?
+- **Scope** — is this one light-spec unit or one implementation plan's worth of work, or does
+  it still need decomposing?
 - **Two-way ambiguity** — any requirement a competent reader could take two
   ways. Settle it and say which reading the spec means.
+- **Failure model** — the section exists with its four entries, sized to the change, and no
+  accepted class is one a completion criterion requires.
+- **Universal words** — every "all", "every", "any", "never", and "always" in `Success`, a
+  completion criterion, or a guarantee is bounded to a named set, and what falls outside the
+  set is accepted or covered in the failure model. The reviewer raises an unbounded one as a
+  finding against the word; settle it here instead.
+- **Light-spec completeness** — when routed light, verify the exact four-section shape with the
+  `Failure model` subsection under `Scope`, map every success criterion to a supported
+  Validation entry, and recheck the 500-word and 60-line caps.
 
 This pass is cheap and catches the defects an adversarial review would otherwise
-spend an iteration discovering. It does not replace step 3 — and with the plan now derived
-from a spec no adversarial pass has seen, it is the cheapest place a spec defect stops.
+spend an iteration discovering. It does not replace step 3 — and in the full lane, with the plan
+derived from a spec no adversarial pass has seen, it is the cheapest place a spec defect stops.
 
 An ADR-producing change should touch **only its own ADR file**. A hand-maintained
 index table serializes parallel ADR PRs on one merge conflict — N such PRs cost
@@ -260,7 +332,46 @@ Add to the spec:
 The eval cases are acceptance criteria: `$forge` implements them as executable tests when their
 observable contract supports one, or as the spec's bounded evaluation when it does not.
 
-### Security-relevant changes require a threat model
+### Every spec carries a failure model
+
+Answer, before anyone reviews the design, what can go wrong here that matters. Every spec
+carries a section headed `Failure model` — its own second-level section in the full lane, a
+third-level subsection of `Scope` in the light lane, where it counts against the caps — with
+four entries. Each entry is a list of short lines, not prose; an entry with nothing in it says
+`none`.
+
+1. **Actors and deployments** — who runs or calls the changed code and where: a local operator
+   at a terminal, a CI job, an authenticated tenant, another service, anonymous traffic. Name
+   the deployments the change is designed for. An unnamed one is outside the model, and the
+   reviewer grades a trigger that needs it as a note, not a blocker.
+2. **Invariants and assets at stake** — what is expensive to get wrong: data that cannot be
+   recovered, state another actor reads, money, availability, a published contract. This is
+   where the assessment's hazards land, and where a reviewer's blocking findings come from.
+3. **Accepted failure classes** — each with the reason it is accepted: not reachable in the
+   named deployments, tolerated because its cost is bounded and stated here, or already held by
+   a named existing guardrail. An acceptance the charter's outcome or completion criteria
+   contradict is a defect the review will find; never write one to make a criterion cheaper.
+4. **Covered elsewhere** — failure classes another owner holds, with the owner: a record, an
+   issue, a guardrail.
+
+Size it to the change. A small change with no hazards gets a few lines — one named operator,
+one invariant, one or two accepted classes. Silence reads as coverage: a class the model neither
+names nor accepts is one the reviewer may still raise, so the section's value is in what it
+declines, stated. It is a review target — the design review challenges each entry once, on the
+merits — and once that review closes it is frozen with the design. The branch reviewer then
+receives it as the frozen answer to what matters: instances of an accepted class are disclosed
+suppressions rather than findings, a trigger outside the named deployments is at most a note,
+and an entry can be attacked with evidence but not added to. Under `$trial-loop`, a finding the
+model accepts or places outside the named deployments is rejected with evidence by citing the
+entry, in one line.
+
+Bound every universal word. "All", "every", "any", "never", and "always" in `Success`, a
+completion criterion, or a guarantee are each bounded to a named set, in the sentence that
+carries them or here; what falls outside the set is accepted in entry 3 or covered in entry 4.
+A universal claim with no closure is one finding against the quantifier. The reviewer will not
+enumerate its instances, and it will not approve the word either.
+
+### Security-relevant changes extend the failure model with a threat model
 
 If the change is security-relevant — it moves what an untrusted actor can reach
 or cause, touches authn/authz or tenancy, handles a secret, parses input it did
@@ -268,6 +379,10 @@ not produce, builds a command/query/path/URL from a non-literal, widens a
 permission grant, or changes dependencies or security-relevant defaults (the
 same trigger `$quest` step 6 applies to the diff, judged here on intent
 because no diff exists yet) — the spec is incomplete without a threat model.
+It is the failure model's security-specific extension: its actor model refines
+the model's first entry with the untrusted parties, and its out-of-scope list is
+the model's third entry read against those parties. Write it beside the failure
+model and keep the four items below.
 
 Add to the spec:
 
@@ -299,48 +414,49 @@ point of writing it down first.
 
 ## Design-review scope input
 
-`$trial-loop` is a separate skill, so the charter does cross a boundary here.
+The reviewer is a separate worker, so the charter does cross a boundary here.
 Pass all eight fields frozen in *External scope authority* — `interaction`,
 `scope identity`, `outcome`, `completion criteria`, `provenance`, `exclusions`,
-`surface`, `ambiguities` — unchanged, to the design review's single `$trial-loop`
-call and to the scope audit that follows it. `scope identity` stays the external
-one and never becomes the reviewed target.
+`surface`, `ambiguities` — unchanged, to every independent design-review pass
+and to the scope audit that follows it. `scope identity` stays the external one
+and never becomes the reviewed target.
 
 The target remains evidence for review, never a source of authority. If a design-changing
 ambiguity appears, end the current review cycle and use `SCOPE CHECKPOINT`; do not let the
 reviewer resolve it by extending the target.
 
+The spec's `Failure model` is not a ninth charter field. It travels inside the target,
+where the reviewer challenges it; after this review it is frozen with the design, and
+`$quest` names it to the branch reviewer as the `failure model:` line of the review block.
+Report its path and heading with the artifact paths in the phase report.
+
 ## Design-review depth
 
-The single design review in step 3 runs at the depth routed under
-[risk-routed review depth](../../references/review-depth.md), from the caller's assessment
-where `$quest` passed one and from your own reading of the same four fields on a direct
-invocation. Judge the reference's fourth condition on the change's **intent**, using the
-security triggers in *Security-relevant changes require a threat model* above: no diff exists
-at design time, and a design that will touch a trust boundary is security-relevant before a
-line of it is written.
+The combined design-artifact set uses the bounded design-review protocol in
+[risk-routed review depth](../../references/review-depth.md), regardless of the
+caller's assessment. Select the first `gauntlet`-compatible lens for the design's
+shape under [review lenses](../../references/review-lenses.md). One valid
+independent pass is required. A defensible in-surface blocking finding buys one
+further valid independent pass over unchanged artifact bytes under a different
+lens, then the author resolves the collected findings. There is no third valid
+pass and no confirming prose review after an edit.
 
-`iterating` runs `$trial-loop` exactly as step 3 states. `single-pass` dispatches one
-reviewer pass instead, with that step's `challenge_args` and focus unchanged, and gives each
-finding its single disposition; a blocking finding escalates to `$trial-loop` at its ordinary
-budget under the reference's escalation rule. The design set is **one** target, so this is one
-routing decision, not one per artifact — name the routed depth in the audit line step 3 asks
-for.
+This exception belongs only to the design-artifact set. The assessment still
+selects the artifact lane and still routes `$quest`'s branch review. Every
+`$trial-loop` retains its two-pass default and three-pass ceiling.
 
-This is where the cost the routing exists to bound actually lands, and it is where a wrong
-route is cheapest to correct, because the escalation happens before any code exists.
-
-**Count the rounds.** Start from the caller's cumulative figure — `0/0` where there is
-none — pass it into the review as `prior_rounds`, and count a `single-pass` dispatch as one
-round the same way, since it cost a reviewer pass whether or not a loop wrapped it. When the
-phase ends, report the design-phase total in the form `$trial-loop` reports it, and hand it
-to the caller: `$quest` continues the count into the branch review, and a direct invocation
-is reporting to the operator who is paying for it. The figure used to be a sum across three
-separate loops that no single report stated — 11 rounds under two charters before any
-implementation existed, with every individual report accurate. One loop is now the whole
-design phase, and the carry is what keeps the branch review's count continuous with it.
+**Count the rounds and attempts separately.** Start from the caller's cumulative
+figure — `0/0` where there is none — and add one review round for each valid
+independent pass under this phase's one frozen charter. Report every dispatch
+attempt separately, including the one fault-recovery retry permitted for malformed
+output; a malformed attempt is not a valid pass and creates no additional retry
+budget. Hand the resulting round figure to the caller: `$quest` continues it into
+branch review, and a direct invocation reports it to the operator paying for it.
 
 ## 2. Inscribe — the implementation plan
+
+Skip this step for `light-spec`. Its bounded spec already carries the complete validation
+inventory for one Cast unit; do not create a plan, placeholder task, or task-brief input.
 
 Write the plan under `docs/workflow/plans/`, named
 `YYYY-MM-DD-<feature-name>.md`, derived from the spec. Do not choose an
@@ -360,14 +476,17 @@ task to a context-free implementer that cannot ask you what a step meant.
 If the spec still spans several independent subsystems, say so and split it —
 one plan per subsystem, each producing working, testable software on its own.
 
-**Map the files before defining any task.** Which files get created, which get
-changed, and what each is answerable for. Decomposition gets settled here
+**Map the files before defining any task.** Which files get created, changed, moved, or
+removed, what each currently owns, and what it will own. Link the intended owner to a
+completion criterion; identify affected callers, their migration, obsolete paths to remove,
+and any compatibility path retained with its contract and reason. Decomposition gets settled here
 whether or not you do it deliberately, so do it deliberately instead of letting
 it emerge one task at a time. Keep files focused — one clear responsibility each, split by
 responsibility rather than by technical layer, with things that change together
-living together. In an existing codebase, follow the patterns already there
-rather than restructuring unilaterally, though a split is reasonable to plan for
-a file you are modifying that has grown unwieldy.
+living together. In an existing codebase, use the bounded ownership comparison from step 1:
+extend a coherent owner or plan the criterion-linked transition, including caller migration
+and obsolete-path removal. Do not turn unrelated cleanup into a dependency or preserve an
+old path without a protected-contract reason.
 
 **Right-size the tasks.** Draw the boundary where a review verdict could
 plausibly differ on either side of it: if no reviewer could accept the work
@@ -402,13 +521,13 @@ The header also carries one line, exactly:
 
 The range is a by-product of the file map and the task list you have just written, not new
 analysis: count what each task creates and changes and add it up. Exclude the design
-artifacts themselves — this measures the implementation the plan produces. The band is the
-`$divination` complexity verdict where the caller supplied one, and your own reading of the
-same three fields where it did not; a band that disagrees with your own range means one of
-them is wrong, and saying which is part of writing the line. This is the denominator step 3
-measures the design against, so an inflated range is a defeated control rather than a
-generous one. That ratio is the range's only authority: it is an estimate, not a budget or
-ceiling on the implementation.
+artifacts themselves — this measures the implementation the plan produces. The parenthetical
+band is the complexity frozen before design, carried forward unchanged; only the numeric range is
+the plan's own estimate. The line is informational: step 3 never uses its range as the
+denominator. If the range appears inconsistent with the frozen complexity, explain the evidence
+rather than selecting a second band to make them agree. A demonstrated material scope change
+returns to explicit re-scoping and a new design cycle; a plan overestimate alone has no authority
+to widen the frozen baseline. The estimate is not an implementation budget or ceiling.
 
 Give each task:
 
@@ -480,10 +599,11 @@ Run relevant guardrails and commit the plan.
 
 ## 3. Adversarial-review the design
 
-One review, over the whole design set, run once the set is complete. The ADRs, the spec, and
-the plan are one change: they get one charter, one iteration budget, and one report — not
-three targets reviewed in sequence, each drawing a full budget nobody was totalling. That
-shape is what produced 13 review rounds and a 1,469-line design before a line of
+One bounded review phase starts once the whole design set is complete. The ADRs,
+the spec, and the full lane's plan are one change: they get one frozen charter,
+one required independent pass, and at most one further independent pass — not
+separate targets each drawing a loop budget nobody was totalling. That shape is
+what produced 13 review rounds and a 1,469-line design before a line of
 implementation existed.
 
 ### Assemble the set
@@ -501,41 +621,56 @@ of:
 The target-repository `':(exclude)docs/adr/README.md'` pathspec drops the index — an
 index-row edit is not a decision to challenge. Most designs record no ADR, so an ADR-free
 set is the common case and reviews exactly the same way; there is no ADR-specific skip left
-to get wrong. A set missing **the spec or the plan** is a resume that lost its own artifacts:
-stop as blocked rather than reviewing whatever remains. Never invoke `$trial-loop` with a
-path that does not resolve — it appends a `CHARTER` block on every invocation, and under a
-charter an unresolvable target is a hard error naming the token, with `--out` suppressing
-both the artifact and the compact object, so the loop returns no verdict and stops as
-blocked.
+to get wrong. Every set requires the spec. A `full-spec` set also requires the plan; a
+`light-spec` set must not contain one. A mismatch is a resume or routing defect: stop rather
+than reviewing whatever remains. Never dispatch a reviewer with a path that does not resolve.
+Under a charter an unresolvable target is a hard error naming the token, with `--out`
+suppressing both the artifact and compact object, so the phase stops as blocked.
 
 ### Measure the proportionality inputs
 
 Measure them here, in the orchestrator, so the reviewer judges numbers instead of producing
-them — a reviewer asked to both measure and judge will do neither reproducibly:
+them — a reviewer asked to both measure and judge will do neither reproducibly.
 
-- `wc -l` over every path in the set, summed — the **design size**.
-- the plan header's `Expected implementation size` range — the **implementation estimate**.
-- the design size over the range's high end, to one decimal place — the **ratio**.
+- `wc -l` over every path in the complete set, including every ADR, summed — the
+  **design size** in both lanes.
+- the fixed design denominator and its assessment provenance from the frozen scope record.
+  Recheck `S = 100`, `M = 250`, or `L = 1000`; a missing or mismatched value returns to
+  `SCOPE CHECKPOINT` rather than falling back to the plan.
+- the design size divided by that denominator — the **ratio** in both lanes. Classify the
+  exact, unrounded fraction by integer comparison: below `2 × denominator` produces no
+  proportionality finding; from `2 × denominator` through `3 × denominator`, inclusive,
+  is a note; above `3 × denominator` is blocking. Round only the displayed ratio.
 
-**Echo an audit line before proceeding**, so a mis-evaluated predicate or an unmeasured
-ratio leaves an inspectable trace rather than silently reopening the shield (the repo's only
-verification is reading the transcript):
+For `full-spec`, also read the plan header's `Expected implementation size` range for the
+audit line. It remains useful to readers and may be challenged when its file-map basis is
+unsupported, but it never participates in the ratio. For `light-spec`, separately measure the
+specification alone with `wc -w` and `wc -l`; its 500-word and 60-line caps remain independent
+controls. The complete-set ratio still includes any ADR beside that spec.
 
-    design review: set = <paths>; design <n> lines vs implementation estimate <low>–<high>; ratio <n.n>x; depth = iterating | single-pass
+**Echo the lane's audit line before proceeding**, so a mis-evaluated predicate or unmeasured
+control leaves an inspectable trace:
 
-A plan carrying no `Expected implementation size` line is a step 2 defect: derive the range
-from the plan's own file map and task list, write it into the plan, and say in the audit
-line that you did.
+    design review: lane = full-spec; set = <paths>; design <n> lines / fixed <S|M|L> denominator <100|250|1000> from <scope provenance> = <n.n>x displayed, <exact threshold class>; plan estimate = <low>–<high>; protocol = bounded-independent; lens = <name>
+    design review: lane = light-spec; set = <paths>; design <n> lines / fixed <S|M|L> denominator <100|250|1000> from <scope provenance> = <n.n>x displayed, <exact threshold class>; spec = <words>/500 words and <lines>/60 lines; protocol = bounded-independent; lens = <name>
+
+A full plan carrying no `Expected implementation size` line is a step 2 defect: derive the
+informational range from the plan's own file map and task list, write it into the plan, and say
+in the audit line that you did. Never use that repair to alter the fixed denominator.
 
 ### Run the review
 
-Run `$trial-loop` in file-list mode:
+Dispatch `$gauntlet` in a fresh worker using the bounded design-artifact recipe
+in [risk-routed review depth](../../references/review-depth.md). Use its
+single-pass JSON artifact, freshness, validation, and malformed-retry contract:
 
 - challenge_args: `<every path in the design set, space-separated>`
-- focus: `This is one design reviewed as one artifact set — ADR(s), specification, and
-  implementation plan. Read them together and challenge them together: a defect that
-  crosses files is one finding, not one per file, and a spec defect the plan inherited is
-  reported once against both.
+- focus: `<selected review-lens focus> followed by this target-specific context:
+  This is one design reviewed as one artifact set in the <light-spec | full-spec>
+  lane — ADR(s), specification, and the full lane's implementation plan. Read the present
+  artifacts together and challenge them together: a defect that
+  crosses files is one finding, not one per file, and a spec defect inherited by a present plan
+  is reported once against both.
 
   Decisions (each ADR in the set): the soundness of the decision under its stated context;
   the completeness and honesty of the "Considered & rejected" list — alternatives dismissed
@@ -558,7 +693,16 @@ Run `$trial-loop` in file-list mode:
   the eval plan: failure modes without cases, unmeasurable pass traits, and uncalibrated
   LLM-judge evidence.
 
-  Plan: phase ordering, missing prerequisites, steps that cannot run in the claimed order,
+  Failure model: the spec's `Failure model` section is the design's frozen answer to what can
+  go wrong that matters, and it is a target here. Challenge each entry once on the merits — an
+  accepted class the charter's outcome or completion criteria require, a reason that does not
+  hold, or a named deployment the repository's own evidence contradicts is a finding against
+  that entry, blocking when the evidence supports it. Do not enumerate the instances an entry
+  would cover: report them once against the entry, or, where the entry holds, as disclosed
+  suppressions. A trigger outside the named deployments is at most a note stating the gap. A
+  universal claim in Success or a criterion with no bound is one finding against the word.
+
+  Full-spec plan, when present: phase ordering, missing prerequisites, steps that cannot run in the claimed order,
   rollback and cleanup paths, verification gaps, ungrounded references — a type, function,
   or signature borrowed from the codebase or a dependency without confirmation it exists
   with the assumed signature — and tasks that are not self-contained enough for an
@@ -566,44 +710,92 @@ Run `$trial-loop` in file-list mode:
   back against the spec in this same set: a spec requirement with no task, and a task
   serving no requirement, are both findings.
 
-  Proportionality, over the whole set: the orchestrator measured <design size> lines of
-  design against an expected implementation of <low>–<high> changed lines, a ratio of
-  <n.n>x. Above 3x is a blocking finding; 2x to 3x is a note. The remedy is cutting the
-  design — never adding text to defend its length, and never widening the estimate to move
-  the ratio. Judge the estimate too: a range the plan's own file map and task list do not
-  support is a finding in its own right, and the honest range is the one the file map
-  yields. Size is in scope per artifact as well as in aggregate — a record arguing for its
-  decision at greater length than the decision governs is a finding, and its remedy is also
-  cutting.`
+  Light-spec execution, when selected: the spec must remain one independently implementable
+  Cast unit, and its Validation inventory must cover every material contract with supported
+  focused or non-applicable evidence. A task breakdown, missing inventory entry, or correctness
+  detail compressed away to meet the cap is a finding.
 
-### Exits
+  Proportionality: for either lane, the orchestrator measured <design size> lines across the
+  complete design set, including ADRs, against the frozen <S | M | L> denominator of
+  <100 | 250 | 1000> changed lines from <scope provenance>. The exact fraction is <n>/<d>;
+  its displayed ratio is <n.n>x and its unrounded threshold class is <below-note | note |
+  blocking>. From 2x through 3x inclusive is a note; above 3x is blocking. The remedy is
+  cutting the design — never adding text to defend its length, widening the plan estimate,
+  or retroactively re-sizing the denominator. A real scope change returns to explicit
+  re-scoping before a new design cycle. There is no new absolute full-spec design ceiling or
+  implementation ceiling; the light-spec caps below remain independently binding.
 
-If the loop reports blocked — including cap exhaustion at its iteration budget — stop as
-blocked per `$trial-loop`'s stop contract. The design does not go on to the scope audit.
+  Full-spec estimate, when present: the plan separately estimates <low>–<high> changed lines.
+  Judge its file-map basis as plan quality; an unsupported estimate is a finding in its own
+  right, but even an honest estimate never replaces the fixed denominator. Light-spec cap,
+  when selected: the spec has <words> words and <lines> lines. Exceeding either the 500-word
+  or 60-line cap is independently blocking and returns to the scope and assessment checkpoint;
+  the breach alone does not authorize `full-spec`. Omit the other lane's clause rather than
+  leaving unused placeholders. Size is in scope per artifact as well as in aggregate — a
+  record arguing for its decision at greater length than the decision governs is a finding,
+  and its remedy is also cutting.`
 
-A run the loop reports as **finished** is not that case, whatever its last verdict. The
-loop finishes on `approve`, and also on `needs-attention` where the only blocking findings
-left were ones it had already dispositioned as owned deferrals or rejected with evidence.
-The phase continues on either. Route on finished-versus-blocked, which the loop states
-outright; a last verdict of `needs-attention` never by itself means the design is
-unhardened.
+### Route the passes
 
-Editing an ADR in the set to address a finding is legitimate — it is pre-merge on the design
-branch, and the immutability rule applies only once the ADR is merged.
+Before the first dispatch, record an ordered `git hash-object -- <design-set
+paths>` mapping. For every dispatch, record the phase's total attempts, valid
+passes, lens, and whether a malformed result consumed that pass's sole retry. A
+retry keeps the same target bytes and lens. If the retry is also malformed, stop
+as blocked; do not mint another attempt.
+
+After the first valid artifact, apply [heed-counsel](../../references/heed-counsel.md)
+to determine which findings are defensible, without editing the design or
+recording final dispositions. If any defensible blocking finding has `surface:
+adjacent`, return `SCOPE CHECKPOINT` when interactive or park when unattended.
+Do not fix it, defer it, widen scope, or spend the optional second pass.
+
+If no defensible in-surface blocking finding remains, close review after this
+one valid pass. If one does remain, assert the complete ordered hash mapping is
+unchanged, select the next compatible lens, and dispatch one fresh worker. Its
+brief carries the same charter and target context but none of the first pass's
+findings, verdict, or proposed remedies. Apply the same artifact validation and
+one-retry rule. A defensible adjacent blocker from this pass checkpoints or
+parks in the same way. There is no third valid pass.
+
+After the final valid pass, apply `heed-counsel` and the existing disposition
+vocabulary to every finding from the phase, then make accepted edits once. A
+repeated concern still gets one disposition per finding, but the later finding
+may cite the earlier disposition instead of duplicating its remedy. Every
+defensible in-surface blocking finding must be fixed or otherwise resolved
+before the scope audit; a `blocked` disposition stops here. Adjacent notes become
+public-safe follow-up candidates, and their scratch findings paths remain only
+in the local review report.
+
+Do not dispatch a confirming prose review after editing. Run the relevant
+guardrails and commit the resulting design artifacts, then continue to the scope
+audit. A newly created, unmerged ADR in the set may be edited with the rest of
+the design. An already-merged ADR retains its append-only contract: preserve its
+decision and body, and make only the Status amendment the current change
+authorizes.
 
 Carry every deferral — each entry with its owning record path or tracker issue — into the
-**plan**, whichever way the run ended, `approve` included. The loop discloses its deferrals
-on every exit, and the plan is what `$forge` reads, so that is where a later implementer
-meets them. Not the ADR: it merges append-only, and an entry there cannot be struck when its
-tracker closes.
+full lane's **plan**, or the light spec's **Scope**, whichever way the phase ended. The
+artifact `$forge` reads is where a later implementer meets it. Not the ADR: it merges
+append-only, and an entry there cannot be struck when its tracker closes. Carry the
+public-safe follow-up-candidates table in the phase report for the caller. A light spec that
+cannot carry a deferral and remain complete within its caps returns to the scope and
+assessment checkpoint. Only a demonstrated complexity, hazard, or decomposition change can
+alter its lane; the overflow alone cannot.
+
+On every phase exit, including a scope checkpoint, unattended park, or malformed-output
+stop, report every suppression with its governing ADR, every public-safe follow-up candidate,
+every deferral with its owner, every `rejected-with-evidence` finding with its source pass,
+and every outstanding note accumulated before the exit. Keep scratch findings paths in the
+local report only; the payload carried into a quest handoff remains public-safe.
 
 ## 4. Scope audit
 
 The design phase ends with exactly one `$oathbind` pass over the reviewed set. This skill
 does not invoke it: `$quest` step 4 owns the report path, the `.agent/` ignore check, and
 the dispatch, and it runs immediately after this review. A direct invocation of this skill
-runs no audit; an operator who wants one invokes `$oathbind` themselves, with the same
-frozen charter and the paths this review just hardened.
+runs no audit; an operator who wants one invokes `$oathbind` themselves, with the same frozen
+charter, the artifact lane as routing evidence outside that charter, and the paths this review
+just hardened.
 
 One pass is the whole of it, and that is a property of what the audit can produce rather
 than a budget imposed on it. `$oathbind` is read-only and audits authority, so every remedy
@@ -614,10 +806,10 @@ Re-auditing after an edit the audit itself asked for is the second pass this rem
 
 ## Context checkpoint
 
-The spec, ADR, and plan you just wrote are the **durable artifacts** of this
+The spec, any ADR, and the full lane's plan are the **durable artifacts** of this
 phase — they, not the brainstorm transcript or the review payloads, are what a
 downstream build (or a post-compaction resume) reads. Before handing off, ensure
 the checkable facts a resume needs — the branch name, `BASE_BRANCH`, and the
 guardrail commands — are recorded somewhere durable, and, as a reminder, that the
-spec/ADR/plan hold every design decision. Do **not** run `context compaction` proactively;
+lane's artifact set holds every design decision. Do **not** run `context compaction` proactively;
 just keep the artifacts complete.

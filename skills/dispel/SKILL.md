@@ -49,9 +49,12 @@ Apply the applicable repository and agent instructions, in this priority order:
    surrounding file to know its idiom.
 2. Make the edits, smallest first. Each edit stands alone — if one is questioned, the
    rest still hold.
-3. Re-run the repo's guardrails on the touched files (linter, type checker, relevant
-   tests — discover them; don't assume). A simplification that breaks a check is reverted,
-   not argued with.
+3. If anything changed, run applicable lint, type, and structural checks plus tests
+   covering changed behavior, affected callers, and shared boundaries. Select by
+   impact, not only touched filenames; broaden and state why if impact cannot be
+   bounded. Honor required repository hooks. A simplification that breaks a check
+   is reverted, not argued with.
+   With no edit, do not add a check run or empty commit.
 4. Report: what was simplified and why (one line each), what was deliberately left
    alone, and anything flagged-but-out-of-scope. If nothing needed simplifying, say so
    plainly — a no-op result is a valid result.

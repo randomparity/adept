@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR=$(CDPATH='' cd -- "${BASH_SOURCE[0]%/*}" && pwd)
+ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/../../.." && pwd)
+claim_token=''
+fail() {
+	printf 'deliver-write: %s\n' "$1" >&2
+	exit 1
+}
+# Run a command under a bound. Returns the command's own status, or 124 when the
+# bound was exceeded. stdout and stderr land in separate caller-owned files: a
+# merged capture once made a gh release notice part of a value a caller then
+# decided labels from.
+# Precondition: the caller has validated bound as decimal seconds with no leading
+# zeros (except 0), and a range safe for bound * 10, before invoking this function.
+bounded_call() { # seconds out-file err-file command...
+	# rc, not status: under zsh `status` is a read-only special parameter, and a
+	# `local status=0` in a sourced body once killed a caller's whole session --
+	# cleared-dependencies.sh:5-16 carries that record.
+	local bound=$1 out=$2 err=$3 pid waited=0 grace=0 rc=0
+	shift 3
+	"$@" >"$out" 2>"$err" &
+	pid=$!
+	# Tenths, so the counter stays integer arithmetic on a Bash 3.2 floor.
+	while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$((bound * 10))" ]; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+	if kill -0 "$pid" 2>/dev/null; then
+		# TERM, then KILL only if TERM does not land. Never a bare KILL.
+		kill -TERM "$pid" 2>/dev/null || :
+		while kill -0 "$pid" 2>/dev/null && [ "$grace" -lt 20 ]; do
+			sleep 0.1
+			grace=$((grace + 1))
+		done
+		kill -KILL "$pid" 2>/dev/null || :
+		wait "$pid" 2>/dev/null || :
+		# The writer was killed mid-stream, so the capture is void. Emptying it
+		# here makes that structural: a site that parses it anyway gets nothing,
+		# not a truncated page that reads as a complete short one.
+		: >"$out"
+		return 124
+	fi
+	wait "$pid" || rc=$?
+	return "$rc"
+}
+[ "${1-}" = --claim-token ] && [ "$#" -ge 5 ] || fail 'usage: deliver-write --claim-token TOKEN REPO ISSUE OP ARGS'
+claim_token=$2
+repo=$3
+issue=$4
+operation=$5
+shift 5
+case $issue in '' | *[!0123456789]* | 0*) fail 'invalid issue' ;; esac
+[[ $claim_token =~ ^q${issue}-[0123456789abcdef]{8}$ ]] || fail 'invalid issue claim token'
+case $repo in *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/-]* | *'/'*'/'*) fail 'invalid repository' ;; esac
+case $repo in */*) ;; *) fail 'invalid repository' ;; esac
+case ${repo%%/*}:${repo#*/} in :* | *: | .* | -*) fail 'invalid repository' ;; esac
+case ${repo#*/} in .* | -*) fail 'invalid repository' ;; esac
+for command in bash git gh jq mktemp cat rm sleep; do command -v "$command" >/dev/null || fail "required command unavailable: $command"; done
+TRACKER="$ROOT/skills/quest-log/assets/tracker.sh"
+[ -x "$TRACKER" ] || fail 'bundled tracker missing; repair plugin'
+local_vars=$(git rev-parse --local-env-vars) || fail 'cannot read git selectors'
+[ -n "$local_vars" ] || fail 'git returned no selector inventory'
+while IFS= read -r variable; do [ -z "$variable" ] || unset "$variable"; done <<<"$local_vars"
+branch=$(git symbolic-ref --quiet --short HEAD) || fail 'delivery needs a local branch'
+case $branch in main | master) fail 'delivery requires a feature branch' ;; esac
+remote=$(git remote get-url --push --all origin) || fail 'cannot resolve push origin'
+case $remote in *$'\n'*) fail 'multiple push destinations' ;; esac
+remote=${remote%.git}
+case $remote in "git@github.com:$repo" | "ssh://git@github.com/$repo" | "https://github.com/$repo") ;; *) fail 'origin does not match selected repository' ;; esac
+run_gh() {
+	local bound=$1 out err rc=0
+	shift
+	out=$(mktemp) || fail 'cannot create stdout capture'
+	err=$(mktemp) || fail 'cannot create stderr capture'
+	bounded_call "$bound" "$out" "$err" gh "$@" || rc=$?
+	cat "$err" >&2 || fail 'cannot read stderr capture'
+	cat "$out" || fail 'cannot read stdout capture'
+	rm -- "$out" "$err" || fail 'cannot remove captures'
+	if [ "$rc" -eq 124 ]; then printf 'deliver-write: gh %s exceeded %ss bound\n' "$1" "$bound" >&2; fi
+	return "$rc"
+}
+verify_claim() {
+	local rc=0
+	GH_HOST=github.com bash "$TRACKER" claim-verify --profile github --target "$repo" "$issue" --token "$claim_token" >&2 || rc=$?
+	if [ "$rc" -ne 0 ]; then
+		printf 'deliver-write: selected write refused; local checkout: %s\n' "$PWD" >&2
+		exit "$rc"
+	fi
+}
+case $operation in
+push)
+	[ "$#" -eq 0 ] || fail 'push accepts no extra arguments'
+	verify_claim
+	# User-authorized managed push exception; required hooks run normally.
+	exec git push -u origin "HEAD:refs/heads/$branch"
+	;;
+pr-create)
+	[ "$#" -eq 3 ] && [ -f "$3" ] || fail 'pr-create needs BASE TITLE BODY file'
+	base=$1
+	title=$2
+	body=$3
+	verify_claim
+	rc=0
+	run_gh 120 pr create --repo "github.com/$repo" --head "$branch" --base "$base" --title "$title" --body-file "$body" || rc=$?
+	;;
+pr-edit)
+	[ "$#" -eq 2 ] && [ -f "$2" ] || fail 'pr-edit needs PR BODY file'
+	pr=$1
+	body=$2
+	case $pr in '' | *[!0123456789]* | 0*) fail 'invalid PR' ;; esac
+	rc=0
+	info=$(run_gh 30 pr view "$pr" --repo "github.com/$repo" --json number,headRefName,isCrossRepository,closingIssuesReferences) || rc=$?
+	[ "$rc" -eq 0 ] || fail 'cannot establish PR destination'
+	jq -e --argjson pr "$pr" --arg branch "$branch" --argjson issue "$issue" --arg repo "$repo" '.number==$pr and .headRefName==$branch and .isCrossRepository==false and any(.closingIssuesReferences[]; .number==$issue and (((.repository.owner.login // "")+"/"+(.repository.name // ""))|ascii_downcase)==($repo|ascii_downcase))' <<<"$info" >/dev/null || fail 'PR does not match checkout and issue'
+	verify_claim
+	rc=0
+	run_gh 120 pr edit "$pr" --repo "github.com/$repo" --body-file "$body" || rc=$?
+	;;
+*) fail 'unsupported delivery operation' ;;
+esac
+[ "$rc" -ne 124 ] || {
+	printf 'deliver-write: selected write exceeded120s; may have landed, inspect before another attempt\n' >&2
+	exit 5
+}
+exit "$rc"

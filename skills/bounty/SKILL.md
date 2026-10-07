@@ -95,6 +95,13 @@ operator confirmation.
    decline there stays declined rather than being undone by the next `$bounty` run. Show the
    value's reasoning in the step-6 draft, per the human-read invariant.
 
+   A quest-log standing policy may supply the risk assessment without a
+   per-issue human read only when its exact base-file blob is independently
+   approved and the new issue fits its bounded class. Carry the policy path,
+   blob ID, identity/revision, approval evidence, and ordinary risk reasoning
+   in the draft. This does not waive step 6's confirmation to create the issue;
+   an unattended call without that separate authority still stops there.
+
    `risk:` is deliberately **not** part of the born-ready conjunction above. Born-ready
    governs eligibility for *daytime* work; `risk:` gates only unattended work, and coupling
    them would park every issue the dimension has not reached.
@@ -165,7 +172,15 @@ operator confirmation.
    report line. Birth labels come from the caller's
    per-entry state, overriding step 5: `status:blocked` + a `Blocked by #<n>` body line
    for dependents, `status:needs-triage` for open-question entries (blocked wins when
-   both apply), else `status:ready` — the same rule recovery applies below.
+   both apply), else `status:ready` — the same rule recovery applies below. Prefer the bare
+   dependency record. When its rationale must remain on the same line, use the exact ` — `
+   delimiter and non-empty prose. Use one record per blocker, with no leading whitespace;
+   arbitrary trailing prose and combined references are malformed:
+
+   ```text
+   Blocked by #123
+   Blocked by #123 — the schema change must land first
+   ```
 
    **Epic-parent recovery.** When the parent carries the `epic` label, its Decomposition
    section is the authoritative sub-issue list. Enumerate existing native sub-issues

@@ -13,10 +13,10 @@ stale evidence from another failure is not enough; without current causal eviden
 `$detect-curse` before proposing a correction. If the same artifact recurs after the same
 evidence-backed correction with no new evidence, stop instead of repeating the diagnose-fix cycle.
 Don't advance past a red guardrail, an undispositioned `$gauntlet` finding, a dirty-tree surprise,
-or an ambiguous user-facing design decision. A finding a `$trial-loop` run disposed of — as
-`deferred-tracked` with an owner, or `rejected-with-evidence` — is dispositioned; the loop
-finishes while such findings stand, and treating them as advancement blockers is the
-reading the loop's residual blocking figure exists to remove.
+or an ambiguous user-facing design decision. A finding a `$trial-loop` run disposed of — as a
+`follow-up-candidate`, `deferred-tracked` with an owner, or `rejected-with-evidence` — is
+dispositioned; the loop finishes while such findings stand, and treating them as advancement
+blockers is the reading the loop's residual blocking figure exists to remove.
 
 > **One continuous task.** Preflight through hand-off -- or through cleanup on
 > the authorized merge path -- is a single turn, and the checkpoints inside
@@ -31,7 +31,7 @@ reading the loop's residual blocking figure exists to remove.
 
 > **Keep the durable facts durable.** Raw phase context -- brainstorm
 > transcripts, `$gauntlet` payloads, task-verification output -- is droppable once the spec,
-> plan, and findings files hold the decisions. The resume facts are not: at
+> optional plan, and findings files hold the decisions. The resume facts are not: at
 > each phase seam (design -> build -> review -> ship), write the branch name,
 > `BASE_BRANCH`, guardrail commands, current step, open findings, and every
 > deferral a `$trial-loop` run disposed of, somewhere durable (the plan, the
@@ -42,18 +42,43 @@ reading the loop's residual blocking figure exists to remove.
 > operator compacts, suggest focus text that keeps those facts and drops
 > resolved review iterations and tool output.
 
+Before handing a phase to another model/session, apply quest-log's
+[handoff checklist and receiver checks](../quest-log/SKILL.md#model-and-session-handoffs) in the
+existing private run notes or forge ledger. On resume, reconcile those facts before the next
+dependent action; phase labels alone do not authorize it. Preserve the exact exclusion approval,
+claim/scope binding, artifact lifecycle and cumulative budgets. Keep this continuity record
+beside the strict quest-forge handoff, never as extra fields inside it. Publication recovery,
+review continuation and the step-9 author handshake retain their own authority gates.
+
 ## 0. Preflight
 
 Run `$attunement` to learn the repo: `BASE_BRANCH`, guardrail commands,
-working-tree state, gh authentication, parallel-run context.
+working-tree state, gh authentication, parallel-run context. Keep discovery read-only, then
+evaluate forge's [shared-tree placement policy](../forge/SKILL.md#shared-tree-placement-policy)
+before composing a scope or blocker annotation body or writing other files. Retain the decision
+and observations; branch/worktree creation still waits for scope and claim gate G3 below.
+Until placement completes, compose required tracker annotations only in a private temporary
+directory outside the checkouts, including when the policy stops this run. Defer checkout-local
+notes and file writes until entering the selected checkout; a stop never permits those writes.
 
 ## 1. Scope the Issue
 
-Run `gh issue view <issue-number> --json title,body,labels,comments` and follow
-linked issues, PRs, specs, and commits. Restate the requirement and acceptance
-criteria in your own words before touching code. Ask the user only when
-something is genuinely ambiguous *and* the answer changes the design; otherwise
-state your assumption and proceed.
+Run `gh issue view <issue-number> --json title,body,labels,comments,parent,blockedBy,blocking` and
+follow linked issues, PRs, specs, and commits. When `parent` names a native epic, read its goals,
+non-goals, decomposition, and relevant upcoming open sub-issues. Treat that direction as evidence
+for compatibility and sequencing, never as authority to implement sibling scope. Restate the
+requirement and acceptance criteria in your own words before touching code. Apart from the
+mandatory exclusion approval below, ask the user only when something is genuinely ambiguous
+*and* the answer changes the design; otherwise state your assumption and proceed.
+
+Before freezing the permitted surface, inspect the responsibilities affected by the criteria,
+their direct callers, and shared dependencies. Bound this inquiry to the affected behavior;
+do not inventory the repository. Where current ownership duplicates policy, misplaces a
+responsibility, or adds avoidable indirection, identify a credible ownership change and the
+caller migration or obsolete path it would require. A clean extension remains valid.
+Current file layout is evidence, not external scope authority. If a public, persisted, or
+security contract or an accepted decision would change, resolve its authority at SCOPE
+CHECKPOINT rather than treating the move as permission.
 
 Classify the work:
 
@@ -71,7 +96,7 @@ Classify the work:
   evidence.
 - **Non-trivial** -- anything else.
 
-Only the first two may skip step 3, and a governed small change only after you
+Only the first two use the no-spec lane, and a governed small change only after you
 record the decision's reference, kind, authoritative accepted status, and the
 behavior it governs. Missing, superseded, conflicting, or no-longer-governing
 evidence sends you to SCOPE CHECKPOINT and full design.
@@ -83,12 +108,31 @@ four fields from the live issue and repository as before. In either case, re-che
 assessment against the issue body. Never use divination content to fill any of the frozen charter's
 eight authority fields; only the external sources and decisions listed below can do that.
 
-The assessment stays advisory for scope and becomes load-bearing for exactly one thing: it routes
-this run's review depth under
+The assessment stays advisory for scope and becomes load-bearing for review depth, artifact
+lane, and the fixed design denominator. Route this run's review depth under
 [risk-routed review depth](../../references/review-depth.md). Derive `single-pass` or
 `iterating` from the four fields now, record it with the tracking metadata below, and carry it to
-step 6. An absent or rejected assessment routes `iterating`, so the failure path is the expensive
-one and never the cheap one.
+step 6. A successful live derivation is a present assessment; failure to derive a complete
+assessment routes `iterating` for absence, so the failure path is the expensive one and never
+the cheap one.
+
+Derive and record the artifact lane beside the classification: `trivial-bugfix` and a
+revalidated `governed-small-change` use `no-spec`; a `non-trivial` change uses
+`light-spec` only when complexity is `S` or `M` and change hazards are exactly `none`;
+everything else uses `full-spec`. Because public API or contract work is a change hazard, it
+never enters the light lane. A run entering `light-spec` or `full-spec` requires a validated
+complexity before design: map `S` to 100, `M` to 250, and `L` to 1000 changed lines. This is the
+fixed design denominator, derived from the assessment rather than added to it. If neither
+validated persisted evidence nor the live derivation can establish `S`, `M`, or `L`, return to
+`SCOPE CHECKPOINT` before writing a design artifact; never guess a band or use `full-spec` to
+hide the missing denominator.
+
+Treat a caller-supplied or persisted denominator as comparison evidence only. Recompute the
+mapping from the validated complexity and require the number, band, and public-safe provenance
+to identify the same valid assessment evidence before reuse; unrelated citation wording or line
+number changes do not invalidate that provenance. A mismatch returns to `SCOPE CHECKPOINT`; the
+plan cannot reconcile it. For `no-spec`, record the denominator as `not-applicable` because no
+design ratio is measured.
 
 **A lone quest never splits its own issue.** You claim one issue number and create one branch for
 it, so a `split` decompose verdict is not yours to act on. It is the caller's: `$campaign` gates
@@ -105,9 +149,11 @@ issue/repository derivation read also fails, stop before changing `status:*` or 
 Never include the external payload, authentication data, or private environment detail in that
 response.
 
-**Claim the issue before touching it.** Mint the scope token now, in the
-short form `q<issue-number>-<8 lowercase hex>` (the quest-log claim protocol
-constrains the grammar), and resolve the producer login
+**Claim the issue before touching it.** A campaign supplies its pre-recorded scope token
+and public-safe Campaign identity. Validate the supplied token as exactly
+`q<issue-number>-<8 lowercase hex>` before any claim or issue mutation; invalid or empty
+supplied tokens stop, never fall back to minting. Use the assigned token unchanged.
+A standalone quest mints its own token in that same form. Resolve the producer login
 (`gh api user --jq .login`; a failure is an auth failure — stop with the
 `gh` error). Then acquire the claim — `<plugin root>` is the installed plugin's own
 root, the directory two levels above this skill's own directory, which the harness
@@ -118,16 +164,20 @@ names when it loads the skill, and never the target repository:
   <issue-number> --token <scope-token> --producer <login>
 ```
 
-On exit 6, read the holder payload and the issue's status:
+On exit 6, read the holder payload and the issue's state/status, and apply
+quest-log's liveness rule. An in-flight holder remains live regardless of age.
 
-- Holder stale per the liveness rule → recover:
+- Open issue, no in-flight status, holder stale after `CLAIM_GRACE` → recover:
   `claim-recover <issue-number> --token <scope-token> --producer <login>
-  --older-than <CLAIM_TTL if the issue carries an in-flight status, else
-  CLAIM_GRACE>` and continue as the new owner.
+  --older-than CLAIM_GRACE` and continue as the new owner. A closed issue is
+  terminal; leave its claim for resurrection cleanup.
 - Holder live, interactive root → stop. Report the holder's token,
   producer, age, and the issue's status; the human decides whether to wait
-  or authorize recovery (a re-invocation carrying that decision uses
-  `claim-recover --force`). Ask, never assume.
+  or authorize recovery of that exact observed token. A re-invocation carrying
+  that decision uses `claim-recover --force --expect-token <observed-holder-token>`.
+  A changed, malformed or absent holder conflicts without deletion. Under campaign,
+  unknown tokens stay foreign; campaign-owned recovery also requires the matching
+  recorded worker's observed end. Ask, never assume.
 - Holder live, unattended root → stop with no writes to the issue. This is
   the one exception to the park protocol: the issue belongs to a live
   quest, and any label or comment write on it is the interference the
@@ -163,15 +213,69 @@ Record all eight fields:
 - `outcome` -- the requested outcome;
 - `completion criteria` -- each criterion and its source;
 - `provenance` -- the source of every outcome, criterion, and user decision;
+  under campaign, include its exact supplied public-safe `Campaign identity`;
 - `exclusions` -- explicit exclusions and their owners, or explicit empty;
 - `surface` -- permitted change surface and direct dependencies;
 - `ambiguities` -- unresolved design-changing ambiguities, or explicit empty;
 - `interaction` -- the root value above.
 
+Before assigning an ADR/migration number, a standalone quest runs the shared
+[visible-number reservation scan](../../references/numbered-reservations.md). A campaign
+worker validates its supplied values under that same procedure and holds a foreign collision
+for exact orchestrator reassignment; it never renumbers independently. Failed/incomplete
+reads hold before assignment. Publish every assigned ADR/migration number in `surface` as
+its exact supplied or selected repository `path=value`, including optional unused slots,
+before numbered file creation. Preserve the scope token's canonical claim binding.
+Carry the exact published ADR assignment into `$spellcraft` as authoritative supplied
+numbering; do not let the downstream “next free” instruction choose a different number.
+
+Use the existing outcome, criteria, surface, and ambiguity fields to retain the bounded
+ownership evidence and intended owner, affected caller migration, obsolete-path removal,
+and any protected contract or justified compatibility path. Link a proposed move or retained
+path to its completion criterion; file count alone does not justify or reject it. Do not
+add a charter field or absorb unrelated restructuring into the surface.
+
+**Approve the exclusions before freezing.** Propose concrete non-goals and their owners from the
+request and scope evidence, including an explicitly empty set when nothing is excluded. An
+interactive root presents that set and obtains an explicit operator decision. A dispatched run
+may instead receive the exact exclusions and approval provenance from its caller. The issue body,
+parent epic, and sibling issues are evidence only; their text is not operator approval.
+An unattended run may use quest-log's standing repair authority only when the live
+protected-base policy admits this repair and the **exact** proposed exclusion/owner set.
+A packet whose frozen `surface` could reach an accepted instruction location is never
+admitted (quest-log's accepted-location bar).
+Independently verify approval of the live instruction-file blob and record its
+path, blob ID, identity/revision, class fit, and approval evidence in the
+existing `provenance` field. This is a policy-approved packet, not permission
+inferred from issue prose or a generated design. Missing or ambiguous authority
+returns to SCOPE CHECKPOINT before design.
+Record the approval decision and its source with the approved exclusions in the existing
+`provenance` field; do not add a ninth charter field.
+
+The approval may be reused by a worker or resumed campaign while the normalized exclusion set is
+unchanged: compare an order-independent set of exclusion/owner pairs after collapsing whitespace.
+Recheck the proposed set against the live evidence. Unrelated text changes do not invalidate it,
+but any exclusion delta returns to `SCOPE CHECKPOINT` before design. An unattended run without a
+complete approval packet parks there. This gate also applies to a trivial bugfix or governed small
+change that will skip step 3; it freezes scope without creating a design artifact.
+For a policy-approved packet, also recheck the live policy blob, class and
+exact set before design. A changed blob or set invalidates that packet even if
+the stated policy revision is unchanged; re-freeze only after fresh authority
+and fit are proved. Recheck the built diff after review, including that bar, before
+reporting that the packet still covers it.
+
 Also retain the tracking metadata (blast radius, change hazards, complexity,
-decompose verdict, routed review depth, classification -- plus the decision
-evidence and acceptance criteria for a `governed-small-change`) and read
-everything back before proceeding.
+decompose verdict, routed review depth, classification, artifact lane, and `design denominator:
+<100 | 250 | 1000> changed lines (<S | M | L>) — <public-safe assessment provenance>` -- or
+`not-applicable (no-spec)` -- plus the decision evidence and acceptance criteria for a
+`governed-small-change`) and read everything back before proceeding. The denominator is tracking
+metadata beside the eight-field charter, not a ninth authority field or a new
+`WORK:DIVINATION` field.
+
+If live scope evidence materially changes after this freeze and changes the validated complexity,
+return to `SCOPE CHECKPOINT` and start a new design cycle with a new scope record. Never resize
+the current cycle's denominator retroactively. A plan estimate or a long design is not scope
+evidence and cannot trigger re-sizing.
 
 Keep every public annotation to the minimum its fields need: public-safe source
 labels for provenance, never secrets, auth headers, host paths, hostnames, IPs,
@@ -196,38 +300,47 @@ ADR, plan, or other generated artifact.
 
 An unattended root never answers a design-changing question itself: post a
 public-safe `WORK:TRAJECTORY`, set `status:needs-human`, and stop before
-design. If the checkpoint data is unsafe, the notice names only the parked
-phase and the need for human input.
+design. Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+refuses a block missing either. If the checkpoint data is unsafe, the notice
+names only the parked phase and the need for human input.
 
 ### Posting the annotation
 
-Use the scope token minted for the claim (step 1) as the annotation token —
+Use the scope token assigned or minted for the claim (step 1) as the annotation token —
 claim and charter share one identity. Include it in the comment and capture
 the returned comment URL as the annotation's location, not its identity. Read
 the comment back and verify the token and all eight fields before continuing,
 then cross-check the annotation token against the claim token and run verify
 gate **G2** (`claim-verify` again). Post
 it even for a trivial bugfix that skips design -- `$resurrection` reads it as
-the liveness signal.
+the liveness signal. Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+refuses a block missing either.
 
 ## 2. Branch
 
 Verify gate **G3**: `claim-verify` before creating the branch; a lost gate
 halts per step 1's rule.
 
-Fetch, sync `BASE_BRANCH` to `origin/BASE_BRANCH`, and create
-`feat/<short-slug>-<issue-number>` off it. Never work on the default branch. If
+**Decide placement before mutation.** Consume preflight's `SHARED_TREE` through forge's
+[shared-tree placement policy](../forge/SKILL.md#shared-tree-placement-policy) before fetching,
+syncing a base, creating a branch/worktree, or writing files. Read and apply that policy only;
+do not run forge's implementation or setup here. It owns the state/action decision, including
+unknowns and already-isolated reuse; do not substitute a disclosure-only condition or another
+shared/solo verdict. A stop takes this quest's existing blocker path.
+
+After that gate, fetch and create `feat/<short-slug>-<issue-number>` from
+`origin/BASE_BRANCH` in the selected checkout. Never work on the default branch. If
 a branch for this issue already exists, ask before reusing it unless the issue
 or PR explicitly names it or your dispatch prompt carries the operator's reuse
 decision.
 
-**Worktree placement.** If repo instructions require an isolated worktree (or
-you are a parallel agent that must not share a working tree), create it
-*outside* the repo tree -- `../<repo>-worktrees/<branch>` -- and `cd` there
-first. Never nest a worktree inside the repo: whole-tree tooling (linters, type
-checkers, test discovery) will walk it and fail your commit on another agent's
-in-flight code. If the harness's built-in isolation would nest it, run
-`git worktree add <external-path>` yourself.
+When the policy selects isolation, use forge's external placement procedure with the fetched
+`origin/BASE_BRANCH` as the new branch's start point, then enter and verify that checkout before
+writing. Do not switch, reset, or synchronize the source checkout's branch to create the
+destination. Reuse an authorized already-isolated worktree without recursively isolating it.
+Carry the dispatched file scope, assigned numbers, and ADR-index ownership into that checkout.
 
 ### Governed small change path
 
@@ -247,7 +360,14 @@ still happen.
 
 ## 3. Design
 
-Pass the frozen charter to `$spellcraft` exactly as follows:
+Pass the artifact lane and fixed denominator to `$spellcraft` as routing evidence outside the
+charter:
+
+artifact lane: light-spec | full-spec
+design denominator: 100 | 250 | 1000 changed lines (S | M | L)
+denominator provenance: <exact public-safe source recorded in WORK:SCOPE>
+
+Then pass the frozen charter exactly as follows:
 
 interaction: <unchanged root value>
 scope identity: <external scope identity, never reviewed target>
@@ -258,18 +378,17 @@ exclusions: <frozen external exclusions>
 surface: <frozen permitted surface>
 ambiguities: <frozen ambiguity list>
 
-Run `$spellcraft <issue-number>`: write the spec and ADR, write the
-implementation plan, then adversarially review the whole design set — ADRs,
-spec, and plan — in one loop under one charter. Skip only for
-a trivial bugfix or a revalidated governed small change. The spec, the ADR
-(under `docs/adr/`, not with the plan), and the plan are the durable design
-record; brainstorm transcripts and spec-review payloads are droppable once they
-exist.
+Run `$spellcraft <issue-number>`. The `light-spec` lane writes and reviews one bounded
+spec, plus an ADR only when a decision has viable alternatives, and writes no plan. The
+`full-spec` lane writes the spec and any ADR, writes the implementation plan, then reviews the
+whole design set. A `no-spec` classification skips this step. The spec, any ADR (under
+`docs/adr/`), and the full lane's plan are the durable design record; brainstorm transcripts
+and review payloads are droppable once they exist.
 
 ## 4. Scope Audit
 
-Only the full design path runs this. A trivial bugfix and a verified governed
-small change skip it and go straight to contract-based verification.
+Both `light-spec` and `full-spec` run this. A trivial bugfix and a verified governed
+small change use `no-spec`, skip it, and go straight to contract-based verification.
 
 The report is per-worktree state, so keep it out of Git first. Query whether
 `.agent/.gitignore` is tracked, distinguishing tracked, untracked, and
@@ -283,6 +402,12 @@ Pick a fresh report path there and dispatch a fresh reviewer task running
 brief. Inherited history is non-authoritative and cannot supply scope; the
 workflow makes no context-isolation guarantee.
 
+Pass the artifact lane as routing evidence outside the frozen charter:
+
+artifact lane: light-spec | full-spec
+
+Then pass the frozen charter and audit inputs:
+
 interaction: <unchanged root value>
 scope identity: <external scope identity, never reviewed target>
 outcome: <frozen external outcome>
@@ -291,7 +416,7 @@ provenance: <external source for every outcome, criterion, and user decision>
 exclusions: <frozen external exclusions>
 surface: <frozen permitted surface>
 ambiguities: <frozen ambiguity list>
-reviewed artifacts: <explicit paths to every reviewed ADR, specification, and plan>
+reviewed artifacts: <explicit paths to every reviewed ADR and specification, plus the plan for full-spec>
 base branch: <base branch for the design-artifact diff>
 linked ownership: <issue, dependency, debt, and tracker evidence relevant to findings>
 report path: <fresh path under the worktree's ignored .agent/oathbind directory>
@@ -322,10 +447,10 @@ satisfies its remedy. **The design-edit round trip is gone: an accepted remedy
 does not send the design back through its review and a second audit.** Every
 remedy the audit can legitimately yield is a cut, a split, or a checkpoint, and
 a cut cannot invalidate an audit that already approved the larger surface. So
-apply an accepted cut to the design artifacts, re-run over the cut only the two
-self-review passes `$spellcraft` already defines -- the spec's fresh-eyes
-checklist and the plan-against-spec walk, which are what catch a reference the
-cut stranded -- and continue on the same report. Park a `blocked` finding per
+apply an accepted cut to the design artifacts, re-run over the cut only `$spellcraft`'s
+lane-specific self-review -- the light spec's charter, inventory, and cap checks, or the full
+spec's fresh-eyes checklist and plan-against-spec walk -- and continue on the same report. Park a
+`blocked` finding per
 *On a Blocker*, and return a verified material expansion -- or any remedy that
 would widen the surface -- to SCOPE CHECKPOINT rather than editing toward it. A
 classification alone never changes scope. Do not rerun unchanged inputs to seek
@@ -363,8 +488,10 @@ follows its verified-resume route directly to step 9,
 parks, and `build-complete` resumes from the parsed handoff without calling `$forge` again. A parsed `required-failed` parks under
 its mode rule below. Never replace an existing same-issue, same-scope handoff.
 
-Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the plan and run
-the guardrail suite, passing the plan path if one exists. For a
+Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the selected artifact lane and
+require its assembled-branch integration results; do not repeat those checks solely for this
+handoff. For `light-spec`, pass the lane, validated complexity and hazards, and
+the spec path, with no plan path. For `full-spec`, pass the plan path. For a
 `governed-small-change`, pass the classification and revalidated decision
 evidence (reference, kind, accepted status, governed behavior, acceptance
 criteria) -- and no plan path. Require forge's ledger result to equal the
@@ -486,23 +613,35 @@ other condition that has since stopped holding. Name the routed depth in the tra
 what moved it if it changed.
 
 Set the issue to `status:in-review` (single-active swap), then review the branch at that depth
-with this focus:
+with the first `gauntlet`-compatible lens selected for the target shape under
+[review lenses](../../references/review-lenses.md). Append the scope-audit comparison below to
+the preset as target-specific context. Name the selected lens beside the routed depth in the
+transcript. This broad branch review retains the existing `gauntlet` route; the Security pass
+below retains the `detect-evil` route and its `security` lens.
 
-> Focus on auth, permissions, data loss or corruption, rollback, idempotency, races, empty or
-> malformed inputs, degraded dependencies, compatibility, migrations, observability, and whether
-> the chosen approach is simpler or safer than viable alternatives.
+When the approved design selects an ownership transition, add its transition evidence to that
+review focus and compare it with the actual branch diff: the approved intended owner, every
+affected direct caller and migration, obsolete paths to remove, protected contracts, and each
+retained compatibility path's contract and reason. A missing caller or unjustified independent
+policy is an in-scope finding. A retained compatibility path is justified only when its protected
+contract and reason are evidenced; a delegating public facade with an accepted contract is not a
+finding merely because it remains in a separate file.
 
-On `iterating`, run `$trial-loop --base <BASE_BRANCH> <that focus>`. On `single-pass`, dispatch
-the one reviewer pass the reference specifies, with the same `--base` and the same focus, and
-give each finding its single disposition. Address every defensible finding and commit after each
-accepted fix, on either route.
+On `iterating`, run `$trial-loop --reviewer gauntlet --base <BASE_BRANCH> <composed focus>`. On
+`single-pass`, dispatch the one `gauntlet` pass the reference specifies, with the same `--base`
+and composed focus, and give each finding its single disposition. On either route the review
+block's `failure model:` line names the reviewed spec's `Failure model` section by
+repo-relative path and heading — the loop's `failure_model` input — or `none` on a `no-spec`
+run. Address every defensible finding and commit after each accepted fix, on either route.
 
 **A blocking finding on a single pass escalates rather than being fixed in place.** Record the
 escalation and the finding that caused it, then run the `$trial-loop` invocation above against
 the same branch at its ordinary budget, starting at iteration 1 — the single pass is not one of
-that run's iterations. From that point this step reads exactly as it does for a run routed
-`iterating` at step 1. A `single-pass` review that returns `approve` carrying only notes is a
-completed review, and step 8's summary records it as `exit: none` with `iterations: 1`.
+that run's iterations. No pass changed the target, so replace the first lens with the different
+independent-review lens selected by the reference before starting the loop. From that point this
+step reads exactly as it does for a run routed `iterating` at step 1. A `single-pass` review that
+returns `approve` carrying only notes is a completed review, and step 8's summary records it as
+`exit: none` with `iterations: 1`.
 
 **Carry the issue's cumulative review-round figure through every run here.** Seed it with
 the design phase's total where `$spellcraft` reported one, `0/0` otherwise, pass it to each
@@ -521,8 +660,9 @@ this workflow. Reading the second as blocked reports a finished branch as stuck.
 Carry every deferral from any `$trial-loop` run on this branch — each entry with
 its owning record path or tracker issue — into the `WORK:REVIEW` comment and the
 PR body, however the run ended, `approve` included. Carry the run's
-`rejected-with-evidence` findings and its outstanding notes the same way. The loop
-discloses all three however it ended, and a second run after a security round trip
+follow-up-candidates table, `rejected-with-evidence` findings, and its outstanding notes
+the same way. The loop discloses each list however it ended, and a second run after a
+security round trip
 does not erase the first run's records. Those lists are the part a reader cannot
 reconstruct, and they are the only thing holding the orchestrator's own disposition
 judgment to account.
@@ -566,7 +706,10 @@ resume:
 - **On approval**, post a fresh complete `WORK:TRAJECTORY` recording it — who approved,
   where the approval is recorded, and what it authorized — then swap
   `status:needs-human` → `status:in-review` in a single-active edit. Record before
-  label: the same exit-edges discipline the park itself followed.
+  label: the same exit-edges discipline the park itself followed. Compose it with both
+  markers and post it through the
+  [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses
+  a block missing either.
 - **Resume at step 7** (Simplify). The approval alone never re-enters the loop —
   `$trial-loop`'s caller contract forbids a budget-stopped run from re-entering — so
   the budget stop stands as the run's ending. One exception, already governed: if a
@@ -593,18 +736,20 @@ oathbind report path: <exact readable report path>
 candidate approved surface: <read and pass the report's exact candidate approved surface>
 
 **Security pass.** When the branch diff is security-relevant, also run
-`$detect-evil` and disposition its findings on the same terms -- fixed, or owned
-by a tracked deferral (a deferral record where the repo keeps them, otherwise a
-tracker issue filed through `$bounty`, whose recurrence gate bounds instance
-growth and routes an unreachable-in-practice finding to record-and-close rather
-than the open queue). Non-blocking: `needs-attention` is work to do, never a
-reason to park.
+`$detect-evil` and disposition its in-surface findings on the same terms -- fixed,
+or owned by a tracked deferral (a deferral record where the repo keeps them,
+otherwise a tracker issue filed through `$bounty`, whose recurrence gate bounds
+instance growth and routes an unreachable-in-practice finding to
+record-and-close rather than the open queue). Adjacent findings take the routes
+defined below. Non-blocking: `needs-attention` is work to do, never a reason to
+park.
 
 Dispatch it the way `$trial-loop` dispatches its reviewer -- a subagent running
-`$detect-evil --json --out <path> --base <BASE_BRANCH>`, artifact on a
-scratchpad path outside the repo tree. Invoked bare it returns full markdown
-inline: a findings payload in your context at step 6 of 9, the cost this
-dispatch exists to avoid. Two properties make it safe:
+`$detect-evil --json --out <path> --base <BASE_BRANCH> <security lens focus>` under
+[review lenses](../../references/review-lenses.md), artifact on a scratchpad path outside the
+repo tree. Keep the existing `detect-evil` route: a focus string named `security` is not a reason
+to invoke `gauntlet`. Invoked bare it returns full markdown inline: a findings payload in your
+context at step 6 of 9, the cost this dispatch exists to avoid. Two properties make it safe:
 
 - **A path unique to this run** -- embed the issue number and branch name.
   `$campaign` runs up to five `$quest` subagents in parallel, and a fixed
@@ -620,6 +765,18 @@ dispatch exists to avoid. Two properties make it safe:
   security finding -- the one case the verdict cannot show. Record any
   suppression in `WORK:REVIEW` and the PR body whatever the verdict; the
   summary's fields are single-line and none of them holds a suppression.
+
+Validate each security finding's `surface` and `trigger` and the artifact's
+severity-derived counts on the same terms as `$trial-loop`; do not infer a
+missing field. Rerun malformed output once, then park without dispositioning it.
+The finding's `surface` is the reviewer's correctness-closure
+judgment, not the oathbind candidate-approved surface. A defensible adjacent
+`critical` or `high` finding refutes the frozen scope and returns to SCOPE
+CHECKPOINT when interactive or parks when unattended. An adjacent `medium` or
+`low` finding is added to the same follow-up-candidates table carried from the
+main review and does not block or trigger another pass. That public table carries
+repo-relative file evidence and a public-safe source-pass reference; keep the
+scratch findings path in the local run report only.
 
 Judge security-relevance by reading the changed files, not the issue's
 description of itself. The diff qualifies when it:
@@ -661,7 +818,10 @@ is where a human is reliably present to run it.
 
 ## 7. Simplify
 
-Run `$dispel` on the branch diff, re-run the guardrails, and commit.
+Run `$dispel` on the branch diff. If it makes an edit, use the checks `$dispel`
+ran for that edit and commit it; if it makes no edit, add no check run or empty
+commit. The assembled-branch integration and final-candidate checks remain
+obligations, not reasons to repeat them solely for this step.
 Quality only -- do not reopen settled design decisions. Step 6 reviewed the
 pre-simplify code, so if simplification changed behavior (anything beyond a
 pure rename or format), re-run `$trial-loop` -- or at minimum `$gauntlet` --
@@ -671,13 +831,16 @@ already assert.
 ## 8. Ship It
 
 Verify gate **G4**: `claim-verify` before running `$deliver`; a lost gate
-halts per step 1's rule.
+halts per step 1's rule. Delivery also mechanically verifies before each issue-backed
+push/PR write, and both publication helpers verify before their comment write.
+Pass the exact claim/scope token unchanged; a prior successful gate does not replace
+the write-owner checks, and a lost later gate does not erase an already-completed push.
 
 In `build-complete`, re-read the build-to-review handoff before delivery. Only `required` and
 `not-required` may proceed; `required-failed` or any unreadable required
 artifact parks the quest before `$deliver`.
 
-Run `$deliver <issue-number>` to push the branch, create the PR, and drive it
+Run `$deliver <issue-number> --claim-token <scope-token>` to push the branch, create the PR, and drive it
 to green CI and mergeable state. Keep a compact public review summary — the
 fields below — as
 an ignored private mode-0600 file beside the forge ledger; do not put outer
@@ -727,29 +890,48 @@ run that reaches this field with nothing to write.
 
 ADR 0053 is the authority for this field's values, amending ADR 0021, which
 remains the authority for the field set. A run's payload — the lists step 6 carries:
-deferrals with their owning paths or tracker issues, rejected findings, outstanding
-notes, and a budget stop's remaining-findings summary — stays out of
+deferrals with their owning paths or tracker issues, follow-up candidates, rejected findings,
+outstanding notes, and a budget stop's remaining-findings summary — stays out of
 the summary and out of every field: ADR 0028 sends it through the helper's payload
 slot into `WORK:REVIEW` and through this step's named write moment into the PR body,
 which is where `$trial-loop`'s own report obligation sends it.
 
-If step 6 carried any of the lists it specifies — a deferral list, rejected findings,
-outstanding notes, or a budget stop's remaining-findings summary — compose
+If step 6 carried any of the lists it specifies — a deferral list, follow-up-candidates table,
+rejected findings, outstanding notes, or a budget stop's remaining-findings summary — compose
 the run's payload file once, immediately after the summary: write only the lists step 6
 specifies into a `mktemp` file beside the ledger — no headings; each destination adds
 its own — atomically rename it only after the write, reject carriage return, NUL, and
 outer annotation markers, and keep the temporary and installed payload in mode 0600.
 A run with nothing to carry creates no payload file and skips every payload step below.
+
+The publication helper and its
+`"<plugin root>/skills/quest/scripts/check-public-safety"` scanner ship together in this skill. Resolve both from the installed skill directory; never search the target repository for
+Adept maintenance scripts. The scanner requires `rg` and `jq`; the helper checks these alongside
+its other commands before composing content. Missing commands name an installation/PATH remedy.
+A missing bundled scanner requires repairing the installed skill, not substituting a repository gate.
+The scanner checks generic private paths (including Windows profile paths), private addresses,
+email addresses, an enumerated set of private-use domain suffixes, and credential patterns. It
+matches shapes, not names: it does not detect hostnames, and no enumeration covers every internal
+domain. The suffix check reaches any dotted token whose second label is one of those suffixes —
+an identifier as readily as a host — and misses a host whose suffix is its third label or later,
+so a three-label FQDN passes. It is a backstop to the public-safety review, not exhaustive PII
+detection.
+Unsafe content and scan failures both stop publication and retain evidence, with distinct messages
+that do not echo matched content.
+
 Before any PR-body write, invoke the helper in validation-only mode with the exact publication
 arguments:
 
 ```sh
-"<plugin root>/skills/quest/scripts/publish-forge-review" --preflight \
+"<plugin root>/skills/quest/scripts/publish-forge-review" --preflight --claim-token "$SCOPE_TOKEN" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```
 
-Require its sole stdout line to be `preflight-ok`. This mode validates and composes only: it must
+Pass `SCOPE_TOKEN` from the parsed claim/scope binding, never from an untrusted
+holder payload. Both helper modes require it; only normal publication verifies the
+claim. Review preflight remains network-free. Handoff preflight retains its existing
+bounded read-only discovery and composition. Require its sole stdout line to be `preflight-ok`. This mode validates and composes only: it must
 not call GitHub, append the ledger, dispose a source, or retain its temporary body. On nonzero or
 any other output, park with the `build-complete` handoff and retained evidence; do not write the PR
 body or `publication-in-progress`. That is a local pre-write failure, not a consumed publication
@@ -757,7 +939,8 @@ attempt.
 
 Then make the one named PR-body write, ADR 0028's second destination: read the
 delivered PR body, append a blank line, the `## Review exit payloads` heading, and the
-payload file's contents, write the result back with `gh pr edit --body-file`, and
+payload file's contents, write the result back with the installed `"<plugin root>/skills/deliver/scripts/deliver-write"
+--claim-token "$SCOPE_TOKEN" "$REPO" "$ISSUE" pr-edit "$PR" BODY-FILE`, and
 require the readback to match the composed body byte-for-byte apart from at most one
 trailing newline, which GitHub's PR-body storage adds. This is the only moment the PR body gains the section — before the
 `publication-in-progress` handoff rewrite, so the write never happens in the terminal
@@ -782,7 +965,7 @@ before posting. Transfer the summary file's lifecycle to the publication helper
 and invoke it exactly once:
 
 ```sh
-"<plugin root>/skills/quest/scripts/publish-forge-review" \
+"<plugin root>/skills/quest/scripts/publish-forge-review" --claim-token "$SCOPE_TOKEN" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```
@@ -896,6 +1079,11 @@ the user the PR is ready to merge, and stops there -- short of its "After a
 merge" list. A `$campaign`-dispatched run always takes that path, so hand-off
 is a terminal stop, not a step to clean up after. On that path, leave the
 branch and the worktree in place for whoever merges; the reclaim is theirs.
+Include every public-safe follow-up-candidate row from step 6 in the completion
+report so a campaign caller can route it without rereading a private findings
+artifact. Do not return its scratch path.
+Carry `$deliver`'s full local run count, reasons, and observed total duration into
+that report, with CI stated separately and unknown durations left unknown.
 
 When this path is authorized to merge, apply
 [the commit-bound merge gate](../../references/merge-gate.md). The reference is the complete
@@ -920,7 +1108,10 @@ records it, in this order:
    the live branch and PR if either exists, guardrail status, and exactly what
    a human must decide or supply. The exit-edges rule (quest-log skill)
    requires the note before the label, so an issue never parks without a record
-   of where.
+   of where. Compose it with both markers and post it through the
+   [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+   refuses a block missing either -- a park note that loses its sentinel is filtered
+   out by latest-complete-wins, and an older block is returned as current.
 2. **Then set the label** (ensure-create it first; single-active swap):
    - **`status:blocked`** -- an external dependency: an unmerged upstream PR, an
      absent credential or service, a decision owned by someone not in this

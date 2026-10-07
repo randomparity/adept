@@ -136,6 +136,14 @@ package scripts, `pyproject.toml`, `Cargo.toml`, or `.github/workflows/`.
 Record the exact commands in the task plan. Note which checks CI hard-gates
 **individually** vs. only via an aggregate recipe — a guard added to an
 umbrella `ci` target may not gate PRs if CI calls the sub-recipes directly.
+Separate iteration checks, assembled-branch integration checks, the full local
+suite, mandatory push hooks, and CI. Inspect the effective installed hook as
+well as its installer and target to establish whether it runs the full suite,
+what object it tests, and whether it blocks a failed push; its name proves none of
+these. Name the owner of final full local verification before scheduling it:
+the mandatory full hook when it covers the pushed candidate, otherwise an
+applicable earlier result or an explicit final run. Record any repository rule
+that requires a separate full run even when the hook covers the same candidate.
 
 Where the repo keeps an ADR index, also determine whether a gated check couples
 the two — an ADR file requiring a matching index row, or the reverse. Read the
@@ -154,6 +162,8 @@ layered on top of a measurement, and an unrun command supports neither claim.
 `unknown` tells the reader to bound the first run generously; a duration tells
 them what every later run costs. Update the entry when a later run replaces
 an `unknown`.
+Record cost and coverage separately for each phase and hook; a fast focused
+check does not inherit the full suite's coverage or duration.
 
 **Prerequisites.** Everything the command needs that a default checkout does
 not supply: installed tools with version floors, one-time setup targets such
@@ -166,6 +176,23 @@ outlast a two-minute default tool timeout — that is slowness, not a hang, and
 re-invoking after an apparent timeout restarts the suite instead of ending
 it. Repo instruction files often name such hazards; carry them into the
 record so a reader of the task plan does not have to find them there.
+
+**Verification results.** In this same task plan or durable workflow record,
+carry each result that later work may consult: tested commit/tree, paths and
+content identity of relevant dirty or untracked inputs, exact command and
+scope, exit status and output reference, environment and target, and observed
+duration. Record no result for a command that has not run; keep its cost as
+`unknown` until measured. On resume, compare these facts with current inputs
+and scope using [true-seeing](../../references/true-seeing.md) before making a claim or
+reusing a baseline. Missing facts do not establish applicability; failed,
+cancelled, incomplete, and flaky results cannot support a passing claim.
+
+Also identify mandatory per-PR edits shared by concurrent branches: paths that
+a repository rule requires every pull request to change, such as release
+metadata. Record each path, its governing rule, its value or ordering
+constraint, and how a moved base can make an assigned value stale. Under
+`$campaign`, return these facts to the orchestrator for row-specific
+assignment; do not assign the values here.
 
 Before the first build, check prior art for exactly these facts. Search
 `docs/solutions/` for tooling-involved records (`rg -li '<tooling keyword>'
@@ -181,6 +208,30 @@ Confirm `gh` is authenticated enough to read the issue and later create a PR.
 If authentication is missing, stop with the exact command the user should run.
 
 ## 7. Detect parallel-run context
+
+Run one unconditional probe here, whether or not you were told you are one of several
+agents: `git worktree list`, and step 4's already-captured
+`git status --short --untracked-files=all` result (no second status call). Record a new
+one-sided line in step 2's `KEY<TAB>VALUE` shape:
+
+- `SHARED_TREE` — raw counts, not a judged verdict: `siblings: <n> (<branch names, or
+  none>); pre-existing dirty or staged paths: <yes|no>`. `git worktree list` always
+  includes this session's own working tree; exclude the row whose path equals your own
+  working directory (`pwd -P`) before counting `n`, since it is not a sibling. A row with
+  no branch (e.g. `(detached HEAD)`) still counts toward `n` and is listed as
+  `(detached HEAD)`. The dirty/staged half reflects step 4's read time, not step 7's —
+  it may be stale by however long steps 4-6 took. If either half cannot be determined,
+  that half alone reads `unknown` (e.g. `siblings: 2 (...); pre-existing dirty or staged
+  paths: unknown`); record the whole line as `unknown` only when the probe itself cannot
+  run (e.g. `git worktree list` errors). Fails open like step 2's records — `unknown`
+  never blocks attunement. The counts cannot attribute a sibling worktree or dirty state
+  to a cause — this session's own resumed work, another agent, a stale worktree — so the
+  record states the observation only, leaving attribution to the downstream reader.
+
+No policy attaches to this record: the disclosed-case bullets below are unchanged, byte
+for byte. What the counts imply in the undisclosed case is `$quest`'s and `$forge`'s own
+future work, the same as "Attunement records; skills branch" above (SKILL.md:69) already
+argues for step 2's records.
 
 If you were dispatched as one of several agents working sibling issues
 concurrently, honor what the orchestrator handed you:
