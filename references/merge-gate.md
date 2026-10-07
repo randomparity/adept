@@ -73,14 +73,21 @@ fault**.
    part 2 **not applicable** for this run, never persisted. All three parts are required;
    any one alone skips part 2 over a repository whose checks are live elsewhere. Without
    that the gate deadlocks permanently wherever there are no automated checks.
-3. **Merge base current.** `git fetch origin`, then `git merge-base --is-ancestor
-   "origin/<BASE_BRANCH>" "$HEAD_SHA"`. The fetch is part of this check, not preparation
+3. **Merge base current.** Recover the [refresh chain](#bounded-refresh-recovery) first.
+   Run `git fetch origin "refs/heads/<BASE_BRANCH>:refs/remotes/origin/<BASE_BRANCH>"`,
+   capture `BASE_TIP_SHA=$(git rev-parse "refs/remotes/origin/<BASE_BRANCH>")`,
+   then `git merge-base --is-ancestor "$BASE_TIP_SHA" "$HEAD_SHA"`.
+   The fetch is part of this check, not preparation
    for it: this is a local test against a remote-tracking ref, and against a stale one it
    passes wrongly — the exact failure the part exists to catch — so re-fetch here even
-   though the block opened with one. Exit 0 passes — the base tip is already in the head,
-   so the merge result is the commit CI ran on. Exit 1 means the base moved under a green check: merge
-   `BASE_BRANCH` in, regenerate artifacts, rerun guardrails, and re-run this gate from
-   part 1, because the refresh produced a new head. Any other exit is a fault, not a
+   though the block opened with one. The explicit source/destination prevents a narrowed
+   configured fetch set from silently leaving the base tracking ref stale.
+   Exit 0 passes — the base tip is already in the head,
+   so the merge result is the commit CI ran on. Exit 1 means the base moved under a green
+   check: apply bounded refresh recovery below before any merge-in or retry. An admitted
+   refresh merges `BASE_BRANCH` in, regenerates artifacts, reruns full candidate guardrails
+   and CI, and returns to part 1 because it produced a new head. Required hooks are never
+   bypassed. Any other exit is a fault, not a
    verdict. `mergeStateStatus` does not answer this: it reports `BEHIND` only where the
    base branch requires up-to-date branches, and stays `CLEAN` otherwise. Run this part
    **immediately** before the merge — nothing binds the base at merge time, so a sibling
@@ -92,10 +99,15 @@ fault**.
    complete block simpliciter, because the park protocol writes that block type too and a
    hold posted after a valid hand-off would otherwise revoke it. `$return-to-town`'s hand-off
    is what writes the block, and it computes `HEAD_SHA` from `git ls-remote` at that moment;
-   read it there rather than relying on a report reaching you. Use the quest-log skill's
-   selection rules, not an ad-hoc `jq` over every comment: a block missing its
-   `TRAJECTORY:COMPLETE` sentinel is a write that died midway and counts as absent, and
-   `last` is what implements latest-complete-wins.
+   read it there rather than relying on a report reaching you. **The `jq` block below is this
+   part's selection rule**, not an illustration of one stated elsewhere: quest-log's general
+   *Recipe: read the latest complete annotation of a type* tests only the opening marker and
+   the closing sentinel before `last`, so it returns the newest complete `WORK:TRAJECTORY`
+   block whatever that block says — including the park note this part exists to exclude — and
+   it selects over comment bodies, which cannot yield the author the check below needs. What
+   it does share keeps its usual meaning here: a block missing its `TRAJECTORY:COMPLETE`
+   sentinel is a write that died midway and counts as absent, and `last` is what implements
+   latest-complete-wins over the blocks the `MERGE-READY` test admits.
 
    ```sh
    gh issue view <n> --repo <owner/name> --json comments |
@@ -139,3 +151,84 @@ gh pr merge <PR> --repo <owner/name> "$MERGE_FLAG" --match-head-commit "$HEAD_SH
 
 A refused `--match-head-commit` merge means the branch moved. Re-run the gate from part 1;
 never retry the merge on the stale reads.
+
+## Finite root-owned execution
+
+For an explicit human grant covering this refresh/merge sequence, the campaign root or
+directly authorized human flow uses
+[`refresh-merge`](../skills/return-to-town/scripts/refresh-merge) from its reclaimed, clean
+feature worktree. A dispatched quest worker stops at its authored handoff. Before invocation,
+the caller establishes eligible landing order, current scope, complete assignment snapshot,
+human authority, observed worker end and worktree ownership. A claim token alone proves
+none of those facts. Policy-only authority tied to an evaluated head retains its existing
+manual route and returns to policy evaluation whenever the head changes.
+
+Create a private context using the exact
+[v1 schema](../docs/workflow/specs/2026-09-30-bounded-merge-refresh-design.md#private-context-v1).
+Record its absolute path in existing row/workflow notes. Supply real authority provenance,
+exact numbered/version assignments, regeneration argv/allowed paths, and the attuned full
+verification owner. Empty assignment arrays assert that none apply; unsupported conventions
+hold for root. Use a regular mode-0600 file under a physical mode-0700 directory. Reconcile existing
+history before construction; missing history never authorizes a new zero-count packet.
+
+```sh
+bash "$CLAUDE_PLUGIN_ROOT/skills/return-to-town/scripts/refresh-merge" \
+  --claim-token "$CLAIM_TOKEN" --context "$REFRESH_CONTEXT"
+```
+
+Run once with a timeout covering the packet's finite deadline, or one harness-managed
+background task and read on completion. The helper owns CI waiting, all four predicates,
+at most two admitted refreshes, required hooks/full candidate verification, derivative
+publication and the final head-bound merge. It rechecks assignments against each captured
+base; root alone reassigns. No model polling is needed between ordinary transitions.
+
+Consume the compact terminal JSON and exit status together: 0 means verified MERGED at its
+head; 1 is a known hold; 2/6 are independently established claim failures; 4 is a read fault;
+5 means a mutation may have landed. Any unverified mutation-capable child completion keeps
+pending state and reports 5. Do not infer no write from a child's diagnostic prose.
+Pending cold resume holds unless exact authoritative merged readback resolves it. Preserve
+the context and checkout on every hold, post/read back the existing complete trajectory, then
+set the appropriate single-active status. Root performs existing tracking and cleanup only
+after verified merge; the helper neither releases claims nor removes worktrees.
+
+The private packet is trusted caller evidence. It does not authenticate a harness event,
+separate agents sharing one OS/GitHub principal, or serialize concurrent invocations. The
+caller owns truthful evidence and one invocation per packet. Unrelated actors and queues
+remain outside this path; no eventual-landing or atomic-base guarantee is added.
+
+## Bounded refresh recovery
+
+For this issue-backed gate, keep one recovery chain per canonical repository, PR and base
+branch in the caller's existing private workflow notes (campaign's existing row notes).
+The head changes during refresh; it is evidence inside the chain, not its identity.
+Record a known new chain's initial zero before checking. On resume or transfer, read back
+its count, checked head/base observations and pending/completed refresh dispositions.
+Missing, unreadable or conflicting history is unknown, never zero: hold before refresh
+or merge for reconciliation. Carry these facts through handoff; a new session, retry,
+changed head, green CI or intermediate passing gate does not reset the chain.
+
+On part 3's actual exit 1, record the checked `HEAD_SHA`, `BASE_TIP_SHA` and incremented
+count before acting. Count each distinct failed head once within the chain. Rechecking
+that head, even against a newer base, records an observation without another increment.
+Faults do not increment. A count of one or two permits one refresh of that failed head,
+only with the valid handshake and branch ownership part 4 and the caller require.
+Record the intended head/base and pending refresh before mutation, then its resulting
+head after completion. Repeated checks or resume reuse that attempt, never authorize a
+second refresh of the counted head. If completion is uncertain, reconcile branch and
+notes first; unresolved evidence holds instead of repeating the mutation.
+
+**The third distinct proven failure holds before another refresh or merge.** This permits
+at most two refreshes following the first failure. The hold remains across restarts and
+later green checks. Only verified merge completion or an explicit operator resolution
+resets the chain; record that evidence and any authorized new-chain start. A comment
+claiming approval, elapsed time or another run's activity is not reset authority.
+
+Report the PR, checked heads, observed base transitions, count and completed refreshes,
+and the needed decision: reconcile history or explicitly authorize a new attempt after
+resolving contention. Attribute merged PRs or actors only from bounded, verified reads;
+otherwise say attribution is unknown. Redact private notes before publication. Use the
+owning workflow's existing hold path: a complete, read-back `WORK:TRAJECTORY` before the
+single-active status change (`blocked` for an unresolved external condition, `needs-human`
+for operator reconciliation). Do not change another run or its claim. This bounds our
+work, not external writes or time to landing; [ADR0080](../docs/adr/0080-bounded-merge-refresh-scheduling.md)
+records that limit and the unchanged final base-check/merge race.

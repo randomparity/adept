@@ -695,7 +695,9 @@ unresolved worker or ownership invariant retains the worktree and ref.
 ### PR tracking contract
 
 Before the first PR mutation, ensure-create every `status:` label this run may write using the
-quest-log recipe. For every transition, post and read back a versioned PR `WORK:TRAJECTORY` with
+quest-log recipe. Compose every block under this contract with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a block
+missing either. For every transition, post and read back a versioned PR `WORK:TRAJECTORY` with
 repository, PR, run token, observed head, transition, and `outcome: pending`; swap and read back the
 single active label set; then post and read back the matching `outcome: applied`. Labels are current
 state. A pending block without applied is interrupted intent, not completed state. Retry a write
@@ -719,7 +721,9 @@ state and either ambiguous mismatch without mutation, and report which one was o
 unit, transition to `status:in-progress`, then `status:in-review` while its worker runs. After
 evaluation, post a complete `WORK:REVIEW` containing the actual head SHA, evaluated base SHA, local
 integration SHA, domain outcome, canonical verdict when defined, findings, coverage exposure,
-guardrails, and the residual base-advance race.
+guardrails, and the residual base-advance race. Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a block
+missing either.
 
 `WARN`, `FAIL`, ordinary refusal, and a second `BASE_CHANGED` receive terminal review/trajectory
 evidence and no active `status:` label. A clean `PASS` moves to `status:awaiting-merge` immediately

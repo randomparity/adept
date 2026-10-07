@@ -92,7 +92,9 @@ acceptance criteria?
 - **It did not** — reopen that issue. Its closure asserted work that was not delivered;
   reopening is the honest state. Strip any residual `status:` label in the same edit that
   sets the next one, link the bad PR, and post a `WORK:TRAJECTORY` naming the disposition
-  and evidence.
+  and evidence. Compose it with both markers and post it through the
+  [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a
+  block missing either.
 - **It did, but something else regressed** — leave the original closed (it was true at
   merge time) and file **one** regression issue for this run, naming every affected PR
   when a reversal spans several delivered features, referencing the bad PR and the
@@ -132,7 +134,9 @@ Urgency compresses the standard lifecycle; it does not remove its guards.
    `$quest`, per item 2); a blocked stop at the budget — an unresolved consequential
    finding that is not a design question — parks instead: `WORK:TRAJECTORY` first, then
    `status:needs-human`, branch and annotation left in place for the operator's
-   approved-continuation decision. An unattended run never continues past its own park.
+   approved-continuation decision. Compose it with both markers and post it through the
+   [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a
+   block missing either. An unattended run never continues past its own park.
 5. Security pass only under the quest skill's relevance test: a mechanical revert rarely
    triggers it; a hotfix that adds entry points, parses input, or changes defaults does.
 6. Guardrails green, then `$deliver`: PR titled `revert: …` or `hotfix: …`, body carrying
@@ -147,5 +151,7 @@ Urgency compresses the standard lifecycle; it does not remove its guards.
 
 Park per the quest-log exit edges: `WORK:TRAJECTORY` first, then the label
 (`status:blocked` for an external dependency, `status:needs-human` when the pipeline
-cannot proceed). A stalled reversal is worse than a slow one — the bad code is live while
+cannot proceed). Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a
+block missing either. A stalled reversal is worse than a slow one — the bad code is live while
 you hold it, so surface the blocker immediately rather than improvising past a guard.

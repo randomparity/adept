@@ -6,11 +6,13 @@ exact moment it binds.
 
 ## The law
 
-**No completion claim without verification evidence from this same message.**
+**No completion claim without applicable verification evidence.**
 
-If you have not run the command in this turn, you cannot say it passes. A run
-from earlier does not carry forward: the code has changed since, which is the
-whole reason you are making a claim about it now.
+A successful result remains usable across turns and worker handoffs when its
+tested inputs, command coverage, and execution environment still apply to the
+claim. A conversation boundary alone changes none of these. If applicability
+cannot be established, run the needed check; a matching commit ID alone is not
+enough.
 
 Claiming completion you have not checked is not efficiency. It is a false
 statement about work someone is going to rely on, and the person relying on it
@@ -20,19 +22,28 @@ has no way to tell it from a true one.
 
 Before the claim, in this order:
 
-1. **Identify the command that proves it.** Not the one that is convenient or
-   the one you ran last — the one whose output would be different if the claim
-   were false.
-2. **Run it in full.** Not the focused case, not the subset covering the files
-   you touched. Architecture checks, doc generation, and boundary tests live
-   outside the directory you edited and only fail in a complete run.
-3. **Read the output.** Check the exit code, and count the failures rather than
-   scanning for the absence of red.
-4. **Account for what the check never saw.** For any done, passing, or mergeable
-   claim, run `git status --porcelain` as well. An untracked file is one no gate
-   read: green plus untracked is a false green, and it is the most common way a
-   verified claim turns out to be wrong.
-5. **If the output does not confirm the claim, say what is actually true, with
+1. **Identify the command and scope that prove the claim.** Choose a check whose
+   output would differ if the claim were false. A focused check supports a
+   focused claim; claim full-suite coverage only from a complete suite run.
+2. **Establish the result's provenance.** Record the tested commit/tree and the
+   paths and content identity of relevant dirty or untracked inputs, exact
+   command and scope, exit status and output reference, execution environment
+   and target, and observed duration. Read the output and count failures; an
+   absent, incomplete, cancelled, or failed run cannot be reused as a pass.
+3. **Assess applicability before reuse.** Compare the recorded inputs with the
+   current inputs, including dependencies, configuration, generated files, and
+   the integration base. Check that command coverage and environment/target
+   match the claim. A change in one of these calls for an explicit assessment;
+   if its effect cannot be ruled out, run the affected check. CI evidence does
+   not silently establish local or target-specific execution.
+4. **Run the needed check when no applicable result exists.** Read its output
+   and record it as above. A later green run does not erase an unexplained
+   failure with unchanged inputs; follow *Flaky tests* below.
+5. **Account for what the check never saw.** For any done, passing, or mergeable
+   claim, inspect `git status --porcelain --untracked-files=all` and assess
+   relevant untracked and dirty inputs against the recorded run. Green checks
+   cannot cover an input they never saw.
+6. **If the evidence does not confirm the claim, say what is actually true, with
    the evidence.** Reporting the real state is the alternative to claiming
    success — not silence, and not a softer version of the same claim.
 
@@ -44,18 +55,46 @@ Evidence for one claim is not evidence for a different one:
 
 | Claim | What proves it | What does not |
 |---|---|---|
-| Tests pass | The test command's output, zero failures | An earlier run; "it should pass now" |
-| Linter clean | The linter's output, zero findings | A partial run over changed files |
+| Tests pass | Applicable successful output from the named test command and scope | An undocumented run; "it should pass now" |
+| Linter clean | Applicable successful output from the named lint command and scope | A partial run claimed as a full lint pass |
 | It builds | The build command, exit 0 | The linter passing — a linter does not compile |
 | The bug is fixed | The original symptom, exercised, gone | The code changed in the right place |
 | Requirements met | The plan, walked line by line | The test suite being green |
-| Green and mergeable | Guardrails exit 0 **and** a clean `git status --porcelain` | Green checks with untracked files |
+| Green and mergeable | Applicable guardrail results **and** current worktree and merge-state checks | Green checks with relevant unseen inputs |
 | The merge published | The base-branch run's conclusion, read | The merge landing; the pull request's own green checks |
 | A subagent finished | The diff, read by you | The subagent's report saying it succeeded |
 | A red run was a fluke | The nondeterminism found, and fixed or filed | The same test passing on re-run |
 
 The subagent row is the one that costs most. A subagent reporting success is
 describing its intent; the diff is what it did. Read the diff.
+
+## A patch stream is not the file
+
+"Read the diff" assumes the diff shows the file as it exists at the head commit.
+`gh pr diff` without `--patch` does: it requests GitHub's `diff` media type, a single
+net diff between the merge base and the head. `--patch` requests a different media
+type instead — a format-patch-style series, one patch per commit — and a file touched
+by more than one commit appears once per commit that touched it, each hunk showing
+only that commit's own incremental change, not the cumulative state at head. A
+reviewer reading the series can land on a hunk a later commit superseded and conclude
+the branch still carries that content, when the file at head never did. A filename
+repeated across the `--patch` output is the tell. Base merges make this worse without
+being the cause: they lengthen the commit series, so repeats multiply and the
+earliest hunks drift further from what is actually at head.
+
+The plain diff is the fix, and it costs one flag: drop `--patch`. `gh pr diff <N>`
+requests the net comparison and is correct for reading content, on any branch however
+many merges it carries. Reach for the file's content at the head commit instead only
+when you need one file's exact state at a known commit, not a reviewable diff:
+
+`gh api repos/<owner>/<repo>/contents/<path>?ref=<head-sha> -H "Accept: application/vnd.github.raw"`
+
+The `raw` accept header matters: without it the endpoint returns a JSON metadata envelope with
+the content base64-encoded inside it, not the file text the sentence above promises.
+
+Take the head SHA the same way [the commit-bound merge gate](merge-gate.md) does —
+from `git ls-remote` or `headRefOid` read at that moment, never from a patch's own
+commit metadata.
 
 ## Flaky tests
 

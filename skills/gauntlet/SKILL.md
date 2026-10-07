@@ -26,8 +26,10 @@ and emphasis characters, and ignoring trailing punctuation or emphasis. Matching
 case-sensitive; the start of the supplied invocation text counts as a line start. So `CHARTER`, `   CHARTER (…)`,
 `CHARTER:`, `- CHARTER:` and `**CHARTER:**` all match. That line and every token after it is
 **focus text** — never a target, never a flag. A path named there is prose describing a permitted
-change surface, not a file to review. Classify only the tokens *before* that line with the rules
-below.
+change surface, not a file to review. The one line you *read* from is `failure model:`, which
+names a document section to consult under *Failure model* below — read it, never review it as a
+target unless it is also among the target tokens. Classify only the tokens *before* that line
+with the rules below.
 
 **When a `CHARTER` label was found** and classifying the tokens before it leaves no target token
 and no `--base`/`--working-tree` flag, do **not** fall through to the working-tree default. A
@@ -142,6 +144,49 @@ it to what the charter supports. Recommend controls, transactions, persistence, 
 or other machinery only when the frozen charter or an explicit user decision authorizes
 the guarantee.
 
+**A universal claim is one finding.** "All", "every", "any", "never", "always", or an
+unbounded "must" with no stated closure is an ungrounded guarantee of the kind above, and it
+earns exactly one finding — against the quantifier — whose remedy is to bound the claim to a
+named set or ground it in the charter. Its instances are not findings: do not enumerate the
+cases the word would have to cover, because each is the same defect restated and the list has
+no end. Once the claim is bounded, a case inside the bound that the target mishandles is a
+finding on its own terms.
+
+### Failure model — the frozen answer to what can go wrong
+
+A design written under `$spellcraft` carries a `Failure model` section: the actors and
+deployments the change serves, the invariants and assets it must not break, the failure
+classes it accepts with a reason each, and the ones another owner covers. It is the target's
+answer to "what can go wrong here that matters", frozen when the design review closed. A
+caller names it with a `failure model:` line in the `CHARTER` block; a design review meets it
+inside the target. Read it before forming findings. `none`, or no line at all → skip this
+section silently; nothing below applies.
+
+Grade reachability against the model, not against the worst deployment you can imagine:
+
+- **Inside the model.** A trigger that uses a named actor, deployment, or input, or that
+  breaks a named invariant, is a finding on its ordinary terms.
+- **Accepted by the model.** A would-be finding whose failure class the model accepts, with a
+  reason that holds, is not reported as an instance. Drop it and disclose it: a `suppressions`
+  entry naming the concern and the entry that accepted it, exactly as a governing-ADR drop is
+  disclosed, on an `approve` too.
+- **Outside the model.** A trigger that needs an actor, deployment, or condition the model
+  neither names nor accepts is at most a note — `medium`, with the model gap stated in the
+  body — because under the model's own premise it is unreachable. It takes one disposition
+  downstream, and a second such note adds nothing the first did not say: report the gap once.
+- **Against the model.** When the model itself is wrong — an accepted class is one the
+  charter's outcome or completion criteria require, a reason does not hold, or a named
+  deployment is contradicted by the repository's own evidence (a CI workflow, a published entry
+  point, a documented consumer) — raise **one** finding against that entry with the evidence.
+  It takes the severity its evidence supports and may block. This is the counterpart of a
+  supersession proposal: the way past the model runs through the entry, never around it.
+
+The model is a review target whenever it sits inside the artifact under review. Challenge
+each entry once, on the merits, as an entry; do not also report the instances an entry you
+reject would have covered — the finding against the entry carries them. The model bounds what
+you report as instances. It never lowers the bar on anything it names, and it cannot make a
+correctness dependency of the charter's outcome disappear by accepting it.
+
 ### Governing ADRs — respect accepted decisions
 
 Some repos record architectural decisions as ADRs (typically `docs/adr/`). An
@@ -188,9 +233,10 @@ governing ADRs and respect them — without letting that silence genuine new ris
 - **Disclose every suppression.** When you suppress a would-be finding as
   governing-ADR re-litigation, record it: add an entry to the `suppressions` array
   (`--json`) naming the concern you dropped and the ADR that settled it — or, in
-  markdown mode, a **Suppressed (governing ADR)** block (see Output). Do this **even
-  when the verdict is `approve`**, since that is the case a caller cannot infer from
-  the verdict.
+  markdown mode, a **Suppressed** block (see Output). A finding dropped because the
+  failure model accepts its class is disclosed the same way, naming the entry instead
+  of an ADR. Do this **even when the verdict is `approve`**, since that is the case a
+  caller cannot infer from the verdict.
   Over-suppression is the main hazard of this stance, so silent suppression is not
   allowed — a suppressed finding must leave an auditable trace, exactly as the
   budget-exhaustion escape does.
@@ -298,15 +344,17 @@ For every finding use real line numbers from the file you read or the diff hunk.
 - <action>
 - <action>
 
-**Suppressed (governing ADR):**
+**Suppressed:**
 - <concern you dropped> — settled by ADR <NNNN>
+- <concern you dropped> — accepted by failure model entry <entry>
 ```
 
-Include the **Suppressed (governing ADR)** block whenever you dropped a finding as
-governing-ADR re-litigation — it is the markdown counterpart of the `suppressions`
-array and **persists even on an `approve` verdict** — whichever finding sections that
-verdict carries — because an approve that suppressed a real finding is the case a
-reader most needs to see. Omit the block only when nothing was suppressed.
+Include the **Suppressed** block whenever you dropped a finding as governing-ADR
+re-litigation or as a class the failure model accepts — it is the markdown counterpart
+of the `suppressions` array and **persists even on an `approve` verdict** — whichever
+finding sections that verdict carries — because an approve that suppressed a real
+finding is the case a reader most needs to see. Omit the block only when nothing was
+suppressed.
 
 Omit either section when it is empty. An `approve` has no **Findings (blocking)**
 section by definition, but it keeps its **Notes (non-blocking)** section whenever notes
@@ -339,10 +387,14 @@ When `--json` is present, the skill's **output artifact** is exactly this JSON o
   ],
   "next_steps": ["..."],
   "suppressions": [
-    { "concern": "one line: the finding you dropped", "adr": "0002" }
+    { "concern": "one line: the finding you dropped", "adr": "0002" },
+    { "concern": "one line: the finding you dropped", "failure_model": "<the entry that accepted it>" }
   ]
 }
 ```
+
+A suppression carries `concern` and exactly one of `adr` or `failure_model` — what settled
+it. An entry with neither names nothing a caller can audit and is malformed.
 
 `verdict` is `approve` when no **blocking** (`critical` or `high`) finding exists, and `needs-attention` otherwise. `findings`, `next_steps`, and `suppressions` may be empty arrays but must be present.
 
@@ -353,7 +405,7 @@ is emitted **first**, per *Finding bar*. A consumer may read it; its job is done
 before any consumer sees it. `surface` routes the finding after review and never
 changes its severity or whether it contributes to `blocking_count`.
 
-`suppressions` is the machine-readable form of the "Disclose every suppression" rule — populate it whenever you drop a finding as governing-ADR re-litigation, **even when the verdict is `approve`** (that is exactly the case a caller cannot see from the verdict alone).
+`suppressions` is the machine-readable form of the "Disclose every suppression" rule — populate it whenever you drop a finding as governing-ADR re-litigation or as a class the failure model accepts, **even when the verdict is `approve`** (that is exactly the case a caller cannot see from the verdict alone).
 
 ### Severity vocabulary
 

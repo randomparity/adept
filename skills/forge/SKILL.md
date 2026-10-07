@@ -57,6 +57,16 @@ supported mode:
 - `task-test-not-applicable` names the changed surface and explains why no task-specific
   executable or structural observation could fail meaningfully.
 
+When the approved design selects an ownership transition, every affected task's existing
+inventory and brief must also carry its criterion-linked transition evidence: current and
+intended owner; every affected direct caller and its migration; obsolete paths to remove;
+protected contracts; and every retained compatibility path with its protected contract and
+reason. Link each fact to the design criterion and task that consumes it. A meaningful
+structural boundary uses `focused-test` and its controlled violation must fail; existing
+behavioral tests remain the behavior proof. Pure prose and a pure relocation with no meaningful
+new executable or structural observation retain `task-test-not-applicable`; do not invent a
+behavioral red test for either.
+
 Reject an omitted, vague, or contradicted entry at the plan checkpoint. File type, task size,
 convenience, and repository guardrails are not reasons. Changed script behavior, parsers, schemas,
 record shapes, validation rules, generated artifacts, and other machine-checkable contracts use
@@ -118,26 +128,66 @@ abbreviations for filenames and human-facing status.
 
 Set this up before either execution mode runs.
 
-**Detect isolation before creating anything.**
+### Shared-tree placement policy
+
+This is the shared policy for `$quest` and `$forge`. Evaluate it before the first branch,
+worktree, or file mutation, including project setup and
+`"<plugin root>/skills/forge/scripts/sdd-workspace"`. `<plugin root>` is the installed
+plugin root, the directory two levels above this
+skill's own directory named by the harness when it loads the skill. Substitute that
+absolute directory before invoking a helper; it is never the target repository.
+Quest reads this subsection during preflight and revalidates at branch setup; neither invokes forge early.
+
+Consume attunement's `SHARED_TREE` for this checkout. If absent, from another checkout, or
+invalidated by observed changes, run `$attunement` before deciding; retain each unknown half
+as unknown. Keep that discovery read-only and defer its task-plan/file writes until this policy
+permits mutation in the selected checkout. Do not create a competing shared/solo probe or infer
+a zero from missing evidence.
+Sibling counts include stale and tooling worktrees: nonzero is not evidence of another agent,
+its ownership, or its liveness. Disclosed concurrency can require isolation even with zero
+siblings; lack of disclosure cannot weaken the policy.
+
+**Resolve checkout topology without mutating it.**
 
 ```bash
-GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
-GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
-git rev-parse --show-superproject-working-tree 2>/dev/null   # non-empty ⇒ submodule
+GIT_DIR=$(cd "$(git rev-parse --git-dir)" && pwd -P)
+GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
+git rev-parse --show-superproject-working-tree   # non-empty ⇒ submodule
 ```
 
 `GIT_DIR != GIT_COMMON` means a linked worktree — **but it is also true inside a
 submodule**, so the third command is not optional. A submodule is a normal
 checkout for this purpose.
 
-Already isolated: report the path and whether HEAD is detached (detached means a
-branch has to be created at finish time), then skip to project setup. Do not
-create a second worktree.
+Check each command's exit status and require non-empty resolved directory paths before
+comparing them. Failed or inconclusive topology is unknown, not a primary or linked verdict.
+For linked reuse, verify the physical checkout is external to the primary checkout using
+preflight's worktree paths, and matches this run's assigned path/branch or authorized reuse.
+Nested or unassigned placement stops for reconciliation; do not relocate or delete another tree.
 
-Not isolated: if the instructions do not already declare a worktree preference,
-ask before creating one — it changes where the user's work lives. Honour a
-declared preference without asking. If the user declines, work in place and
-continue to project setup.
+Apply the first matching row. Clean means `pre-existing dirty or staged paths: no`:
+
+| Observed state | Action before mutation |
+|---|---|
+| Dirty yes or unknown, or topology unknown | Stop through the caller's dirty-tree/blocker path; report the unresolved evidence. Never stash, discard, or reinterpret it as clean. |
+| Clean, authorized external linked checkout; siblings zero, nonzero, or unknown | Reuse it. Report placement and detached HEAD if present; do not create another worktree because of siblings. |
+| Clean primary/submodule; isolation required by instructions, disclosed concurrency, or siblings nonzero/unknown | Require an external sibling worktree using the placement procedure below. |
+| Clean primary/submodule; zero siblings, no required isolation or disclosed concurrency | Quest may create its feature branch in place. Forge honors a declared worktree preference; otherwise ask, and permit in-place work if declined. |
+
+Record the inputs and selected action with the run's existing preflight facts. An unknown sibling
+count permits reuse only in the verified linked arm, never in-place edits in a primary checkout.
+When isolation is required, a declined request or creation failure stops; it cannot fall through
+to the optional in-place arm. Preserve dispatched file scope, assigned numbers, and ADR-index
+ownership unchanged whichever placement is selected. Existing default-branch and branch-reuse
+restrictions still apply. Detached linked reuse retains forge's existing finish-time branch step.
+Before placement completes, a caller's required scope/park annotation bodies may use private
+temporary storage outside the checkouts, even on a stop. This reporting exception permits no
+checkout-local notes, setup, edits, or branch/worktree creation contrary to the selected action.
+
+### Create the selected external worktree
+
+Only the isolation action uses this procedure; reuse and permitted in-place work skip to project
+setup. Verify the new destination and its clean state before setup or edits.
 
 **Prefer the harness's native worktree tool** — something named like
 `EnterWorktree`, a `/worktree` command, a `--worktree` flag. It handles
@@ -177,12 +227,22 @@ the containment check prints, remove the worktree and recreate it externally —
 never paper over it with a `.gitignore` entry.
 
 If `git worktree add` fails on a sandbox permission denial, say the sandbox
-blocked it, work in the current directory, and run setup and baseline there.
+blocked it and stop through the caller's blocker path. Do not run setup or edit in the source
+checkout as a fallback for failed isolation.
 
-**Then set up and verify a clean baseline.** Install dependencies for whatever
-manifests are present — `package.json`, `Cargo.toml`, `requirements.txt`,
-`pyproject.toml`, `go.mod` — and run the project's test command. A baseline you
-did not check is a baseline that gets blamed on your change.
+**Then set up and verify a clean baseline.** Check the checkout's local
+prerequisites and readiness; install missing dependencies for applicable
+manifests — `package.json`, `Cargo.toml`, `requirements.txt`, `pyproject.toml`,
+`go.mod`. Reuse a recorded successful baseline only if it covers the exact
+base, its tested inputs (including dependencies, configuration, generated and
+untracked files), command scope, and applicable environment/target. Compare
+the evidence under [true-seeing](../../references/true-seeing.md); a commit ID
+alone does not prove this checkout's baseline, and CI results support only
+their recorded environment, not unrun local or target-specific checks. If the
+record is missing, incomplete, or inapplicable, run the project's test command
+and record the result. Do not reuse a failed, cancelled, incomplete, or flaky
+result as a clean baseline. A baseline you did not check is a baseline blamed on
+your change.
 
 On a failing baseline the response depends on who is reachable:
 
@@ -241,8 +301,9 @@ correction or declaring the blocker unresolved. If the same artifact recurs afte
 evidence-backed correction with no new evidence, stop instead of repeating the diagnose-fix cycle.
 Guessing past a blocker produces work that looks finished and is not.
 
-After all Cast tasks and the guardrails below pass, emit the Cast
-`not-required` ledger/result from *Forge result contract* before returning to
+After all Cast tasks, run the assembled-branch integration check below once. When
+it passes, emit the Cast `not-required` ledger/result from *Forge result contract*
+before returning to
 the caller. `$quest` consumes that verified result; it must not treat Cast's
 lack of a whole-branch reviewer as an implicit no-review mode.
 
@@ -316,7 +377,8 @@ and incrementing would spend a replacement budget no recovery consumed.
 
 ### The per-task loop
 
-1. Generate the task brief: `scripts/task-brief PLAN_FILE N` writes it to a
+1. Generate the task brief:
+   `"<plugin root>/skills/forge/scripts/task-brief" PLAN_FILE N` writes it to a
    uniquely named file and prints the path.
 2. Dispatch an implementer with [implementer-prompt.md](implementer-prompt.md),
    carrying the placement contract from *What goes in a dispatch*: the
@@ -362,14 +424,17 @@ and incrementing would spend a replacement budget no recovery consumed.
    and non-structural. Missing or incomplete evidence is `NEEDS_CONTEXT`.
 
    A focused entry's red half is then re-derived rather than read. Two
-   resolutions, and they are separate: resolve `scripts/verify-red` to an
-   absolute path against **this skill's own directory** first — the script ships
-   beside this skill, not in the target repository, the same as
-   `scripts/task-brief` and `scripts/review-package` — then run that absolute
-   path with the **assigned worktree** as the working directory. For each
-   focused entry:
+   resolutions, and they are separate: resolve
+   `<plugin root>/skills/forge/scripts/verify-red` to an absolute path against
+   **the installed plugin's own root** first — `<plugin root>` is the directory
+   two levels above this skill's own directory, which the harness names when it
+   loads the skill, and the script ships there, not in the target repository, the
+   same as `<plugin root>/skills/forge/scripts/task-brief` and
+   `<plugin root>/skills/forge/scripts/review-package` — then run that absolute
+   path with the **assigned worktree** as the working directory. For each focused
+   entry:
 
-       scripts/verify-red --base <BASE> --head <HEAD> --test <the entry's test file> -- <the inventory entry's exact command>
+       "<plugin root>/skills/forge/scripts/verify-red" --base <BASE> --head <HEAD> --test <the entry's test file> -- <the inventory entry's exact command>
 
    The command comes from the **plan's** Verification inventory, never from the
    implementer's report. A focused entry names a test file, an expected red,
@@ -446,7 +511,15 @@ and incrementing would spend a replacement budget no recovery consumed.
    reverted. Running it at HEAD proves nothing about whether it could ever have
    failed, which is the whole of what this step establishes.
 7. Inventory the actual task diff and reconcile its material contracts one-to-one with the plan
-   and report. An unmatched or reclassified contract returns to the plan checkpoint.
+   and report. For an ownership transition, compare the actual changed paths and direct callers
+   with its transition evidence: the intended owner is present; every affected caller migrated;
+   each obsolete path is removed; protected contracts remain exercised by existing behavioral
+   tests; and every retained compatibility path still has its contract and reason. Where a
+   meaningful structural boundary is named, confirm its controlled violation failed. A missing
+   caller, retained independent duplicate, unprotected contract, unjustified compatibility path,
+   unmatched, or reclassified contract is unresolved and returns to the plan checkpoint; it is
+   not a completed task. A pure relocation keeps its non-applicable reason and does not acquire
+   an invented behavioral red test.
 8. Mark the task complete in the todo list and append exactly one line, using `mixed` when both
    modes occur: `Task N: complete (commits <base-sha>..<head-sha>, verification
    <focused-test|task-test-not-applicable|mixed>, red <confirmed=<n>,
@@ -461,14 +534,17 @@ mostly re-reading the loop's own output. What such a pass could see, the
 whole-branch review sees too; what it could not see — the defect spanning
 tasks — is why that review exists. ADR 0052 records the decision.
 
-After the last task, run the guardrail suite under *Guardrails* over the
-assembled branch and fix anything red before going further. With no per-task
-reviewer, this is the first executable check that has seen every task's work
-together. Then dispatch the whole-branch review with
-[code-reviewer.md](code-reviewer.md), on the most capable model, in a fresh-context
+After the last task, run an assembled-branch integration check under *Guardrails*
+and fix anything red before going further. Select executable checks that exercise
+the tasks together across changed callers, shared boundaries, and generated
+artifacts; task results alone do not establish that coverage. If the integration
+impact cannot be bounded, or repository policy requires the full suite here,
+run it and record why. Otherwise keep the full local suite for the final candidate
+after review fixes and simplification. This check is the first executable check
+that has seen every task's work together. Then dispatch the whole-branch review
+with [code-reviewer.md](code-reviewer.md), on the most capable model, in a fresh-context
 worker — never a fork, per `$trial-loop` step 1, because a fork here would carry this
-run's own build instructions into the one worker whose job is to disbelieve them. It is
-the branch's only adversarial pass.
+run's own build instructions into the worker reviewing them. It is the branch's only adversarial pass.
 
 Its base is the branch's fork point — `git merge-base HEAD <BASE_BRANCH>`,
 recomputed here rather than carried forward, because a rebase moves it. Capture
@@ -498,12 +574,14 @@ asked report it as a blocker and return. Never default to `main`.
    file is still on disk. Do not match a generic marker, prefix, substring, or an
    older range's closing record. Do not infer completion from a missing review
    file or from the historical review line alone.
-2. `scripts/review-package <fork-point> HEAD` for `[DIFF_FILE]`. It must exit 0
-   and print a non-zero commit count and a non-zero byte count. Report and stop
-   rather than dispatching: this file is the reviewer's whole input.
+2. `"<plugin root>/skills/forge/scripts/review-package" <fork-point> HEAD` for
+   `[DIFF_FILE]`. It must exit 0 and print a non-zero commit count and a non-zero
+   byte count. Report and stop rather than dispatching: this file is the
+   reviewer's whole input.
 3. `[REVIEW_FILE]` is `<workspace>/final-review-<base7>..<head7>.md`, in the
-   directory `scripts/sdd-workspace` prints. Remove anything already at that
-   path before dispatching, so a file there afterwards is this dispatch's.
+   directory `"<plugin root>/skills/forge/scripts/sdd-workspace"` prints.
+   Remove anything already at that path before dispatching, so a file there
+   afterwards is this dispatch's.
 4. When the reviewer returns, `[REVIEW_FILE]` must exist and be non-empty.
 5. **Append the ledger line once that check passes**, before the fix wave —
    `Final review <base-sha>..<head-sha>: <verdict> (review <path>)` — and a
@@ -564,12 +642,44 @@ Four statuses, four responses:
 - **DONE_WITH_CONCERNS** — read the concerns first. Correctness or scope
   concerns get addressed before the task is closed; observations get noted.
 - **NEEDS_CONTEXT** — supply what was missing and re-dispatch.
-- **CANNOT_COMPLETE** — assess it. A context problem gets more context; a reasoning
-  problem gets a more capable model; an oversized task gets split; a wrong plan
-  gets escalated.
+- **CANNOT_COMPLETE** — verify the failure class below before changing the brief,
+  task, plan or model. Route only a demonstrated reasoning gap to a stronger tier.
 
-**Never retry an unchanged prompt after `CANNOT_COMPLETE`, and never ignore an
-escalation.** If the implementer says it is stuck, something has to change.
+**Diagnose before escalating or re-dispatching.** Apply the shared
+[failure classification](../../references/model-selection.md#escalation-after-difficulty-or-failure)
+to the report, task brief and actual failure artifact. A worker's `CANNOT_COMPLETE` alone does not
+show a reasoning gap. Check that required context was present and the verification result is
+trustworthy before selecting a stronger tier. `NEEDS_CONTEXT` gets the precise missing facts;
+transport, authentication, rate limit and service errors use their owning recovery path or hold.
+An oversized task or wrong plan returns to the existing split/plan checkpoint; changed scope
+returns to the caller's scope checkpoint. A safety or authority restriction stops at its owning
+gate. Do not route any of those failures through a model switch.
+
+For a returned worker, record the report and new failure evidence, diagnosis, distinct corrective
+change, selected capability and observed effective settings or unmet capability in the existing
+private brief/report and `progress.md`. Record every returned-worker dispatch in that history;
+`task-<N>.<attempt>` still counts only the one liveness replacement, so `NEEDS_CONTEXT` or
+`CANNOT_COMPLETE` re-dispatch keeps the current suffix. Before another dispatch, reconcile the
+prior worker's observed end, branch artifacts and ownership under dispatch-liveness and, inside
+`$quest`, verify the live claim under quest-log. Read existing malformed-return retries, review
+rounds, probes and replacement use from the ledger/handoff, including earlier models or sessions.
+Missing consumption is unknown, not zero; an exhausted allowance cannot be renewed by a model
+change. A returned-worker retry needs new failure evidence and a different evidence-backed brief,
+task, approved plan or effective tier. The same failure after that correction is a stop for
+diagnosis, not another attempt with the same correction. This adds no numeric retry allowance.
+
+Bounded examples for this decision, with all existing authorization gates still applying:
+
+| Observed case | Next action and budget disposition |
+|---|---|
+| A complete in-scope task fails a deterministic check because the worker cannot reason through it | Document the check and missing reasoning, then choose an available stronger tier for a distinct corrective dispatch; preserve dispatch history and existing allowances. |
+| The same failure returns after the same tier correction | Stop for diagnosis; do not send an unchanged failing prompt or count the model change as a new allowance. |
+| A service timeout prevents a task result | Follow transport recovery or hold; do not call it a reasoning failure or reset counters. |
+| No adequate stronger permitted model is available | Name the unmet capability and hold; do not guess an identifier or weaken final review. |
+| Review rounds or the one liveness replacement are exhausted | Keep each exhausted state; another tier grants neither a review pass nor a replacement. |
+| A worker asks to bypass safety or change approved scope | Stop at the owning safety or scope checkpoint; capability selection grants no authority. |
+| A successor sees partial scope, stale head, foreign claim or live predecessor | Reconcile under quest-log and dispatch-liveness before mutation; preserve prior budget use. |
+| A report identifies missing context that the brief omitted | Supply those facts, record the change and use the existing returned-worker route; do not infer a reasoning gap. |
 
 **A reported flake is dispositioned here, before the task is closed** — fix the
 determinism, or file it and record the reference. Filing is yours to do, not the
@@ -579,30 +689,24 @@ review would look at it again.
 
 ### Choosing a model
 
-Use the least powerful model that can do the job, and **always name it
-explicitly** — an omitted model inherits your session's, usually the most
-capable and most expensive.
+Use [shared model selection](../../references/model-selection.md) for capability tiers,
+phase defaults, runtime availability, overrides, and supported reasoning controls. Resolve
+provider identifiers only through its centralized mapping. Name the supported choice explicitly
+where the harness permits it; do not describe inheritance as an explicit selection.
 
-- Mechanical task, complete spec, one or two files, no design latitude → cheap.
-- Multi-file integration or pattern matching → standard.
-- Design judgment, broad codebase understanding, or the final whole-branch
-  review → most capable.
+The final whole-branch review still uses the strongest available permitted model. Coordinator
+recommendations are separate from reviewer selection; keep waiting off the model as described
+under Silent party workers. At a settled boundary, use the shared
+[coordinator continuation paths](../../references/model-selection.md#coordinator-continuation-at-phase-boundaries)
+to distinguish the current root, an exposed native switch and an explicitly resumed session.
 
-**Turn count beats token price.** Give a weak model something multi-step and it
-will often need two or three times as many turns to finish, which is more
-expensive than the stronger model would have been. Use a mid-tier floor for
-implementers working from prose; reserve the cheapest tier for transcription —
-where the plan text already contains the code to write — and for single-file
-mechanical fixes.
-
-**This governs your own model too.** A coordinating session runs on the most
-capable model by default and then pays that rate for every turn it spends
-dispatching, waiting, checking and reporting — which across a long build
-outnumbers the turns it spends deciding anything. Capability is what the
-dispatches above need; coordination is not where it earns its price. Where the
-harness allows it, run a coordinating session no higher than the most capable
-worker it dispatches, and keep the waiting off the model entirely — see Silent
-party workers.
+Before dispatch or model/session continuation, read quest-log's
+[handoff checklist and receiver checks](../quest-log/SKILL.md#model-and-session-handoffs).
+Carry the task-relevant continuity facts in the existing brief and progress ledger, retaining
+attempt/dispatch identity, completed verification, model evidence and consumed review/recovery
+allowances. The receiver verifies them with placement and artifact access before editing.
+Keep controller continuity narration out of reviewer prompts; the existing review-package
+contract still determines their inputs.
 
 ### What goes in a dispatch
 
@@ -622,8 +726,13 @@ party workers.
   the brief itself has no way of carrying
 - your resolution of any ambiguity you noticed in the brief
 - applicable `AGENTS.md` conventions
-- exact guardrail commands to run before committing
+- exact applicable guardrail commands to run before committing, and the affected
+  contracts, callers, or shared boundaries that determine test scope
 - the task's complete Verification inventory and the contract-evidence rules below
+- for every selected ownership transition, the brief's criterion-linked inventory of current and
+  intended owner, affected direct callers and migration, obsolete paths, protected contracts, and
+  each retained compatibility path's contract and reason; state that an omitted caller or
+  unjustified duplicate is unresolved rather than DONE
 - the report-file path, named after the brief (`…/task-N-brief.md` →
   `…/task-N-report.md`)
 - the **worker report contract** (`AGENTS.md`), last, so the implementer
@@ -665,10 +774,12 @@ review itself.
 
 Every fix dispatch carries the implementer contract, placement included: the
 assigned worktree path, branch name, and the `review-fix.<attempt>` dispatch
-identity, verified before the first edit. Re-run the tests covering the change
-and report the command and its output. Name the covering test files — a
-one-line fix does not need the whole suite. Confirm the report carries the
-command, its output, and the covering test files before closing the fix wave.
+identity, verified before the first edit. Run the tests covering the changed
+behavior and affected callers, plus applicable lint, type, and structural checks.
+Broaden if the impact cannot be bounded. Report each command, coverage reason,
+and result; name the covering test files. A review with no edit needs no new
+check or commit. Confirm the report carries the commands, results, coverage
+reasons, and covering test files before closing the fix wave.
 
 Verify the fix wave's commits the way step 5 verifies a task's: every commit
 from the reviewed HEAD to the branch tip must carry `review-fix.<attempt>`.
@@ -717,10 +828,19 @@ knows which tasks finished will hand out work already done, sometimes a whole
 run of it — the costliest failure this process has produced. Keep the record in
 a ledger; todos alone are not enough.
 
-Resolve the workspace with `scripts/sdd-workspace`, which prints its absolute
-path, and check for `<workspace>/progress.md`. Tasks marked complete there are
-done: resume at the first that is not, and never re-dispatch one the ledger has
-already closed.
+Resolve the workspace with `"<plugin root>/skills/forge/scripts/sdd-workspace"` —
+`<plugin root>` is the installed plugin's own root, the directory two levels above
+this skill's own directory, which the harness names when it loads the skill; every
+script this skill runs ships there rather than in the target repository — which
+prints its absolute path, and check for `<workspace>/progress.md`. Tasks marked
+complete there are done: resume at the first that is not, and never re-dispatch
+one the ledger has already closed.
+
+On a resumed ledger, reconcile the same
+[handoff evidence](../quest-log/SKILL.md#receiving-the-handoff) before the first uncompleted
+task or review. Missing counters do not reset attempts, review rounds, probes or the recovery
+chain's replacement allowance; unknown ownership or inaccessible required evidence holds that
+dependent work under the existing recovery rules.
 
 **Only that script creates the workspace**, and that matters: it writes a
 self-ignoring `.gitignore` (`*`) into `.agent/`, which is the whole mechanism
@@ -816,19 +936,28 @@ correction, allow one confirming pass. A second failure parks instead of startin
 
 ## Guardrails
 
-Run the project's local check suite discovered in `$attunement`. At minimum,
-for the languages involved, it must cover:
+Before each task or review-fix commit, run its meaningful contract tests, affected
+regression and integration tests, and applicable checks discovered in `$attunement`:
 
 - format check
 - lint
 - type check, when the language has one
 - tests
 
-Zero warnings. Fix every warning or add a narrow inline ignore with a
-justification. Whatever is hard-gating in CI must be green locally before
-every commit unless it requires hardware, credentials, or external services
-unavailable locally; in that case, run the closest local equivalent and state
-the limitation in the PR body.
+Select tests by changed behavior and affected callers or shared boundaries, not
+only edited filenames. Record each selected command, its coverage reason, and
+result in the existing task or review-fix evidence. If impact cannot be bounded,
+broaden verification and state why. Keep required repository hooks; a task,
+commit, or review pass alone does not require a full-suite run. After the last
+task, run the assembled-branch integration check as required above for both modes.
+Shared build, configuration, or dependency changes and newly found
+cross-component failures can require broader checks.
+
+Zero warnings. Fix every warning or add a narrow inline ignore with a justification.
+For checks requiring
+hardware, credentials, or external services unavailable locally, run the closest
+local equivalent and state the limitation in the PR body. Do not claim unrun
+full-suite coverage from focused results.
 
 If a guardrail fails, stop and fix it. Do not commit with red guardrails.
 

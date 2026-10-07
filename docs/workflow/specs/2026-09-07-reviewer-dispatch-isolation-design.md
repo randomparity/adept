@@ -1,7 +1,7 @@
 # Reviewer dispatch isolation — design
 
 Decision record:
-[ADR 0058](../../adr/0058-review-dispatch-requires-no-parent-conversation.md).
+[ADR 0084](../../adr/0084-review-dispatch-requires-no-parent-conversation.md).
 
 ## Goal
 

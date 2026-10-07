@@ -4,6 +4,8 @@
 
 Accepted (2026-08-16)
 
+> **Superseded by [0076](0076-campaign-claim-attribution-and-guarded-recovery.md)** (2026-09-29)
+
 ## Context
 
 Issue #125: two `$quest` agents can observe the same `status:ready` issue,

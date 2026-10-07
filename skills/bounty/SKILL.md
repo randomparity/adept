@@ -95,6 +95,13 @@ operator confirmation.
    decline there stays declined rather than being undone by the next `$bounty` run. Show the
    value's reasoning in the step-6 draft, per the human-read invariant.
 
+   A quest-log standing policy may supply the risk assessment without a
+   per-issue human read only when its exact base-file blob is independently
+   approved and the new issue fits its bounded class. Carry the policy path,
+   blob ID, identity/revision, approval evidence, and ordinary risk reasoning
+   in the draft. This does not waive step 6's confirmation to create the issue;
+   an unattended call without that separate authority still stops there.
+
    `risk:` is deliberately **not** part of the born-ready conjunction above. Born-ready
    governs eligibility for *daytime* work; `risk:` gates only unattended work, and coupling
    them would park every issue the dimension has not reached.
@@ -108,8 +115,11 @@ operator confirmation.
    closed-sweep recurrence decision; do not infer post-closure persistence from an occurrence
    that predates and was covered by that sweep.
 
-   Then invoke the bundled `scripts/create-verified-issue.sh` with `--repo <owner/name>`,
-   `--title <t>`, `--body-file <tmp>`, and one `--label <label>` per intended label.
+   Then invoke the bundled `"<plugin root>/skills/bounty/scripts/create-verified-issue.sh"` —
+   `<plugin root>` is the installed plugin's own root, the directory two levels above this
+   skill's own directory, which the harness names when it loads the skill, and never the
+   target repository — with `--repo <owner/name>`, `--title <t>`, `--body-file <tmp>`, and one
+   `--label <label>` per intended label.
    Retain the populated temporary body file through read-back verification; never replace
    it with standard input or inline `--body`, and never `eval` argument tokens. The script
    creates exactly one issue, reads it back with explicit JSON fields, and checks the
@@ -139,8 +149,8 @@ operator confirmation.
    data, or private environment detail.
    Draft each sub-issue through steps 2–6, and file each
    as a **native sub-issue** by passing `--parent <N>` to
-   `scripts/create-verified-issue.sh` (the direct native path requires `gh` ≥ 2.94.0; on
-   older `gh`, or to link a *pre-existing* issue instead, use
+   `"<plugin root>/skills/bounty/scripts/create-verified-issue.sh"` (the direct native path
+   requires `gh` ≥ 2.94.0; on older `gh`, or to link a *pre-existing* issue instead, use
    `gh api repos/<owner>/<name>/issues/<N>/sub_issues` or the `sub_issue_write` MCP tool).
    Add a `Part of #N` courtesy line to each sub-issue body. The script also verifies the
    created issue's authoritative native `parent` field. After each child, wait for its
@@ -162,7 +172,15 @@ operator confirmation.
    report line. Birth labels come from the caller's
    per-entry state, overriding step 5: `status:blocked` + a `Blocked by #<n>` body line
    for dependents, `status:needs-triage` for open-question entries (blocked wins when
-   both apply), else `status:ready` — the same rule recovery applies below.
+   both apply), else `status:ready` — the same rule recovery applies below. Prefer the bare
+   dependency record. When its rationale must remain on the same line, use the exact ` — `
+   delimiter and non-empty prose. Use one record per blocker, with no leading whitespace;
+   arbitrary trailing prose and combined references are malformed:
+
+   ```text
+   Blocked by #123
+   Blocked by #123 — the schema change must land first
+   ```
 
    **Epic-parent recovery.** When the parent carries the `epic` label, its Decomposition
    section is the authoritative sub-issue list. Enumerate existing native sub-issues

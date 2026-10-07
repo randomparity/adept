@@ -22,9 +22,15 @@ completed guardrails, and next awaited event. Mark unavailable facts unknown or 
 never infer them from elapsed time or silence. Use one compact sentence for one row and the
 existing status table for several rows.
 
-**Authorization.** Invoking `$campaign` authorizes you to auto-close issues shown as
-already-fixed and self-merge only after the four-part gate passes for one `HEAD_SHA`. This
-authorization stays with the orchestrator — never propagate merge rights to workers. Each
+**Authorization.** A human invoking `$campaign` authorizes you to auto-close issues shown as
+already-fixed and self-merge only after the four-part gate passes for one `HEAD_SHA`.
+An unattended workflow invoking this skill grants neither action by invocation alone:
+closing needs a verified, issue-specific operator closure grant; merging needs
+an issue-specific operator merge grant or quest-log's admitted standing policy
+for that repair and head. The standing repair policy never authorizes a
+separate issue-close action or replaces the four-part merge gate; GitHub's
+auto-close from an authorized `Closes #N` merge is part of that merge. This authority
+stays with the orchestrator — never propagate merge rights to workers. Each
 `$quest` stops only after review and publishes its matching `MERGE-READY` handshake; the
 orchestrator verifies the gate and handles the merge.
 
@@ -64,9 +70,9 @@ Slug is a short hash of this normal form. Store the full normal form in the mani
 On a newly created campaign, mint one opaque public-safe UUID and persist
 `Campaign identity: <collision-resolved-manifest-stem>-<uuid>`. Reuse it unchanged on resume;
 never derive it again. A fresh campaign after an archived completed run mints a new UUID even
-when selector and filename stem repeat. Use the exact identity in every bounty prompt,
-occurrence marker, and recovery search. Validate a non-empty identity and Normalized-selector
-together before reconciliation; neither the initial hash nor filename stem alone is a durable
+when selector and filename stem repeat. Use the exact identity in every quest and bounty prompt,
+quest WORK:SCOPE provenance, occurrence marker, and recovery search. Validate a non-empty identity
+and Normalized-selector together before reconciliation; neither the initial hash nor filename stem alone is a durable
 marker namespace.
 
 **Keep manifest out of git** without relying on target repo's `.gitignore`** (required before any manifest write or resume mutation**):
@@ -81,6 +87,20 @@ git -C "$campaign_root" ls-files --error-unmatch .agent/.gitignore  # exit 0=tra
 - Other: stop with named blocker
 
 Verify: `git -C "$campaign_root" check-ignore -q .agent/campaigns/`. Stop if fails.
+
+At settled campaign boundaries, apply the shared
+[coordinator continuation paths](../../references/model-selection.md#coordinator-continuation-at-phase-boundaries).
+Select capability for unresolved campaign decisions separately from worker/reviewer settings and
+mechanical waits; a phase boundary does not itself switch the root or end this continuous task.
+
+On campaign handoff/resume, apply quest-log's
+[handoff checklist and receiver checks](../quest-log/SKILL.md#model-and-session-handoffs).
+The orchestrator retains the compact continuity facts in the existing private manifest notes
+or run report: exact approvals, assigned reservations, row/worker identities, reachable
+artifacts, resolved model evidence and consumed per-worker/review/recovery budgets. Validate
+the loaded manifest identity before using them. This adds no queue state or table column.
+Reconcile them against live claims, branches and worker end evidence before dependent dispatch;
+a resumed orchestrator does not replace a still-active worker.
 
 **Routing:**
 - **No file** → create with `Status: active`
@@ -128,6 +148,11 @@ Manifest schema:
 |-------|-----------------------|----------------|---------------------|
 | #NNN  | <normalized set or explicit empty> | <evidence summary or none> | pending |
 
+## Worker claim assignments
+<private per-attempt notes: issue, Campaign identity, scope token, attempt, worker identity
+(pending before dispatch; harness identity bound after dispatch), and observed-end evidence.
+Retain earlier attempt bindings on replacement; never infer missing legacy bindings.>
+
 ## Outcomes log
 <appended per close/merge/block; every entry dated — merge entries' dates drive step 7's
 stale-deferral reset>
@@ -147,12 +172,24 @@ Status progression: `pending → triaged → in-flight → merged | closed | blo
 
 The Scope approvals table has one unique row for every queued `fix` verdict. Encode `&` and `|`
 as for the other manifest tables. Normalize exclusions as an order-independent set of
-exclusion/owner pairs after collapsing whitespace. `Approval provenance` is either `pending` or
-the durable record of the operator confirmation that displayed this exact exclusion set. On
+exclusion/owner pairs after collapsing whitespace. `Approval provenance` is `pending`,
+the durable record of the operator confirmation that displayed this exact exclusion set,
+or the standing-policy provenance defined below. On
 resume, re-derive the proposed exclusions from live scope evidence. Preserve the approval when
 the normalized set is unchanged; unrelated issue or epic edits do not invalidate it. Replace it
 with `pending` when the set changes. Older manifests add this section empty and populate it during
 triage before any fix dispatch.
+
+For an unattended repository with quest-log's admitted standing repair authority,
+`Approval provenance` may instead record the policy identity/revision, tracked
+base instruction path and exact blob ID, independently verified maintainer
+approval of that blob, and this row's exact exclusion/owner set and class fit;
+a repair that quest-log's accepted-location bar excludes has no class fit.
+This is an alternative provenance value in the **existing row**, not a second
+store or blanket approval of later discoveries. On resume and before dispatch,
+re-read the live base, approval evidence and exact proposed set. A changed
+blob or set resets the row to `pending` until a fresh policy admission is
+proved and recorded; a same-revision file edit still invalidates it.
 
 The pending-occurrence table is not a fix queue. Validate unique occurrence numbers, the three
 normalized states shown above, and a non-empty state reason. `CLOSED` remains pending unless its
@@ -255,7 +292,10 @@ for the operator rather than being closed.
 
 For `governed-small-change`, also return: decision reference, kind, accepted status, governed behavior, testable acceptance criteria. These are evidence, not authority — `$quest` revalidates.
 
-Triage on the fast model by default; escalate to the capable model only on a named signal — a genuinely ambiguous issue, a wide or unfamiliar surface. Triage is read-only reconnaissance whose verdict `$quest` revalidates before acting, so a wrong cheap verdict costs a re-triage, not a defect; a capable-model default costs every triage the price of the few that need it.
+Use [shared model selection](../../references/model-selection.md) for triage and the later
+phase defaults. Clear, bounded reconnaissance starts at the mechanical tier; named ambiguity,
+consequences, or difficult verification raise that recommendation. Resolve against the actual
+provider and harness, honoring supported overrides and reporting unmet capability.
 
 **Verdict handling:**
 - `close-candidate` → confirm with `bug-claim-verifier` or `$gauntlet` before closing. **Confirmed** → keep `close-candidate`; don't close here — batch closes in step 4 after plan is visible. **Rejected or inconclusive** → the already-fixed claim is unproven, so the issue needs work: re-verdict as `fix` (subtype from the verifier's evidence; default `non-trivial` when unclear), or `blocked` with reason if even that can't be determined. Persist the transition in the manifest before presenting the plan.
@@ -281,7 +321,17 @@ Count issues needing fixes. **Every fix runs in a worker** — never inline.
 
 Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge order), `w1`, `w2`... for parallel.
 
-**Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial — crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from attunement's known-landmine record. Reserve each row's exact value in planned merge order under the repository's ordering rule and persist it as `path=value`; use `—` when there is no mandatory edit. A reservation remains consumed if its row becomes blocked or is skipped, and is never assigned to another row. File scope is a hint, not guarantee.
+**Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial —
+crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from
+attunement's known-landmine record. Before assigning ADR/migration values, complete the
+shared [visible-number reservation scan](../../references/numbered-reservations.md) over
+base, own consumed manifest, canonical live-token scopes, open PR full changed paths and
+pushed branches. Failed/incomplete reads hold the row. Reserve each row's exact value in
+planned merge order under the repository's ordering rule and persist it as `path=value`;
+use `—` when there is no mandatory edit. A reservation remains consumed if its row becomes
+blocked or is skipped, and is never assigned to another row. Pass exact assigned `path=value`
+entries to the worker for WORK:SCOPE surface publication before numbered file creation.
+File scope is a hint, not guarantee.
 
 Present triage/plan table: issue → verdict, artifact lane, design denominator and provenance,
 decomposition, review depth, wave, assigned numbers, mandatory per-PR edits, file scope.
@@ -292,6 +342,14 @@ Take one explicit operator confirmation over all displayed `pending` rows, recor
 in each matching manifest row, and read those rows back before their first dispatch. A prior
 approval carries across workers and campaign resume only while its normalized exclusion set and
 owners remain unchanged; an exclusion delta returns the row to `pending`.
+An unattended root may move a `pending` row to policy-bound provenance only
+after validating quest-log's live protected-base authority for that issue and
+its exact exclusions/owners under quest-log's accepted-location bar; read the
+row back before dispatch. No policy, inconclusive proof, or out-of-class
+evidence leaves it `pending` and held.
+Before unattended dispatch, also read the issue's single-active `risk:` value.
+An absent, ambiguous, or more restrictive value than the proposed repair
+permits holds the row; a policy packet does not fill an absent risk label.
 
 An unattended root proceeds only with unchanged, already-approved rows. Hold a `pending` row
 before design, name the missing approval in the run output, and continue draining the rest of the
@@ -324,13 +382,21 @@ gate.
 
 Emit the after-plan progress update before the first close or dispatch.
 
+On an unattended run, hold a close-candidate or close-not-planned row before
+its first comment or close unless an independently verified operator grant
+authorizes closure of that exact issue and reason. A standing repair policy
+cannot supply this separate grant; retain the row as issue-local blocked work and
+continue draining fixes.
+
 Execute **close-candidates** (all remaining ones are confirmed — rejected/inconclusive candidates were re-routed in step 3): post research comment citing fixing code/PR, `gh issue close` each. Set `Status: closed`, append to outcomes log before removing from queue.
 
 Execute **close-not-planned** only after the operator has seen it in the plan. Post a complete
 `WORK:CLOSE-NOT-PLANNED` annotation containing the evidence, trigger, likely impact,
 remediation/quest cost, cost/benefit rationale, reconsideration condition, and completion
 sentinel (`<!-- WORK:CLOSE-NOT-PLANNED -->` through
-`<!-- CLOSE-NOT-PLANNED:COMPLETE -->`). The annotation must succeed and be read back before
+`<!-- CLOSE-NOT-PLANNED:COMPLETE -->`). Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a block
+missing either. The annotation must succeed and be read back before
 closure; otherwise
 leave the issue open, record an issue-local blocker, and continue draining other rows. Then run
 `gh issue close <N> --reason "not planned"` and verify with
@@ -361,13 +427,27 @@ blockers, and every discovered/finalized follow-up, including every adjacent-not
 candidate returned by review. For each bounty open-sweep occurrence it includes occurrence number,
 sweep number, rationale, state, and state reason. No diffs/logs/file bodies.
 
+**Assign the claim before dispatch.** For each new attempt, mint `q<N>-<8 lowercase hex>`.
+Atomically record and read back the issue, Campaign identity, token and attempt in the manifest's
+existing private notes, with worker identity `pending` until dispatch returns its harness identity.
+Bind that identity and read back before any dependent action; a failed or unverifiable binding
+holds the row. Retain each previous token/worker binding and its observed-end evidence. A resume
+of the same active worker retains its token; a replacement receives a fresh token. Never infer
+a legacy row's missing binding from producer login, a public charter or branch naming.
+
 Each prompt carries:
 - Issue number, acceptance criteria, **completion notes verbatim** (private dispatch context) and the **public-safe summary** (the only form allowed on public surfaces: acceptance criteria, `WORK:` annotations, PR bodies)
 - Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification.
 - Exact approved exclusions and owners, their operator-approval provenance, and the relevant epic
   direction copied from the manifest. The quest rechecks the exclusion set and stops before design
   if it changed; the worker does not ask again when it is unchanged
-- The claim contract: the worker mints its own claim token and never recovers a claim without authorization carried in this dispatch prompt
+- For a policy-approved row, copy the exact policy path, blob ID,
+  identity/revision, approval evidence and class fit instead of claiming an
+  operator approved this repair. Quest rechecks live base authority and
+  freezes its own matching `WORK:SCOPE` packet before design
+- The claim contract: the exact assigned scope token and Campaign identity; quest uses that token
+  and names the identity in WORK:SCOPE provenance. No claim recovery without its explicit packet
+  in this prompt; a forced packet names the observed holder as `--expect-token`.
 - **For resumed work:** recovered branch name and `reuse` decision
 - For `governed-small-change`: subtype, decision reference, kind, accepted status, governed behavior, criteria
 - Assigned ADR/migration numbers, exact mandatory per-PR edits, file scope; the
@@ -391,17 +471,32 @@ Each prompt carries:
   `CAMPAIGN-OCCURRENCE-RATIONALE:` field in any new occurrence
 - (Parallel only) external worktree path (`../<repo>-worktrees/<branch>`)
 
-**Claim check before every dispatch and re-dispatch.** Read the claim
-(`claim-list` covers the batch; a read failure holds the row — the step-5
-hold: named in the run output while the rest of the queue drains — and
-reports the error; never dispatch on an unreadable claim state). No claim →
-dispatch; the worker acquires its own. Stale claim → dispatch with recovery
-authorized in the prompt; the worker runs `claim-recover --older-than`.
-Live claim → hold: do not dispatch. When the row's agent has been observed
-ended (the re-dispatch bar above), the operator's re-dispatch answer is the
-recovery authorization; the prompt carries it as an explicit line —
-"Claim recovery authorized: the prior run was observed ended" — beside the
-branch-reuse decision, and the worker runs `claim-recover --force`.
+**Claim check before every dispatch and re-dispatch.** Read the claim (`claim-list` covers the
+batch), issue state/status and matching complete WORK:SCOPE provenance. A read failure holds
+the row; never dispatch on unreadable claim state. Compare its holder token with this row's
+retained token/worker bindings, not with the shared producer login or descriptive provenance.
+An unknown token is **foreign**, even when the login or public Campaign identity matches.
+Report token, producer, age, status and matching WORK:SCOPE provenance, or explicit unavailable;
+never present it as this run's stray and never reconstruct a missing binding from that report.
+
+Apply quest-log's liveness rule. No claim on an open issue → dispatch with the assigned token.
+Open non-in-flight issue with a claim stale after CLAIM_GRACE → the existing age-recovery path:
+dispatch with `claim-recover --older-than CLAIM_GRACE` authorization. Report unknown ownership
+as foreign even on that stale path. Closed issue → reconcile terminal state. Any live in-flight
+claim → hold without dispatch or issue/claim mutation, regardless of age.
+
+Before offering campaign-owned live recovery, prove the exact holder token belongs to this row's
+recorded worker and that **that worker** was harness-observed ended under dispatch-liveness.
+End of a different worker, shared login, silence or matching public provenance proves no such
+ownership. An unknown live holder remains a foreign hold for the operator. An exceptional
+operator-directed foreign recovery must explicitly name that foreign holder, never be inferred.
+For a reconciled ended holder, the operator's re-dispatch decision authorizes recovery only of
+the named token. The prompt carries `Claim recovery authorized: holder <token>, worker <identity>
+observed ended` beside the branch-reuse decision, and quest runs
+`claim-recover --force --expect-token <observed-holder-token>`. Re-read immediately before dispatch;
+a changed holder invalidates the packet and holds the row. Preserve the replacement budget.
+The worker's direct read guards the expected holder again; GitHub read then delete is not atomic,
+so substitution after that read remains possible, and verify gates still apply.
 
 Before the serial blocking dispatch and wait, emit the before-wait progress update required by the top-level contract.
 
@@ -431,6 +526,14 @@ The operator's answer to that hold is what reaches the harness's stop control. T
 
 **A re-dispatch resumes where it can and restarts where it cannot.** Reconcile the row's artifacts first (step 3) — a dying agent may have pushed a branch or opened a PR you have not recorded. A row where that turns up no branch has nothing to resume; dispatch it fresh. Otherwise hand the successor the context it had before plus the recovered branch name, an explicit `reuse` decision, and the last phase the events showed. The branch carries the committed work by reference, so do not paste a diff into the prompt — bulky going in, stale on arrival. Reclaim the dead agent's worktree before dispatching: it still has the branch checked out, so the successor's own `git worktree add` on that path fails until you either hand it that path or remove it, and any uncommitted edits stranded there are readable only until you do.
 
+Carry only the issue-relevant
+[continuity packet](../quest-log/SKILL.md#model-and-session-handoffs) in that successor dispatch,
+including exact reuse/recovery authority, prior scope identity, artifact dispositions and
+consumed budgets. Reconcile successor claim/scope identity through quest's existing rules.
+Preserve the original worker/recovery-chain and probe/replacement consumption in the existing
+private run report; a new orchestrator session does not mint a new allowance. Missing records
+hold the affected replacement until reconciled, while independent rows may drain.
+
 **Report each read as one table**, no prose per row. `State` is one of `alive`, `quiet`, `hold`, `ended`:
 
 | Issue | Branch | Last signal | PR | State |
@@ -453,8 +556,8 @@ Immediately before a potentially long PR verification, branch-refresh guardrail/
 
 **Verify each issue's PR before merging it.** Green + mergeable says CI passed and Git can fast-forward — neither says the PR contains the work you dispatched. Two `gh` queries answer that; if either fails twice, hold rather than merge, since the merge is the irreversible half. (Your own ADR-index PR below has no issue and no manifest row, so none of this applies to it.)
 
-- **The PR must close its assigned issue** — `gh pr view <PR> --json closingIssuesReferences`. A reference to any *other* issue takes the hold below: merging closes a row the campaign may still have queued, and a later resume reads that close as already-fixed. A missing reference is recorded and left to the post-merge auto-close check below.
-- **List its changed files** — `gh pr diff <PR> --name-only`, on every PR, including a row step 3 adopted with no scope assigned; that PR has no worker report behind it, so the list is worth more there, not less. Never `gh pr view --json files`: that field returns the first 100 paths and says nothing about the rest, so it reports a clean prefix of the largest PRs. A diff that succeeded and listed nothing blocks — nothing was changed, so nothing can be carrying the fix.
+- **The PR must close its assigned issue** — `gh pr view <PR> --json closingIssuesReferences`. A reference to any *other* issue takes the hold below: merging closes a row the campaign may still have queued, and a later resume reads that close as already-fixed. A missing reference is recorded and left to the post-merge auto-close check below. For an unattended policy-authorized merge, a missing assigned-issue reference holds **before merge** unless an issue-specific operator closure grant exists; policy authority cannot supply that grant.
+- **List its changed files** — `gh pr diff <PR> --name-only`, on every PR, including a row step 3 adopted with no scope assigned; that PR has no worker report behind it, so the list is worth more there, not less. Never `gh pr view --json files`: that field returns the first 100 paths and says nothing about the rest, so it reports a clean prefix of the largest PRs. A diff that succeeded and listed nothing blocks — nothing was changed, so nothing can be carrying the fix. `--name-only` is deliberate here, not `--patch`: a serial-merge campaign is exactly the branch shape — several base merges — where `--patch` is unreliable for reading content; see [true-seeing](../../references/true-seeing.md), *A patch stream is not the file*.
 - **Compare that list against the issue's `File scope` cell from step 4.** A path is in scope when the cell names it, names a directory above it, or holds a glob whose directory is above it. A cell still at `—`, or holding nothing that parses as a path, leaves nothing to compare — record that and read every path through the next bullet, rather than treating an absent hint as a mismatch.
 - **Paths outside the scope do not block by themselves.** Step 4 assigns scope as a hint, and a correct fix routinely touches a file the plan didn't predict; a check that hard-blocks on any deviation fires on legitimate work and gets routed around. A path is accounted for when the PR body, a commit message, or the worker's report ties it to **the assigned issue**, or when this step itself mandated the change (the ADR index under `coupled` coupling, your own branch refresh, your own artifact regeneration). Everything else is **unrelated** — hold that one merge for the operator's decision. A path tied to a *different* tracked issue most needs that decision rather than being exempt from it: merging it lands a sibling's work early and can auto-close a row still queued. Never split, revert, or cherry-pick inside the PR; that surgery is undefined here and risks discarding work.
 
@@ -466,25 +569,61 @@ Apply [the commit-bound merge gate](../../references/merge-gate.md) before each 
 merge in this step. The reference is the complete normative gate; green + mergeable alone is
 not authorization to merge.
 
-As each issue's pull request passes the four-part merge gate above — all four parts, for
-one `HEAD_SHA` — run `$return-to-town` (you are authorized), which re-runs the gate and
-performs the guarded merge. **Green + mergeable is not that trigger.** Its "After a merge"
+For every unattended merge without an issue-specific operator grant, first
+read the issue's `risk:` labels and apply quest-log's absence and multi-value
+rules. A missing label or a label less restrictive than the current diff
+classification holds the merge until the risk producer corrects it. Bind the
+policy decision to the exact remote PR head SHA whose diff and consumer proof
+were inspected. Reclassify that actual reviewed diff using quest-log's rubric
+and recheck the live policy, frozen `WORK:SCOPE` packet and this row's approval
+provenance. A protected
+external contract or any `daytime-only` criterion parks for a separate
+operator decision. Shared code stays `risk:night-watch`; allow its automatic
+merge only if the policy explicitly admits that repair and decisive tests
+cover the identified affected consumers of its changed contract. An
+unidentified or unproved consumer, a new path outside the packet, a path at an
+accepted instruction location in quest-log's `--no-renames` path set (not the
+`gh pr diff --name-only` list, which drops a rename's source), changed
+exclusions, stale policy blob, or incomplete approval evidence holds that merge.
+Run these checks before the **final** four-part gate and require its `HEAD_SHA`
+to equal the policy-evaluated SHA. If the head changes, the base is
+refreshed, or `$return-to-town`'s repeated gate sees another SHA, redo policy,
+diff and consumer evaluation for the new head before any merge; never reuse
+the old verdict. The gate's fresh-base check keeps its immediately-before-merge
+position. Explicitly human-run campaigns retain their existing merge
+authorization and review gates.
+
+For an explicit human grant covering this sequence, pass only the next eligible row to
+`$return-to-town`'s [finite root-owned path](../../references/merge-gate.md#finite-root-owned-execution).
+After observed worker end and worktree reclamation below, prepare its private context from
+this row's actual authority, scope, assignments and retained recovery facts, then invoke the
+helper once. It enforces all four predicates and performs the guarded merge; green + mergeable
+alone is never authorization. Consume one terminal result, not model turns per CI snapshot.
+Policy-only admission retains the exact-head evaluation above and manual repeated gate; it
+cannot enter this automatic refresh path with a grant that covers only one evaluated SHA.
+Return-to-town's "After a merge"
 list is written for a run cleaning up after itself, so replace its worktree-removal and
 branch-deletion steps with the gated list at the end of this step — the worktree here is not
 yours. Everything else in that skill still applies. Its tracking writes and cleared-dependency
 reconcile remain load-bearing, as does its switch to `BASE_BRANCH` and fast-forward pull.
 Merge eligible rows with ordered mandatory edits in their assigned value order. A blocked
 row drops out of that order, but its reservation stays consumed. If a moved base makes an
-assignment invalid, the orchestrator alone reserves the next unused valid value and persists
-it before refresh; a worker may apply only that exact reassignment from a fresh prompt. When
+assignment invalid, the orchestrator alone repeats the same
+[complete reservation scan](../../references/numbered-reservations.md), reserves the next
+unused valid value and persists it before refresh; a worker may apply only that exact reassignment from a fresh prompt. When
 the assigned value remains valid against the moved base, resolve the shared-file conflict by
 keeping that exact assignment.
 An earlier assigned row that is neither blocked nor skipped holds later ordered rows until it
 is merge-ready; only an explicitly blocked or skipped row may be passed over, with its
 reservation consumed.
-Merge one PR, then re-run the gate for each remaining in-flight PR. If the base moved, refresh
-the branch as part 3 directs. If the repository forbids the required merge commit and rebasing
-a pushed branch is denied, stop with a named blocker.
+Merge one PR, then gate only the next eligible PR in that landing order. Refresh only that
+PR when part 3 admits it; leave waiting siblings' heads alone until their turn. Preserve each
+row's [bounded refresh chain](../../references/merge-gate.md#bounded-refresh-recovery) in
+its existing private manifest notes, including through a blocked/skipped interval or resume.
+The third distinct proven base-moved failure holds that row before another refresh; use
+step 8's trajectory/status path and keep draining other eligible work. The orchestrator
+remains the sole manifest writer. If the repository forbids the required merge commit and
+rebasing a pushed branch is denied, stop with a named blocker.
 
 **Never merge a pull request for which you hold no merge-ready handshake, however green
 GitHub reports it.** A worker opens its pull request before its quest hand-off, so green +
@@ -495,8 +634,9 @@ durable line from the issue rather than spending the step-5 agent-probe budget.
 **In parallel mode the dispatched agent may still be running.** Do not begin merging when
 its pull request first reads green + mergeable; leave it pending until hand-off supplies the
 matching handshake and the four-part gate passes. Even then, the agent may still be finishing
-its report, and its branch remains checked out in a worktree you did not create. Merging is
-unaffected because it touches only pushed refs. A refresh is different: `git worktree add`
+its report, and its branch remains checked out in a worktree you did not create. A manual
+exact-head merge touches only pushed refs. The finite helper requires observed end and
+reclamation at entry because it may refresh. A refresh is different: `git worktree add`
 fails while another worktree holds the branch. Refresh a `BEHIND` sibling only after the
 agent's observed end of run, or after `git worktree list` shows the branch checked out nowhere
 for a row you did not dispatch. Post-handoff work belongs to you or to a fresh bounded dispatch,
@@ -509,7 +649,12 @@ The end of run does not by itself hand you the branch. The worker never removes 
 - **`not coupled`** (index exists, not CI-gated): workers write only the ADR file, report `index row pending`. You append all pending rows **once** after wave's last PR merges, on its own branch.
 - **`coupled`** (index is CI-gated): workers add their own rows in their PRs. You resolve adjacent-insertion conflicts during the serial-merge branch refresh. Expect no `index row pending` reports.
 
-Verify auto-close: `gh issue view <n> --json state` after merge. If still open, close explicitly and note why. Record outcome in manifest before moving to next PR.
+Verify auto-close: `gh issue view <n> --json state` after merge. If still open,
+close explicitly and note why only for a human-run campaign or an independently
+verified issue-specific closure grant. An unattended policy-authorized row
+without that grant stays open and blocked for operator reconciliation; the
+merge itself does not grant a second closure action. Record the actual outcome
+in the manifest before moving to the next PR.
 
 After each verified merge outcome is recorded, emit the after-merge progress update required by the top-level contract before advancing to the next row or finalization.
 
@@ -575,7 +720,9 @@ evidence citations, proposed action — and ask for one explicit operator confir
 changing anything on GitHub. It is the same gate this step already requires for enqueueing,
 because these are issues the campaign chose not to own; with no proposed action, no
 confirmation is asked. On confirmation, for each moved issue: post one `WORK:RESCORE`
-annotation comment, then flip the priority label. The comment carries the prior level, the
+annotation comment, then flip the priority label. Compose it with both markers and post it
+through the [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+refuses a block missing either. The comment carries the prior level, the
 new level, the evidence citations, and the batch merge that changed the picture:
 
 ```markdown
@@ -641,7 +788,7 @@ A `merged` row is drained whether or not its branch and worktree have been clean
 
 **GitHub is the parked state** (quest-log skill). Who writes the label depends on who parked it:
 - **Worker reported blocker** → it already posted `WORK:TRAJECTORY` and set `status:blocked`/`status:needs-human`. Record `Status: blocked` with reason from report. Don't rewrite label.
-- **You block it** (triage inconclusive, merge-phase blocker, orchestrator decision) → post `WORK:TRAJECTORY` note, ensure-create and set label (`status:blocked` for external dependency, `status:needs-human` for human diagnosis).
+- **You block it** (triage inconclusive, merge-phase blocker, orchestrator decision) → post `WORK:TRAJECTORY` note, ensure-create and set label (`status:blocked` for external dependency, `status:needs-human` for human diagnosis). Compose it with both markers and post it through the [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses a block missing either.
 
 Ensure manifest row and GitHub state agree before moving on.
 

@@ -83,14 +83,27 @@ Worker (implementer):
        entries red then green. For `task-test-not-applicable`, preserve the exact
        reason and do not invent a prose search, snapshot, or unrelated assertion.
     3. Inventory the completed diff and reconcile every material changed contract
-       one-to-one with the plan before reporting.
+       one-to-one with the plan before reporting. When the brief selects an ownership
+       transition, reconcile its criterion-linked inventory against the actual changed
+       paths and direct callers: intended owner present; every affected caller migrated;
+       obsolete paths removed; protected contracts still exercised by existing behavioral
+       tests; and every retained compatibility path has its contract and reason. For a
+       meaningful structural boundary, the controlled violation must fail. A pure
+       relocation keeps its non-applicable reason and does not need an invented behavioral
+       red test. An omitted caller or unjustified independent duplicate is unresolved,
+       not DONE.
     4. Confirm the implementation actually works.
     5. Commit to [BRANCH_NAME] — the branch you verified in Placement.
     6. Review your own work, as set out below.
     7. Report back.
 
-    Run each focused-test entry as you go. Run the full suite once, before you
-    commit — not after every edit.
+    Run each focused-test entry as you go. Before committing, run affected
+    regression and integration tests plus applicable lint, type, and structural
+    checks. Select by changed behavior and affected callers or shared boundaries,
+    not only by edited filenames. If you cannot bound the impact, broaden the
+    checks and say why. Honor required repository hooks. The orchestrator runs
+    the assembled-branch suite after the last task; a task or commit alone does
+    not require that suite.
 
     ## When the suite fails on something you did not touch
 
@@ -174,14 +187,20 @@ Worker (implementer):
     one-to-one. Every focused entry covers its named contract; every non-applicable
     entry still has no meaningful executable or structural observation. A newly
     discovered or reclassified contract is NEEDS_CONTEXT, not a silent plan repair.
+    For a selected ownership transition, the actual owner, direct callers, removals,
+    protected contracts, and retained compatibility paths reconcile with the brief's
+    criteria; an omitted caller or unjustified duplicate is unresolved.
 
     Anything you find here, fix before reporting rather than after.
 
     ## If a reviewer sends work back
 
-    When you fix something a reviewer raised, re-run the tests covering the code
-    you amended and append their results to your report file. No reviewer will
-    re-run them on your behalf: the report is the evidence.
+    When you fix something a reviewer raised, run the tests covering the amended
+    behavior and affected callers, plus applicable lint, type, and structural
+    checks. Broaden when the impact cannot be bounded. Append the commands,
+    coverage reasons, and results to your report file. A review with no edit
+    needs no new run or commit. No reviewer will re-run checks on your behalf:
+    the report is the evidence.
 
     ## Reporting
 
@@ -189,8 +208,9 @@ Worker (implementer):
 
     - what you built, or attempted, if you could not finish;
     - what you tested, and what the tests said;
-    - the guardrail commands you were given, and what each returned — the
-      orchestrator closes the task on this evidence and nothing else;
+    - each selected check's exact command, coverage reason, and result, including
+      the guardrail commands you were given — the orchestrator closes the task
+      on this evidence and nothing else;
     - **any test you ran more than once**, whatever the reason — both outcomes,
       the test's name. A test that
       failed and then passed is the one the reviewer most needs told about;
@@ -199,6 +219,11 @@ Worker (implementer):
       the plan's exact reason and confirmation that the implemented contract stayed
       non-executable and non-structural;
     - the actual-diff inventory and its one-to-one reconciliation with those entries;
+    - for a selected ownership transition, the criterion-by-criterion reconciliation of
+      intended owner, affected direct callers and migration, obsolete paths, protected
+      contracts, and each retained compatibility path's contract and reason; name every
+      unresolved criterion, and record the existing behavioral-test result or the
+      meaningful structural boundary's controlled-fault result when applicable;
     - the files you changed;
     - anything your own review turned up;
     - concerns of any other kind.

@@ -94,6 +94,15 @@ Worker (reviewer):
     - Trust the implementer's recorded first-run evidence for this exact HEAD by
       default; do not broadly rerun a suite to duplicate it.
     - Do the tests exercise real behaviour rather than the mocks around it?
+    - Where did each consequential expected value come from? Flag a concrete
+      circular oracle: the expectation is built by calling the subject or its
+      helper, shares the implementation's calculation, copies its algorithm, or
+      is a regenerated snapshot that contradicts the contract. Recorded red/green
+      runs show the test can fail, not that its expected value is right. An
+      expectation is circular only if it could not disagree with the
+      implementation for the defect that matters. A worked contract value, or an
+      independently specified property or relation, is a sound oracle without a
+      literal.
     - Are the edge cases covered?
     - Where components have to work together, is that pairing tested?
     - A reported retry without an intervening code change is nondeterminism and
@@ -205,7 +214,9 @@ Worker (reviewer):
 - `[PLAN_OR_REQUIREMENTS]` — what it was supposed to do: a plan path, the task
   text, or the requirements themselves
 - `[DIFF_FILE]` — REQUIRED. Where the review package was written.
-  `scripts/review-package BASE HEAD` prints a path unique to that range, and the
+  `"<plugin root>/skills/forge/scripts/review-package" BASE HEAD` prints a path
+  unique to that range — `<plugin root>` is the installed plugin's own root, two
+  levels above the skill's own directory, never the target repository — and the
   package's contents never pass through the orchestrator's own context.
 - `[REVIEW_FILE]` — REQUIRED. Where the reviewer writes the review. The
   orchestrator clears this path before dispatching and reads it afterwards.

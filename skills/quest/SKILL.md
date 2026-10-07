@@ -42,10 +42,24 @@ blockers is the reading the loop's residual blocking figure exists to remove.
 > operator compacts, suggest focus text that keeps those facts and drops
 > resolved review iterations and tool output.
 
+Before handing a phase to another model/session, apply quest-log's
+[handoff checklist and receiver checks](../quest-log/SKILL.md#model-and-session-handoffs) in the
+existing private run notes or forge ledger. On resume, reconcile those facts before the next
+dependent action; phase labels alone do not authorize it. Preserve the exact exclusion approval,
+claim/scope binding, artifact lifecycle and cumulative budgets. Keep this continuity record
+beside the strict quest-forge handoff, never as extra fields inside it. Publication recovery,
+review continuation and the step-9 author handshake retain their own authority gates.
+
 ## 0. Preflight
 
 Run `$attunement` to learn the repo: `BASE_BRANCH`, guardrail commands,
-working-tree state, gh authentication, parallel-run context.
+working-tree state, gh authentication, parallel-run context. Keep discovery read-only, then
+evaluate forge's [shared-tree placement policy](../forge/SKILL.md#shared-tree-placement-policy)
+before composing a scope or blocker annotation body or writing other files. Retain the decision
+and observations; branch/worktree creation still waits for scope and claim gate G3 below.
+Until placement completes, compose required tracker annotations only in a private temporary
+directory outside the checkouts, including when the policy stops this run. Defer checkout-local
+notes and file writes until entering the selected checkout; a stop never permits those writes.
 
 ## 1. Scope the Issue
 
@@ -56,6 +70,15 @@ for compatibility and sequencing, never as authority to implement sibling scope.
 requirement and acceptance criteria in your own words before touching code. Apart from the
 mandatory exclusion approval below, ask the user only when something is genuinely ambiguous
 *and* the answer changes the design; otherwise state your assumption and proceed.
+
+Before freezing the permitted surface, inspect the responsibilities affected by the criteria,
+their direct callers, and shared dependencies. Bound this inquiry to the affected behavior;
+do not inventory the repository. Where current ownership duplicates policy, misplaces a
+responsibility, or adds avoidable indirection, identify a credible ownership change and the
+caller migration or obsolete path it would require. A clean extension remains valid.
+Current file layout is evidence, not external scope authority. If a public, persisted, or
+security contract or an accepted decision would change, resolve its authority at SCOPE
+CHECKPOINT rather than treating the move as permission.
 
 Classify the work:
 
@@ -126,27 +149,35 @@ issue/repository derivation read also fails, stop before changing `status:*` or 
 Never include the external payload, authentication data, or private environment detail in that
 response.
 
-**Claim the issue before touching it.** Mint the scope token now, in the
-short form `q<issue-number>-<8 lowercase hex>` (the quest-log claim protocol
-constrains the grammar), and resolve the producer login
+**Claim the issue before touching it.** A campaign supplies its pre-recorded scope token
+and public-safe Campaign identity. Validate the supplied token as exactly
+`q<issue-number>-<8 lowercase hex>` before any claim or issue mutation; invalid or empty
+supplied tokens stop, never fall back to minting. Use the assigned token unchanged.
+A standalone quest mints its own token in that same form. Resolve the producer login
 (`gh api user --jq .login`; a failure is an auth failure — stop with the
-`gh` error). Then acquire the claim:
+`gh` error). Then acquire the claim — `<plugin root>` is the installed plugin's own
+root, the directory two levels above this skill's own directory, which the harness
+names when it loads the skill, and never the target repository:
 
 ```sh
-skills/quest-log/assets/tracker.sh claim-acquire --target <owner/name> \
+"<plugin root>/skills/quest-log/assets/tracker.sh" claim-acquire --target <owner/name> \
   <issue-number> --token <scope-token> --producer <login>
 ```
 
-On exit 6, read the holder payload and the issue's status:
+On exit 6, read the holder payload and the issue's state/status, and apply
+quest-log's liveness rule. An in-flight holder remains live regardless of age.
 
-- Holder stale per the liveness rule → recover:
+- Open issue, no in-flight status, holder stale after `CLAIM_GRACE` → recover:
   `claim-recover <issue-number> --token <scope-token> --producer <login>
-  --older-than <CLAIM_TTL if the issue carries an in-flight status, else
-  CLAIM_GRACE>` and continue as the new owner.
+  --older-than CLAIM_GRACE` and continue as the new owner. A closed issue is
+  terminal; leave its claim for resurrection cleanup.
 - Holder live, interactive root → stop. Report the holder's token,
   producer, age, and the issue's status; the human decides whether to wait
-  or authorize recovery (a re-invocation carrying that decision uses
-  `claim-recover --force`). Ask, never assume.
+  or authorize recovery of that exact observed token. A re-invocation carrying
+  that decision uses `claim-recover --force --expect-token <observed-holder-token>`.
+  A changed, malformed or absent holder conflicts without deletion. Under campaign,
+  unknown tokens stay foreign; campaign-owned recovery also requires the matching
+  recorded worker's observed end. Ask, never assume.
 - Holder live, unattended root → stop with no writes to the issue. This is
   the one exception to the park protocol: the issue belongs to a live
   quest, and any label or comment write on it is the interference the
@@ -182,16 +213,42 @@ Record all eight fields:
 - `outcome` -- the requested outcome;
 - `completion criteria` -- each criterion and its source;
 - `provenance` -- the source of every outcome, criterion, and user decision;
+  under campaign, include its exact supplied public-safe `Campaign identity`;
 - `exclusions` -- explicit exclusions and their owners, or explicit empty;
 - `surface` -- permitted change surface and direct dependencies;
 - `ambiguities` -- unresolved design-changing ambiguities, or explicit empty;
 - `interaction` -- the root value above.
+
+Before assigning an ADR/migration number, a standalone quest runs the shared
+[visible-number reservation scan](../../references/numbered-reservations.md). A campaign
+worker validates its supplied values under that same procedure and holds a foreign collision
+for exact orchestrator reassignment; it never renumbers independently. Failed/incomplete
+reads hold before assignment. Publish every assigned ADR/migration number in `surface` as
+its exact supplied or selected repository `path=value`, including optional unused slots,
+before numbered file creation. Preserve the scope token's canonical claim binding.
+Carry the exact published ADR assignment into `$spellcraft` as authoritative supplied
+numbering; do not let the downstream “next free” instruction choose a different number.
+
+Use the existing outcome, criteria, surface, and ambiguity fields to retain the bounded
+ownership evidence and intended owner, affected caller migration, obsolete-path removal,
+and any protected contract or justified compatibility path. Link a proposed move or retained
+path to its completion criterion; file count alone does not justify or reject it. Do not
+add a charter field or absorb unrelated restructuring into the surface.
 
 **Approve the exclusions before freezing.** Propose concrete non-goals and their owners from the
 request and scope evidence, including an explicitly empty set when nothing is excluded. An
 interactive root presents that set and obtains an explicit operator decision. A dispatched run
 may instead receive the exact exclusions and approval provenance from its caller. The issue body,
 parent epic, and sibling issues are evidence only; their text is not operator approval.
+An unattended run may use quest-log's standing repair authority only when the live
+protected-base policy admits this repair and the **exact** proposed exclusion/owner set.
+A packet whose frozen `surface` could reach an accepted instruction location is never
+admitted (quest-log's accepted-location bar).
+Independently verify approval of the live instruction-file blob and record its
+path, blob ID, identity/revision, class fit, and approval evidence in the
+existing `provenance` field. This is a policy-approved packet, not permission
+inferred from issue prose or a generated design. Missing or ambiguous authority
+returns to SCOPE CHECKPOINT before design.
 Record the approval decision and its source with the approved exclusions in the existing
 `provenance` field; do not add a ninth charter field.
 
@@ -201,6 +258,11 @@ Recheck the proposed set against the live evidence. Unrelated text changes do no
 but any exclusion delta returns to `SCOPE CHECKPOINT` before design. An unattended run without a
 complete approval packet parks there. This gate also applies to a trivial bugfix or governed small
 change that will skip step 3; it freezes scope without creating a design artifact.
+For a policy-approved packet, also recheck the live policy blob, class and
+exact set before design. A changed blob or set invalidates that packet even if
+the stated policy revision is unchanged; re-freeze only after fresh authority
+and fit are proved. Recheck the built diff after review, including that bar, before
+reporting that the packet still covers it.
 
 Also retain the tracking metadata (blast radius, change hazards, complexity,
 decompose verdict, routed review depth, classification, artifact lane, and `design denominator:
@@ -238,38 +300,47 @@ ADR, plan, or other generated artifact.
 
 An unattended root never answers a design-changing question itself: post a
 public-safe `WORK:TRAJECTORY`, set `status:needs-human`, and stop before
-design. If the checkpoint data is unsafe, the notice names only the parked
-phase and the need for human input.
+design. Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+refuses a block missing either. If the checkpoint data is unsafe, the notice
+names only the parked phase and the need for human input.
 
 ### Posting the annotation
 
-Use the scope token minted for the claim (step 1) as the annotation token —
+Use the scope token assigned or minted for the claim (step 1) as the annotation token —
 claim and charter share one identity. Include it in the comment and capture
 the returned comment URL as the annotation's location, not its identity. Read
 the comment back and verify the token and all eight fields before continuing,
 then cross-check the annotation token against the claim token and run verify
 gate **G2** (`claim-verify` again). Post
 it even for a trivial bugfix that skips design -- `$resurrection` reads it as
-the liveness signal.
+the liveness signal. Compose it with both markers and post it through the
+[post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+refuses a block missing either.
 
 ## 2. Branch
 
 Verify gate **G3**: `claim-verify` before creating the branch; a lost gate
 halts per step 1's rule.
 
-Fetch, sync `BASE_BRANCH` to `origin/BASE_BRANCH`, and create
-`feat/<short-slug>-<issue-number>` off it. Never work on the default branch. If
+**Decide placement before mutation.** Consume preflight's `SHARED_TREE` through forge's
+[shared-tree placement policy](../forge/SKILL.md#shared-tree-placement-policy) before fetching,
+syncing a base, creating a branch/worktree, or writing files. Read and apply that policy only;
+do not run forge's implementation or setup here. It owns the state/action decision, including
+unknowns and already-isolated reuse; do not substitute a disclosure-only condition or another
+shared/solo verdict. A stop takes this quest's existing blocker path.
+
+After that gate, fetch and create `feat/<short-slug>-<issue-number>` from
+`origin/BASE_BRANCH` in the selected checkout. Never work on the default branch. If
 a branch for this issue already exists, ask before reusing it unless the issue
 or PR explicitly names it or your dispatch prompt carries the operator's reuse
 decision.
 
-**Worktree placement.** If repo instructions require an isolated worktree (or
-you are a parallel agent that must not share a working tree), create it
-*outside* the repo tree -- `../<repo>-worktrees/<branch>` -- and `cd` there
-first. Never nest a worktree inside the repo: whole-tree tooling (linters, type
-checkers, test discovery) will walk it and fail your commit on another agent's
-in-flight code. If the harness's built-in isolation would nest it, run
-`git worktree add <external-path>` yourself.
+When the policy selects isolation, use forge's external placement procedure with the fetched
+`origin/BASE_BRANCH` as the new branch's start point, then enter and verify that checkout before
+writing. Do not switch, reset, or synchronize the source checkout's branch to create the
+destination. Reuse an authorized already-isolated worktree without recursively isolating it.
+Carry the dispatched file scope, assigned numbers, and ADR-index ownership into that checkout.
 
 ### Governed small change path
 
@@ -396,8 +467,12 @@ to detect arbitrary out-of-band edits.
 
 ## 5. Build With Contract Evidence
 
-Before calling `$forge`, resolve its workspace with `scripts/sdd-workspace` and
-set `FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
+Before calling `$forge`, resolve its workspace with
+`"<plugin root>/skills/forge/scripts/sdd-workspace"` — `<plugin root>` is the
+installed plugin's own root, the directory two levels above this skill's own
+directory, which the harness names when it loads the skill; the script ships
+beside `$forge` there, not in the target repository — and set
+`FORGE_LEDGER=<workspace>/progress.md`. Read the current issue number and
 the frozen `WORK:SCOPE` annotation token that this quest already validated, then
 set `FORGE_HANDOFF=<workspace>/quest-forge-handoff-<issue>-<scope-token>.md`.
 The workspace must be a regular private mode-0700 directory; the ledger,
@@ -415,7 +490,8 @@ parks, and `build-complete` resumes from the parsed handoff without calling `$fo
 its mode rule below. Never replace an existing same-issue, same-scope handoff.
 
 Only when `FORGE_HANDOFF` is absent, run `$forge` to implement the selected artifact lane and
-run the guardrail suite. For `light-spec`, pass the lane, validated complexity and hazards, and
+require its assembled-branch integration results; do not repeat those checks solely for this
+handoff. For `light-spec`, pass the lane, validated complexity and hazards, and
 the spec path, with no plan path. For `full-spec`, pass the plan path. For a
 `governed-small-change`, pass the classification and revalidated decision
 evidence (reference, kind, accepted status, governed behavior, acceptance
@@ -544,11 +620,21 @@ the preset as target-specific context. Name the selected lens beside the routed 
 transcript. This broad branch review retains the existing `gauntlet` route; the Security pass
 below retains the `detect-evil` route and its `security` lens.
 
+When the approved design selects an ownership transition, add its transition evidence to that
+review focus and compare it with the actual branch diff: the approved intended owner, every
+affected direct caller and migration, obsolete paths to remove, protected contracts, and each
+retained compatibility path's contract and reason. A missing caller or unjustified independent
+policy is an in-scope finding. A retained compatibility path is justified only when its protected
+contract and reason are evidenced; a delegating public facade with an accepted contract is not a
+finding merely because it remains in a separate file.
+
 On `iterating`, run `$trial-loop --reviewer gauntlet --base <BASE_BRANCH> <composed focus>`. On
 `single-pass`, dispatch the one `gauntlet` pass the reference specifies in a fresh-context
-worker -- never a fork, per `$trial-loop` step 1 -- with the same `--base` and composed focus,
-and give each finding its single disposition. Address every defensible
-finding and commit after each accepted fix, on either route.
+worker — never a fork, per `$trial-loop` step 1 — with the same `--base`
+and composed focus, and give each finding its single disposition. On either route the review
+block's `failure model:` line names the reviewed spec's `Failure model` section by
+repo-relative path and heading — the loop's `failure_model` input — or `none` on a `no-spec`
+run. Address every defensible finding and commit after each accepted fix, on either route.
 
 **A blocking finding on a single pass escalates rather than being fixed in place.** Record the
 escalation and the finding that caused it, then run the `$trial-loop` invocation above against
@@ -622,7 +708,10 @@ resume:
 - **On approval**, post a fresh complete `WORK:TRAJECTORY` recording it — who approved,
   where the approval is recorded, and what it authorized — then swap
   `status:needs-human` → `status:in-review` in a single-active edit. Record before
-  label: the same exit-edges discipline the park itself followed.
+  label: the same exit-edges discipline the park itself followed. Compose it with both
+  markers and post it through the
+  [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which refuses
+  a block missing either.
 - **Resume at step 7** (Simplify). The approval alone never re-enters the loop —
   `$trial-loop`'s caller contract forbids a budget-stopped run from re-entering — so
   the budget stop stands as the run's ending. One exception, already governed: if a
@@ -732,7 +821,10 @@ is where a human is reliably present to run it.
 
 ## 7. Simplify
 
-Run `$dispel` on the branch diff, re-run the guardrails, and commit.
+Run `$dispel` on the branch diff. If it makes an edit, use the checks `$dispel`
+ran for that edit and commit it; if it makes no edit, add no check run or empty
+commit. The assembled-branch integration and final-candidate checks remain
+obligations, not reasons to repeat them solely for this step.
 Quality only -- do not reopen settled design decisions. Step 6 reviewed the
 pre-simplify code, so if simplification changed behavior (anything beyond a
 pure rename or format), re-run `$trial-loop` -- or at minimum `$gauntlet` --
@@ -742,13 +834,16 @@ already assert.
 ## 8. Ship It
 
 Verify gate **G4**: `claim-verify` before running `$deliver`; a lost gate
-halts per step 1's rule.
+halts per step 1's rule. Delivery also mechanically verifies before each issue-backed
+push/PR write, and both publication helpers verify before their comment write.
+Pass the exact claim/scope token unchanged; a prior successful gate does not replace
+the write-owner checks, and a lost later gate does not erase an already-completed push.
 
 In `build-complete`, re-read the build-to-review handoff before delivery. Only `required` and
 `not-required` may proceed; `required-failed` or any unreadable required
 artifact parks the quest before `$deliver`.
 
-Run `$deliver <issue-number>` to push the branch, create the PR, and drive it
+Run `$deliver <issue-number> --claim-token <scope-token>` to push the branch, create the PR, and drive it
 to green CI and mergeable state. Keep a compact public review summary — the
 fields below — as
 an ignored private mode-0600 file beside the forge ledger; do not put outer
@@ -811,16 +906,35 @@ specifies into a `mktemp` file beside the ledger — no headings; each destinati
 its own — atomically rename it only after the write, reject carriage return, NUL, and
 outer annotation markers, and keep the temporary and installed payload in mode 0600.
 A run with nothing to carry creates no payload file and skips every payload step below.
+
+The publication helper and its
+`"<plugin root>/skills/quest/scripts/check-public-safety"` scanner ship together in this skill. Resolve both from the installed skill directory; never search the target repository for
+Adept maintenance scripts. The scanner requires `rg` and `jq`; the helper checks these alongside
+its other commands before composing content. Missing commands name an installation/PATH remedy.
+A missing bundled scanner requires repairing the installed skill, not substituting a repository gate.
+The scanner checks generic private paths (including Windows profile paths), private addresses,
+email addresses, an enumerated set of private-use domain suffixes, and credential patterns. It
+matches shapes, not names: it does not detect hostnames, and no enumeration covers every internal
+domain. The suffix check reaches any dotted token whose second label is one of those suffixes —
+an identifier as readily as a host — and misses a host whose suffix is its third label or later,
+so a three-label FQDN passes. It is a backstop to the public-safety review, not exhaustive PII
+detection.
+Unsafe content and scan failures both stop publication and retain evidence, with distinct messages
+that do not echo matched content.
+
 Before any PR-body write, invoke the helper in validation-only mode with the exact publication
 arguments:
 
 ```sh
-skills/quest/scripts/publish-forge-review --preflight \
+"<plugin root>/skills/quest/scripts/publish-forge-review" --preflight --claim-token "$SCOPE_TOKEN" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```
 
-Require its sole stdout line to be `preflight-ok`. This mode validates and composes only: it must
+Pass `SCOPE_TOKEN` from the parsed claim/scope binding, never from an untrusted
+holder payload. Both helper modes require it; only normal publication verifies the
+claim. Review preflight remains network-free. Handoff preflight retains its existing
+bounded read-only discovery and composition. Require its sole stdout line to be `preflight-ok`. This mode validates and composes only: it must
 not call GitHub, append the ledger, dispose a source, or retain its temporary body. On nonzero or
 any other output, park with the `build-complete` handoff and retained evidence; do not write the PR
 body or `publication-in-progress`. That is a local pre-write failure, not a consumed publication
@@ -828,7 +942,8 @@ attempt.
 
 Then make the one named PR-body write, ADR 0028's second destination: read the
 delivered PR body, append a blank line, the `## Review exit payloads` heading, and the
-payload file's contents, write the result back with `gh pr edit --body-file`, and
+payload file's contents, write the result back with the installed `"<plugin root>/skills/deliver/scripts/deliver-write"
+--claim-token "$SCOPE_TOKEN" "$REPO" "$ISSUE" pr-edit "$PR" BODY-FILE`, and
 require the readback to match the composed body byte-for-byte apart from at most one
 trailing newline, which GitHub's PR-body storage adds. This is the only moment the PR body gains the section — before the
 `publication-in-progress` handoff rewrite, so the write never happens in the terminal
@@ -853,7 +968,7 @@ before posting. Transfer the summary file's lifecycle to the publication helper
 and invoke it exactly once:
 
 ```sh
-skills/quest/scripts/publish-forge-review \
+"<plugin root>/skills/quest/scripts/publish-forge-review" --claim-token "$SCOPE_TOKEN" \
   "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
   "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
 ```
@@ -921,7 +1036,57 @@ finish, resume, ship, merge, or run a campaign. A parsed `publication-in-progres
 make one recovery attempt only when the human explicitly authorizes recovery of that exact PR's
 forge-review publication.
 
-Revalidate the handoff and forge-result record under step 5, then require all of the following:
+Revalidate the handoff and forge-result record under step 5. There are two exclusive routes:
+reconcile an already-existing verified comment below, or make the existing absence-only
+publication attempt. Both consume the same single recovery allowance; a failed reconciliation
+never falls through to publication.
+
+#### Reconcile an existing verified publication
+
+Use this route only when the retained failure evidence identifies a comment the helper already
+read back successfully, but verification-ledger append or readback failed before disposal.
+The human must explicitly authorize reconciliation of that exact PR and comment URL. Require:
+
+- the live repository, PR number, branch, base and full `headRefOid` equal the handoff, including
+  `delivered-head-sha:`; revalidate original private review/reason, ledger, summary and payload
+  under step 5, preserving the legacy explicit payload reconciliation rule below;
+- the original retained helper body is a regular private mode-0600 direct child of the physical
+  ledger directory, named `.publish-forge-review.` plus its original six-character suffix;
+  establish its identity from retained failure evidence, never by newest-file selection;
+- after the exact `forge-result-record`, no disposal, undisposed or recovery-authorization
+  record exists; admit either no verification line or one whole exact
+  `review-publication-verified: <selected URL>` line, rejecting partial, different or duplicate
+  verification records; the ledger remains readable text with complete newline-terminated lines;
+- a complete bounded read of PR comments identifies exactly one complete `WORK:REVIEW` comment
+  matching the original summary, and that comment is the selected URL; unreadable, inconclusive,
+  duplicate or mismatched evidence parks;
+- read that exact comment with `gh api --hostname github.com` at its numeric comment endpoint;
+  require its `html_url` to equal the selected URL, its `issue_url` to identify this repository
+  and PR, and its body to equal the original retained helper body byte-for-byte; and
+- the normal validation-only helper preflight succeeds with the exact original inputs.
+
+Before consuming the allowance, repeat the PR identity/HEAD and complete-comment checks. Append
+and read back the existing `review-publication-recovery-authorized: pr <number> head <full-sha>`
+line once. Then invoke only this mode, once, with the verified original body and URL:
+
+```sh
+"<plugin root>/skills/quest/scripts/publish-forge-review" \
+  --reconcile "$VERIFIED_COMMENT_URL" "$ORIGINAL_HELPER_BODY" --claim-token "$SCOPE_TOKEN" \
+  "$REPO" "$PR" "$FORGE_MODE" "$FORGE_REVIEW_OR_REASON" \
+  "$FORGE_LEDGER" "$REVIEW_SUMMARY" "$REVIEW_PAYLOAD"
+```
+
+This mode recomposes and compares the original inputs, reads the existing comment, records or
+reuses its exact verification line, and closes disposal for the original owned paths. It never
+creates a comment. A failure retains evidence and parks with the allowance consumed; do not
+invoke normal publication. On success apply every existing verified-URL, closing-partition,
+unchanged-HEAD and atomic `publication-verified` handoff check above, then continue to step 9.
+The unchanged-HEAD check still runs after reconciliation; a changed head parks without reposting.
+ADR0083 amends only ADR0048's existing-comment exclusion for this route.
+
+#### Recover only when publication is absent
+
+Require all of the following:
 
 - the live repository, PR number, head branch, base branch, and full `headRefOid` equal the
   handoff, including `delivered-head-sha:`;
@@ -970,6 +1135,8 @@ branch and the worktree in place for whoever merges; the reclaim is theirs.
 Include every public-safe follow-up-candidate row from step 6 in the completion
 report so a campaign caller can route it without rereading a private findings
 artifact. Do not return its scratch path.
+Carry `$deliver`'s full local run count, reasons, and observed total duration into
+that report, with CI stated separately and unknown durations left unknown.
 
 When this path is authorized to merge, apply
 [the commit-bound merge gate](../../references/merge-gate.md). The reference is the complete
@@ -994,7 +1161,10 @@ records it, in this order:
    the live branch and PR if either exists, guardrail status, and exactly what
    a human must decide or supply. The exit-edges rule (quest-log skill)
    requires the note before the label, so an issue never parks without a record
-   of where.
+   of where. Compose it with both markers and post it through the
+   [post-annotation recipe](../quest-log/SKILL.md#recipe-post-an-annotation), which
+   refuses a block missing either -- a park note that loses its sentinel is filtered
+   out by latest-complete-wins, and an older block is returned as current.
 2. **Then set the label** (ensure-create it first; single-active swap):
    - **`status:blocked`** -- an external dependency: an unmerged upstream PR, an
      absent credential or service, a decision owned by someone not in this

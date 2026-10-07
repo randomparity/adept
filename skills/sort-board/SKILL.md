@@ -13,9 +13,9 @@ existing value. It never closes an issue and never edits an issue body.
 Input: use the user-supplied issue numbers.
 When none are supplied, sweep untriaged and blocked open issues.
 
-Execute every step below in order. Both writes to GitHub (creating labels,
-applying labels) are gated behind a single explicit confirmation each — do not
-write to GitHub before the user confirms that step.
+Execute every step below in order. Creating labels and ordinary label application
+are gated behind a single explicit confirmation each. The admitted unattended
+risk-only path in steps 5–6 is the sole exception; it never creates labels.
 
 ## Curated triage taxonomy
 
@@ -144,8 +144,10 @@ it, so no swap arises there.
    what the issue text actually states.
 
    Evaluate a sweep's blocked candidates under the `quest-log` canonical
-   cleared-dependency contract. Consider only whole-line `Blocked by #N` records in the
-   issue body, never comments, and resolve every distinct referenced issue with
+   cleared-dependency contract. Consider `Blocked by #N` records in the issue body, never
+   comments: a record starts at the beginning of a line and either ends after the decimal
+   issue number or carries non-empty prose after the exact ` — ` delimiter. Resolve every
+   distinct referenced issue with
    `gh issue view <n> --repo <owner/name> --json state`. An open, missing, or unreadable
    blocker, a malformed `Blocked by #` record, or a body with no canonical references
    retains `status:blocked`; report the reason and propose no status swap. Once at least one
@@ -183,19 +185,34 @@ it, so no swap arises there.
    about to apply, and render a swap toward a **less restrictive** value distinctly, showing
    the value being replaced.
 
+   An unattended risk-only pass may use quest-log's standing policy instead
+   of the per-issue human read only for issues in its bounded class. Verify
+   maintainer approval of the exact live base instruction-file blob and
+   record path, blob ID, policy identity/revision, approval evidence, and the
+   ordinary risk reasoning in the plan. Missing, stale, ambiguous, or
+   out-of-class authority leaves that risk proposal unapplied. Other label
+   dimensions retain this step's confirmation and are not bundled into an
+   unattended risk-only write.
+
 6. **Confirm → apply.** After a single explicit confirmation of the whole plan,
    apply per issue with one call:
    `gh issue edit <n> --repo <owner/name> --add-label "<adds>"` — and for a swap,
    the same call additionally with `--remove-label "<old-values>"`. Report a
    summary of what was applied and any per-issue failures; do not abort the
    remaining issues on a single failure.
+   For an admitted unattended risk-only pass, recheck the same live policy
+   blob and issue class immediately before each `risk:`-only swap; record the
+   policy-bound rationale on the issue before the label write and verify its
+   readback. A failed read or write holds that issue. Keep the single-active
+   swap and never apply other proposed labels without their confirmation.
 
 ## Hard constraints
 
 - `gh` and `Read` only — no file writes, no `git`.
 - Add-only except `priority:`/`status:`/`risk:` swaps. Never remove a `type:`/`effort:`
   label, never close an issue, never edit an issue body.
-- Both GitHub writes (label creation, label application) require explicit
-  confirmation first.
+- Label creation and ordinary label application require explicit confirmation
+  first. Only the admitted, risk-only standing-policy path above may write an
+  existing `risk:` label without a per-issue confirmation.
 - The apply set is derived from the available label set, so a `gh issue edit`
   never references a label the user declined to create.
