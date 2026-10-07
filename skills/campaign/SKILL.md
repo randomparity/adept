@@ -317,11 +317,17 @@ guessing. Record fix-row scope evidence in `Scope approvals`. Reconcile states
 
 Count issues needing fixes. **Every fix runs in a worker** — never inline.
 
-**Wave size:**
+**Execution groups:**
 - **Serial (size 1)**: for coupled issues (overlapping file scopes, ordering dependencies). Merge each before next.
-- **Parallel (up to 5)**: for independent issues (disjoint scopes, no dependencies).
+- **Parallel (up to 5 active workers)**: for independent issues. Use the lowest applicable
+  task, campaign and available harness concurrency limit, including one.
 
-Record wave in manifest (`Wave` column): `s1`, `s2`... for serial (order = merge order), `w1`, `w2`... for parallel.
+Keep the existing `Wave` column: `s1`, `s2`... retain serial merge order; `w1`, `w2`...
+name finite planned approval/publication groups, not execution barriers. Fix each group's
+membership in the plan before dispatch; do not extend it as capacity becomes available.
+Independent eligible rows may execute across `wN` boundaries. Scope conflicts and dependencies
+still determine serial work; shared mandatory edits and coupled ADR-index rows retain only
+their existing ordered-landing exceptions.
 
 **Pre-assign ADR/migration numbers, mandatory per-PR edits, and file scope** even for serial —
 crashed issues need consistent assignments on re-dispatch. Source mandatory edits only from
@@ -507,9 +513,36 @@ Use supported foreground dispatch or asynchronous dispatch plus native notificat
 [the shared waiting procedure](../../references/dispatch-liveness.md). Serial dependency order
 holds even when the harness has no blocking-dispatch field.
 
-**Parallel:** dispatch up to 5 worktree-isolated workers in one message per wave.
+**Parallel:** initially fill available capacity with eligible worktree-isolated workers in
+planned row order. Then refill on completion; do not wait for a whole group to finish.
 
 After each worker completion is received, emit the worker-completed progress update required by the top-level contract before processing its PR or next row.
+
+**Reconcile, then refill.** At that completion-handling opportunity:
+
+1. Reconcile the report, actual artifacts, row/attempt/worker binding and harness-observed end
+   under the shared waiting procedure. Record the outcome in the existing manifest before
+   reusing capacity. A report, reviewed PR or green check alone does not release the worker's
+   slot. Outstanding workers and uncertain ownership continue to count against the cap.
+2. Select the earliest already-approved independent row in planned order whose existing
+   dispatch gates pass: approvals/exclusions unchanged, dependencies satisfied, claim readable
+   and dispatchable, assignments valid, and scope compatible with active workers and waiting
+   unmerged rows. Merge-required dependencies still require verified landing and the existing
+   dependency reconciliation; review approval or worker completion cannot release them.
+   Ordinary overlapping scopes remain serial through merge. Reserved mandatory edits and
+   coupled index rows use only their existing step-6 conflict/ordering rules.
+3. Apply the claim/binding checks above and dispatch into the vacated slot within the lowest
+   applicable cap. Repeat while capacity and eligible rows remain. A held row is skipped for
+   this selection, not reclassified as independent or stripped of its claim/reservation.
+   Refill precedes a wait for another worker, pending merge, or uncoupled index publication;
+   none is a whole-group barrier for otherwise eligible execution.
+
+On resume, reconcile existing manifest statuses, attempts, worker/claim bindings and artifacts
+before counting slots or dispatching. Retain consumed probe/replacement budgets. Missing or
+conflicting ownership evidence holds the affected row and its capacity; do not launch a second
+worker by treating an unreadable or quiet row as absent. Observed completion releases execution
+capacity only: step 6 still owns ordered landing and cleanup. A lower cap permits no new dispatch
+until outstanding ownership fits it; it does not authorize stopping or replacing workers.
 
 **Track every outstanding row**, serial and parallel alike — a wave of one stalls the whole campaign. A dispatched agent is silent for long stretches by design — a design phase, a build, a review loop, a CI wait — so **silence is not a signal**.
 
@@ -658,7 +691,17 @@ The end of run does not by itself hand you the branch. The worker never removes 
 
 **ADR index handling** (three states: `coupled` | `not coupled` | `no index`):
 - **`no index`**: skip row handling entirely
-- **`not coupled`** (index exists, not CI-gated): workers write only the ADR file, report `index row pending`. You append all pending rows **once** after wave's last PR merges, on its own branch.
+- **`not coupled`** (index exists, not CI-gated): workers write only the ADR file and report
+  `index row pending`. Use the fixed finite planned groups from step 4. Close a group when
+  its members have merged or are explicitly blocked/skipped; a quiet in-flight worker does
+  not qualify. Append that group's merged pending rows once on a separate branch. A blocked
+  member that later lands belongs to a later finite publication group, recorded before its
+  publication; do not reopen or indefinitely extend the earlier group. Keep membership,
+  pending rows, publication branch/PR and verified outcome in existing manifest notes/outcomes.
+  Reconcile an interrupted or ambiguous publication before another write, and clear pending
+  rows only after verified publication. Eligible worker refill does not wait for this branch.
+  Publish closed groups while draining; at finalization account for every remaining pending
+  row and name any publication blocker instead of claiming publication complete.
 - **`coupled`** (index is CI-gated): workers add their own rows in their PRs. You resolve adjacent-insertion conflicts during the serial-merge branch refresh. Expect no `index row pending` reports.
 
 Verify auto-close: `gh issue view <n> --json state` after merge. If still open,
