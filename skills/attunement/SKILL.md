@@ -24,6 +24,10 @@ reference for the files' language (Python, TypeScript, Rust, Bash, or GitHub
 Actions), read that reference before writing code — it holds the strictness and
 supply-chain rules that are no longer inline in `AGENTS.md`.
 
+Before invoking a helper, including step 2's detector and resolver, apply step 5's
+prerequisite validation to that invocation. Extend the inventory as later task commands
+are discovered; do not wait until step 5 to check an earlier operation's dependencies.
+
 ## 2. Record architecture context
 
 Run `"<plugin root>/skills/attunement/scripts/detect-host-architecture"`. `<plugin root>` is
@@ -161,10 +165,44 @@ an `unknown`.
 Record cost and coverage separately for each phase and hook; a fast focused
 check does not inherit the full suite's coverage or duration.
 
-**Prerequisites.** Everything the command needs that a default checkout does
-not supply: installed tools with version floors, one-time setup targets such
-as a hooks installer, credentials or services CI provides but a workstation
-does not. Unrecorded, each of these is re-diagnosed per session.
+**Prerequisites.** Build a task-scoped inventory from the invoked installed helpers
+and their called helpers, effective repository instructions, and selected guardrail
+recipes and their commands. Include required tools, declared version floors, the script
+interpreter, one-time setup such as hooks, and credentials or services the command needs.
+A repository setup recipe covers that repository's tools; it is not a complete inventory
+of an installed skill's dependencies. Commands documented as optional retain their
+existing fallback or `unknown` behavior; do not promote them to mandatory holds.
+
+Before dependent work, verify command availability in the execution context that will
+run it (for example, `command -v` in that shell and PATH). Check the interpreter selected
+by the actual invocation: an explicit interpreter argument, a direct shebang path, or
+PATH resolution for an `env` shebang. Record its resolved path and version separately
+from `HOST_SHELL` and `$SHELL`; neither establishes the script interpreter's version.
+Use supported, non-mutating version probes and compare against the floor declared for
+that dependency by its applicable instructions or recipe. Compare version components
+using the tool's version rules, not string ordering. Do not invent a floor when none is
+declared or transfer a tool-call shell's version to the helper's interpreter.
+
+In the private task plan or existing durable workflow notes, record each dependency's
+source and dependent operation, resolved command/interpreter, observed version and
+probe result, declared floor (or `none declared`), and availability/compatibility verdict.
+Record an unavailable or unverifiable version explicitly; it cannot satisfy a declared
+floor. Keep host-specific resolution paths private and redact them in public summaries.
+Reuse evidence only while its invocation, requirements and execution context still apply;
+recheck affected entries after a relevant change such as PATH or interpreter selection.
+
+When required availability or compliance with a declared floor cannot be verified, use a
+documented equivalent only when it preserves the required behavior and the actual caller
+supports selecting it. Verify the equivalent's availability and applicable floor, and
+record the documentation, chosen invocation and preserved behavior. A similarly named
+tool or an alias unseen by the helper is not evidence of equivalence.
+
+Without a verified usable equivalent, name the dependency, failed requirement, dependent
+operation and actionable installation or PATH remedy (including the needed floor when
+declared). Stop that operation and work depending on it; continue independent work that
+needs none of the unmet prerequisites. Never skip a required safety check or substitute
+a weaker check to proceed. Do not install tools or run a setup/install target without
+applicable existing authorization; otherwise leave that remedy for the operator.
 
 **Known landmines.** Behaviors that look like failures but are not. A managed
 pre-push hook that re-runs the whole check suite in an isolated worktree can
