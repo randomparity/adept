@@ -10,9 +10,8 @@ repo's `references/` would not resolve. Do not collapse it into a link.
 ```
 Worker (implementer):
   description: "Task N — [task name]"
-  background: false  # REQUIRED: this wait is serial — nothing proceeds until this
-                     # worker returns, so a backgrounded dispatch buys no parallelism
-                     # and invites the dispatcher to spend turns checking on it.
+  # Serial wait: use supported foreground dispatch or await the native notification/wait
+  # before dependent work. Apply SKILL.md's shared waiting procedure; invent no blocking flag.
   model: [MODEL — REQUIRED: pick one from SKILL.md, Choosing a model. Leave this
          unset and the dispatch quietly inherits whatever model this session is
          running, which is the costliest choice available.]

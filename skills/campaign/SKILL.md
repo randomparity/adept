@@ -500,9 +500,12 @@ a changed holder invalidates the packet and holds the row. Preserve the replacem
 The worker's direct read guards the expected holder again; GitHub read then delete is not atomic,
 so substitution after that read remains possible, and verify gates still apply.
 
-Before the serial blocking dispatch and wait, emit the before-wait progress update required by the top-level contract.
+Before the serial dispatch and wait, emit the before-wait progress update required by the top-level contract.
 
-**Serial:** dispatch one **blocking** (`background: false`), wait for green + mergeable PR, merge (step 6), repeat. Blocking is the point, not a detail: nothing else in the queue can advance until this row lands, so there is no work to drain and no reason to take a turn — and a dispatcher blocked on a worker cannot poll it at all.
+**Serial:** dispatch one worker, await its green + mergeable PR, merge (step 6), then repeat.
+Use supported foreground dispatch or asynchronous dispatch plus native notification/wait under
+[the shared waiting procedure](../../references/dispatch-liveness.md). Serial dependency order
+holds even when the harness has no blocking-dispatch field.
 
 **Parallel:** dispatch up to 5 worktree-isolated workers in one message per wave.
 
@@ -512,15 +515,22 @@ After each worker completion is received, emit the worker-completed progress upd
 
 **Last-commit age cannot tell alive from dead.** Neither can elapsed time or tracker inactivity. Nothing derived from a timestamp authorizes re-dispatch, and a run that has started treating the commit stream as its liveness signal has already left this contract.
 
-**The tracker is the primary signal, and it costs no model turn.** `$quest` publishes its phase boundaries to the tracker as it goes, and they land in three clusters rather than five checkpoints: `status:in-progress` with `WORK:SCOPE` at the start, `status:in-review` once the build is done, then the PR and its `WORK:REVIEW` (that one on the PR, not the issue) at ship. Take the newest such event on the row and read its age — the quest-log skill carries the label-timeline recipe, and `--json comments` carries each annotation's own `createdAt` (the top-level field is the issue's, which never moves). Design, build and review each sit inside a cluster gap, so a row quiet inside one is ordinary. This narrows which rows look interesting; it never says a row is dead.
+**Use events to collect evidence.** Await the worker's compact report and harness notification.
+At completion or a blocker, failure, user request or task-appropriate deadline, reconcile the
+needed tracker/branch/run-state once. The tracker supplies durable phase evidence, not proof of
+liveness. Ordinary long design/build/review gaps require no discretionary healthy-status reads.
 
-**The direct probe is the exception, budgeted at one per agent per run** — see [dispatch liveness and silent-worker recovery](../../references/dispatch-liveness.md) for what a reply proves, what it does not, and why a stale-but-plausible report never outranks verified branch, tracker, or run-state. Spend it on a row whose newest tracker event is old enough that no cluster gap explains it. Each probe costs a full orchestrator turn replaying this skill and the whole campaign so far, so a probe that only confirms what a `gh` query already implied is pure cost, and a second probe to an agent that ignored the first buys the same non-answer twice.
-
-**Those orchestrator turns, not worker tokens, are a long campaign's dominant marginal cost.** Step 4 chooses worker models with care; the same care belongs on how often this session takes a turn at all.
+**The direct probe remains budgeted at one per agent per run.** Apply the shared reference's
+unexpected-silence threshold and hold/recovery rules. Neither tracker age nor an unchanged wait
+timeout is proof of end, and a deadline does not increase probe or replacement authority.
+No relative coordinator/worker cost is asserted without run telemetry.
 
 Before the parallel background wait, emit the before-wait progress update required by the top-level contract.
 
-**Do not read on a timer.** Read the rows when an end-of-run notification arrives, or when other work in hand finishes. When nothing else is in hand, the outstanding rows **are** the work: put the whole wait in one background task per the reference's recipe and read it once when it returns. Never a foreground sleep loop, and never a poll manufactured to look busy.
+**Wait for the needed event.** Drain useful independent work; when only outstanding workers
+remain, use the shared native notification/wait path. Continue unchanged timeout returns without
+status reads. Required progress uses known facts. Reserve the single background condition-wait
+recipe for durable-state waits, not as a replacement for native agent completion.
 
 **Only an observed end of run authorizes re-dispatch.** Re-dispatching a live agent lands two branches and two PRs on one issue, which is worse than the stall you are fixing, so the bar is what you saw and not what you inferred. Unanswered probes are not proof. A row that has gone quiet, has spent its one probe without a reply, and shows no new tracker event is a **hold** — name it in your run output and keep draining the rest of the queue. A hold here is a report, not a state machine: nothing is written down, the tracker half is recomputed from live queries in seconds, and the probe half belongs to the run the operator is already in. Unlike step 6's hold this one writes no `status:` label and leaves the row **in-flight** — the label is the dispatched agent's to write, it may still be alive to write it, and a `blocked` row would read as drained while its agent kept working.
 
