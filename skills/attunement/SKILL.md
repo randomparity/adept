@@ -43,11 +43,7 @@ fields, records, or terminal control sequences. Never evaluate that representati
 shell code. The detector assumes the resolved `uname` is the operating system tool and its
 output is text; shell variables cannot retain binary NUL bytes. Anything else is a
 malformed detector result and stops preflight with the observed status
-and a request to repair the installed preflight package. A status of 127 naming a missing
-file buys exactly one retry before that report, because an unsubstituted `<plugin root>`
-produces the same status as an absent script: re-resolve it and run the command once more.
-A second 127 is the repair case — stop with the observed status, the absolute path that was
-tried, and the repair request. Render `HOST_ARCHITECTURE` as the
+and a request to repair the installed preflight package. Render `HOST_ARCHITECTURE` as the
 normalized value, `unsupported (<raw-or-empty>)`, or `detection failed (<reason>)`.
 
 The status line is not the whole payload. After it, on every exit path, the same
