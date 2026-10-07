@@ -26,6 +26,7 @@ mode=''
 claim_token=''
 claim_issue=''
 operation=publish
+retained_body=''
 review_or_reason=''
 ledger=''
 summary=''
@@ -116,7 +117,7 @@ run_gh() { # seconds gh-args...
 
 preflight() {
 	local command bound
-	for command in bash gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm sleep; do
+	for command in bash gh jq rg mktemp awk git iconv od grep sed dirname tail uname cat chmod stat wc rm sleep cmp; do
 		command -v "$command" >/dev/null 2>&1 ||
 			fail "required command is unavailable: $command; install it or expose it in PATH"
 	done
@@ -154,10 +155,19 @@ preflight() {
 }
 
 validate_arguments() {
-	if [ "${1-}" = --preflight ]; then
+	case ${1-} in
+	--preflight)
 		operation=preflight
 		shift
-	fi
+		;;
+	--reconcile)
+		[ "$#" -ge 3 ] || fail 'usage: --reconcile COMMENT-URL RETAINED-BODY'
+		operation=reconcile
+		comment_url=$2
+		retained_body=$3
+		shift 3
+		;;
+	esac
 	[ "${1-}" = --claim-token ] && [ "$#" -ge 2 ] ||
 		fail 'usage: required --claim-token TOKEN'
 	claim_token=$2
@@ -167,7 +177,7 @@ validate_arguments() {
 	claim_issue=${BASH_REMATCH[1]}
 	case $# in
 	6 | 7) ;;
-	*) fail 'usage: publish-forge-review [--preflight] --claim-token TOKEN REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY [PAYLOAD]' ;;
+	*) fail 'usage: publish-forge-review [--preflight | --reconcile COMMENT-URL RETAINED-BODY] --claim-token TOKEN REPO PR MODE REVIEW-OR-REASON LEDGER SUMMARY [PAYLOAD]' ;;
 	esac
 	repo=$1
 	pr=$2
@@ -336,6 +346,21 @@ compose_body() {
 	esac
 }
 
+reuse_retained_body() {
+	local directory suffix
+	directory=$(cd "$ledger_directory" && pwd -P) || fail 'cannot resolve ledger directory'
+	case $retained_body in
+	"$directory/.publish-forge-review."*) suffix=${retained_body#"$directory/.publish-forge-review."} ;;
+	*) fail 'retained body is outside its original ledger directory' ;;
+	esac
+	case $suffix in '' | *[!a-zA-Z0-9]*) fail 'retained body identity is invalid' ;; esac
+	[ "${#suffix}" -eq 6 ] || fail 'retained body identity is invalid'
+	require_private_file 'retained body' "$retained_body" true
+	cmp -s "$body" "$retained_body" || fail 'retained body does not match original publication inputs'
+	rm -- "$body" || fail 'cannot remove reconciliation comparison body'
+	body=$retained_body
+}
+
 post_comment() {
 	local post_status=0 candidate
 	run_gh "$BOUND_MULTI" pr comment "$pr" --repo "github.com/$repo" \
@@ -386,6 +411,11 @@ read_comment() {
 		printf 'publish-forge-review: posted but unverified comment: %s\n' "$comment_url" >&2
 		fail 'comment readback did not match the checked body'
 	fi
+	if [ "$operation" = reconcile ]; then
+		jq -e --arg url "$comment_url" --arg issue "https://api.github.com/repos/$repo/issues/$pr" \
+			'.html_url == $url and .issue_url == $issue' <"$gh_capture" >/dev/null ||
+			fail 'existing comment does not belong to the exact publication destination'
+	fi
 	rm -f -- "$gh_capture" ||
 		printf 'publish-forge-review: retained gh capture: %s\n' "$gh_capture" >&2
 	gh_capture=''
@@ -396,11 +426,13 @@ append_ledger() {
 	printf '%s\n' "$line" >>"$ledger" || append_status=$?
 	if [ "$append_status" -ne 0 ]; then
 		printf 'publish-forge-review: verified comment retained: %s\n' "$comment_url" >&2
+		printf 'publish-forge-review: original publication body: %s\n' "$body" >&2
 		fail 'publication ledger append failed'
 	fi
 	readback=$(tail -n 1 "$ledger") || read_status=$?
 	if [ "$read_status" -ne 0 ] || [ "$readback" != "$line" ]; then
 		printf 'publish-forge-review: verified comment retained: %s\n' "$comment_url" >&2
+		printf 'publish-forge-review: original publication body: %s\n' "$body" >&2
 		fail 'publication ledger readback failed'
 	fi
 }
@@ -453,6 +485,9 @@ if [ "$operation" = preflight ]; then
 	printf '%s\n' preflight-ok
 	exit 0
 fi
+if [ "$operation" = reconcile ]; then
+	reuse_retained_body
+fi
 run_gh "$BOUND_SINGLE" pr view "$pr" --repo "github.com/$repo" \
 	--json number,closingIssuesReferences || fail 'cannot read publication destination'
 jq -e --argjson pr "$pr" --argjson issue "$claim_issue" --arg repo "$repo" \
@@ -467,9 +502,23 @@ if [ "$claim_rc" -ne 0 ]; then
 	printf 'publication refused; local checkout: %s\n' "$PWD" >&2
 	exit "$claim_rc"
 fi
-comment_url=$(post_comment)
+if [ "$operation" = publish ]; then
+	comment_url=$(post_comment)
+fi
 read_comment "$comment_url"
-append_ledger "review-publication-verified: $comment_url"
+verified_line="review-publication-verified: $comment_url"
+verified_count=0
+if [ "$operation" = reconcile ]; then
+	# Quest has validated this handoff's ledger suffix and consumed human authority.
+	# Count exact existing records so a failed original readback is not appended twice.
+	scan_status=0
+	verified_count=$(grep -cxF "$verified_line" "$ledger") || scan_status=$?
+	case $scan_status in 0 | 1) ;; *) fail 'cannot read existing verification record' ;; esac
+	case $verified_count in 0 | 1) ;; *) fail 'existing verification record is ambiguous' ;; esac
+fi
+if [ "$verified_count" = 0 ]; then
+	append_ledger "$verified_line"
+fi
 disposed_paths=("$summary" "$body")
 if [ "$mode" = required ]; then
 	disposed_paths=("$review_or_reason" "${disposed_paths[@]}")
