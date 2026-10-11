@@ -1,8 +1,10 @@
-# ADR0088: Optional producer on claim verification
+# 0088 Optional producer on claim verification
 
 ## Status
 
-Accepted. Operator approved issue459’s bounded design on 2026-10-11.
+Accepted (2026-10-11)
+
+Operator approved issue459’s bounded design on 2026-10-11.
 
 ## Context
 
