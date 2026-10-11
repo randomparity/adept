@@ -861,6 +861,7 @@ profile_claim_verify() {
 			;;
 		--producer)
 			(($# >= 2)) || die "$EXIT_USAGE" usage '--producer needs a value'
+			[[ $2 != --* ]] || die "$EXIT_USAGE" usage '--producer needs a value'
 			github_claim_validate_producer "$2"
 			shift 2
 			;;

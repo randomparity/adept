@@ -195,6 +195,8 @@ verify_usage() {
 verify_usage --token q101-aaaaaaaa --producer ''
 verify_usage --token q101-aaaaaaaa --producer 'bad/login'
 verify_usage --token q101-aaaaaaaa --producer
+verify_usage --token q101-aaaaaaaa --producer --token
+verify_usage --token q101-aaaaaaaa --producer --unknown
 verify_usage --producer --token q101-aaaaaaaa
 verify_usage --producer alice --token
 verify_usage --producer alice
