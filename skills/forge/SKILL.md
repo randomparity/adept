@@ -704,7 +704,10 @@ contract still determines their inputs.
 
 ### What goes in a dispatch
 
-**Subagents inherit nothing.** Each implementer prompt must include:
+**Context inheritance depends on the harness and dispatch mode.** A fork may inherit
+parent conversation; a fresh context may still receive system instructions, project
+instructions, or configuration. Regardless of inheritance, each implementer prompt
+must include the complete explicit task contract:
 
 - the task brief path, introduced as its requirements, with the exact values to
   use verbatim
