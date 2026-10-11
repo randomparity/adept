@@ -166,6 +166,41 @@ assert_exit 0 "$RUN_STATUS" 'verify held'
 jq -e '.held == true and (.age_seconds | type == "number" and . >= 0)' \
 	>"$sandbox/jq-out" <"$sandbox/out" || fail 'verify payload wrong'
 
+# Producer is compatibility input, never an ownership credential.
+: >"$GH_CALL_LOG"
+for producer in alice bob; do
+	run claim-verify --profile github --target example/repo 101 \
+		--token q101-aaaaaaaa --producer "$producer"
+	assert_exit 0 "$RUN_STATUS" 'verify accepts producer without comparing it'
+	jq -e '.held == true' >"$sandbox/jq-out" <"$sandbox/out" || fail 'producer verify payload'
+done
+run claim-verify --profile github --target example/repo 101 \
+	--producer bob --token q101-aaaaaaaa
+assert_exit 0 "$RUN_STATUS" 'producer before token'
+run claim-verify --profile github --target example/repo 101 \
+	--token q101-bbbbbbbb --producer alice
+assert_exit 6 "$RUN_STATUS" 'producer cannot authorize foreign token'
+jq -e '.error == "conflict" and .holder.token == "q101-aaaaaaaa"' \
+	>"$sandbox/jq-out" <"$sandbox/err" || fail 'producer conflict payload'
+assert_no_claim_writes 'producer verification'
+
+verify_usage() {
+	: >"$GH_CALL_LOG"
+	run claim-verify --profile github --target example/repo 101 "$@"
+	assert_exit 1 "$RUN_STATUS" 'invalid verify arguments'
+	jq -e '.error == "usage"' >"$sandbox/jq-out" <"$sandbox/err" || fail 'verify usage payload'
+	[[ ! -s $GH_CALL_LOG ]] || fail 'invalid verify arguments reached GitHub'
+}
+
+verify_usage --token q101-aaaaaaaa --producer ''
+verify_usage --token q101-aaaaaaaa --producer 'bad/login'
+verify_usage --token q101-aaaaaaaa --producer
+verify_usage --producer --token q101-aaaaaaaa
+verify_usage --producer alice --token
+verify_usage --producer alice
+verify_usage --producer alice --token 'bad/token'
+verify_usage --token q101-aaaaaaaa --unknown
+
 run claim-verify --profile github --target example/repo 101 --token q101-bbbbbbbb
 assert_exit 6 "$RUN_STATUS" 'verify foreign token'
 jq -e '.error == "conflict" and .holder.token == "q101-aaaaaaaa"' \
@@ -184,6 +219,10 @@ assert_exit 0 "$RUN_STATUS" 'release absent is idempotent'
 
 run claim-verify --profile github --target example/repo 101 --token q101-aaaaaaaa
 assert_exit 2 "$RUN_STATUS" 'verify absent exits 2'
+
+run claim-verify --profile github --target example/repo 101 \
+	--token q101-aaaaaaaa --producer bob
+assert_exit 2 "$RUN_STATUS" 'verify absent with producer exits 2'
 
 # --- self-recovery after a lost create response ------------------------------
 new_store

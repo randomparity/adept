@@ -859,6 +859,11 @@ profile_claim_verify() {
 			TOKEN=$2
 			shift 2
 			;;
+		--producer)
+			(($# >= 2)) || die "$EXIT_USAGE" usage '--producer needs a value'
+			github_claim_validate_producer "$2"
+			shift 2
+			;;
 		*) die "$EXIT_USAGE" usage "unknown claim-verify argument: $1" ;;
 		esac
 	done
