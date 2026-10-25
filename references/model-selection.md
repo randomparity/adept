@@ -65,10 +65,10 @@ provider/harness, requested choice, supported effective model/effort (or unknown
 and basis: `explicit override`, `preference (project|user|unknown)` when the chosen model is
 one that line names, `mapping default` when it comes from the mapping (including after skipped
 preferences), `runtime alternative` for a runtime-documented model outside both, `runtime
-default`, or `unmet`. Name any skipped preference line or exclusion that
-changed the outcome. Distinguish a recommendation from settings actually observed; unknown
-observations cannot prove a required capability. Keep account and endpoint details private.
-This is human-readable evidence, not a new schema or state store.
+default`, or `unmet`. Name any skipped preference line or exclusion that changed the outcome.
+Distinguish a recommendation from settings actually observed; unknown observations cannot prove
+a required capability. Keep account and endpoint details private. This is human-readable
+evidence, not a new schema or state store.
 
 ## Operator preferences
 
