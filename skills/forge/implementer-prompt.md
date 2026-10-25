@@ -12,9 +12,11 @@ Worker (implementer):
   description: "Task N — [task name]"
   # Serial wait: use supported foreground dispatch or await the native notification/wait
   # before dependent work. Apply SKILL.md's shared waiting procedure; invent no blocking flag.
-  model: [MODEL — REQUIRED: pick one from SKILL.md, Choosing a model. Leave this
-         unset and the dispatch quietly inherits whatever model this session is
-         running, which is the costliest choice available.]
+  model: [SUPPORTED CHOICE — resolve under SKILL.md, Choosing a model; use the
+          actual harness selector where exposed, preserving explicit overrides.]
+  # Also supply supported reasoning effort through the harness's actual control.
+  # If either control is absent, follow the shared default-or-unmet path and record
+  # inheritance/unavailable controls honestly in progress.md; never invent an argument.
   prompt: |
     Your job is Task N of the plan: [task name]
 
