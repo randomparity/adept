@@ -64,7 +64,8 @@ Record the recommendation in the workflow's existing work notes: phase, capabili
 provider/harness, requested choice, supported effective model/effort (or unknown/unavailable),
 and basis: `explicit override`, `preference (project|user)` when the chosen model is one that
 line names, `mapping default` when it comes from the mapping (including after skipped
-preferences), `runtime default`, or `unmet`. Name any skipped preference line or exclusion that
+preferences), `runtime alternative` for a runtime-documented model outside both, `runtime
+default`, or `unmet`. Name any skipped preference line or exclusion that
 changed the outcome. Distinguish a recommendation from settings actually observed; unknown
 observations cannot prove a required capability. Keep account and endpoint details private.
 This is human-readable evidence, not a new schema or state store.
@@ -85,7 +86,11 @@ or project instructions, with one line per harness and tier:
 `<model>` is an identifier or alias exactly as that harness accepts it. Harness and tier
 keys match case-insensitively; model tokens match exactly. User scope is the harness's
 user-level instruction location (by default `~/.claude/CLAUDE.md` for Claude Code and
-`~/.codex/AGENTS.md` for Codex); every other loaded instruction file is project scope.
+`~/.codex/AGENTS.md` for Codex); every other loaded instruction file, including nested,
+imported and local ones, is project scope, so keep one line per key in each scope. Claude Code
+labels each loaded file with its path. Codex (observed in 0.164.0) concatenates the user file
+ahead of project documents under one header; content before the first `--- project-doc ---`
+separator is user scope. Where the reader cannot tell, scope is not established.
 
 - **Precedence:** host restrictions, then an explicit choice, then the project line, then
   the user line, then the [mapping](model-mapping.md). An explicit choice is a model the
@@ -99,15 +104,17 @@ user-level instruction location (by default `~/.claude/CLAUDE.md` for Claude Cod
   known, or cannot be ruled out, counts as excluded. Steps 3–5 choose from that list.
   If none is available, a verified runtime default applies only when it is not excluded and
   its capability is established; otherwise name the unmet capability. Absent an
-  explicit choice, never request an excluded model.
+  explicit choice, never request an excluded model. An unavailable listed model is dropped
+  and recorded; its line and that line's exclusions still apply.
 - **Final review:** permitted means allowed by the host and not excluded on the Deep key.
   Compare those candidates on strength; preference order does not apply. If exclusions
   leave no adequate deep candidate, the capability is unmet before dependent work — never a
   lower tier.
-- **Faults:** skip and record a malformed line, an unknown harness or tier, a key repeated
-  in one scope or a line whose scope cannot be established (skip that key), or an
-  unavailable model, and report it to the operator. A skipped key is absent at that scope, so
-  the next source applies; infer nothing else from a skipped line.
+- **Faults:** skip and record a malformed line, an unknown harness or tier, or a key repeated
+  in one scope or whose scope cannot be established (skip that key), and report it to the
+  operator. A skipped key's preferences are absent at that scope, so the next source applies,
+  but every exclusion its well-formed lines state still applies. Infer nothing else from a
+  skipped line.
 
 With no section configured, the mapping alone supplies candidates.
 

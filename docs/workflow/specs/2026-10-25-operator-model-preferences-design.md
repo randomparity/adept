@@ -36,6 +36,8 @@ model tokens match exactly as the harness accepts them.
 
 **Scope.** User scope is the harness's user instruction file (`~/.claude/CLAUDE.md` for Claude
 Code, `~/.codex/AGENTS.md` for Codex). Every other loaded instruction file is project scope.
+Claude Code labels loaded files by path. Codex 0.164.0 concatenates the user file ahead of
+project documents, and the first `--- project-doc ---` separator marks the boundary.
 
 **Precedence,** highest first:
 
@@ -69,15 +71,15 @@ operator:
 
 - a malformed line;
 - an unknown harness or tier;
-- a key repeated in one scope, or a line whose scope cannot be established (the whole key is
-  skipped);
-- an unavailable model.
+- a key repeated in one scope, or a line whose scope cannot be established (the key's
+  preferences are skipped, and its exclusions still apply).
 
-Nothing is inferred from a skipped line.
+An unavailable listed model is dropped and recorded, and its line still applies. Nothing else
+is inferred from a skipped line.
 
 **Basis.** The record names one of `explicit override`, `preference (project|user)`,
-`mapping default`, `runtime default` or `unmet`. It also lists every skipped line or excluded
-model that changed the outcome.
+`mapping default`, `runtime alternative`, `runtime default` or `unmet`. It also lists every
+skipped line or excluded model that changed the outcome.
 
 ### Failure model
 
