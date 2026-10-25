@@ -62,8 +62,8 @@ its provider-specific values; equal labels across providers do not imply equal w
 
 Record the recommendation in the workflow's existing work notes: phase, capability and reason,
 provider/harness, requested choice, supported effective model/effort (or unknown/unavailable),
-and basis: `explicit override`, `preference (project|user)` when the chosen model is one that
-line names, `mapping default` when it comes from the mapping (including after skipped
+and basis: `explicit override`, `preference (project|user|unknown)` when the chosen model is
+one that line names, `mapping default` when it comes from the mapping (including after skipped
 preferences), `runtime alternative` for a runtime-documented model outside both, `runtime
 default`, or `unmet`. Name any skipped preference line or exclusion that
 changed the outcome. Distinguish a recommendation from settings actually observed; unknown

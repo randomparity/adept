@@ -81,7 +81,7 @@ operator:
 An unavailable listed model is dropped and recorded, and its line still applies. Nothing else
 is inferred from a skipped line.
 
-**Basis.** The record names one of `explicit override`, `preference (project|user)`,
+**Basis.** The record names one of `explicit override`, `preference (project|user|unknown)`,
 `mapping default`, `runtime alternative`, `runtime default` or `unmet`. It also lists every
 skipped line or excluded model that changed the outcome.
 
