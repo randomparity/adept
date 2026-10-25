@@ -299,6 +299,14 @@ phase defaults. Clear, bounded reconnaissance starts at the mechanical tier; nam
 consequences, or difficult verification raise that recommendation. Resolve against the actual
 provider and harness, honoring supported overrides and reporting unmet capability.
 
+Before each campaign-owned worker dispatch (triage, verification, or quest), apply that
+resolution to the actual invocation. Supply the supported model and reasoning controls
+explicitly where exposed; a tier in the prompt is not a model selection. Record the role,
+capability rationale, requested settings and supported effective choice in the existing
+private manifest notes, then reconcile observed settings or unavailable observations on
+return. Use the shared policy's override and default-or-unmet paths when a control is absent;
+do not invent a field or treat an unconfirmed request as an observed setting.
+
 **Verdict handling:**
 - `close-candidate` → confirm with `bug-claim-verifier` or `$gauntlet` before closing. **Confirmed** → keep `close-candidate`; don't close here — batch closes in step 4 after plan is visible. **Rejected or inconclusive** → the already-fixed claim is unproven, so the issue needs work: re-verdict as `fix` (subtype from the verifier's evidence; default `non-trivial` when unclear), or `blocked` with reason if even that can't be determined. Persist the transition in the manifest before presenting the plan.
 - `close-not-planned` → preserve the citations, trigger, impact, cycle-cost comparison, and
@@ -461,7 +469,8 @@ Each prompt carries:
 - Assigned ADR/migration numbers, exact mandatory per-PR edits, file scope; the
   worker applies each assigned value and never derives, increments, or reassigns it
 - Guardrail commands, `BASE_BRANCH`, ADR-index coupling verdict
-- Model tier from triage
+- Model tier and resolved model/effort evidence from triage; revalidate for the quest
+  invocation before dispatch under the selection rule above
 - Artifact lane, routed review depth, and all four assessment fields from triage, passed as
   evidence rather than instruction. `$quest` revalidates the lane from that assessment at its
   step 1 and checkpoints an unprovable design-lane complexity before design; it re-derives the

@@ -13,7 +13,11 @@ Worker (reviewer):
   description: "Whole-branch review"
   # Serial wait: use supported foreground dispatch or await the native notification/wait
   # before dependent work. Apply SKILL.md's shared waiting procedure; invent no blocking flag.
-  model: [MODEL — REQUIRED: select the most-capable available model]
+  model: [SUPPORTED CHOICE — strongest available permitted model under SKILL.md,
+          Choosing a model; use the actual harness selector where exposed.]
+  # Also supply supported reasoning effort through the harness's actual control.
+  # Follow the shared default-or-unmet path for absent controls, preserving required
+  # review capability; record requested versus observed settings in progress.md.
   prompt: |
     Review this branch the way a senior engineer would — attentive to
     architecture, to the patterns the surrounding code already follows, and to

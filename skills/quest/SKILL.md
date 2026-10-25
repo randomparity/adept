@@ -50,6 +50,22 @@ claim/scope binding, artifact lifecycle and cumulative budgets. Keep this contin
 beside the strict quest-forge handoff, never as extra fields inside it. Publication recovery,
 review continuation and the step-9 author handshake retain their own authority gates.
 
+## Worker model assignment
+
+Before dispatching a quest-owned worker, including design, scope audit, branch review or
+security review delegated through another skill, apply
+[shared model selection](../../references/model-selection.md) to that role and the actual
+harness controls. Supply the supported model and reasoning controls explicitly where
+exposed. Preserve supported explicit choices and required capability, including the strongest
+available permitted final whole-branch reviewer; follow the shared default-or-unmet path
+when a control is unavailable.
+
+Record the role, capability rationale, requested settings and supported effective choice in
+the existing private work notes or forge ledger before dispatch; reconcile observed settings
+or unavailable observations on return. Inheritance and a requested setting are not evidence
+that an explicit choice applied. Keep these controller records out of isolated reviewer
+prompts; the review's existing input contract remains unchanged.
+
 ## 0. Preflight
 
 Run `$attunement` to learn the repo: `BASE_BRANCH`, guardrail commands,

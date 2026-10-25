@@ -688,6 +688,13 @@ phase defaults, runtime availability, overrides, and supported reasoning control
 provider identifiers only through its centralized mapping. Name the supported choice explicitly
 where the harness permits it; do not describe inheritance as an explicit selection.
 
+Apply this before each implementer, review-fix and reviewer dispatch, not only when choosing
+the execution mode. Supply supported model and reasoning controls through the actual tool
+arguments; the templates are illustrative, not a native argument schema. Record the role,
+capability rationale, requested settings and supported effective choice in `progress.md`,
+then reconcile observed settings or unavailable observations on return. Preserve the shared
+policy's override and default-or-unmet behavior; do not claim an unconfirmed request applied.
+
 The final whole-branch review still uses the strongest available permitted model. Coordinator
 recommendations are separate from reviewer selection; keep waiting off the model as described
 under Silent party workers. At a settled boundary, use the shared
