@@ -19,7 +19,7 @@ Choose the least capable tier adequate for the task, starting from these default
 | Triage | Mechanical | Standard for unfamiliar scope; deep for ambiguous requirements or consequential classification. |
 | Scoping/design | Deep | Standard when the decision is already settled and only bounded detail remains. |
 | Implementation | Standard | Mechanical only for fully specified transcription or a mechanical fix; deep for design latitude or difficult integration. |
-| Review/security | Deep | Final whole-branch review always uses the strongest available permitted model, even for a mechanical implementation. |
+| Review/security | Deep | Final whole-branch review always uses the strongest available permitted deep-capable model (allowed by the host and not operator-excluded), even for a mechanical implementation. |
 | Coordination | Standard | Mechanical for settled bookkeeping; deep when resolving dependencies, scope conflicts, or consequential judgments. |
 | Routine shipping/cleanup | Mechanical | Standard for diagnosing a bounded gate failure; deep for uncertain consequences or difficult verification. |
 
@@ -39,29 +39,77 @@ its provider-specific values; equal labels across providers do not imply equal w
 1. Identify the actual harness, provider, available models and controls from the active tool
    contract, runtime inventory or supported host inspection. An API catalog alone does not
    prove the harness exposes a model, effort setting, or account entitlement.
-2. Apply effective user/project instructions and host restrictions before these defaults,
-   using the harness's own instruction precedence. Do not overwrite a supported explicit
-   choice with the mapping. If that choice conflicts with a required capability or control,
+2. Apply host restrictions, then a supported explicit choice (a model the operator names for
+   this request, task or dispatch), then the [operator preferences](#operator-preferences)
+   below, before these defaults. Do not overwrite a supported explicit choice with a
+   preference or the mapping. If that choice conflicts with a required capability or control,
    report the conflict as unmet; do not silently change the choice or weaken the requirement.
-3. Match the required capability to an available mapped candidate, or a runtime-documented
-   alternative. For final review compare the permitted available candidates, not only the
-   static mapping's preferred entry. A missing favorite can leave another adequate deep
-   candidate; a lone mechanical candidate does not establish deep capability. If capability
-   or relative strength cannot be established, name what is unmet before dependent work.
+3. Match the required capability to an available candidate from the preference-ordered list
+   below (or the mapping when none is configured), or a runtime-documented alternative that is
+   not excluded. For final review compare the permitted available candidates, not only the
+   first listed entry. A missing favorite can leave another adequate deep candidate; a lone
+   mechanical candidate does not establish deep capability. If capability or relative strength
+   cannot be established, name what is unmet before dependent work.
 4. Check reasoning control support for this model **and** this invocation surface. When a
    requested control is unsupported, record it as unavailable. Use the supported effective
    default only if no required control/capability is lost; otherwise name the unmet requirement.
    Reconcile any host fallback with the actual effective settings instead of reporting the
    original request as applied.
-5. For an unknown provider, use its runtime-supported default only when evidence establishes
-   the needed capability. Record that default and its source; otherwise report the named unmet
-   capability. Never construct an identifier from a tier, provider name, or naming pattern.
+5. For an unknown provider, use its runtime-supported default (never an excluded model) only
+   when evidence establishes the needed capability. Record that default and its source;
+   otherwise report the named unmet capability. Never construct an identifier from a tier,
+   provider name, or naming pattern.
 
 Record the recommendation in the workflow's existing work notes: phase, capability and reason,
 provider/harness, requested choice, supported effective model/effort (or unknown/unavailable),
-and override or fallback basis. Distinguish a recommendation from settings actually observed;
-unknown observations cannot prove a required capability. Keep account and endpoint details private.
+and basis: `explicit override`, `preference (project|user)` when the chosen model is one that
+line names, `mapping default` when it comes from the mapping (including after skipped
+preferences), `runtime default`, or `unmet`. Name any skipped preference line or exclusion that
+changed the outcome. Distinguish a recommendation from settings actually observed; unknown
+observations cannot prove a required capability. Keep account and endpoint details private.
 This is human-readable evidence, not a new schema or state store.
+
+## Operator preferences
+
+An operator may reorder or exclude a tier's candidates without editing plugin files
+([ADR 0089](../docs/adr/0089-operator-model-preferences.md)). Put the exact heading
+`## adept model preferences` in any instruction file the harness loads as effective user
+or project instructions, with one line per harness and tier:
+
+```text
+- <harness> <tier>: prefer <model>[, <model>...][; exclude <model>[, <model>...]]
+- <harness> <tier>: exclude <model>[, <model>...]
+```
+
+`<harness>` is `claude-code` or `codex`; `<tier>` is `mechanical`, `standard` or `deep`;
+`<model>` is an identifier or alias exactly as that harness accepts it. Harness and tier
+keys match case-insensitively; model tokens match exactly. User scope is the harness's
+user-level instruction location (by default `~/.claude/CLAUDE.md` for Claude Code and
+`~/.codex/AGENTS.md` for Codex); every other loaded instruction file is project scope.
+
+- **Precedence:** host restrictions, then an explicit choice, then the project line, then
+  the user line, then the [mapping](model-mapping.md). An explicit choice is a model the
+  operator names for this request, task or dispatch; a coordinator's assignment derived from
+  this policy is not one, nor is standing instruction prose. A project line replaces the
+  user line for the same key entirely; lines are not merged. A standing model instruction
+  outside the section applies only to keys no section line covers.
+- **Candidates:** the preferred models in order, then any mapped candidates not already
+  listed, minus every excluded model. An exclusion covers the model, not the string: an
+  alias or fallback (such as `opus` or `best`) whose resolution to an excluded model is
+  known, or cannot be ruled out, counts as excluded. Steps 3–5 choose from that list.
+  If none is available, a verified runtime default applies only when it is not excluded and
+  its capability is established; otherwise name the unmet capability. Absent an
+  explicit choice, never request an excluded model.
+- **Final review:** permitted means allowed by the host and not excluded on the Deep key.
+  Compare those candidates on strength; preference order does not apply. If exclusions
+  leave no adequate deep candidate, the capability is unmet before dependent work — never a
+  lower tier.
+- **Faults:** skip and record a malformed line, an unknown harness or tier, a key repeated
+  in one scope or a line whose scope cannot be established (skip that key), or an
+  unavailable model, and report it to the operator. A skipped key is absent at that scope, so
+  the next source applies; infer nothing else from a skipped line.
+
+With no section configured, the mapping alone supplies candidates.
 
 ## Escalation after difficulty or failure
 
