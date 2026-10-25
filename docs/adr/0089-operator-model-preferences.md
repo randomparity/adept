@@ -40,7 +40,11 @@ Preferences live in files the operator already owns and the harness already load
 updates leave them alone, and routine refreshes still touch only the mapping. Malformed lines
 are skipped and reported, never guessed at. An exclusion can make Deep work unmet, which is
 intended: it never silently downgrades. A project file can steer choices only as far as any
-project instruction already can.
+project instruction already can. Standing model prose outside the section ranks below every
+section line for the keys the section covers, so an operator who relied on project prose for a
+covered key moves it into the project section. A section the harness truncates or has not yet
+loaded is invisible to the reader. The policy therefore directs operators to the user file or
+the top of the root project file, and cannot detect a section that was not loaded.
 
 ## Considered & rejected
 

@@ -86,11 +86,15 @@ or project instructions, with one line per harness and tier:
 `<model>` is an identifier or alias exactly as that harness accepts it. Harness and tier
 keys match case-insensitively; model tokens match exactly. User scope is the harness's
 user-level instruction location (by default `~/.claude/CLAUDE.md` for Claude Code and
-`~/.codex/AGENTS.md` for Codex); every other loaded instruction file, including nested,
-imported and local ones, is project scope, so keep one line per key in each scope. Claude Code
-labels each loaded file with its path. Codex (observed in 0.164.0) concatenates the user file
-ahead of project documents under one header; content before the first `--- project-doc ---`
-separator is user scope. Where the reader cannot tell, scope is not established.
+`~/.codex/AGENTS.md` for Codex) and any file it imports; every other loaded instruction file,
+including nested and local ones, is project scope, so keep one line per key in each scope.
+Claude Code labels each loaded file with its path. Codex (observed in 0.164.0) concatenates the
+user file ahead of project documents under one header; content before the first
+`--- project-doc ---` separator is user scope. Where the reader cannot tell, scope is not
+established. A section the harness did not load is absent, and the reader cannot detect that:
+Codex truncates project documents past `project_doc_max_bytes` (default 32768 in 0.164.0), and
+Claude Code loads a nested subdirectory file only once work reaches that directory. Put the
+section in the user file or near the top of the root project file.
 
 - **Precedence:** host restrictions, then an explicit choice, then the project line, then
   the user line, then the [mapping](model-mapping.md). An explicit choice is a model the

@@ -83,11 +83,11 @@ mismatch:
 2. Update only this mapping's candidates, control support, examples, and source links. Keep
    tier meanings and phase defaults stable; a capability-policy change needs its own scope.
 3. Walk through both harnesses, an explicit override, a configured preference and
-   exclusion (rechecking how each harness exposes instruction-file scope), an unavailable
-   preferred model, unsupported effort and an unknown provider.
-   Require a supported recorded choice or named unmet capability. Preserve explicit overrides
-   and recheck strongest-available review; never manufacture an alias or control. Root
-   CLI/startup controls do not establish an agent-callable root switch or worker dispatch
+   exclusion (rechecking how each harness exposes instruction-file scope and truncates large
+   instruction files), an unavailable preferred model, unsupported effort and an unknown
+   provider. Require a supported recorded choice or named unmet capability. Preserve explicit
+   overrides and recheck strongest-available review; never manufacture an alias or control.
+   Root CLI/startup controls do not establish an agent-callable root switch or worker dispatch
    arguments.
 4. Check the diff: consumer skills and stable policy need no routine identifier edit. Run
    repository link/plugin/version guardrails; release metadata still receives its required bump.
