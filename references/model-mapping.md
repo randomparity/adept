@@ -13,7 +13,7 @@ provider-specific examples here rather than in consumer skills.
 |---|---|
 | Mechanical | `gpt-6-luna` |
 | Standard | `gpt-6.1-sol`; `gpt-6-sol` remains available during rollout |
-| Deep | `gpt-6-astra`; `gpt-5.6-sol` is another deep candidate |
+| Deep | `gpt-6.1-sol` |
 
 The [official model guide](https://learn.chatgpt.com/docs/models) identifies these models and
 roles; the [API guide](https://developers.openai.com/api/docs/guides/latest-model) separately
@@ -43,7 +43,7 @@ which model/effort arguments that invocation accepts; CLI flags are not tool arg
 |---|---|
 | Mechanical | `haiku`; `claude-haiku-5-5` |
 | Standard | `sonnet`; `claude-sonnet-5-5` |
-| Deep | `fable`; `claude-fable-5-1`; `opus` / `claude-opus-5-5` is another deep candidate |
+| Deep | `opus`; `claude-opus-5-5` |
 
 [Model configuration](https://code.claude.com/docs/en/model-config) documents aliases,
 provider differences and controls. Select with `--model`; use `--effort` when supported:
