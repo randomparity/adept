@@ -35,9 +35,13 @@ One line exists per harness and tier key. Harness and tier keys match case-insen
 model tokens match exactly as the harness accepts them.
 
 **Scope.** User scope is the harness's user instruction file (`~/.claude/CLAUDE.md` for Claude
-Code, `~/.codex/AGENTS.md` for Codex). Every other loaded instruction file is project scope.
-Claude Code labels loaded files by path. Codex 0.164.0 concatenates the user file ahead of
-project documents, and the first `--- project-doc ---` separator marks the boundary.
+Code, `~/.codex/AGENTS.md` for Codex) and any file it imports. Every other loaded instruction
+file, nested and local ones included, is project scope. Claude Code labels loaded files by path.
+Codex 0.164.0 concatenates the user file ahead of project documents, and the first
+`--- project-doc ---` separator marks the boundary. With no separator, only one source loaded,
+and its scope is recorded as unknown. A section the harness truncated or has not loaded is
+absent and undetectable, so operators keep it in the user file or near the top of the root
+project file.
 
 **Precedence,** highest first:
 
