@@ -19,10 +19,12 @@ four workloads maximum; at most 12 collections and 180 observation seconds per a
 no retries. This finite invocation budget is **not a hard dollar cap**.
 
 The protocol counts wrapper collections as work too. N50 exceeded the conservative total when
-its worker repeatedly collected an outer execution cell as well as the inner process. On that
-deviation the operator's coordinator stopped further initiation and explicitly granted no budget
-extension. P10 had already started when that hold arrived; only its original handle was reconciled.
-P50 remains unrun. No replacement, probe, status read or workload retry occurred.
+its worker repeatedly collected an outer execution cell as well as the inner process. The
+coordinator recognized that overrun **before starting P10** at 13:22:16.594 UTC. Starting P10
+violated the original stop-at-any-limit rule, independently of the later hold. The operator's
+coordinator explicitly stopped further initiation without a budget extension; that hold was
+recorded at 13:22:59.820 UTC. Only P10's original handle was then reconciled, with exit collected
+at 13:23:35.073 UTC. P50 remains unrun. No replacement, probe, status read or workload retry occurred.
 
 ## Actual surface and constraints
 
