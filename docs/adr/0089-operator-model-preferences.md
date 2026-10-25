@@ -23,14 +23,16 @@ user or project instruction file. Each line has the form
 Precedence, highest first:
 
 1. Host restrictions.
-2. An explicit per-request choice.
+2. A model the operator names for this request, task or dispatch.
 3. The project line.
 4. The user line.
 5. The plugin mapping.
 
 A project line replaces the user line for its key entirely. Candidates are the preferred models,
-then the mapping candidates, minus every exclusion. Final review takes the strongest
-non-excluded available model. When nothing adequate remains, the capability is unmet.
+then the mapping candidates, minus every exclusion; an exclusion covers the model, so an alias
+that may resolve to an excluded identifier is excluded too. User scope is the harness's user
+instruction file; a key repeated in one scope is skipped as a fault. Final review takes the
+strongest non-excluded available model. When nothing adequate remains, the capability is unmet.
 
 ## Consequences
 

@@ -12,8 +12,8 @@ no defined way to say so.
 
 Decision: [ADR 0089](../../adr/0089-operator-model-preferences.md). This adds an *Operator
 preferences* section to `references/model-selection.md`, which stays the single owner of
-resolution. It also edits that file's resolution step 2, step 3, the final-review row and the
-record paragraph, adds one header sentence and one walkthrough item to
+resolution. It also edits that file's resolution steps 2, 3 and 5, the final-review row and
+the record paragraph, adds one header sentence and one walkthrough item to
 `references/model-mapping.md`, and bumps the plugin to 7.12.0. This is a clean extension: no
 ownership move, caller migration or compatibility path. Consumer skills keep linking the policy
 unchanged.
@@ -31,25 +31,33 @@ in it has this form:
 - `<tier>` is `mechanical`, `standard` or `deep`.
 - `<model>` is an identifier or alias exactly as that harness accepts it.
 
-One line exists per harness and tier key. Matching ignores case and surrounding whitespace.
+One line exists per harness and tier key. Harness and tier keys match case-insensitively;
+model tokens match exactly as the harness accepts them.
+
+**Scope.** User scope is the harness's user instruction file (`~/.claude/CLAUDE.md` for Claude
+Code, `~/.codex/AGENTS.md` for Codex). Every other loaded instruction file is project scope.
 
 **Precedence,** highest first:
 
 1. Host restrictions.
-2. An explicit choice for this request (existing step 2), recorded as `explicit override`.
+2. An explicit choice: a model the operator names for this request, task or dispatch,
+   recorded as `explicit override`. A coordinator's assignment derived from this policy is not
+   one, and neither is standing instruction prose.
 3. The project-scope line for the key.
 4. The user-scope line for the key.
 5. The plugin mapping.
 
-A project line replaces the user line for the same key entirely. Lines are not merged. Among
-several project files, the harness's own instruction precedence picks the most specific one.
+A project line replaces the user line for the same key entirely. Lines are not merged. A
+standing model instruction outside the section applies only to keys no section line covers.
 
 **Resolution.** The candidate list is the preferred models in their stated order, then any
-mapping candidates not already listed. Every excluded model is then removed. Existing steps 3–5
-choose from what remains. If no listed candidate is available, the verified runtime default is
-used only when it is not excluded and its capability is established. Otherwise the capability
-is reported as unmet. Absent an explicit choice for this request, an excluded model is
-never requested, even as a host or runtime default.
+mapping candidates not already listed. Every excluded model is then removed. An exclusion
+covers the model, not the string: an alias or fallback (such as `opus` or `best`) whose
+resolution to an excluded model is known, or cannot be ruled out, counts as excluded.
+Existing steps 3–5 choose from what remains. If no listed candidate is available, the verified
+runtime default is used only when it is not excluded and its capability is established.
+Otherwise the capability is reported as unmet. Absent an explicit choice for this request, an
+excluded model is never requested, even as a host or runtime default.
 
 **Final review.** "Permitted" means allowed by the host and not excluded for the Deep key. The
 strongest permitted available model is chosen, and preference order does not apply. When
@@ -61,7 +69,8 @@ operator:
 
 - a malformed line;
 - an unknown harness or tier;
-- a duplicate key in one file (the whole key is skipped);
+- a key repeated in one scope, or a line whose scope cannot be established (the whole key is
+  skipped);
 - an unavailable model.
 
 Nothing is inferred from a skipped line.
@@ -84,7 +93,7 @@ model that changed the outcome.
 
 ## Success
 
-Under each of these six inputs, a reader of `model-selection.md` reaches exactly one supported
+Under each of these eight inputs, a reader of `model-selection.md` reaches exactly one supported
 choice, or one named unmet capability, and its recorded basis:
 
 1. No section.
@@ -93,6 +102,9 @@ choice, or one named unmet capability, and its recorded basis:
 4. Every Deep candidate is excluded.
 5. An explicit request choice conflicts with the configured preference.
 6. Project and user lines conflict for the same key.
+7. A malformed line, or a key repeated in one scope.
+8. A direct ID is excluded while the mapping lists its alias, or the only remaining option is
+   an excluded runtime default.
 
 The mapping alone still governs when no section exists, and its refresh procedure touches only
 the mapping.
@@ -108,9 +120,9 @@ weakening final review. Fallback: verified default or unmet.
   `task-test-not-applicable`. These are policy prose with no executable consumer, and anatomy
   rule 4 forbids asserting on wording.
 - Bounded evaluation (instruction-following failure, severity 4; every case blocks): walk the
-  six Success inputs through the edited policy on both harnesses. Each must yield one recorded
-  choice or one named unmet capability, with the basis listed above. Evidence comes from
-  reading, not a judge model.
+  eight Success inputs through the edited policy against each harness's mapping, by reading
+  (no provider session). Each must yield one choice or one named unmet capability, with its
+  basis. Record each case's input, outcome and basis in the PR body; no judge model.
 - `.claude-plugin/plugin.json`: `focused-test` with `BASE_SHA=$(git rev-parse origin/main)
   just version-check`. It exits 1 before the bump and 0 after.
 - ADR 0089: `focused-test` with `just records`, which exits 0.

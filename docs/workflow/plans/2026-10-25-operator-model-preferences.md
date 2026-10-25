@@ -3,14 +3,14 @@
 Goal: implement `docs/workflow/specs/2026-10-25-operator-model-preferences-design.md` for
 issue #472.
 
-Architecture: one new section and four amended passages in `references/model-selection.md`,
+Architecture: one new section and five amended passages in `references/model-selection.md`,
 one header sentence and one walkthrough clause in `references/model-mapping.md`, and a version
 bump. No executable code.
 
 Tech stack: Markdown, JSON, repository guardrail recipes.
 
-Expected implementation size: 45–60 changed lines (M) — a new section of about 30 lines,
-four amended passages of 2–4 lines each in model-selection, two amended mapping sentences and
+Expected implementation size: 50–70 changed lines (M) — a new section of about 38 lines,
+five amended passages of 2–4 lines each in model-selection, two amended mapping sentences and
 one JSON value. Design artifacts are excluded.
 
 ## Global constraints
@@ -41,8 +41,8 @@ existing policy link.
 ### Verification
 
 - Policy prose (both references): `task-test-not-applicable`. It has no executable consumer,
-  and anatomy rule 4 forbids a wording assertion. Walk the six spec Success inputs on both
-  harnesses against the edited text.
+  and anatomy rule 4 forbids a wording assertion. Walk the eight spec Success inputs against
+  each harness's mapping by reading (step 10), recorded in the PR body.
 - Plugin version: `focused-test` with `BASE_SHA=$(git rev-parse origin/main) just
   version-check`. It exits 1 before the bump and 0 after.
 - Reference links: `focused-test` with `just shape-check`, which exits 0 (rule 5 resolves
@@ -53,16 +53,17 @@ existing policy link.
 1. In `references/model-selection.md`, make the final-review refinement read: "Final
    whole-branch review always uses the strongest available permitted model (allowed by the host
    and not operator-excluded), even for a mechanical implementation."
-2. Replace resolution step 2's first sentence with:
+2. Replace resolution step 2's first two sentences ("Apply effective user/project
+   instructions ... with the mapping.") with:
 
    ```markdown
-   2. Apply host restrictions, then a supported explicit choice for this request, then the
-      [operator preferences](#operator-preferences) below, before these defaults; other
-      effective user/project instructions apply under the harness's own instruction precedence.
-      Do not overwrite a supported explicit choice with a preference or the mapping.
+   2. Apply host restrictions, then a supported explicit choice (a model the operator names for
+      this request, task or dispatch), then the [operator preferences](#operator-preferences)
+      below, before these defaults. Do not overwrite a supported explicit choice with a
+      preference or the mapping.
    ```
 
-   Keep the step's remaining conflict sentences unchanged.
+   Keep the step's remaining sentences ("If that choice conflicts ...") unchanged.
 3. Make step 3's first two sentences read: "Match the required capability to an available
    candidate from the preference-ordered list below (or the mapping when none is configured),
    or a runtime-documented alternative that is not excluded. For final review compare the
@@ -87,24 +88,31 @@ existing policy link.
    ```
 
    `<harness>` is `claude-code` or `codex`; `<tier>` is `mechanical`, `standard` or `deep`;
-   `<model>` is an identifier or alias exactly as that harness accepts it. Keys match
-   case-insensitively.
+   `<model>` is an identifier or alias exactly as that harness accepts it. Harness and tier
+   keys match case-insensitively; model tokens match exactly. User scope is the harness's user
+   instruction file (`~/.claude/CLAUDE.md` for Claude Code, `~/.codex/AGENTS.md` for Codex);
+   every other loaded instruction file is project scope.
 
-   - **Precedence:** host restrictions, then an explicit choice for this request, then the
-     project line, then the user line, then the [mapping](model-mapping.md). A project line
-     replaces the user line for the same key entirely; lines are not merged. Among several
-     project files the harness's own instruction precedence picks the most specific.
+   - **Precedence:** host restrictions, then an explicit choice, then the project line, then
+     the user line, then the [mapping](model-mapping.md). An explicit choice is a model the
+     operator names for this request, task or dispatch; a coordinator's assignment derived from
+     this policy is not one, nor is standing instruction prose. A project line replaces the
+     user line for the same key entirely; lines are not merged. A standing model instruction
+     outside the section applies only to keys no section line covers.
    - **Candidates:** the preferred models in order, then any mapped candidates not already
-     listed, minus every excluded model. Steps 3–5 choose from that list. If none is available,
-     a verified runtime default applies only when it is not excluded and its capability is
-     established; otherwise name the unmet capability. Absent an explicit choice for this
+     listed, minus every excluded model. An exclusion covers the model, not the string: an
+     alias or fallback (such as `opus` or `best`) whose resolution to an excluded model is
+     known, or cannot be ruled out, counts as excluded. Steps 3–5 choose from that list.
+     If none is available, a verified runtime default applies only when it is not excluded and
+     its capability is established; otherwise name the unmet capability. Absent an explicit choice for this
      request, never request an excluded model.
    - **Final review:** permitted means allowed by the host and not excluded on the Deep key.
      Compare those candidates on strength; preference order does not apply. If exclusions
      leave no adequate deep candidate, the capability is unmet before dependent work — never a
      lower tier.
    - **Faults:** skip and record a malformed line, an unknown harness or tier, a key repeated
-     in one file (skip that key) or an unavailable model, and report it to the operator. Infer
+     in one scope or a line whose scope cannot be established (skip that key), or an
+     unavailable model, and report it to the operator. Infer
      nothing from a skipped line.
 
    With no section configured, the mapping alone supplies candidates.
@@ -118,8 +126,12 @@ existing policy link.
    exclusion,".
 9. Run `BASE_SHA=$(git rev-parse origin/main) just version-check` and expect exit 1. Change the
    version to `7.12.0`, rerun, and expect exit 0.
-10. Run `just shape-check` and expect exit 0, then commit:
+10. Walk the eight spec Success inputs against the Claude Code and Codex mappings by reading
+    the edited text (no provider session). Write each case's input, chosen model or unmet
+    capability, and basis into a local note for the PR body; any case without exactly one
+    outcome blocks the commit.
+11. Run `just shape-check` and expect exit 0, then commit:
     `docs: add operator model preferences per selection tier`.
 
-Acceptance: each of the six spec Success inputs resolves through the edited text to one
+Acceptance: each of the eight spec Success inputs resolves through the edited text to one
 recorded choice or one named unmet capability with its basis. No skill file changes.
