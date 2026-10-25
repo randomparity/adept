@@ -61,12 +61,14 @@ to `xhigh`, other listed models to `high`, subject to explicit choices and setti
 5.5 defaults to `high` on the API. Economical/balanced/deliberative candidates remain
 `low`/`medium`/`high`. Claude Code lowers unsupported requests to the highest supported level
 at or below the request, subject to caps. Record the effective result. Saved effort in
-`modelSettings` or `effortLevel` excludes `max`; `--effort` accepts it. The API catalog does not prove worker-tool support.
+`modelSettings` or `effortLevel` excludes `max`; `--effort` accepts it. The API catalog does
+not prove worker-tool support.
 
 The direct 5.5 candidates require Claude Code at least 2.1.280 (Opus), 2.1.284 (Sonnet),
 and 2.1.293 (Haiku). Aliases vary by provider and configuration; on the Anthropic API,
 `opus`, `sonnet`, and `haiku` currently resolve to 5.5, while hosted aliases can lag.
-Bedrock uses inference profiles, Foundry deployment names, and Google's Agent Platform version names; do not transplant direct Anthropic IDs.
+Bedrock uses inference profiles, Foundry deployment names, and Google's Agent Platform version
+names; do not transplant direct Anthropic IDs.
 `best` can fall back to `opus`; confirm its resolution before using it for required review.
 Unknown or unmapped deployments use the policy's verified-default-or-unmet path.
 
