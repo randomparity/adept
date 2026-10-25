@@ -104,8 +104,8 @@ existing policy link.
      alias or fallback (such as `opus` or `best`) whose resolution to an excluded model is
      known, or cannot be ruled out, counts as excluded. Steps 3–5 choose from that list.
      If none is available, a verified runtime default applies only when it is not excluded and
-     its capability is established; otherwise name the unmet capability. Absent an explicit choice for this
-     request, never request an excluded model.
+     its capability is established; otherwise name the unmet capability. Absent an
+     explicit choice, never request an excluded model.
    - **Final review:** permitted means allowed by the host and not excluded on the Deep key.
      Compare those candidates on strength; preference order does not apply. If exclusions
      leave no adequate deep candidate, the capability is unmet before dependent work — never a
