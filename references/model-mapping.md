@@ -4,8 +4,9 @@ Companion to [model selection](model-selection.md). Verified **2026-10-25** agai
 primary sources below; read-only version/help inspected with Codex 0.164.0 and Claude Code
 2.1.304, plus the active native dispatch schema. No provider task/session was launched.
 These are candidate mappings, not an account inventory. Runtime support and effective
-instructions take precedence. Maintain identifiers, aliases, supported control values and
-provider-specific examples here rather than in consumer skills.
+instructions take precedence. [Operator preferences](model-selection.md#operator-preferences)
+reorder or exclude these candidates without editing this file. Maintain identifiers, aliases,
+supported control values and provider-specific examples here rather than in consumer skills.
 
 ## Codex with OpenAI
 
@@ -81,11 +82,13 @@ mismatch:
    the relevant current host controls. Record the verification date and inspected harness version.
 2. Update only this mapping's candidates, control support, examples, and source links. Keep
    tier meanings and phase defaults stable; a capability-policy change needs its own scope.
-3. Walk through both harnesses, an explicit override, an unavailable preferred model,
-   unsupported effort and an unknown provider. Require a supported recorded choice or named
-   unmet capability. Preserve explicit overrides and recheck strongest-available review; never
-   manufacture an alias or control. Root CLI/startup controls do not establish an agent-callable
-   root switch or worker dispatch arguments.
+3. Walk through both harnesses, an explicit override, a configured preference and
+   exclusion (rechecking how each harness exposes instruction-file scope and truncates large
+   instruction files), an unavailable preferred model, unsupported effort and an unknown
+   provider. Require a supported recorded choice or named unmet capability. Preserve explicit
+   overrides and recheck strongest-available review; never manufacture an alias or control.
+   Root CLI/startup controls do not establish an agent-callable root switch or worker dispatch
+   arguments.
 4. Check the diff: consumer skills and stable policy need no routine identifier edit. Run
    repository link/plugin/version guardrails; release metadata still receives its required bump.
 
