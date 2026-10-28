@@ -258,10 +258,9 @@ version-check:
 plugin-check:
   #!/usr/bin/env bash
   set -euo pipefail
-  # --strict promotes every warning to an error. It is usable because the
-  # manifest now declares a version (ADR 0022); the one warning this repo used
-  # to accept was that field's absence, and "any other warning is a defect" was
-  # already the rule for the rest.
+  # --strict fails on manifest warnings; directory advisories only affect
+  # the exit status with --profile directory. Keep validation warning-free
+  # under the repository rule and declare a version as required by ADR 0022.
   claude plugin validate ./ --strict
   # The validator reads the Claude manifests only. It passes green with
   # .mcp.json and .codex-plugin/plugin.json both unparseable, so without these
