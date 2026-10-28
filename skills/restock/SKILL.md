@@ -38,11 +38,12 @@ Clone into `$RUN_ROOT/repo`:
 
 ```bash
 REPO_DIR="$RUN_ROOT/repo"
-gh repo clone "$REPO" "$REPO_DIR" -- --filter=blob:none
+gh repo clone "$REPO" "$REPO_DIR"
 ```
 
-`--filter=blob:none` fetches every commit and tree but defers file contents until
-a checkout needs them, so the clone stays cheap while keeping complete history.
+Use a complete clone, including historical file contents: repository tests may
+create nested local clones and check out older commits. A blobless source can
+leave those nested clones missing historical blobs, causing false baseline failures.
 Complete history is not optional here: every later phase compares a fetched PR
 head against the default branch — `git diff "$BASE_BRANCH"...pr-{n}` in Phase 3,
 `git merge pr-{n}` for batches, `git merge "$BASE_BRANCH"` in Phase 4a — and each
@@ -357,8 +358,8 @@ early and would never reach a cleanup step of its own.
 Two costs come with the isolation. Each worktree is a full checkout, so a wave of
 5 uses 5 working trees' worth of disk and each unit builds from a cold cache
 instead of sharing one warm tree — that sharing is what was corrupting the
-results. And because the clone is blobless, checking out a worktree fetches the
-blobs it needs, so these commands need network, not just the clone.
+results. Worktree creation uses the complete clone's local objects; it does not
+need a lazy fetch for file contents.
 
 ### 3b. Launch workers
 
