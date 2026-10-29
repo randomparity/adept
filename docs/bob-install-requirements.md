@@ -64,7 +64,7 @@ sibling of `skills/`, not nested inside it.
 
 Same tree as the global install, but rooted at `<project>/.bob/` instead of `~/.bob/`. Bob's
 skill location docs state that project skills take precedence over global ones on name
-collision (see §4 below), so a project install can shadow a global one.
+collision (see §5 below), so a project install can shadow a global one.
 
 ---
 
@@ -82,25 +82,25 @@ present.
 **Symlink install** (skill directories symlinked into `~/.bob/skills/<name>`):
 **unverified** — behaviour depends on whether each script uses logical or physical `cd`:
 
-| Script | Resolution | Expected symlink behaviour |
-|--------|-----------|---------------------------|
-| `skills/deliver/scripts/deliver-write` | logical (`cd -- "$SCRIPT_DIR/../../.."`) | Resolves to the directory the symlink points into, i.e. the checkout, not `~/.bob/` |
-| `skills/return-to-town/scripts/publish-handoff` | physical (`cd -P -- "$SCRIPT_DIR/../../.."`) | Resolves to the physical checkout directory |
-| `skills/return-to-town/scripts/refresh-merge` | physical (`cd -P -- "$SCRIPT_DIR/../../.."`) | Resolves to the physical checkout directory |
-| `skills/quest/scripts/publish-forge-review` | logical (`cd "$SCRIPT_DIR"`) then `../../..` | Resolves to checkout |
-| `skills/bounty/scripts/create-verified-issue.sh` | physical (`pwd -P`) | Resolves to physical checkout |
+| Script | Resolution | ROOT under a symlink install |
+|--------|-----------|------------------------------|
+| `skills/deliver/scripts/deliver-write` | logical (`cd -- "$SCRIPT_DIR/../../.."`) | Resolves to `~/.bob/` (the directory containing `skills/`) |
+| `skills/return-to-town/scripts/publish-handoff` | physical (`cd -P -- "$SCRIPT_DIR/../../.."`) | Resolves to the physical checkout |
+| `skills/return-to-town/scripts/refresh-merge` | physical (`cd -P -- "$SCRIPT_DIR/../../.."`) | Resolves to the physical checkout |
+| `skills/quest/scripts/publish-forge-review` | logical (`cd "$SCRIPT_DIR"`) then `../../..` | Resolves to `~/.bob/` |
+| `skills/bounty/scripts/create-verified-issue.sh` | physical (`pwd -P`) | Resolves to the physical checkout |
 
 The issue body (`Evidence: Symlink sensitivity`) reported a measurement on macOS arm64
-(not re-run in this review) finding that logical resolution (`deliver-write`) resolved ROOT
-to the Bob directory while physical resolution (`publish-handoff`) resolved it to the
-checkout. Both approaches break
-the assumption that ROOT contains `scripts/check-public-safety.sh` and `references/`,
-unless those paths exist in both the checkout and the install target, or a symlink forest
-replicates the full expected tree.
+(not re-run in this review) confirming the table's split result: logical-`cd` scripts
+resolve ROOT to `~/.bob/`, while physical-`cd` scripts resolve it to the checkout. The
+scripts therefore disagree with each other. A logical-`cd` script expects to find
+`references/` and `scripts/check-public-safety.sh` inside `~/.bob/`; a physical-`cd` script
+expects them in the checkout. Neither assumption holds for both script types simultaneously.
 
 **Supported path:** A copy install (no symlinks) is the only configuration where all
-scripts agree on ROOT. A symlink install requires additional work to ensure ROOT-relative
-lookups resolve consistently across scripts; this work has not been done.
+scripts agree on ROOT. A symlink install requires additional work (e.g. a symlink forest in
+`~/.bob/` that mirrors `references/` and `scripts/`) to satisfy both; this work has not been
+done.
 
 ---
 
@@ -126,19 +126,18 @@ new conversation or restart Bob after placing new skill directories.
 
 **documented (Bob documentation):** The `name` field in `SKILL.md` frontmatter is "the
 skill's display name used in the Bob interface." The `use_skill` tool takes a `skill_name`
-parameter that Bob matches against this `name` field, not against the directory name.
+parameter; Bob matches it against this `name` field.
 
-**Consequence for adept:** Each adept skill already sets its `name` field in its `SKILL.md`
-frontmatter (e.g. `name: attunement`, `name: quest`). The directory name under
-`~/.bob/skills/` does not need to match the `name` field, but using the same name as the
-directory (as adept already does) avoids confusion.
+**unverified:** Whether the directory name under `~/.bob/skills/` affects resolution (vs the
+`name` field) is inferred, not confirmed by Bob documentation. Each adept skill already sets
+a `name` field matching its directory name (e.g. `name: attunement`), so this ambiguity
+does not affect adept in practice.
 
 **Harness naming at load time:** **verified** — skills refer to a `<plugin root>` that
 "the harness names when it loads the skill" (e.g. `skills/attunement/SKILL.md:35–36`,
 `skills/quest/SKILL.md:174–175`). Under Claude Code, the harness injects the plugin cache
-path as this root. Under Bob, no equivalent injection exists; scripts that rely on this
-convention will not receive a harness-supplied root, so ROOT derivation falls to the
-`cd`-based resolution described in §2.
+path as this root. **unverified** — under Bob, whether an equivalent injection exists is not
+documented; if it does not, ROOT derivation falls to the `cd`-based resolution in §2.
 
 ---
 
@@ -174,9 +173,9 @@ equivalent at the time of writing:
 
 | Feature | adept location | Bob status |
 |---------|---------------|-----------|
-| Slash-command syntax (`$quest`, `$forge`, etc.) | Skill descriptions reference these as invocation patterns used by Claude Code / Codex operators | **unverified** — Bob supports slash commands but adept's skills are invoked via `use_skill`, not slash commands; the `$name` shorthand is a Claude Code convention |
-| `agents/openai.yaml` per-skill worker manifests | `skills/*/agents/openai.yaml` (22 skills ship these) | **verified** — no Bob equivalent: Bob has no plugin system that reads per-skill worker manifests; these files are Codex CLI–specific |
-| Plugin marketplace manifest | `.claude-plugin/marketplace.json`, `.codex-plugin/plugin.json` | **verified** — Bob has no plugin marketplace; skills must be placed manually |
+| `$name` invocation shorthand (e.g. `$quest`) | Skill descriptions reference these as shorthand used by Claude Code / Codex operators | **unverified** — Bob has slash commands but adept's skills are invoked via `use_skill`; the `$name` shorthand is a Codex agent convention, not a Bob convention |
+| `agents/openai.yaml` per-skill worker manifests | `skills/*/agents/openai.yaml` (22 skills) | **documented** — Bob has no feature for per-skill worker manifests; these files are Codex CLI-specific (Bob docs describe no equivalent) |
+| Skills plugin marketplace | `.claude-plugin/marketplace.json`, `.codex-plugin/plugin.json` | **documented** — Bob's marketplace covers MCP servers and modes, not skills; adept skills must be placed manually |
 | Version field | `.claude-plugin/plugin.json` (via ADR 0022) | **verified** — not relevant to Bob install |
 
 **`agents/openai.yaml` detail:** Each file provides a Codex CLI interface definition (display
