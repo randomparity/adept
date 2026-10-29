@@ -10,11 +10,9 @@ are written down and verified.
 
 ## Scope
 
-One new file: `docs/bob-install-requirements.md`. No changes to existing files.
-Not in scope: writing an installer, resolving the ADR 0001 / "Bob is retired" contradiction,
-or live Bob environment verification (items requiring runtime observation are marked unverified).
-One existing-file change is required: the mandatory `plugin.json` version bump (ADR 0022,
-`just version-check`) that every PR touching the repository must include.
+One new file (`docs/bob-install-requirements.md`) plus the mandatory `plugin.json` version
+bump (ADR 0022). Not in scope: writing an installer, resolving the ADR 0001 / "Bob is
+retired" contradiction, or live Bob environment verification.
 
 ## Success
 

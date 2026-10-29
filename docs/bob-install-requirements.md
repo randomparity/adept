@@ -1,17 +1,14 @@
 # IBM Bob install requirements
 
 This document records what a Bob user must supply to make adept skills work, and what
-open decisions block a future installer. Each claim is marked **verified** or **unverified**
-with the environment in which it was checked.
+open decisions block a future installer. Each claim is marked with one of three markers:
 
-Verification key:
 - **verified** — confirmed by static inspection of this repository (source code, documentation).
   Environment: macOS arm64, 2026-10-29, no live Bob session.
 - **documented** — stated in Bob's published documentation but not tested against a live Bob
   instance in this run.
-- **unverified** — not yet confirmed against a live Bob instance or documented by IBM.
-  The stated behaviour is derived from repository source or logical inference and should be
-  tested before an installer is written.
+- **unverified** — neither tested against a live Bob instance nor documented by IBM.
+  Behaviour is inferred from repository source or logical inference.
 
 Related: issue #478, ADR 0001 (`docs/adr/0001-distribution-via-plugin-marketplace.md`).
 
@@ -20,7 +17,6 @@ Related: issue #478, ADR 0001 (`docs/adr/0001-distribution-via-plugin-marketplac
 ## 1. Minimum file tree
 
 A Bob install must produce the following tree for adept skills to work.
-All paths are verified from repository source unless noted otherwise.
 
 ### Global install (`~/.bob/skills/`)
 
@@ -32,7 +28,7 @@ All paths are verified from repository source unless noted otherwise.
 │   ├── campaign/
 │   ├── … (one directory per skill) …
 │   └── quest/
-├── references/             # all 11 files from references/ at repo root
+├── references/             # files from references/ at repo root
 │   ├── dispatch-liveness.md
 │   ├── heed-counsel.md
 │   ├── merge-gate.md
@@ -106,14 +102,11 @@ done.
 
 ## 3. Symlink following and reload behaviour
 
-**Bob IDE (symlinks):** **unverified** — Bob's sandboxing documentation states that "symlinks
-pointing outside the project directory may not work correctly" (Bob Shell sandboxing page,
-File system limitations). Bob IDE's analogous sandboxing behaviour for skill directories is
-not separately documented. Whether a symlinked `~/.bob/skills/<name>` directory is followed
-when loading skill content is not confirmed.
-
-**Bob Shell (symlinks):** **unverified** — same caveat as above applies to Bob Shell's file
-system access model.
+**Symlinks (IDE and Shell):** **unverified** — Bob Shell's sandboxing docs state that
+"symlinks pointing outside the project directory may not work correctly" (sandboxing page,
+File system limitations). Bob IDE has no separately documented sandboxing rule for skill
+directories. Whether a symlinked `~/.bob/skills/<name>` directory is followed when loading
+skill content is not confirmed for either surface.
 
 **Reload:** **unverified** — the Bob IDE skills documentation states that "Skills load once
 per conversation to avoid duplicate prompts." Whether newly added skill directories appear
@@ -149,20 +142,10 @@ precedence. Since adept's skill names are unique within the repository but not g
 reserved, a user with a pre-existing skill using the same name would have it silently shadowed
 (global → project) or shadow adept's copy (project pre-existing → new global install).
 
-**Pre-existing `~/.bob/skills/` content:** **unverified** — no documentation describes what
-happens if the target directory exists and contains files adept did not create. A copy-based
-install would need to merge directories rather than replace them. Idempotency and
-non-destructive behaviour of a copy install have not been tested.
-
-**Pre-existing `~/.bob/references/`:** **unverified** — adept's `references/` tree is
-at the repository root, not under `~/.bob/references/`. How to install it (copy to
-`~/.bob/references/`, a separate path sibling to `skills/`, or another location) has not
-been decided. If `~/.bob/references/` already contains user-authored files, a naive copy
-could clobber them.
-
-**Re-running after an update:** **unverified** — update semantics (overwrite, merge, skip)
-for an already-installed tree are undefined. Any installer must define an explicit update
-strategy.
+**Pre-existing content and update semantics:** **unverified** — no documentation describes
+what happens if `~/.bob/skills/` already exists, if `~/.bob/references/` already contains
+user-authored files, or what "re-run after an update" means (overwrite, merge, skip). A
+copy-based install would need to address all three. None has been tested.
 
 ---
 
