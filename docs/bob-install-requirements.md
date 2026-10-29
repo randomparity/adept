@@ -49,7 +49,7 @@ All paths are verified from repository source unless noted otherwise.
 ```
 
 **Note on `scripts/check-public-safety.sh`:** **verified** — this file
-(`scripts/check-public-safety.sh:3–9`) resolves `ROOT` as the directory two levels above
+(`scripts/check-public-safety.sh:4,11`) resolves `ROOT` as the directory two levels above
 itself and then `exec`s `$ROOT/skills/quest/scripts/check-public-safety "$@"`. A Bob install
 that copies only the `skills/` tree will not have this wrapper and will not have the inner
 scanner. A full tree copy is required. The inner scanner lives at
@@ -206,9 +206,10 @@ decision before an install script targeting Bob could be added to this repositor
 > "Bob is retired. Task 9 is skipped in full; nothing under `$OLD/agents/bob/` is
 > carried into either new repo, and Bob-related issues close as obsolete in Task 11."
 
-Line 969 of the same plan records Task 9 as "SKIPPED (Bob retired 2026-08-11)." Line 979
-records that Bob "has no plugin system" and describes a clone-plus-symlink approach that
-was planned but never executed.
+Line 967 of the same plan carries the section heading "SKIPPED (Bob retired 2026-08-11)."
+Line 969 records that "Bob is retired, `~/.bob` does not exist on this machine, and no Bob
+deployment manifest is present." Line 979 records that Bob "has no plugin system" and
+describes a clone-plus-symlink approach that was planned but never executed.
 
 ### Resolution required
 
