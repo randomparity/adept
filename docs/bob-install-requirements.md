@@ -6,11 +6,12 @@ with the environment in which it was checked.
 
 Verification key:
 - **verified** — confirmed by static inspection of this repository (source code, documentation).
-  Environment: macOS arm64, repository HEAD at `feat/bob-install-requirements-478`
-  (2026-10-29), no live Bob session.
+  Environment: macOS arm64, 2026-10-29, no live Bob session.
+- **documented** — stated in Bob's published documentation but not tested against a live Bob
+  instance in this run.
 - **unverified** — not yet confirmed against a live Bob instance or documented by IBM.
-  The stated behaviour is derived from Bob's published documentation, repository source,
-  or logical inference and should be tested before an installer is written.
+  The stated behaviour is derived from repository source or logical inference and should be
+  tested before an installer is written.
 
 Related: issue #478, ADR 0001 (`docs/adr/0001-distribution-via-plugin-marketplace.md`).
 
@@ -25,26 +26,26 @@ All paths are verified from repository source unless noted otherwise.
 
 ```
 ~/.bob/
-└── skills/
-    ├── attunement/         # all files from skills/attunement/
-    ├── bounty/
-    ├── campaign/
-    ├── … (one directory per skill) …
-    └── quest/
-references/                 # all 11 files from references/ at repo root
-    ├── dispatch-liveness.md
-    ├── heed-counsel.md
-    ├── merge-gate.md
-    ├── model-mapping.md
-    ├── model-selection.md
-    ├── network-bounds.md
-    ├── numbered-reservations.md
-    ├── review-depth.md
-    ├── review-lenses.md
-    ├── trial-by-fire.md
-    └── true-seeing.md
-scripts/
-└── check-public-safety.sh  # root-level wrapper
+├── skills/
+│   ├── attunement/         # all files from skills/attunement/
+│   ├── bounty/
+│   ├── campaign/
+│   ├── … (one directory per skill) …
+│   └── quest/
+├── references/             # all 11 files from references/ at repo root
+│   ├── dispatch-liveness.md
+│   ├── heed-counsel.md
+│   ├── merge-gate.md
+│   ├── model-mapping.md
+│   ├── model-selection.md
+│   ├── network-bounds.md
+│   ├── numbered-reservations.md
+│   ├── review-depth.md
+│   ├── review-lenses.md
+│   ├── trial-by-fire.md
+│   └── true-seeing.md
+└── scripts/
+    └── check-public-safety.sh  # root-level wrapper
 ```
 
 **Note on `scripts/check-public-safety.sh`:** **verified** — this file
@@ -89,9 +90,10 @@ present.
 | `skills/quest/scripts/publish-forge-review` | logical (`cd "$SCRIPT_DIR"`) then `../../..` | Resolves to checkout |
 | `skills/bounty/scripts/create-verified-issue.sh` | physical (`pwd -P`) | Resolves to physical checkout |
 
-The issue evidence section (`Evidence:Symlink sensitivity`) measured this on macOS arm64 and
-found that logical resolution (`deliver-write`) resolved ROOT to the Bob directory while
-physical resolution (`publish-handoff`) resolved it to the checkout. Both approaches break
+The issue body (`Evidence: Symlink sensitivity`) reported a measurement on macOS arm64
+(not re-run in this review) finding that logical resolution (`deliver-write`) resolved ROOT
+to the Bob directory while physical resolution (`publish-handoff`) resolved it to the
+checkout. Both approaches break
 the assumption that ROOT contains `scripts/check-public-safety.sh` and `references/`,
 unless those paths exist in both the checkout and the install target, or a symlink forest
 replicates the full expected tree.
@@ -122,7 +124,7 @@ new conversation or restart Bob after placing new skill directories.
 
 ## 4. How a skill's directory is named to the model
 
-**verified (from Bob documentation):** The `name` field in `SKILL.md` frontmatter is "the
+**documented (Bob documentation):** The `name` field in `SKILL.md` frontmatter is "the
 skill's display name used in the Bob interface." The `use_skill` tool takes a `skill_name`
 parameter that Bob matches against this `name` field, not against the directory name.
 
@@ -142,7 +144,7 @@ convention will not receive a harness-supplied root, so ROOT derivation falls to
 
 ## 5. Collision and idempotency rules
 
-**Priority:** **verified (from Bob documentation)** — if both `<project>/.bob/skills/` and
+**Priority:** **documented (Bob documentation)** — if both `<project>/.bob/skills/` and
 `~/.bob/skills/` contain a skill with the same `name` field, the project-level skill takes
 precedence. Since adept's skill names are unique within the repository but not globally
 reserved, a user with a pre-existing skill using the same name would have it silently shadowed
@@ -175,7 +177,7 @@ equivalent at the time of writing:
 | Slash-command syntax (`$quest`, `$forge`, etc.) | Skill descriptions reference these as invocation patterns used by Claude Code / Codex operators | **unverified** — Bob supports slash commands but adept's skills are invoked via `use_skill`, not slash commands; the `$name` shorthand is a Claude Code convention |
 | `agents/openai.yaml` per-skill worker manifests | `skills/*/agents/openai.yaml` (22 skills ship these) | **verified** — no Bob equivalent: Bob has no plugin system that reads per-skill worker manifests; these files are Codex CLI–specific |
 | Plugin marketplace manifest | `.claude-plugin/marketplace.json`, `.codex-plugin/plugin.json` | **verified** — Bob has no plugin marketplace; skills must be placed manually |
-| Version field | `.claude-plugin/marketplace.json` (via ADR 0022) | **verified** — not relevant to Bob install |
+| Version field | `.claude-plugin/plugin.json` (via ADR 0022) | **verified** — not relevant to Bob install |
 
 **`agents/openai.yaml` detail:** Each file provides a Codex CLI interface definition (display
 name, short description, default prompt) used when a skill is invoked as an OpenAI Codex
@@ -190,9 +192,10 @@ Two existing records conflict with writing a Bob installer:
 
 ### ADR 0001 — Distribution via a plugin marketplace
 
-`docs/adr/0001-distribution-via-plugin-marketplace.md` (Accepted 2026-08-11) states:
-> "There is no install script and there will not be one. The harness owns install, update,
-> uninstall, and caching."
+`docs/adr/0001-distribution-via-plugin-marketplace.md` (Accepted 2026-08-11) records
+that the harness owns "install, update, uninstall, caching, and version resolution" and
+that `install.sh` (1,337 lines) has no successor. `.claude/CLAUDE.md:7` restates this as
+"There is no install script and there will not be one."
 
 This decision was made in the context of Claude Code and Codex. It did not anticipate a
 Bob user who must hand-place files. A new ADR would need to supersede or amend this
@@ -204,8 +207,9 @@ decision before an install script targeting Bob could be added to this repositor
 > "Bob is retired. Task 9 is skipped in full; nothing under `$OLD/agents/bob/` is
 > carried into either new repo, and Bob-related issues close as obsolete in Task 11."
 
-Line 979 of the same plan records that Bob "has no plugin system" and a
-clone-plus-symlink approach "was never executed."
+Line 969 of the same plan records Task 9 as "SKIPPED (Bob retired 2026-08-11)." Line 979
+records that Bob "has no plugin system" and describes a clone-plus-symlink approach that
+was planned but never executed.
 
 ### Resolution required
 
