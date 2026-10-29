@@ -27,9 +27,9 @@ tracker="$assets/tracker.sh"
 
 # --- stub gh ---------------------------------------------------------------
 # The store is $GH_STORE/<label-name>/description. The CAS is bash's
-# noclobber redirect, an O_EXCL open of description, not mkdir: no coreutils
-# behaviour can weaken it. All claim ops go through it, so concurrent cases
-# exercise real interleavings.
+# noclobber redirect, an O_EXCL open of description; mkdir -p only makes its
+# directory, so mkdir's own atomicity no longer decides a race. All claim ops
+# go through it, so concurrent cases exercise real interleavings.
 mkdir -p "$sandbox/bin"
 cat >"$sandbox/bin/gh" <<'FAKE_GH'
 #!/usr/bin/env bash
@@ -125,9 +125,9 @@ chmod +x "$sandbox/bin/gh"
 
 # --- racy mkdir --------------------------------------------------------------
 # uutils mkdir 0.8.0 (Ubuntu 26.04) checks for the leaf and then creates it, so
-# two racing calls both succeed. This shim widens that window on every host:
-# a CAS that leans on mkdir fails the concurrent rounds below deterministically
-# instead of only on that one userland.
+# two racing calls both succeed. This shim widens that window on every host,
+# so a CAS that leans on mkdir reliably fails the simultaneous-claims rounds
+# below instead of only on that one userland.
 REAL_MKDIR=$(command -v mkdir)
 export REAL_MKDIR
 cat >"$sandbox/bin/mkdir" <<'RACY_MKDIR'
