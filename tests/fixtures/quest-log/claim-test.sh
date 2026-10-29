@@ -3,8 +3,9 @@ set -euo pipefail
 
 # Adversarial suite for the quest-claim tracker operations. A stateful stub
 # gh stands in for GitHub: its label store is a fixture directory where
-# create is mkdir -- atomic, failing on existence, the fixture's stand-in
-# for the server-side unique-name constraint ADR 0018 probes live.
+# create is an exclusive file create -- atomic, failing on existence, the
+# fixture's stand-in for the server-side unique-name constraint ADR 0018
+# probes live.
 unset RIPGREP_CONFIG_PATH
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -25,8 +26,10 @@ chmod +x "$assets/tracker.sh"
 tracker="$assets/tracker.sh"
 
 # --- stub gh ---------------------------------------------------------------
-# The store is $GH_STORE/<label-name>/description. mkdir is the CAS. All
-# claim ops go through it, so concurrent cases exercise real interleavings.
+# The store is $GH_STORE/<label-name>/description. The CAS is bash's
+# noclobber redirect, an O_EXCL open of description, not mkdir: no coreutils
+# behaviour can weaken it. All claim ops go through it, so concurrent cases
+# exercise real interleavings.
 mkdir -p "$sandbox/bin"
 cat >"$sandbox/bin/gh" <<'FAKE_GH'
 #!/usr/bin/env bash
@@ -60,9 +63,11 @@ if [[ $1 == label && $2 == create ]]; then
 		exit 1
 		;;
 	esac
-	mkdir -p "$GH_STORE/quest-claim"
-	if mkdir "$GH_STORE/$name" 2>/dev/null; then
+	mkdir -p "$GH_STORE/$name"
+	if (
+		set -C
 		printf '%s' "$desc" >"$GH_STORE/$name/description"
+	) 2>/dev/null; then
 		printf 'Created label %s\n' "$name"
 		exit 0
 	fi
@@ -117,6 +122,28 @@ printf 'stub gh: unhandled: %s\n' "$*" >&2
 exit 1
 FAKE_GH
 chmod +x "$sandbox/bin/gh"
+
+# --- racy mkdir --------------------------------------------------------------
+# uutils mkdir 0.8.0 (Ubuntu 26.04) checks for the leaf and then creates it, so
+# two racing calls both succeed. This shim widens that window on every host:
+# a CAS that leans on mkdir fails the concurrent rounds below deterministically
+# instead of only on that one userland.
+REAL_MKDIR=$(command -v mkdir)
+export REAL_MKDIR
+cat >"$sandbox/bin/mkdir" <<'RACY_MKDIR'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $1 == -p ]] && exec "$REAL_MKDIR" "$@"
+for dir; do
+	[[ ! -e $dir ]] || {
+		printf 'mkdir: %s: File exists\n' "$dir" >&2
+		exit 1
+	}
+done
+sleep 0.2
+exec "$REAL_MKDIR" -p "$@"
+RACY_MKDIR
+chmod +x "$sandbox/bin/mkdir"
 
 assert_exit() {
 	local expected=$1 actual=$2 label=$3
