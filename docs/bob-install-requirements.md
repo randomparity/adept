@@ -1,102 +1,23 @@
 # IBM Bob install requirements
 
 This document records what a Bob user must supply to make adept skills work, and what
-open decisions block a future installer. Each claim is marked with one of three markers:
-
-- **verified** — confirmed by static inspection of this repository (source code, documentation).
-  Environment: macOS arm64, 2026-10-29, no live Bob session.
-- **documented** — stated in Bob's published documentation but not tested against a live Bob
-  instance in this run.
-- **unverified** — neither tested against a live Bob instance nor documented by IBM.
-  Behaviour is inferred from repository source or logical inference.
+open decisions block a future installer. The requirements every non-marketplace agent shares
+— the minimum file tree, `<plugin root>` resolution, and the adept features specific to
+Claude Code and Codex — are in [Agent-neutral install requirements](agent-install-requirements.md),
+which also defines the **verified**, **documented**, and **unverified** markers used here.
 
 Related: issue #478, ADR 0001 (`docs/adr/0001-distribution-via-plugin-marketplace.md`).
 
 ---
 
-## 1. Minimum file tree
+## 1–2. Install root
 
-A Bob install must produce the following tree for adept skills to work.
-
-### Global install (`~/.bob/skills/`)
-
-```
-~/.bob/
-├── skills/
-│   ├── attunement/         # all files from skills/attunement/
-│   ├── bounty/
-│   ├── campaign/
-│   ├── … (one directory per skill) …
-│   └── quest/
-├── references/             # files from references/ at repo root
-│   ├── dispatch-liveness.md
-│   ├── heed-counsel.md
-│   ├── merge-gate.md
-│   ├── model-mapping.md
-│   ├── model-selection.md
-│   ├── network-bounds.md
-│   ├── numbered-reservations.md
-│   ├── review-depth.md
-│   ├── review-lenses.md
-│   ├── trial-by-fire.md
-│   └── true-seeing.md
-└── scripts/
-    └── check-public-safety.sh  # root-level wrapper
-```
-
-**Note on `scripts/check-public-safety.sh`:** **verified** — this file
-(`scripts/check-public-safety.sh:4,11`) resolves `ROOT` as the directory two levels above
-itself and then `exec`s `$ROOT/skills/quest/scripts/check-public-safety "$@"`. A Bob install
-that copies only the `skills/` tree will not have this wrapper and will not have the inner
-scanner. A full tree copy is required. The inner scanner lives at
-`skills/quest/scripts/check-public-safety`.
-
-**Note on `references/` location:** **verified** — every script that addresses shared
-standards uses a path like `../../references/` relative to a skill's own subdirectory
-(e.g. `skills/quest/SKILL.md:57`, `skills/forge/SKILL.md:239`). The directory must be a
-sibling of `skills/`, not nested inside it.
-
-### Project install (`<project>/.bob/skills/`)
-
-Same tree as the global install, but rooted at `<project>/.bob/` instead of `~/.bob/`. Bob's
-skill location docs state that project skills take precedence over global ones on name
-collision (see §5 below), so a project install can shadow a global one.
-
----
-
-## 2. `<plugin root>` resolution: copy install vs symlink install
-
-The `<plugin root>` convention is defined in skill text as "the directory two levels above
-this skill's own directory" (e.g. `skills/attunement/SKILL.md:33–36`). Scripts resolve it at
-runtime using `$BASH_SOURCE[0]`.
-
-**Copy install** (all files copied into `~/.bob/`): **verified** — all scripts resolve
-ROOT correctly because the physical directory three levels up from any script is the copy
-root. Both logical (`cd --`) and physical (`cd -P`) resolution agree when no symlinks are
-present.
-
-**Symlink install** (skill directories symlinked into `~/.bob/skills/<name>`):
-**unverified** — behaviour depends on whether each script uses logical or physical `cd`:
-
-| Script | Resolution | ROOT under a symlink install |
-|--------|-----------|------------------------------|
-| `skills/deliver/scripts/deliver-write` | logical (`cd -- "$SCRIPT_DIR/../../.."`) | Resolves to `~/.bob/` (the directory containing `skills/`) |
-| `skills/return-to-town/scripts/publish-handoff` | physical (`cd -P -- "$SCRIPT_DIR/../../.."`) | Resolves to the physical checkout |
-| `skills/return-to-town/scripts/refresh-merge` | physical (`cd -P -- "$SCRIPT_DIR/../../.."`) | Resolves to the physical checkout |
-| `skills/quest/scripts/publish-forge-review` | logical (`cd "$SCRIPT_DIR"`) then `../../..` | Resolves to `~/.bob/` |
-| `skills/bounty/scripts/create-verified-issue.sh` | physical (`pwd -P`) | Resolves to the physical checkout |
-
-The issue body (`Evidence: Symlink sensitivity`) reported a measurement on macOS arm64
-(not re-run in this review) confirming the table's split result: logical-`cd` scripts
-resolve ROOT to `~/.bob/`, while physical-`cd` scripts resolve it to the checkout. The
-scripts therefore disagree with each other. A logical-`cd` script expects to find
-`references/` and `scripts/check-public-safety.sh` inside `~/.bob/`; a physical-`cd` script
-expects them in the checkout. Neither assumption holds for both script types simultaneously.
-
-**Supported path:** A copy install (no symlinks) is the only configuration where all
-scripts agree on ROOT. A symlink install requires additional work (e.g. a symlink forest in
-`~/.bob/` that mirrors `references/` and `scripts/`) to satisfy both; this work has not been
-done.
+Bob's `<install root>` is `~/.bob/` for a global install (`~/.bob/skills/`) and
+`<project>/.bob/` for a project install (`<project>/.bob/skills/`). Both take the tree in
+[§1](agent-install-requirements.md#1-minimum-file-tree) of the agent-neutral document, and
+ROOT resolves as its [§2](agent-install-requirements.md#2-plugin-root-resolution-copy-install-vs-symlink-install)
+describes. Bob's skill location docs state that project skills take precedence over global
+ones on name collision (see §5 below), so a project install can shadow a global one.
 
 ---
 
@@ -130,7 +51,8 @@ does not affect adept in practice.
 "the harness names when it loads the skill" (e.g. `skills/attunement/SKILL.md:35–36`,
 `skills/quest/SKILL.md:174–175`). Under Claude Code, the harness injects the plugin cache
 path as this root. **unverified** — under Bob, whether an equivalent injection exists is not
-documented; if it does not, ROOT derivation falls to the `cd`-based resolution in §2.
+documented; if it does not, ROOT derivation falls to the `cd`-based resolution in
+[agent-neutral §2](agent-install-requirements.md#2-plugin-root-resolution-copy-install-vs-symlink-install).
 
 ---
 
@@ -151,11 +73,21 @@ copy-based install would need to address all three. None has been tested.
 
 ## 6. adept features with no Bob equivalent
 
-The following adept capabilities are Claude Code– and Codex-specific and have no Bob
-equivalent at the time of writing:
+The adept capabilities specific to Claude Code and Codex
+([agent-neutral §3](agent-install-requirements.md#3-adept-features-specific-to-claude-code-and-codex))
+have no Bob equivalent at the time of writing:
 
-| Feature | adept location | Bob status |
-|---------|---------------|-----------|
+| Feature | Bob status |
+|---------|-----------|
+| `$name` invocation shorthand (e.g. `$quest`) | **unverified** — Bob has slash commands but adept's skills are invoked via `use_skill`; the `$name` shorthand is a Codex agent convention, not a Bob convention |
+| `agents/openai.yaml` per-skill worker manifests | **documented** — Bob has no feature for per-skill worker manifests (Bob docs describe no equivalent) |
+| Skills plugin marketplace | **documented** — Bob's marketplace covers MCP servers and modes, not skills; adept skills must be placed manually |
+| Version field | **verified** — not relevant to Bob install |
+
+**`agents/openai.yaml` detail:** Bob does not read these files. A Bob install does not need to
+place them, but including them as part of a full-tree copy is harmless.
+
+---------|---------------|-----------|
 | `$name` invocation shorthand (e.g. `$quest`) | Skill descriptions reference these as shorthand used by Claude Code / Codex operators | **unverified** — Bob has slash commands but adept's skills are invoked via `use_skill`; the `$name` shorthand is a Codex agent convention, not a Bob convention |
 | `agents/openai.yaml` per-skill worker manifests | `skills/*/agents/openai.yaml` (22 skills) | **documented** — Bob has no feature for per-skill worker manifests; these files are Codex CLI-specific (Bob docs describe no equivalent) |
 | Skills plugin marketplace | `.claude-plugin/marketplace.json`, `.codex-plugin/plugin.json` | **documented** — Bob's marketplace covers MCP servers and modes, not skills; adept skills must be placed manually |
