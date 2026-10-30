@@ -1,6 +1,6 @@
 {
   "name": "adept",
-  "version": "7.12.5",
+  "version": "7.12.6",
   "icon": "docs/assets/adept-logo-grimoire.png",
   "description": "Development-workflow skills: design, TDD, adversarial review, shipping, and campaign orchestration for Claude Code and Codex.",
   "author": {
