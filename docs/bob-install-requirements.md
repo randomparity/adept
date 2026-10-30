@@ -87,17 +87,6 @@ have no Bob equivalent at the time of writing:
 **`agents/openai.yaml` detail:** Bob does not read these files. A Bob install does not need to
 place them, but including them as part of a full-tree copy is harmless.
 
----------|---------------|-----------|
-| `$name` invocation shorthand (e.g. `$quest`) | Skill descriptions reference these as shorthand used by Claude Code / Codex operators | **unverified** — Bob has slash commands but adept's skills are invoked via `use_skill`; the `$name` shorthand is a Codex agent convention, not a Bob convention |
-| `agents/openai.yaml` per-skill worker manifests | `skills/*/agents/openai.yaml` (22 skills) | **documented** — Bob has no feature for per-skill worker manifests; these files are Codex CLI-specific (Bob docs describe no equivalent) |
-| Skills plugin marketplace | `.claude-plugin/marketplace.json`, `.codex-plugin/plugin.json` | **documented** — Bob's marketplace covers MCP servers and modes, not skills; adept skills must be placed manually |
-| Version field | `.claude-plugin/plugin.json` (via ADR 0022) | **verified** — not relevant to Bob install |
-
-**`agents/openai.yaml` detail:** Each file provides a Codex CLI interface definition (display
-name, short description, default prompt) used when a skill is invoked as an OpenAI Codex
-agent. Bob does not read these files. A Bob install does not need to place them, but
-including them as part of a full-tree copy is harmless.
-
 ---
 
 ## 7. Open decisions blocking an installer
