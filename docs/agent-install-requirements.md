@@ -54,7 +54,7 @@ An install must produce the following tree for adept skills to work.
 ```
 
 **Note on `scripts/check-public-safety.sh`:** **verified** — this file
-(`scripts/check-public-safety.sh:4,11`) resolves `ROOT` as the directory two levels above
+(`scripts/check-public-safety.sh:4,9`) resolves `ROOT` as the directory two levels above
 itself and then `exec`s `$ROOT/skills/quest/scripts/check-public-safety "$@"`. An install
 that copies only the `skills/` tree will not have this wrapper and will not have the inner
 scanner. A full tree copy is required. The inner scanner lives at
