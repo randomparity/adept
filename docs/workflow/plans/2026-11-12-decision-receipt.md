@@ -107,11 +107,11 @@ Steps:
    below, with no label written — name it, ask the operator, and keep draining. It is the one
    such hold that keeps a private record, because the sent text cannot be recomputed from live
    queries. It is also a step 6 merge-hold trigger: step 6 does not merge a row whose decision
-   is `pending` or `held`; a resumed orchestrator that finds `pending`
-   with no recorded report quote treats it as `held`. Never resend a decision to the same
-   worker: a resend lands at the same turn boundary and duplicates what it may already hold. A
-   successor dispatched on the operator's answer to the hold carries the decision in its prompt
-   like any pre-dispatch approval, and the record moves to the successor.
+   is `pending` or `held`; a resumed orchestrator that finds `pending` with no recorded report
+   quote treats it as `held`. Never resend a decision to the same worker: a resend lands at the
+   same turn boundary and duplicates what it may already hold. A successor dispatched on the
+   operator's answer to the hold carries the decision in its prompt like any pre-dispatch
+   approval, and the record moves to the successor.
    ```
 
 4. Read the three insertions back in context; confirm each `#probe-and-hold` link target heading
