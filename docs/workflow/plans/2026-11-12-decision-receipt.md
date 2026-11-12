@@ -10,7 +10,7 @@ gate changes.
 
 Tech stack: Markdown instruction files; `just` guardrails.
 
-Expected implementation size: 20–35 changed lines (M) — three new paragraphs of 6–10 wrapped lines
+Expected implementation size: 35–50 changed lines (M) — three new paragraphs of 9–17 wrapped lines
 each plus one version line.
 
 ## Global Constraints
@@ -51,8 +51,8 @@ Verification:
 - Contract: quest worker readback — Mode: task-test-not-applicable — same reason.
 - Contract: campaign delivered-only-on-readback hold — Mode: task-test-not-applicable — same
   reason.
-- Contract: relative links resolve — covered by the existing `check-skill-shape.sh` rule 5 under
-  `just verify`; no new test.
+- Contract: relative links resolve — Mode: focused-test — `just shape-check` (rule 5 resolves
+  link files; the `#probe-and-hold` anchor is checked by step 4's read).
 
 Steps:
 
@@ -65,18 +65,20 @@ Steps:
    reads it when that call returns; an idle worker reads it as the start of its next turn. A
    successful send proves the message was queued, not read, and a report composed before that
    boundary cannot reflect it — a report that crosses a message is the expected lag, not a lost
-   send. An idle notification means only that the worker ended a turn: it is neither an end of run,
-   which only the observed end below proves, nor a stall, because the next message resumes the
-   worker. Where the owning workflow defines a readback for a message, the message counts as
-   delivered only on that readback.
+   send. A turn end is neither an end of run nor a stall: Claude Code's idle notification, or a
+   background agent's notification whose report asks the dispatcher an open question, means the
+   worker is waiting and the next message resumes it. Such a worker is not observed ended for
+   replacement or worktree reclamation. Where the owning workflow defines a readback for a
+   message, the message counts as delivered only on that readback.
    ```
 
 2. In `skills/quest/SKILL.md` SCOPE CHECKPOINT, insert before "An unattended root never answers":
 
    ```markdown
-   **A dispatched run asks through its dispatcher.** When an orchestrator dispatched this run,
-   the question goes in the worker's report to that dispatcher, and the run waits by ending its
-   turn. The answer arrives as a declared `DECISION:` or `ANSWER:` message
+   **A dispatched run asks through its dispatcher.** When this run was dispatched under an
+   interactive root, the question goes in the worker's report to its dispatcher, and the run
+   waits by ending its turn; an unattended run parks as below. The answer arrives as a declared
+   `DECISION:` or `ANSWER:` message
    ([dispatch liveness](../../references/dispatch-liveness.md#probe-and-hold)); an unasked
    `DECISION:` that changes a charter field is handled the same way. Until the run has read the
    answer it takes no step that depends on the question — no design, no build, no write that
@@ -95,21 +97,24 @@ Steps:
    question, or a new decision on a live row's charter, as one declared `DECISION:` or `ANSWER:`
    message carrying the operator's text verbatim;
    [dispatch liveness](../../references/dispatch-liveness.md#probe-and-hold) owns the kinds and
-   their probe-budget exemption. Record the row, worker and exact sent text in the manifest's
-   existing private notes. The decision is delivered only when the worker's readback matches: a
-   newer complete `WORK:SCOPE` recording it and a report quoting the sent text, compared after
-   trimming surrounding whitespace, both defined by `$quest`'s SCOPE CHECKPOINT. Until then it is
-   pending and the row's PR is not merged; a report composed before the worker's next turn
-   boundary, including one that crossed the message, is not a missing readback. A mismatch,
-   report, scope or branch evidence that the worker moved past the question without the
-   readback, or an observed end without it, is a **hold** on that row: name it, ask the operator,
-   and keep draining. Never resend the decision — a resend lands at the same turn boundary and
-   duplicates what the worker may already hold.
+   their probe-budget exemption. Record the row, worker, sent text and receipt state — `pending`,
+   `delivered`, or `held: <reason>` — in the manifest's existing private notes. It is `delivered`
+   when the worker's readback matches, both halves defined by `$quest`'s SCOPE CHECKPOINT: a
+   newer complete `WORK:SCOPE` recording the decision, and a report quoting the sent text,
+   compared after trimming surrounding whitespace. The first report after the send may have
+   crossed it. A later report without the quote, tracker or branch evidence that the worker
+   moved past the question without the readback, or a mismatch sets `held`: the in-flight hold
+   below, with no label written — name it, ask the operator, and keep draining. Step 6 does not
+   merge a row whose decision is `pending` or `held`; a resumed orchestrator that finds `pending`
+   with no recorded report quote treats it as `held`. Never resend a decision to the same
+   worker: a resend lands at the same turn boundary and duplicates what it may already hold. A
+   successor dispatched on the operator's answer to the hold carries the decision in its prompt
+   like any pre-dispatch approval, and the record moves to the successor.
    ```
 
 4. Read the three insertions back in context; confirm each `#probe-and-hold` link target heading
    `## Probe and hold` exists in `references/dispatch-liveness.md`.
-5. Run `just test skill-shape`; expect every suite `ok` and exit 0.
+5. Run `just shape-check`; expect exit 0 (rule 5 resolves the new relative link files).
 6. Commit: `docs: add a receipt contract for decisions relayed to workers`.
 
 ## Task 2 — version bump

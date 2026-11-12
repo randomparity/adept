@@ -17,25 +17,33 @@ Three prose edits, one per owner, and no new mechanism.
 
 1. **`references/dispatch-liveness.md` owns delivery facts** shared by every dispatcher (campaign,
    forge, trial-loop, restock, saga): a message to a worker lands at its next turn boundary; a
-   successful send proves the message was queued, not read; an idle notification is neither an
-   end of run nor a stall; and a report composed before that boundary cannot reflect the message,
-   so a crossed report is expected lag, not a lost send. This extends the existing
-   composition-time paragraph to the reverse direction.
-2. **`skills/quest/SKILL.md` SCOPE CHECKPOINT owns the worker side.** A dispatched run asks its
-   checkpoint question in its report to the dispatcher and waits by ending the turn. Until it has
-   read the answer it takes no step that depends on the question. On reading a relayed decision
-   it records the decision verbatim in the `provenance` of the `WORK:SCOPE` that checkpoint
-   freezes or re-freezes, before any design or build step, and quotes the same text in its next
-   report. A decision whose text is not public-safe goes into `WORK:SCOPE` as a public-safe
-   summary; the report carries the exact text.
+   successful send proves the message was queued, not read; a report composed before that
+   boundary cannot reflect it, so a crossed report is expected lag, not a lost send; and a turn
+   end — Claude Code's idle notification, or a background agent's notification arriving with an
+   open question in its report — is neither an end of run nor a stall, because the next message
+   resumes the worker. Such a worker is waiting on its dispatcher and is not observed ended for
+   replacement or worktree reclamation.
+2. **`skills/quest/SKILL.md` SCOPE CHECKPOINT owns the worker side.** A run dispatched under an
+   interactive root asks its checkpoint question in its report to the dispatcher and waits by
+   ending the turn; an unattended run keeps the existing park. Until it has read the answer it
+   takes no step that depends on the question. On reading a relayed decision it records the
+   decision verbatim in the `provenance` of the `WORK:SCOPE` that checkpoint freezes or
+   re-freezes, before any design or build step, and quotes the same text in its next report. A
+   decision whose text is not public-safe goes into `WORK:SCOPE` as a public-safe summary; the
+   report carries the exact text.
 3. **`skills/campaign/SKILL.md` step 5 owns the orchestrator side.** It relays a post-dispatch
    decision as one declared `DECISION:` or `ANSWER:` message carrying the operator's text
-   verbatim, and records the sent text, row and worker in the manifest's private notes. The
-   decision is delivered only when the worker's readback matches the sent text: a newer complete
-   `WORK:SCOPE` recording it and the same text quoted in a report. While pending, the row's PR is
-   not merged. A mismatch, or evidence that the worker moved past the question without the
-   readback, or an observed end without it, is a hold on that row; the orchestrator does not
-   resend.
+   verbatim, and records the row, worker, sent text and receipt state (`pending`, `delivered`,
+   or `held: <reason>`) in the manifest's existing private notes. The decision is `delivered`
+   when the worker's readback matches the sent text: a newer complete `WORK:SCOPE` recording it
+   and the same text quoted in a report. The first report after the send may have crossed it; a
+   later report without the quote, or tracker or branch evidence that the worker moved past the
+   question without the readback, is a missing readback. A mismatch or a missing readback sets
+   `held` — step 5's in-flight hold, no label written. Step 6 does not merge a row whose notes
+   show `pending` or `held`; a resumed orchestrator that finds `pending` without a recorded
+   report quote treats it as held. The orchestrator never resends to the same worker; a
+   successor dispatched after an operator decision carries the decision in its prompt like any
+   prompt-carried approval, and the record moves to the successor.
 
 "Matches" means the quoted text in the report equals the sent decision text after trimming
 leading and trailing whitespace, and the `WORK:SCOPE` names the same decision (verbatim or its
@@ -53,9 +61,11 @@ No ADR: the issue prescribes this approach, and the alternatives below are recor
 
 1. Actors and deployments:
    - the campaign orchestrator model in an interactive Claude Code or Codex session;
-   - a dispatched `$quest` worker under that campaign, whose `interaction` follows the root.
+   - a dispatched `$quest` worker under that campaign, whose `interaction` follows the root;
+   - unattended campaigns are outside the receipt path: their workers park at the checkpoint.
 2. Invariants and assets:
-   - the worker never builds a scope option the operator did not approve;
+   - a scope option the operator did not approve is not merged; a rule-following worker does not
+     build it before reading the answer;
    - the probe budget stays one per worker per run; declared kinds do not spend it (#496).
 3. Accepted:
    - a worker that ignores the rule and proceeds: caught by the readback mismatch hold and the
