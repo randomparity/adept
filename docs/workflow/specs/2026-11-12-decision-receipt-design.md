@@ -18,11 +18,10 @@ Three prose edits, one per owner, and no new mechanism.
 1. **`references/dispatch-liveness.md` owns delivery facts** shared by every dispatcher (campaign,
    forge, trial-loop, restock, saga): a message to a worker lands at its next turn boundary; a
    successful send proves the message was queued, not read; a report composed before that
-   boundary cannot reflect it, so a crossed report is expected lag, not a lost send; and a turn
-   end — Claude Code's idle notification, or a background agent's notification arriving with an
-   open question in its report — is neither an end of run nor a stall, because the next message
-   resumes the worker. Such a worker is waiting on its dispatcher and is not observed ended for
-   replacement or worktree reclamation.
+   boundary cannot reflect it, so a crossed report is expected lag, not a lost send; a worker
+   likewise knows a dispatcher's decision only as of the last message it read; and an idle
+   notification is neither an end of run nor a stall, because the next message resumes the
+   worker. The observed-end rule is unchanged.
 2. **`skills/quest/SKILL.md` SCOPE CHECKPOINT owns the worker side.** A run dispatched under an
    interactive root asks its checkpoint question in its report to the dispatcher and waits by
    ending the turn; an unattended run keeps the existing park. Until it has read the answer it
@@ -39,7 +38,8 @@ Three prose edits, one per owner, and no new mechanism.
    and the same text quoted in a report. The first report after the send may have crossed it; a
    later report without the quote, or tracker or branch evidence that the worker moved past the
    question without the readback, is a missing readback. A mismatch or a missing readback sets
-   `held` — step 5's in-flight hold, no label written. Step 6 does not merge a row whose notes
+   `held` — step 5's in-flight hold, with no label written; it is the one such hold that keeps
+   a private record, because the sent text cannot be recomputed from live queries. Step 6 does not merge a row whose notes
    show `pending` or `held`; a resumed orchestrator that finds `pending` without a recorded
    report quote treats it as held. The orchestrator never resends to the same worker; a
    successor dispatched after an operator decision carries the decision in its prompt like any
@@ -84,8 +84,9 @@ No ADR: the issue prescribes this approach, and the alternatives below are recor
    quote a relayed decision before any design or build step.
 2. `$campaign` step 5 defines delivery as a matching readback and makes a mismatch or missing
    readback a hold without resend, citing the declared-kind paragraph rather than restating it.
-3. `references/dispatch-liveness.md` states the turn-boundary landing, send-is-not-read, and that
-   an idle notification is neither an end of run nor a stall.
+3. `references/dispatch-liveness.md` states the turn-boundary landing, send-is-not-read, that a
+   worker knows a decision only as of the last message it read, and that an idle notification
+   is neither an end of run nor a stall.
 4. `.claude-plugin/plugin.json` version is `7.13.0`.
 
 ## Validation

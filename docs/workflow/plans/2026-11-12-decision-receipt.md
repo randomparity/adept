@@ -65,11 +65,11 @@ Steps:
    reads it when that call returns; an idle worker reads it as the start of its next turn. A
    successful send proves the message was queued, not read, and a report composed before that
    boundary cannot reflect it — a report that crosses a message is the expected lag, not a lost
-   send. A turn end is neither an end of run nor a stall: Claude Code's idle notification, or a
-   background agent's notification whose report asks the dispatcher an open question, means the
-   worker is waiting and the next message resumes it. Such a worker is not observed ended for
-   replacement or worktree reclamation. Where the owning workflow defines a readback for a
-   message, the message counts as delivered only on that readback.
+   send. The worker side is the same: a worker knows a dispatcher's decision only as of the last
+   message it read. An idle notification means the worker ended a turn; it is neither an end of
+   run, which only the observed end below proves, nor a stall, because the next message resumes
+   the worker. Where the owning workflow defines a readback for a message, the message counts as
+   delivered only on that readback.
    ```
 
 2. In `skills/quest/SKILL.md` SCOPE CHECKPOINT, insert before "An unattended root never answers":
@@ -104,8 +104,10 @@ Steps:
    compared after trimming surrounding whitespace. The first report after the send may have
    crossed it. A later report without the quote, tracker or branch evidence that the worker
    moved past the question without the readback, or a mismatch sets `held`: the in-flight hold
-   below, with no label written — name it, ask the operator, and keep draining. Step 6 does not
-   merge a row whose decision is `pending` or `held`; a resumed orchestrator that finds `pending`
+   below, with no label written — name it, ask the operator, and keep draining. It is the one
+   such hold that keeps a private record, because the sent text cannot be recomputed from live
+   queries. It is also a step 6 merge-hold trigger: step 6 does not merge a row whose decision
+   is `pending` or `held`; a resumed orchestrator that finds `pending`
    with no recorded report quote treats it as `held`. Never resend a decision to the same
    worker: a resend lands at the same turn boundary and duplicates what it may already hold. A
    successor dispatched on the operator's answer to the hold carries the decision in its prompt
