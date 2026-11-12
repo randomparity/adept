@@ -562,6 +562,26 @@ At completion or a blocker, failure, user request or task-appropriate deadline, 
 needed tracker/branch/run-state once. The tracker supplies durable phase evidence, not proof of
 liveness. Ordinary long design/build/review gaps require no discretionary healthy-status reads.
 
+**A decision made after dispatch has a receipt.** Relay an operator's answer to a worker's
+question, or a new decision on a live row's charter, as one declared `DECISION:` or `ANSWER:`
+message carrying the operator's text verbatim;
+[dispatch liveness](../../references/dispatch-liveness.md#probe-and-hold) owns the kinds and
+their probe-budget exemption. Record the row, worker, sent text and receipt state — `pending`,
+`delivered`, or `held: <reason>` — in the manifest's existing private notes. It is `delivered`
+when the worker's readback matches, both halves defined by `$quest`'s SCOPE CHECKPOINT: a
+newer complete `WORK:SCOPE` recording the decision, and a report quoting the sent text,
+compared after trimming surrounding whitespace. The first report after the send may have
+crossed it. A later report without the quote, tracker or branch evidence that the worker
+moved past the question without the readback, or a mismatch sets `held`: the in-flight hold
+below, with no label written — name it, ask the operator, and keep draining. It is the one
+such hold that keeps a private record, because the sent text cannot be recomputed from live
+queries. It is also a step 6 merge-hold trigger: step 6 does not merge a row whose decision
+is `pending` or `held`; a resumed orchestrator that finds `pending` with no recorded report
+quote treats it as `held`. Never resend a decision to the same worker: a resend lands at the
+same turn boundary and duplicates what it may already hold. A successor dispatched on the
+operator's answer to the hold carries the decision in its prompt like any pre-dispatch
+approval, and the record moves to the successor.
+
 **The direct probe remains budgeted at one per agent per run.** Apply the shared reference's
 unexpected-silence threshold and hold/recovery rules. Neither tracker age nor an unchanged wait
 timeout is proof of end, and a deadline does not increase probe or replacement authority.
