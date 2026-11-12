@@ -20,6 +20,12 @@ a dispatcher may send the worker one direct, non-destructive probe, then wait th
 normal collection point — no more than roughly ten further minutes — for the reply. A reply of any content proves the worker
 alive. No reply proves nothing, and it ends the probe budget: the wait becomes a hold.
 
+The budget counts probes, not messages. A message that is not a probe declares its kind at the
+very start of its first line: `DECISION:` for a decision the worker is waiting on, `ANSWER:` for
+a reply to a question the worker asked, `REFRESH:` for a base-branch or input refresh. A declared
+message neither spends the budget nor is blocked by a spent one; the adept source repository's
+own `SendMessage` hook enforces that. A probe never carries one of these prefixes.
+
 **A report proves the worker was alive when it wrote the report, and nothing more.** Its content is
 evidence about the moment of composition, not about the present the dispatcher reads it in — a
 park report from a resumed worker can be stale rather than current, describing state the worker has
