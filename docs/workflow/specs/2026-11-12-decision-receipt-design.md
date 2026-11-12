@@ -44,6 +44,8 @@ Three prose edits, one per owner, and no new mechanism.
    report quote treats it as held. The orchestrator never resends to the same worker; a
    successor dispatched after an operator decision carries the decision in its prompt like any
    prompt-carried approval, and the record moves to the successor.
+   Step 6 carries a one-line pointer to this hold in its trigger list (operator decision
+   2026-11-12, after the branch review flagged step 6's closed list).
 
 "Matches" means the quoted text in the report equals the sent decision text after trimming
 leading and trailing whitespace, and the `WORK:SCOPE` names the same decision (verbatim or its
