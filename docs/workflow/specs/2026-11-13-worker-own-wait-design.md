@@ -7,23 +7,23 @@ bounded background shell operation and never to poll in the foreground. A worker
 pre-push hook runs the full suite) and its CI are waits on durable state, so the paragraph tells
 a worker to background them. `skills/deliver/SKILL.md` §3 says the opposite. In the #500 run a
 worker backgrounded both waits, ended its turn, and neither completion resumed it. Authority:
-WORK:SCOPE `q505-eedaff8e`, whose exclusions record the operator's 2026-11-13 campaign plan
-approval of this approach; light lane, denominator 100 (S).
+WORK:SCOPE `q505-eedaff8e`, whose exclusions record the operator's 2026-11-13 approval of this
+approach; light lane, denominator 100 (S).
 
 ## Scope
 
 1. In "Waiting mechanics", reword the durable-state paragraph so its audience is a dispatcher
    waiting on workers or on shared state they produce — tracker, branch, or CI state.
-2. Beside it, state the worker's side: a dispatched worker waiting on its own push or CI — even
-   one that also dispatches workers of its own — runs the command in the foreground with the
-   timeout raised to the harness maximum, polls CI the way `$deliver` §3 does, and does not end
-   its turn while that wait is outstanding, because a background completion is not guaranteed
+2. In that section, state the worker's side: a dispatched worker waiting on its own push or CI
+   — even one dispatching workers of its own — runs the command in the foreground with the
+   timeout raised to the harness maximum, polls CI in one foreground `until` loop, and does not
+   end its turn while that wait is outstanding, because a background completion is not guaranteed
    to resume a worker whose turn has ended. If the call returns before the push finishes, it
-   reads the push's outcome in the foreground before ending the turn. Point the "A worker's
+   checks the remote head in the foreground before ending the turn. Point the "A worker's
    inner tool wait" bullet at that statement rather than restating it.
 
-No change to `skills/deliver/SKILL.md`, `skills/campaign/SKILL.md` (#506), or harness hooks
-(excluded). No ADR: the operator chose the approach; no decision with alternatives remains.
+`skills/deliver/SKILL.md` §3 gains one pointer to it. No change to `skills/campaign/SKILL.md`
+(#506) or harness hooks (excluded). No ADR: the operator chose the approach.
 
 ### Failure model
 
