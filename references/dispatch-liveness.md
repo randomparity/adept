@@ -136,15 +136,19 @@ dispatches workers of its own; the background condition wait above is the dispat
 not end its turn while either wait is outstanding: a background task's completion is not
 guaranteed to resume a worker whose turn has ended.
 
-- **Push:** run it with the timeout raised to the harness maximum. If the call returns before
-  the push finishes, compare `git ls-remote origin <branch>` with the local `HEAD` in the
-  foreground, and re-run a push that did not land, again in the foreground. A push that cannot
-  finish within the harness maximum is a blocker to report, not a reason to background it.
+- **Push:** run it with the timeout raised to the harness maximum. Compare
+  `git ls-remote origin <branch>` with the local `HEAD` only after the push has ended, and
+  re-run, in the foreground, a push that ended without landing.
 - **CI:** run one foreground call whose `until` loop sleeps between compact
   `gh pr checks <PR> --json name,state` snapshots until no check is pending, with the timeout
-  raised to the harness maximum, and re-enter it in the foreground if it returns first. Keep the
-  `sleep` inside the loop: Claude Code refuses a leading `sleep <n> &&` chain and offers only
-  background alternatives (observed on Claude Code 2.1.323, macOS, for `sleep 31 && ...`).
+  raised to the harness maximum. Keep the `sleep` inside the loop: Claude Code refuses a leading
+  `sleep <n> &&` chain and offers only background alternatives (observed on Claude Code 2.1.323,
+  macOS, for `sleep 31 && ...`).
+- **A call that outlives its timeout has not ended.** A harness may move it to the background
+  (Claude Code does) or yield a handle. Keep that handle and await the same task in the
+  foreground, as the inner-tool-wait bullet above says; start no second push or loop while it
+  runs. A wait the worker cannot await in the foreground is a blocker to report, not a reason to
+  end the turn.
 
 ## Observed end and reconciliation
 
