@@ -19,14 +19,15 @@ the canonical root, repository, and run token. An unknown or malformed manifest 
 reported without traversal. A valid finalized manifest authorizes removal only when the root is
 otherwise empty.
 
-For a live prior manifest, reconcile only units whose harness end-of-run notification (or requested
-stop followed by that notification) is recorded. Time, process absence, and stale files never prove
-a worker ended. Validate canonical descendant paths, expected types, owning clone/common directory,
-registered worktree, and exact `refs/heads/pr-N` or `refs/heads/test-batch-ID` ref. Then persist and
-read back `worktree-pending`, remove that exact worktree (using `--force` only for a proven-owned,
-proven-ended dirty evaluation tree), verify its registration is absent, persist
-`worktree-removed`, delete only its recorded ref, persist `ref-removed`, and prune only the owning
-clone. Any mismatch retains the unit and names the failed invariant.
+For a live prior manifest, reconcile only units whose observed end under [dispatch
+liveness](../../references/dispatch-liveness.md#observed-end-and-reconciliation) is recorded. Time,
+process absence, and stale files never prove a worker ended. Validate canonical descendant paths,
+expected types, owning clone/common directory, registered worktree, and exact `refs/heads/pr-N` or
+`refs/heads/test-batch-ID` ref. Then persist and read back `worktree-pending`, remove that exact
+worktree (using `--force` only for a proven-owned, proven-ended dirty evaluation tree), verify its
+registration is absent, persist `worktree-removed`, delete only its recorded ref, persist
+`ref-removed`, and prune only the owning clone. Any mismatch retains the unit and names the failed
+invariant.
 
 After prior reconciliation, allocate `<session-scratchpad>/restock/run.XXXXXX` with `mktemp -d`.
 Write one version-1 ownership manifest containing the canonical root, repository, run token, clone,
@@ -687,11 +688,12 @@ Phase 4 or choose a winner between conflicting reports implicitly.
 
 ### 3c. Record worker end; defer owned cleanup
 
-Record `ended` only after the harness reports the worker's end (or a requested stop followed by that
-notification). Phase 4 may need a PASS unit's worktree for fresh-base evaluation, so do not remove
-it here. `$return-to-town` owns cleanup for a merged PASS unit. Restock owns cleanup for WARN, FAIL,
-refusal, and second-`BASE_CHANGED` units, using the manifest's exact Git-aware sequence. An
-unresolved worker or ownership invariant retains the worktree and ref.
+Record `ended` only after the worker's observed end under [dispatch
+liveness](../../references/dispatch-liveness.md#observed-end-and-reconciliation). Phase 4 may need a
+PASS unit's worktree for fresh-base evaluation, so do not remove it here. `$return-to-town` owns
+cleanup for a merged PASS unit. Restock owns cleanup for WARN, FAIL, refusal, and
+second-`BASE_CHANGED` units, using the manifest's exact Git-aware sequence. An unresolved worker or
+ownership invariant retains the worktree and ref.
 
 ### PR tracking contract
 
