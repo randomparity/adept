@@ -18,8 +18,8 @@ approach; light lane, denominator 100 (S).
    — even one dispatching workers of its own — runs the command in the foreground with the
    timeout raised to the harness maximum, polls CI in one foreground `until` loop, and does not
    end its turn while that wait is outstanding, because a background completion is not guaranteed
-   to resume a worker whose turn has ended. If the call returns before the push finishes, it
-   checks the remote head in the foreground before ending the turn. Point the "A worker's
+   to resume a worker whose turn has ended. A call that outlives its timeout is awaited in the
+   foreground, never re-run beside itself. Point the "A worker's
    inner tool wait" bullet at that statement rather than restating it.
 
 `skills/deliver/SKILL.md` §3 gains one pointer to it. No change to `skills/campaign/SKILL.md`
