@@ -91,13 +91,16 @@ Check the active schema rather than copying a flag from another harness:
   end of independently backgrounded workers. A yielded handle or timeout proves neither.
 - **A worker's inner tool wait:** retain the long command's handle and await that invocation.
   A coordinator wait/progress turn does not restart the command or imply the worker can reply.
+  A worker's wait on its own push or CI follows the worker rule below.
 
 These examples were checked against the [bounded capability evidence](../docs/benchmarks/positive-monitoring-344.md).
 Unsupported notification, wait or usage capabilities must be stated, not assumed.
 
-For a wait on durable state rather than a worker report, use **one** bounded background shell
-operation for the whole condition wait, then read its result. Never foreground sleep-and-check
-polling. This avoids discretionary model checks, not a promise of zero model turns or tokens.
+When a dispatcher waits on durable state rather than a worker report — tracker, branch, or CI
+state that its workers produce — it uses **one** bounded background shell operation for the
+whole condition wait, then reads its result, and never polls in the foreground with
+sleep-and-check. This avoids discretionary model checks, not a promise of zero model turns or
+tokens.
 
 Use the Bash 3.2 `bounded_call` function from [network bounds](network-bounds.md#the-mechanism)
 in that background task; it needs no `timeout` or `gtimeout` command. Define that function first,
@@ -128,6 +131,13 @@ running; timeout proves neither their termination nor worker death.
 While a wait is open, drain other work in hand. When the outstanding reports are the only work
 left, say plainly what is blocked and on what, and then wait — never manufacture polls to look
 busy.
+
+**A dispatched worker waits on its own push and CI in the foreground**, including a worker that
+dispatches workers of its own; the background condition wait above is the dispatcher's. It runs
+each with a raised timeout and does not end its turn while either is outstanding: a background
+task's completion is not guaranteed to resume a worker whose turn has ended. A call that outlives
+its timeout may still be running — a harness can move it to the background or yield a handle —
+so the worker waits on that same task rather than starting a second copy.
 
 ## Observed end and reconciliation
 

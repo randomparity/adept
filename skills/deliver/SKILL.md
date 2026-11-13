@@ -105,6 +105,7 @@ issue-backed merge must separately pass ADR 0035's commit-bound four-part gate,
 including its author handshake.
 
 Long commands run in the foreground with a raised timeout, and a worker never ends a turn waiting on a completion notification.
+[Dispatch liveness](../../references/dispatch-liveness.md#waiting-mechanics) states this worker rule, including a call that outlives its timeout.
 
 Poll in a loop — **do not stream**. `gh pr checks <PR> --watch` pipes every
 incremental status frame into context for the entire CI run; the intermediate
