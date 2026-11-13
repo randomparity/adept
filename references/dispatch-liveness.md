@@ -128,12 +128,19 @@ busy.
 
 ## Observed end and reconciliation
 
-For a native agent, only the harness's end-of-run notification, or a dispatcher-requested stop
-followed by that notification, proves the worker ended. For a CLI worker, require the completed
-process exit described above. Before replacement, enumerate the durable evidence the
-dispatcher can reach: reports, tracker state, branch or commit state, and worktree changes. Record
-the disposition of each artifact, establish ownership, resolve conflicts or inaccessible required
-evidence, and check once more for a late valid report.
+For a native agent, the harness's end-of-run notification, or a dispatcher-requested stop followed
+by that notification, proves the worker ended only where the harness tells a turn end from a run
+end, by its notifications or its agent run-state. Where it does not, or the dispatcher cannot
+establish that it does, a completion notification alone is not an observed end, even when it carries
+a final report: the worker may still be resumable. There the observed end is an explicit stop
+through the harness's stop control together with that control's result stating that the stop
+succeeded or that this worker is no longer running; any other result proves nothing. Issue that stop
+only after reconciling the worker's final report, or under a stop authority the owning workflow
+grants, such as an operator-directed re-dispatch. For a CLI worker, require the completed process
+exit described above. Before replacement, enumerate the durable evidence the dispatcher can reach:
+reports, tracker state, branch or commit state, and worktree changes. Record the disposition of each
+artifact, establish ownership, resolve conflicts or inaccessible required evidence, and check once
+more for a late valid report.
 
 For campaign claim recovery, establish ownership by the holder's exact scope token in the
 campaign's pre-dispatch row/worker binding. The observed end must belong to that bound worker;
