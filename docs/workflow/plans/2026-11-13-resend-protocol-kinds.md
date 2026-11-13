@@ -64,8 +64,10 @@ Steps:
    # Any other non-string message counts as undeclared.
    send 0 other '{"type":"status_check"}'
    send 2 other '{"type":"status_check"}'
-   send 2 other '{"reason":"no type"}'
-   send 2 other '["shutdown_request"]'
+   send 0 notype '{"reason":"no type"}'
+   send 2 notype '{"reason":"no type"}'
+   send 0 array '["shutdown_request"]'
+   send 2 array '["shutdown_request"]'
    send 2 other '{"type":"SHUTDOWN_REQUEST"}'
    ```
 
