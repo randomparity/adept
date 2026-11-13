@@ -132,26 +132,11 @@ left, say plainly what is blocked and on what, and then wait — never manufactu
 busy.
 
 **A dispatched worker waits on its own push and CI in the foreground**, including a worker that
-dispatches workers of its own; the background condition wait above is the dispatcher's. It does
-not end its turn while either wait is outstanding: a background task's completion is not
-guaranteed to resume a worker whose turn has ended.
-
-- **Push:** run it with the timeout raised to the harness maximum, and start no second push while
-  it runs. If the harness moves it to the background when that timeout expires (Claude Code does),
-  wait in foreground calls whose `until` loop sleeps until the task's output file shows the push
-  ended, each call bounded below the harness maximum and re-entered while it runs. Then compare
-  `git ls-remote origin <branch>` with the local `HEAD`. Re-run only a push that was interrupted
-  — killed, timed out, or cut off by the network; a push its hook or the remote refused is a
-  failure to diagnose, not to retry.
-- **CI:** run foreground calls whose `until` loop sleeps between compact
-  `gh pr checks <PR> --json name,bucket` snapshots until no check has bucket `pending`. Bound
-  each call's loop below the harness maximum so the harness never backgrounds it, and re-enter it
-  while checks are pending. Keep the `sleep` inside the loop: Claude Code refuses a leading
-  `sleep <n> &&` chain and offers only background alternatives (observed on Claude Code
-  2.1.323, macOS, for `sleep 31 && ...`).
-
-A wait that none of these keeps in the foreground is a blocker to report, not a reason to end
-the turn.
+dispatches workers of its own; the background condition wait above is the dispatcher's. It runs
+each with a raised timeout and does not end its turn while either is outstanding: a background
+task's completion is not guaranteed to resume a worker whose turn has ended. A call that outlives
+its timeout may still be running — a harness can move it to the background or yield a handle —
+so the worker waits on that same task rather than starting a second copy.
 
 ## Observed end and reconciliation
 
