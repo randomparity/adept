@@ -136,19 +136,22 @@ dispatches workers of its own; the background condition wait above is the dispat
 not end its turn while either wait is outstanding: a background task's completion is not
 guaranteed to resume a worker whose turn has ended.
 
-- **Push:** run it with the timeout raised to the harness maximum. Compare
-  `git ls-remote origin <branch>` with the local `HEAD` only after the push has ended, and
-  re-run, in the foreground, a push that ended without landing.
-- **CI:** run one foreground call whose `until` loop sleeps between compact
-  `gh pr checks <PR> --json name,state` snapshots until no check is pending, with the timeout
-  raised to the harness maximum. Keep the `sleep` inside the loop: Claude Code refuses a leading
-  `sleep <n> &&` chain and offers only background alternatives (observed on Claude Code 2.1.323,
-  macOS, for `sleep 31 && ...`).
-- **A call that outlives its timeout has not ended.** A harness may move it to the background
-  (Claude Code does) or yield a handle. Keep that handle and await the same task in the
-  foreground, as the inner-tool-wait bullet above says; start no second push or loop while it
-  runs. A wait the worker cannot await in the foreground is a blocker to report, not a reason to
-  end the turn.
+- **Push:** run it with the timeout raised to the harness maximum, and start no second push while
+  it runs. If the harness moves it to the background when that timeout expires (Claude Code does),
+  wait in foreground calls whose `until` loop sleeps until the task's output file shows the push
+  ended, each call bounded below the harness maximum and re-entered while it runs. Then compare
+  `git ls-remote origin <branch>` with the local `HEAD`. Re-run only a push that was interrupted
+  — killed, timed out, or cut off by the network; a push its hook or the remote refused is a
+  failure to diagnose, not to retry.
+- **CI:** run foreground calls whose `until` loop sleeps between compact
+  `gh pr checks <PR> --json name,bucket` snapshots until no check has bucket `pending`. Bound
+  each call's loop below the harness maximum so the harness never backgrounds it, and re-enter it
+  while checks are pending. Keep the `sleep` inside the loop: Claude Code refuses a leading
+  `sleep <n> &&` chain and offers only background alternatives (observed on Claude Code
+  2.1.323, macOS, for `sleep 31 && ...`).
+
+A wait that none of these keeps in the foreground is a blocker to report, not a reason to end
+the turn.
 
 ## Observed end and reconciliation
 
