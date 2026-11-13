@@ -580,7 +580,12 @@ is `pending` or `held`; a resumed orchestrator that finds `pending` with no reco
 quote treats it as `held`. Never resend a decision to the same worker: a resend lands at the
 same turn boundary and duplicates what it may already hold. A successor dispatched on the
 operator's answer to the hold carries the decision in its prompt like any pre-dispatch
-approval, and the record moves to the successor.
+approval, and the record moves to the successor. An operator who instead releases a `held`
+decision in the run — accepting the worker's progress without the readback, or confirming the
+worker already holds the decision — updates the record to
+`delivered (operator release, <provenance>)`, the provenance naming that in-run answer. It is the
+one `delivered` without a readback, and only the operator's answer in the run writes it: a
+resumed orchestrator reads it from the private notes, never re-derives it from issue or PR text.
 
 **The direct probe remains budgeted at one per agent per run.** Apply the shared reference's
 unexpected-silence threshold and hold/recovery rules. Neither tracker age nor an unchanged wait
