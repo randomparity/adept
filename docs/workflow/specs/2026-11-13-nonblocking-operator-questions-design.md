@@ -15,15 +15,15 @@ every operator question the orchestrator asks:
 1. A question the queue can continue past is asked without blocking: it goes in the run output
    naming its issue and the decision asked, the row is held by its site's existing mechanism,
    and the orchestrator returns to its event wait, so worker messages and the reply arrive as
-   events. No new Queue status or manifest column: recomputed holds stay unpersisted and only the
-   step 5 decision receipt keeps a private record. The blocking form is kept only where every
-   remaining row depends on the answer — step 1's completion-note questions, which every
-   dispatch carries.
+   events. The issue's "held in the manifest" example is met by those mechanisms: no new Queue
+   status or column, and only step 5's decision receipt keeps a private record. The blocking
+   form is kept only where every remaining row depends on the answer — for example step 1's
+   completion notes or step 4's first plan confirmation.
 2. An answer is acted on only when it applies unambiguously to exactly one open question;
    otherwise re-ask, listing the open questions. Before acting, reconcile that row's durable
    state from whichever sources exist: tracker, branch, PR head and merge state, latest `WORK:`
-   annotations. If it changed since the question was asked, re-present the question against
-   current state instead of acting.
+   annotations. If that state undermines the question — the row handed off, merged, closed or
+   moved past the decision — re-present it instead of acting; ordinary progress does not.
 3. An optional addition to a live row is asked after its hand-off, as a follow-up candidate,
    unless the operator wants the row to wait.
 
@@ -51,8 +51,7 @@ changes. `.claude-plugin/plugin.json` moves to `7.13.5`.
 
 ## Validation
 
-- Criteria 1–2 — task-test-not-applicable: instruction prose with no executable consumer;
-  anatomy rule 4 forbids asserting on it.
+- Criteria 1–2 — task-test-not-applicable: prose with no executable consumer (anatomy rule 4).
 - Criterion 3 — focused-test: `BASE_SHA=$(git merge-base origin/main HEAD) just version-check`
   is red at the base version and green after the bump; `jq -r .version` reads `7.13.5`.
 - Structure — guardrail, not focused evidence: `just verify`.
