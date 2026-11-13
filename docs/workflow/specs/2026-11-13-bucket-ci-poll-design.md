@@ -15,7 +15,7 @@ not `bucket`, and `|| true` hides a failed call. Authority: WORK:SCOPE `q508-695
    harness accepts or by other work in hand, never by a background task the turn ends on.
 2. Decide from `bucket`, over every check: any `pending` means not done; once none is pending,
    any `fail` or `cancel` goes to step 2, and `skipping` is not a failure. `no checks reported`
-   (exit 1, no JSON) means not yet registered: pending for a few polls, then stop and report
+   (exit 1, no JSON) means not yet registered: pending for a minute or two, then stop and report
    that none registered. Any other call yielding no JSON is
    retried once, then the worker stops and reports the `gh` error. `|| true` goes.
 3. Add one sentence to the worker paragraph of `references/dispatch-liveness.md` "Waiting
