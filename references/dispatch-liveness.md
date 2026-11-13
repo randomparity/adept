@@ -91,13 +91,23 @@ Check the active schema rather than copying a flag from another harness:
   end of independently backgrounded workers. A yielded handle or timeout proves neither.
 - **A worker's inner tool wait:** retain the long command's handle and await that invocation.
   A coordinator wait/progress turn does not restart the command or imply the worker can reply.
+  A worker's wait on its own push or CI follows the worker rule below.
 
 These examples were checked against the [bounded capability evidence](../docs/benchmarks/positive-monitoring-344.md).
 Unsupported notification, wait or usage capabilities must be stated, not assumed.
 
-For a wait on durable state rather than a worker report, use **one** bounded background shell
-operation for the whole condition wait, then read its result. Never foreground sleep-and-check
-polling. This avoids discretionary model checks, not a promise of zero model turns or tokens.
+When a dispatcher waits on durable state rather than a worker report — tracker, branch, or CI
+state that its workers produce — it uses **one** bounded background shell operation for the
+whole condition wait, then reads its result. Never foreground sleep-and-check polling. This
+avoids discretionary model checks, not a promise of zero model turns or tokens.
+
+**A dispatched worker waits on its own push and CI in the foreground**, including a worker that
+dispatches workers of its own. It runs the push with the timeout raised to the harness maximum,
+polls CI with compact foreground snapshots as `$deliver` §3 does, and does not end its turn while
+either wait is outstanding: a background task's completion is not guaranteed to resume a worker
+whose turn has ended. If the call returns before the push finishes, the worker reads the push's
+outcome in the foreground before it ends the turn. The background condition wait below is the
+dispatcher's.
 
 Use the Bash 3.2 `bounded_call` function from [network bounds](network-bounds.md#the-mechanism)
 in that background task; it needs no `timeout` or `gtimeout` command. Define that function first,
