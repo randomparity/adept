@@ -120,10 +120,12 @@ frames carry no decision value, only the terminal states do.
 
    Decide from `bucket`, over every check, not from `state` or the exit code (which
    is non-zero, 8, while checks are pending). Any `pending` means not done. Once
-   none is pending, any `fail` or `cancel` goes to step 2; `skipping` is not a
-   failure — skipped integration jobs that require unavailable hardware or external
-   services may be expected. `no checks reported` (exit 1, no JSON) means the checks
-   have not registered yet: treat it as pending. Any other call that yields no JSON
+   none is pending, any `fail` or `cancel` counts as a required check failing and
+   goes to step 2; `skipping` is not a failure — skipped integration jobs that
+   require unavailable hardware or external services may be expected. `no checks
+   reported` (exit 1, no JSON) just after a push means the checks have not
+   registered yet: treat it as pending for a few polls, and if it persists, stop
+   polling and report that no checks registered. Any other call that yields no JSON
    is a failed call, neither pending nor a verdict: retry it once, then stop and
    report the `gh` error.
 2. If a required check fails, establish its cause before fixing it. Direct correction is allowed
