@@ -98,8 +98,9 @@ Unsupported notification, wait or usage capabilities must be stated, not assumed
 
 When a dispatcher waits on durable state rather than a worker report — tracker, branch, or CI
 state that its workers produce — it uses **one** bounded background shell operation for the
-whole condition wait, then reads its result. Never foreground sleep-and-check polling. This
-avoids discretionary model checks, not a promise of zero model turns or tokens.
+whole condition wait, then reads its result, and never polls in the foreground with
+sleep-and-check. This avoids discretionary model checks, not a promise of zero model turns or
+tokens.
 
 Use the Bash 3.2 `bounded_call` function from [network bounds](network-bounds.md#the-mechanism)
 in that background task; it needs no `timeout` or `gtimeout` command. Define that function first,
