@@ -562,6 +562,26 @@ At completion or a blocker, failure, user request or task-appropriate deadline, 
 needed tracker/branch/run-state once. The tracker supplies durable phase evidence, not proof of
 liveness. Ordinary long design/build/review gaps require no discretionary healthy-status reads.
 
+**A decision made after dispatch has a receipt.** Relay an operator's answer to a worker's
+question, or a new decision on a live row's charter, as one declared `DECISION:` or `ANSWER:`
+message carrying the operator's text verbatim;
+[dispatch liveness](../../references/dispatch-liveness.md#probe-and-hold) owns the kinds and
+their probe-budget exemption. Record the row, worker, sent text and receipt state — `pending`,
+`delivered`, or `held: <reason>` — in the manifest's existing private notes. It is `delivered`
+when the worker's readback matches, both halves defined by `$quest`'s SCOPE CHECKPOINT: a
+newer complete `WORK:SCOPE` recording the decision, and a report quoting the sent text,
+compared after trimming surrounding whitespace. The first report after the send may have
+crossed it. A later report without the quote, tracker or branch evidence that the worker
+moved past the question without the readback, or a mismatch sets `held`: the in-flight hold
+below, with no label written — name it, ask the operator, and keep draining. It is the one
+such hold that keeps a private record, because the sent text cannot be recomputed from live
+queries. It is also a step 6 merge-hold trigger: step 6 does not merge a row whose decision
+is `pending` or `held`; a resumed orchestrator that finds `pending` with no recorded report
+quote treats it as `held`. Never resend a decision to the same worker: a resend lands at the
+same turn boundary and duplicates what it may already hold. A successor dispatched on the
+operator's answer to the hold carries the decision in its prompt like any pre-dispatch
+approval, and the record moves to the successor.
+
 **The direct probe remains budgeted at one per agent per run.** Apply the shared reference's
 unexpected-silence threshold and hold/recovery rules. Neither tracker age nor an unchanged wait
 timeout is proof of end, and a deadline does not increase probe or replacement authority.
@@ -614,6 +634,7 @@ Immediately before a potentially long PR verification, branch-refresh guardrail/
 - **List its changed files** — `gh pr diff <PR> --name-only`, on every PR, including a row step 3 adopted with no scope assigned; that PR has no worker report behind it, so the list is worth more there, not less. Never `gh pr view --json files`: that field returns the first 100 paths and says nothing about the rest, so it reports a clean prefix of the largest PRs. A diff that succeeded and listed nothing blocks — nothing was changed, so nothing can be carrying the fix. `--name-only` is deliberate here, not `--patch`: a serial-merge campaign is exactly the branch shape — several base merges — where `--patch` is unreliable for reading content; see [true-seeing](../../references/true-seeing.md), *A patch stream is not the file*.
 - **Compare that list against the issue's `File scope` cell from step 4.** A path is in scope when the cell names it, names a directory above it, or holds a glob whose directory is above it. A cell still at `—`, or holding nothing that parses as a path, leaves nothing to compare — record that and read every path through the next bullet, rather than treating an absent hint as a mismatch.
 - **Paths outside the scope do not block by themselves.** Step 4 assigns scope as a hint, and a correct fix routinely touches a file the plan didn't predict; a check that hard-blocks on any deviation fires on legitimate work and gets routed around. A path is accounted for when the PR body, a commit message, or the worker's report ties it to **the assigned issue**, or when this step itself mandated the change (the ADR index under `coupled` coupling, your own branch refresh, your own artifact regeneration). Everything else is **unrelated** — hold that one merge for the operator's decision. A path tied to a *different* tracked issue most needs that decision rather than being exempt from it: merging it lands a sibling's work early and can auto-close a row still queued. Never split, revert, or cherry-pick inside the PR; that surgery is undefined here and risks discarding work.
+- **A post-dispatch decision still `pending` or `held` holds the merge** — read from the manifest's private notes under step 5's decision receipt, the one hold here that is not recomputed from live queries.
 
 Whether the PR *implements* its issue is not what any of this answers: the reference says which issue it claims, the list says where it landed. Read the PR body, its acceptance criteria, and the `WORK:REVIEW` summary — but hold only on the triggers above, never on an unstated inability to confirm, or every reviewed PR becomes an operator's problem.
 

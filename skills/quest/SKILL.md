@@ -314,6 +314,19 @@ answer after freezing ends the current design cycle -- re-freeze before a new
 one. Missing, incomplete, or unresolvable fields never fall back to a spec,
 ADR, plan, or other generated artifact.
 
+**A dispatched run asks through its dispatcher.** When this run was dispatched under an
+interactive root, the question goes in the worker's report to its dispatcher, and the run
+waits by ending its turn; an unattended run parks as below. The answer arrives as a declared
+`DECISION:` or `ANSWER:` message
+([dispatch liveness](../../references/dispatch-liveness.md#probe-and-hold)); an unasked
+`DECISION:` that changes a charter field is handled the same way. Until the run has read the
+answer it takes no step that depends on the question — no design, no build, no write that
+selects one of its options. On reading it, record the decision verbatim in the `provenance`
+of the `WORK:SCOPE` this checkpoint freezes or re-freezes, before any design or build step,
+and quote the same text in the next report. That pair is the readback `$campaign` checks. A
+decision whose text is not public-safe goes into `WORK:SCOPE` as a public-safe summary, and
+only the report carries the exact text.
+
 An unattended root never answers a design-changing question itself: post a
 public-safe `WORK:TRAJECTORY`, set `status:needs-human`, and stop before
 design. Compose it with both markers and post it through the

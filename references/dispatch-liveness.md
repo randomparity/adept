@@ -34,6 +34,16 @@ agent run-state outrank the report's content; a plausible, detailed, or even byt
 is not grounds to override them. This governs a reply to the probe above and every other worker
 report a dispatcher reads.
 
+**A message to a worker lands at its next turn boundary.** A worker inside a long tool call
+reads it when that call returns; an idle worker reads it as the start of its next turn. A
+successful send proves the message was queued, not read, and a report composed before that
+boundary cannot reflect it — a report that crosses a message is the expected lag, not a lost
+send. The worker side is the same: a worker knows a dispatcher's decision only as of the last
+message it read. An idle notification means the worker ended a turn; it is neither an end of
+run, which only the observed end below proves, nor a stall, because the next message resumes
+the worker. Where the owning workflow defines a readback for a message, the message counts as
+delivered only on that readback.
+
 **A second probe to the same worker is the failure this budget exists to prevent.** It buys the
 same non-answer at the price of a full dispatcher turn, because a worker inside a long tool call
 answers at its next turn boundary and not on demand — so the probe is least informative for
