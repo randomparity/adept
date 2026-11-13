@@ -45,7 +45,7 @@ send. The worker side is the same: a worker knows a dispatcher's decision only a
 message it read. An idle notification means the worker ended a turn; it is neither an end of
 run, which only the observed end below proves, nor a stall, because the next message resumes
 the worker. Where the owning workflow defines a readback for a message, the message counts as
-delivered only on that readback.
+delivered only on that readback, or on an operator release the owning workflow records in its place.
 
 **A second probe to the same worker is the failure this budget exists to prevent.** It buys the
 same non-answer at the price of a full dispatcher turn, because a worker inside a long tool call
