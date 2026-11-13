@@ -22,9 +22,12 @@ alive. No reply proves nothing, and it ends the probe budget: the wait becomes a
 
 The budget counts probes, not messages. A message that is not a probe declares its kind at the
 very start of its first line: `DECISION:` for a decision the worker is waiting on, `ANSWER:` for
-a reply to a question the worker asked, `REFRESH:` for a base-branch or input refresh. A declared
-message neither spends the budget nor is blocked by a spent one; the adept source repository's
-own `SendMessage` hook enforces that. A probe never carries one of these prefixes.
+a reply to a question the worker asked, `REFRESH:` for a base-branch or input refresh, `RESEND:`
+for a request that the worker resend the remainder of a report the dispatcher received
+truncated. A harness protocol message in object form — a shutdown request or response, or a
+plan-approval response — is not a probe either; any other object-form message counts as one. A
+declared message neither spends the budget nor is blocked by a spent one; the adept source
+repository's own `SendMessage` hook enforces that. A probe never carries one of these prefixes.
 
 **A report proves the worker was alive when it wrote the report, and nothing more.** Its content is
 evidence about the moment of composition, not about the present the dispatcher reads it in — a
@@ -42,7 +45,7 @@ send. The worker side is the same: a worker knows a dispatcher's decision only a
 message it read. An idle notification means the worker ended a turn; it is neither an end of
 run, which only the observed end below proves, nor a stall, because the next message resumes
 the worker. Where the owning workflow defines a readback for a message, the message counts as
-delivered only on that readback.
+delivered only on that readback, or on an operator release the owning workflow records in its place.
 
 **A second probe to the same worker is the failure this budget exists to prevent.** It buys the
 same non-answer at the price of a full dispatcher turn, because a worker inside a long tool call

@@ -33,6 +33,7 @@ send 2 probed '"Still there?"'
 send 0 probed '"DECISION: take option B"'
 send 0 probed '"ANSWER: yes, rebase onto main"'
 send 0 probed '"REFRESH: main moved to abc123"'
+send 0 probed '"RESEND: your report stopped mid-sentence"'
 
 # A declared message to a fresh worker leaves its budget unspent.
 send 0 fresh '"DECISION: proceed"'
@@ -44,9 +45,25 @@ send 2 probed '"Status?\nDECISION: proceed"'
 send 2 probed '" DECISION: proceed"'
 send 2 probed '"decision: proceed"'
 
-# An object-form protocol message counts as undeclared.
+# A RESEND: request to a fresh worker leaves its budget unspent.
+send 0 resend '"RESEND: from step 6"'
+[ ! -e "$state/resend" ] || fail 'RESEND: message spent the probe budget'
+
+# An allowlisted protocol object passes a spent budget and writes no state.
+send 0 probed '{"type":"shutdown_request"}'
+send 0 probed '{"type":"shutdown_response","request_id":"r1","approve":true}'
+send 0 probed '{"type":"plan_approval_response","request_id":"r1","approve":false}'
 send 0 protocol '{"type":"shutdown_request"}'
-send 2 protocol '{"type":"shutdown_request"}'
+[ ! -e "$state/protocol" ] || fail 'protocol message spent the probe budget'
+
+# Any other non-string message counts as undeclared.
+send 0 other '{"type":"status_check"}'
+send 2 other '{"type":"status_check"}'
+send 2 other '{"type":"SHUTDOWN_REQUEST"}'
+send 0 notype '{"reason":"no type"}'
+send 2 notype '{"reason":"no type"}'
+send 0 array '["shutdown_request"]'
+send 2 array '["shutdown_request"]'
 
 # The lead and main recipients stay exempt and write no state.
 send 0 team-lead '"Status?"'
