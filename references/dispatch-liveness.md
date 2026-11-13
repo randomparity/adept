@@ -137,7 +137,8 @@ dispatches workers of its own; the background condition wait above is the dispat
 each with a raised timeout and does not end its turn while either is outstanding: a background
 task's completion is not guaranteed to resume a worker whose turn has ended. A call that outlives
 its timeout may still be running — a harness can move it to the background or yield a handle —
-so the worker waits on that same task rather than starting a second copy.
+so the worker waits on that same task rather than starting a second copy. Its CI wait is the
+foreground poll `$deliver` §3 step 1 gives.
 
 ## Observed end and reconciliation
 

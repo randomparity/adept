@@ -111,15 +111,21 @@ Poll in a loop — **do not stream**. `gh pr checks <PR> --watch` pipes every
 incremental status frame into context for the entire CI run; the intermediate
 frames carry no decision value, only the terminal states do.
 
-1. Poll checks with a **bounded, compact** snapshot: `sleep <interval> &&
-   gh pr checks <PR> --json name,state || true`, starting at a short interval and
-   backing off (e.g. 30s → 60s), reading one small JSON snapshot per poll. Note
-   `gh pr checks` exits non-zero (code 8) **while checks are still pending** and on
-   failure — decide pass/pending/fail from the parsed `state` fields, not the
-   process exit code (hence `|| true`, so a pending run isn't misread as a command
-   failure). No streaming output enters context. Skipped integration jobs that
-   require unavailable hardware or external services may be expected; wait on
-   required checks.
+1. Poll checks in the **foreground**, one **bounded, compact** snapshot per call:
+   `gh pr checks <PR> --json name,bucket`. Each call finishes under the harness's
+   foreground maximum and leads with no `sleep` the harness refuses — Claude Code
+   refuses a foreground command that leads with a long one. Space the calls with
+   pauses the harness accepts or with other work in hand, never with a background
+   task the turn ends on. No streaming output enters context.
+
+   Decide from `bucket`, over every check, not from `state` or the exit code (which
+   is non-zero, 8, while checks are pending). Any `pending` means not done. Once
+   none is pending, any `fail` or `cancel` goes to step 2; `skipping` is not a
+   failure — skipped integration jobs that require unavailable hardware or external
+   services may be expected. `no checks reported` (exit 1, no JSON) means the checks
+   have not registered yet: treat it as pending. Any other call that yields no JSON
+   is a failed call, neither pending nor a verdict: retry it once, then stop and
+   report the `gh` error.
 2. If a required check fails, establish its cause before fixing it. Direct correction is allowed
    only when the current failure artifact or an already-recorded investigation identifies a
    specific cause and the correction follows from that evidence. Familiarity, a plausible fix, or
