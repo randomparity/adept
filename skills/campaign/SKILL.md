@@ -567,10 +567,10 @@ question, or a new decision on a live row's charter, as one declared `DECISION:`
 message carrying the operator's text verbatim;
 [dispatch liveness](../../references/dispatch-liveness.md#probe-and-hold) owns the kinds and
 their probe-budget exemption. Record the row, worker, sent text and receipt state — `pending`,
-`delivered`, or `held: <reason>` — in the manifest's existing private notes. It is `delivered`
-when the worker's readback matches, both halves defined by `$quest`'s SCOPE CHECKPOINT: a
-newer complete `WORK:SCOPE` recording the decision, and a report quoting the sent text,
-compared after trimming surrounding whitespace. The first report after the send may have
+`delivered`, `held: <reason>`, or the operator release below — in the manifest's existing
+private notes. It is `delivered` when the worker's readback matches, both halves defined by
+`$quest`'s SCOPE CHECKPOINT: a newer complete `WORK:SCOPE` recording the decision, and a report
+quoting the sent text, compared after trimming surrounding whitespace. The first report after the send may have
 crossed it. A later report without the quote, tracker or branch evidence that the worker
 moved past the question without the readback, or a mismatch sets `held`: the in-flight hold
 below, with no label written — name it, ask the operator, and keep draining. It is the one
@@ -583,9 +583,10 @@ operator's answer to the hold carries the decision in its prompt like any pre-di
 approval, and the record moves to the successor. An operator who instead releases a `held`
 decision in the run — accepting the worker's progress without the readback, or confirming the
 worker already holds the decision — updates the record to
-`delivered (operator release, <provenance>)`, the provenance naming that in-run answer. It is the
-one `delivered` without a readback, and only the operator's answer in the run writes it: a
-resumed orchestrator reads it from the private notes, never re-derives it from issue or PR text.
+`delivered (operator release, <provenance>)`, the provenance naming that in-run answer. The
+operator's release stands in for the readback; it is not evidence the worker holds the decision.
+Only the operator's answer in the run writes it: a resumed orchestrator reads it from the private
+notes, never re-derives it from issue or PR text.
 
 **The direct probe remains budgeted at one per agent per run.** Apply the shared reference's
 unexpected-silence threshold and hold/recovery rules. Neither tracker age nor an unchanged wait
