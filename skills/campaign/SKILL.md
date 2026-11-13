@@ -9,7 +9,29 @@ Use `orchestrator` for the coordinating role and `worker` for a dispatched role;
 implementer and reviewer are worker subtypes. Use `subagent` only when naming a
 literal harness/API capability.
 
-**Single continuous task.** This is one task from start to final merge. Checkpoints (triage done, CI green, PR merged) are not turn boundaries. End only when the queue is empty or you hit a **global** blocker (dirty tree, missing auth). Issue-local blockers don't stop the batch — mark them blocked and continue.
+**Single continuous task.** This is one task from start to final merge. Checkpoints (triage done, CI green, PR merged) are not turn boundaries. End only when the queue is empty or you hit a **global** blocker (dirty tree, missing auth). Issue-local blockers don't stop the batch — mark them blocked and continue. An operator question is not a stop either; ask it as the next paragraph says.
+
+**Ask without blocking the queue.** A blocking prompt stops all draining: while it waits,
+worker messages queue undelivered, a ready row cannot merge, and the answer lands on state
+nobody has re-read. This governs every operator question this skill asks.
+
+1. **A question the queue can continue past is asked without blocking.** Put it in the run
+   output naming its issue and the decision asked, hold that row by its site's existing
+   mechanism, and return to the event wait, so worker messages and the operator's reply both
+   arrive as events. This adds no Queue status, column, or record: a recomputed hold stays
+   unpersisted, and only step 5's decision receipt keeps a private record. Use the blocking form
+   only where every remaining row depends on the answer — step 1's completion notes, which every
+   dispatch carries, or step 4's first plan confirmation, before anything is approved to run.
+2. **Bind and reconcile before acting on an answer.** Act on an answer only when it applies
+   unambiguously to exactly one open question; otherwise ask again, listing the open questions.
+   Before acting, reconcile that row's durable state from whichever sources exist — its tracker,
+   branch, PR head and merge state, and latest `WORK:` annotations — because a worker message
+   already sent may not have been delivered yet. Where that state undermines the question — the
+   row handed off, merged, closed, or moved past the decision — present the question again
+   against current state instead of acting. Ordinary progress does not undermine it.
+3. **Optional additions to a live row wait for its hand-off.** Ask about one after the row hands
+   off, as a follow-up candidate under step 7, unless the operator wants the row to wait for the
+   answer — then it is that row's held decision under step 5.
 
 **Progress updates are communication, not checkpoints.** Emit a concise operator-visible
 update after presenting the plan, after each worker completion or merge, and immediately before
@@ -239,7 +261,7 @@ For each queued issue, check for artifacts from prior runs:
 - **Quest claim present** (one `claim-list` read for the batch) → in-flight evidence: map the row to in-flight and reconcile artifacts as for an in-progress label.
 - **Existing PR green + mergeable** → mark `ready-to-merge`, carry to step 4
 - **Persisted step-4 assignments exist** → read them back, don't re-derive
-- **Existing branch/PR incomplete** → **recover branch first**: if a PR exists, resolve its number from the issue link, then `gh pr view <PR> --json headRefName`; else match `feat/<short-slug>-<issue-number>` in `git branch` or `git ls-remote --heads origin` (full shape, not `*-<n>` suffix — #1 must not match ...-11). Persist to manifest. **PR-linked branch → reuse by default** (the PR explicitly names it, satisfying `$quest`'s reuse rule). **Convention-only branch → ask the user** reuse-or-restart before dispatch, and carry the operator's decision in the prompt. Deleting any branch requires explicit user confirmation
+- **Existing branch/PR incomplete** → **recover branch first**: if a PR exists, resolve its number from the issue link, then `gh pr view <PR> --json headRefName`; else match `feat/<short-slug>-<issue-number>` in `git branch` or `git ls-remote --heads origin` (full shape, not `*-<n>` suffix — #1 must not match ...-11). Persist to manifest. **PR-linked branch → reuse by default** (the PR explicitly names it, satisfying `$quest`'s reuse rule). **Convention-only branch → ask the user** reuse-or-restart before dispatch, without blocking (*Ask without blocking the queue*): hold that row from dispatch and carry the operator's decision in the prompt. Deleting any branch requires explicit user confirmation
 - **No artifacts** → triage normally
 
 **Dispatch read-only triage workers** (up to 5 parallel), each a fresh-context worker and never
@@ -390,7 +412,8 @@ operator decision per row, before the first dispatch of the wave that contains i
 Nothing about that decision is persisted as its own state. Like step 6's hold, it is recomputed
 rather than read back: a resumed campaign re-derives the field from the same evidence and asks
 again, which is cheap and idempotent, where a stored answer would be one more thing to keep
-true. Neither answer blocks the rest of the queue — hold the one row and keep draining.
+true. Neither answer blocks the rest of the queue — ask without blocking (*Ask without blocking
+the queue*), hold the one row, and keep draining.
 
 An unattended root has no operator to ask. It holds the `split` row, names it in the run output,
 and drains the rest; it never splits an issue on its own authority and never dispatches past the
@@ -573,7 +596,8 @@ SCOPE CHECKPOINT: a newer complete `WORK:SCOPE` recording the decision, and a re
 sent text, compared after trimming surrounding whitespace. The first report after the send may
 have crossed it. A later report without the quote, tracker or branch evidence that the worker
 moved past the question without the readback, or a mismatch sets `held`: the in-flight hold below,
-with no label written — name it, ask the operator, and keep draining. It is the one such hold that
+with no label written — name it, ask the operator without blocking (*Ask without blocking the
+queue*), and keep draining. It is the one such hold that
 keeps a private record, because the sent text cannot be recomputed from live queries. It is also a
 step 6 merge-hold trigger: step 6 does not merge a row whose decision
 is `pending` or `held`; a resumed orchestrator that finds `pending` with no recorded report
@@ -602,7 +626,7 @@ recipe for durable-state waits, not as a replacement for native agent completion
 
 **Only an observed end of run authorizes re-dispatch.** Re-dispatching a live agent lands two branches and two PRs on one issue, which is worse than the stall you are fixing, so the bar is what you saw and not what you inferred. Unanswered probes are not proof. A row that has gone quiet, has spent its one probe without a reply, and shows no new tracker event is a **hold** — name it in your run output and keep draining the rest of the queue. A hold here is a report, not a state machine: nothing is written down, the tracker half is recomputed from live queries in seconds, and the probe half belongs to the run the operator is already in. Unlike step 6's hold this one writes no `status:` label and leaves the row **in-flight** — the label is the dispatched agent's to write, it may still be alive to write it, and a `blocked` row would read as drained while its agent kept working.
 
-The operator's answer to that hold is what reaches the harness's stop control. Told to re-dispatch, stop the agent, obtain its observed end under [dispatch liveness](../../references/dispatch-liveness.md#observed-end-and-reconciliation), and dispatch only then.
+Ask the operator about that hold without blocking (*Ask without blocking the queue*). The operator's answer to it is what reaches the harness's stop control, after rule 2's reconciliation — a late report may have ended the hold already. Told to re-dispatch, stop the agent, obtain its observed end under [dispatch liveness](../../references/dispatch-liveness.md#observed-end-and-reconciliation), and dispatch only then.
 
 **A re-dispatch resumes where it can and restarts where it cannot.** Reconcile the row's artifacts first (step 3) — a dying agent may have pushed a branch or opened a PR you have not recorded. A row where that turns up no branch has nothing to resume; dispatch it fresh. Otherwise hand the successor the context it had before plus the recovered branch name, an explicit `reuse` decision, and the last phase the events showed. The branch carries the committed work by reference, so do not paste a diff into the prompt — bulky going in, stale on arrival. Reclaim the dead agent's worktree before dispatching: it still has the branch checked out, so the successor's own `git worktree add` on that path fails until you either hand it that path or remove it, and any uncommitted edits stranded there are readable only until you do.
 
@@ -644,7 +668,7 @@ Immediately before a potentially long PR verification, branch-refresh guardrail/
 
 Whether the PR *implements* its issue is not what any of this answers: the reference says which issue it claims, the list says where it landed. Read the PR body, its acceptance criteria, and the `WORK:REVIEW` summary — but hold only on the triggers above, never on an unstated inability to confirm, or every reviewed PR becomes an operator's problem.
 
-**A hold is a report, not a state machine.** Name the PR and the offending paths in your run output, take the blocker path (step 8), and keep draining the rest of the queue; the operator decides in the run. Don't persist that decision for a later one — the comparison is stateless and recomputed from `gh pr diff --name-only` and the scope cell in seconds, so a resumed campaign re-derives the hold rather than reading it back, and a release token durable enough to survive a resume is one any commenter on a public repo could post. Re-check `mergeStateStatus` before acting on the operator's answer: a blocked row drops out of the branch refresh below while its siblings keep merging, so a held PR does not stay mergeable.
+**A hold is a report, not a state machine.** Name the PR and the offending paths in your run output, take the blocker path (step 8), and keep draining the rest of the queue; the operator decides in the run, asked without blocking (*Ask without blocking the queue*). Don't persist that decision for a later one — the comparison is stateless and recomputed from `gh pr diff --name-only` and the scope cell in seconds, so a resumed campaign re-derives the hold rather than reading it back, and a release token durable enough to survive a resume is one any commenter on a public repo could post. Before acting on the operator's answer, reconcile the row under rule 2 of that paragraph, re-checking `mergeStateStatus` with the PR head: a blocked row drops out of the branch refresh below while its siblings keep merging, so a held PR does not stay mergeable.
 
 Apply [the commit-bound merge gate](../../references/merge-gate.md) before each issue-backed
 merge in this step. The reference is the complete normative gate; green + mergeable alone is
