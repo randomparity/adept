@@ -12,20 +12,20 @@ campaign and restock restate the old test locally. Authority: WORK:SCOPE `q500-0
 ## Scope
 
 1. Rewrite the first sentence of "Observed end and reconciliation". The notification, or a
-   requested stop followed by it, proves an end only where the harness's end-of-run notification
-   is distinct from its turn-end one. Where it is not, or the dispatcher cannot establish that it
-   is, a completion notification alone is not an observed end, even carrying a final report;
+   requested stop followed by it, proves an end only where the harness tells a turn end from a
+   run end, by notification or run-state. Elsewhere, or when the dispatcher cannot establish
+   that, a completion notification alone is not an observed end, even carrying a final report;
    the observed end is an explicit stop through the harness's stop control plus that control's
-   own success result for this worker. A stop without that result proves nothing. The dispatcher
-   issues the stop only where its workflow would otherwise act on the end — after reconciling the
-   final report, or under a stop authority the workflow already grants — never to settle a hold.
+   result stating the stop succeeded or this worker is no longer running. Any other result proves
+   nothing. The dispatcher stops only after reconciling the final report or under a stop
+   authority its workflow grants, such as campaign's operator-directed re-dispatch.
 2. Replace the three local definitions — campaign's step-5 re-dispatch sentence, campaign's
    cleanup "What counts" sentence, restock's prior-manifest parenthetical — with a pointer to that
    section. Nothing else in those files changes; forge already only links.
 
 The receipt section's idle-notification sentence stays as written and is not repeated. No
-ownership transition beyond the three pointers. No ADR: the stop path already exists; this
-tightens its evidence, and no viable alternative changes the decision.
+ownership transition beyond the three pointers. No ADR: ADR 0010 already places this test
+in the shared reference to evolve there.
 
 ### Failure model
 
@@ -35,14 +35,16 @@ tightens its evidence, and no viable alternative changes the decision.
   and claim are not reclaimed or replaced on a completion notification alone.
 - Accepted: a stop for a worker whose final report was already reconciled but which had already
   ended — one tool call.
-- Covered elsewhere: a harness with no stop capability — existing recovery rules (the end stays
-  unobserved and the unit holds); the one-replacement authorization — unchanged.
+- Accepted: on such a harness, a silent held worker with no granted stop stays a hold until a
+  late report or an operator stop — the existing hold rule, not a new state.
+- Covered elsewhere: a harness with no stop capability — existing recovery rules (the unit holds);
+  the one-replacement authorization — unchanged.
 
 ## Success
 
 1. The section limits the notification test to harnesses that distinguish turn end from run end.
-2. Elsewhere it requires an explicit stop plus the stop control's success result, and bounds when
-   the stop may be issued.
+2. Elsewhere it requires an explicit stop plus a succeeded or not-running stop result, and
+   bounds when the stop may be issued.
 3. The three named local definitions point to the section; the receipt sentence is not repeated.
 4. `.claude-plugin/plugin.json` version is `7.13.1`.
 
