@@ -101,14 +101,6 @@ state that its workers produce — it uses **one** bounded background shell oper
 whole condition wait, then reads its result. Never foreground sleep-and-check polling. This
 avoids discretionary model checks, not a promise of zero model turns or tokens.
 
-**A dispatched worker waits on its own push and CI in the foreground**, including a worker that
-dispatches workers of its own. It runs the push with the timeout raised to the harness maximum,
-polls CI with compact foreground snapshots as `$deliver` §3 does, and does not end its turn while
-either wait is outstanding: a background task's completion is not guaranteed to resume a worker
-whose turn has ended. If the call returns before the push finishes, the worker reads the push's
-outcome in the foreground before it ends the turn. The background condition wait below is the
-dispatcher's.
-
 Use the Bash 3.2 `bounded_call` function from [network bounds](network-bounds.md#the-mechanism)
 in that background task; it needs no `timeout` or `gtimeout` command. Define that function first,
 then run:
@@ -138,6 +130,21 @@ running; timeout proves neither their termination nor worker death.
 While a wait is open, drain other work in hand. When the outstanding reports are the only work
 left, say plainly what is blocked and on what, and then wait — never manufacture polls to look
 busy.
+
+**A dispatched worker waits on its own push and CI in the foreground**, including a worker that
+dispatches workers of its own; the background condition wait above is the dispatcher's. It does
+not end its turn while either wait is outstanding: a background task's completion is not
+guaranteed to resume a worker whose turn has ended.
+
+- **Push:** run it with the timeout raised to the harness maximum. If the call returns before
+  the push finishes, compare `git ls-remote origin <branch>` with the local `HEAD` in the
+  foreground, and re-run a push that did not land, again in the foreground. A push that cannot
+  finish within the harness maximum is a blocker to report, not a reason to background it.
+- **CI:** run one foreground call whose `until` loop sleeps between compact
+  `gh pr checks <PR> --json name,state` snapshots until no check is pending, with the timeout
+  raised to the harness maximum, and re-enter it in the foreground if it returns first. Keep the
+  `sleep` inside the loop: Claude Code refuses a leading `sleep <n> &&` chain and offers only
+  background alternatives (observed on Claude Code 2.1.323, macOS, for `sleep 31 && ...`).
 
 ## Observed end and reconciliation
 
