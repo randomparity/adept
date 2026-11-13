@@ -22,9 +22,12 @@ alive. No reply proves nothing, and it ends the probe budget: the wait becomes a
 
 The budget counts probes, not messages. A message that is not a probe declares its kind at the
 very start of its first line: `DECISION:` for a decision the worker is waiting on, `ANSWER:` for
-a reply to a question the worker asked, `REFRESH:` for a base-branch or input refresh. A declared
-message neither spends the budget nor is blocked by a spent one; the adept source repository's
-own `SendMessage` hook enforces that. A probe never carries one of these prefixes.
+a reply to a question the worker asked, `REFRESH:` for a base-branch or input refresh, `RESEND:`
+for a request that the worker resend the remainder of a report the dispatcher received
+truncated. A harness protocol message in object form — a shutdown request or response, or a
+plan-approval response — is not a probe either; any other object-form message counts as one. A
+declared message neither spends the budget nor is blocked by a spent one; the adept source
+repository's own `SendMessage` hook enforces that. A probe never carries one of these prefixes.
 
 **A report proves the worker was alive when it wrote the report, and nothing more.** Its content is
 evidence about the moment of composition, not about the present the dispatcher reads it in — a
