@@ -64,10 +64,14 @@ state path are unchanged; no caller migrates.
 5. The reference names `RESEND:` with its narrow meaning and the protocol rule; the block message
    names `RESEND:`.
 6. `.claude-plugin/plugin.json` version is `7.13.3`.
+7. The reference's readback sentence ("counts as delivered only on that readback") also admits an
+   operator release the owning workflow records (campaign step 5's `delivered (operator release,
+   <provenance>)`); no other change to that paragraph. Added by operator decision 2026-11-13
+   (WORK:SCOPE `q499-f3a2a9bc`, re-frozen).
 
 ## Validation
 
 - Criteria 1–4 — focused-test: `scripts/probe-budget-hook-test.sh` runs the extracted hook under
   `sh -c` with a private `TMPDIR`; `just test probe-budget`.
-- Criterion 5 — task-test-not-applicable: prose; anatomy rule 4 forbids asserting on it.
+- Criteria 5 and 7 — task-test-not-applicable: prose; anatomy rule 4 forbids asserting on it.
 - Criterion 6 — focused-test: `just version-check`.
