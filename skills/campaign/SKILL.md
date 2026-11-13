@@ -29,9 +29,11 @@ nobody has re-read. This governs every operator question this skill asks.
    already sent may not have been delivered yet. Where that state undermines the question — the
    row handed off, merged, closed, or moved past the decision — present the question again
    against current state instead of acting. Ordinary progress does not undermine it.
-3. **Optional additions to a live row wait for its hand-off.** Ask about one after the row hands
-   off, as a follow-up candidate under step 7, unless the operator wants the row to wait for the
-   answer — then it is that row's held decision under step 5.
+3. **Optional additions to a live row wait for its hand-off.** Name the addition in the run
+   output and ask about it after the row hands off, as a follow-up candidate under step 7. Like
+   the other unpersisted holds, it does not survive a resume: the operator re-raises it. If the
+   operator wants the row to wait for the answer instead, hold the row's merge while the question
+   is open, then relay the answer as a step 5 `DECISION:`, whose receipt governs from there.
 
 **Progress updates are communication, not checkpoints.** Emit a concise operator-visible
 update after presenting the plan, after each worker completion or merge, and immediately before
