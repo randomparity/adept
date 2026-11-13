@@ -9,50 +9,50 @@ Authority: WORK:SCOPE `q506-2f5c84c7`; light lane, denominator 250 (M).
 
 ## Scope
 
-One new paragraph in `skills/campaign/SKILL.md`, placed after **Single continuous task**:
+One new paragraph in `skills/campaign/SKILL.md`, after **Single continuous task**, governing
+every operator question the orchestrator asks:
 
-1. A question the queue can continue past is asked without blocking: the question goes in the
-   run output, the affected row is held in the manifest, and the orchestrator returns to its
-   event wait, so worker messages and the operator's reply both arrive as events. The blocking
-   form is kept only where every remaining row depends on the answer. The two completion-note
-   questions in step 1 come before any queue exists, so they meet that test and stay as written.
-2. Before acting on any operator answer, reconcile the affected row's durable state: its
-   tracker, branch and PR head, and latest `WORK:` annotations. A queued worker message may not
-   have arrived yet.
+1. A question the queue can continue past is asked without blocking: it goes in the run output
+   naming its issue and the decision asked, the row is held by its site's existing mechanism,
+   and the orchestrator returns to its event wait, so worker messages and the reply arrive as
+   events. No new Queue status or manifest column: recomputed holds stay unpersisted and only the
+   step 5 decision receipt keeps a private record. The blocking form is kept only where every
+   remaining row depends on the answer — step 1's completion-note questions, which every
+   dispatch carries.
+2. An answer is acted on only when it applies unambiguously to exactly one open question;
+   otherwise re-ask, listing the open questions. Before acting, reconcile that row's durable
+   state from whichever sources exist: tracker, branch, PR head and merge state, latest `WORK:`
+   annotations. If it changed since the question was asked, re-present the question against
+   current state instead of acting.
 3. An optional addition to a live row is asked after its hand-off, as a follow-up candidate,
-   unless the operator wants the row to wait for the answer.
+   unless the operator wants the row to wait.
 
-Sites that ask the operator point at that paragraph instead of implying a blocking ask: the
-single-continuous-task paragraph, step 3's convention-only branch reuse question, step 4's split
-decision, step 5's held decision and in-flight hold, and step 6's merge hold. The merge hold's
-existing `mergeStateStatus` re-check becomes one instance of rule 2. No ownership transition: the
-skill already owns its question discipline, and no caller changes. `.claude-plugin/plugin.json`
-moves to `7.13.5`.
+Six sites point at that paragraph: single continuous task, step 3's convention-only branch
+reuse, step 4's split decision, step 5's held decision and in-flight hold, and step 6's merge
+hold, whose `mergeStateStatus` re-check becomes an instance of rule 2. No caller or ownership
+changes. `.claude-plugin/plugin.json` moves to `7.13.5`.
 
 ### Failure model
 
 - Actors and deployments: the campaign orchestrator model in a Claude Code or Codex session,
   with worker agents and one operator.
-- Invariants: no row is merged, dispatched or closed on a stale answer; no unaffected row waits
-  on a question.
-- Accepted: a harness with no way to ask without blocking forces the blocking form; the rule
-  then reduces to rule 2's reconciliation, as the excluded harness mechanism owns the rest.
-- Accepted: nothing mechanically checks that a question was asked without blocking — anatomy
-  rules 3 and 4 exclude hook or prose enforcement.
+- Invariants: no row is merged, dispatched or closed on a stale or misattributed answer; no
+  unaffected row waits on a non-blocking question.
+- Accepted: a harness with no non-blocking ask forces the blocking form; rule 2 still applies.
+- Accepted: nothing mechanically checks how a question was asked (anatomy rules 3 and 4).
 - Covered elsewhere: worker turn-end on its own background wait and `dispatch-liveness.md`
   (#505).
 
 ## Success
 
-1. The skill states rule 1, including the event-wait return and the all-rows-depend exception.
-2. Each of the six named sites is consistent with rule 1 and points to it.
-3. The skill states rule 2 for every operator answer, naming the three state sources.
-4. The skill states rule 3 with its operator-wait exception.
-5. `.claude-plugin/plugin.json` version is `7.13.5`.
+1. The skill states rules 1–3 as written above.
+2. The six named sites point to the paragraph and none implies a blocking ask.
+3. `.claude-plugin/plugin.json` version is `7.13.5`.
 
 ## Validation
 
-- Criteria 1–4 — task-test-not-applicable: instruction prose with no executable consumer;
+- Criteria 1–2 — task-test-not-applicable: instruction prose with no executable consumer;
   anatomy rule 4 forbids asserting on it.
-- Criterion 5 — focused-test: `just version-check` passes on `7.13.5`.
-- Structure — focused-test: `just verify` keeps `check-skill-shape.sh` and link checks green.
+- Criterion 3 — focused-test: `BASE_SHA=$(git merge-base origin/main HEAD) just version-check`
+  is red at the base version and green after the bump; `jq -r .version` reads `7.13.5`.
+- Structure — guardrail, not focused evidence: `just verify`.
