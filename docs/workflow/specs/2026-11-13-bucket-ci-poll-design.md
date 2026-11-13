@@ -17,13 +17,12 @@ not `bucket`, and `|| true` hides a failed call. Authority: WORK:SCOPE `q508-695
    any `fail` or `cancel` goes to step 2, and `skipping` is not a failure. `no checks reported`
    (exit 1, no JSON) means not yet registered: pending for a few polls, then stop and report
    that none registered. Any other call yielding no JSON is
-   retried once, then the worker stops and reports the `gh` error. The exit code is not the
-   verdict, so `|| true` goes.
+   retried once, then the worker stops and reports the `gh` error. `|| true` goes.
 3. Add one sentence to the worker paragraph of `references/dispatch-liveness.md` "Waiting
    mechanics" naming `$deliver` §3 step 1 as a worker's CI poll, so both give one form.
 4. Bump `.claude-plugin/plugin.json` to `7.13.7`.
 
-No ADR: the issue fixes the approach. Exclusions: the WORK:SCOPE set.
+No ADR: the issue fixes the approach.
 
 ### Failure model
 
@@ -47,7 +46,7 @@ No ADR: the issue fixes the approach. Exclusions: the WORK:SCOPE set.
 ## Validation
 
 - Criteria 1–3 — task-test-not-applicable: prose read by a model; anatomy rule 4 forbids
-  asserting on prose. The pointer is plain text, not a link no gate checks.
+  asserting on prose. The pointer is plain text, not a link.
 - Criterion 2 inputs — focused-test, observed 2026-11-13: `gh pr checks 509 --json name,bucket`
   gives a `bucket` per check; `gh pr checks 1 ...` gives `no checks reported`, exit 1.
 - Criterion 4 — focused-test: `just version-check`.
