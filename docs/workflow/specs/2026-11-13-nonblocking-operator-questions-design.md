@@ -3,8 +3,8 @@
 ## Problem
 
 `$campaign` says an operator question holds one row while the queue keeps draining, but the
-orchestrator asks through a blocking prompt. Until the answer returns, worker messages queue
-undelivered, so ready rows wait unmerged and the answer is acted on against stale state.
+orchestrator asks through a blocking prompt: worker messages queue undelivered, ready rows wait
+unmerged, and the answer is acted on against stale state.
 Authority: WORK:SCOPE `q506-2f5c84c7`; light lane, denominator 250 (M).
 
 ## Scope
@@ -52,7 +52,7 @@ moves to `7.13.5`.
 
 ## Validation
 
-- Criteria 1–4 — task-test-not-applicable: the change is instruction prose read by a model;
-  anatomy rule 4 forbids a gate that asserts on prose, and no executable consumer parses it.
+- Criteria 1–4 — task-test-not-applicable: instruction prose with no executable consumer;
+  anatomy rule 4 forbids asserting on it.
 - Criterion 5 — focused-test: `just version-check` passes on `7.13.5`.
 - Structure — focused-test: `just verify` keeps `check-skill-shape.sh` and link checks green.
