@@ -7,7 +7,7 @@ ended. Some harnesses send the same completion notification when a worker's turn
 is idle and still resumable, so a dispatcher cannot tell which happened. Claim recovery, the one
 replacement, and worktree reclamation in campaign, restock and forge all key on observed end, and
 campaign and restock restate the old test locally. Authority: WORK:SCOPE `q500-05440895`
-(re-frozen on the operator's option A); light lane, denominator 100 (S).
+(re-frozen on operator options A and A2); light lane, denominator 100 (S).
 
 ## Scope
 
@@ -19,12 +19,12 @@ campaign and restock restate the old test locally. Authority: WORK:SCOPE `q500-0
    result stating the stop succeeded or this worker is no longer running. Any other result proves
    nothing. The dispatcher stops only after reconciling the final report or under a stop
    authority its workflow grants, such as campaign's operator-directed re-dispatch.
-2. Replace the three local definitions — campaign's step-5 re-dispatch sentence, campaign's
-   cleanup "What counts" sentence, restock's prior-manifest parenthetical — with a pointer to that
-   section. Nothing else in those files changes; forge already only links.
+2. Replace the four local definitions — campaign's step-5 re-dispatch and cleanup "What counts"
+   sentences, restock's prior-manifest and step-3c parentheticals — with a pointer to that
+   section. Nothing else there changes; forge already only links.
 
 The receipt section's idle-notification sentence stays as written and is not repeated. No
-ownership transition beyond the three pointers. No ADR: ADR 0010 already places this test
+ownership change beyond the four pointers. No ADR: ADR 0010 already places this test
 in the shared reference to evolve there.
 
 ### Failure model
@@ -45,7 +45,7 @@ in the shared reference to evolve there.
 1. The section limits the notification test to harnesses that distinguish turn end from run end.
 2. Elsewhere it requires an explicit stop plus a succeeded or not-running stop result, and
    bounds when the stop may be issued.
-3. The three named local definitions point to the section; the receipt sentence is not repeated.
+3. The four named local definitions point to the section; the receipt sentence is not repeated.
 4. `.claude-plugin/plugin.json` version is `7.13.1`.
 
 ## Validation
