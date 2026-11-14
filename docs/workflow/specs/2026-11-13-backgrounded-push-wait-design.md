@@ -4,27 +4,29 @@
 
 The worker paragraph of `references/dispatch-liveness.md` "Waiting mechanics" says a call
 that outlives its timeout may still be running, so the worker waits on that same task. It
-gives no form for that wait and does not say whether the omission is deliberate. A worker
-whose pre-push hook the harness backgrounded (#508's step 8) has to improvise. Authority:
+gives no form for that wait and does not say whether the omission is deliberate, so a
+worker whose pre-push hook the harness backgrounded (#508) improvises. Authority:
 WORK:SCOPE `q511-1892f1a9`, operator option (a): record "no recipe".
 
 ## Scope
 
 1. Extend the worker paragraph with the contract for a call the harness has backgrounded:
-   one bounded foreground call keeps checking that same task's completion; the worker never
-   ends its turn on the task; it never starts a second push; an unfinished or inconclusive
-   wait counts as no passing result, as `$deliver` §2's push step already says of a hook.
+   one bounded foreground call at a time keeps checking that same task's completion, and a
+   call that returns with the task unfinished is followed by another (Waiting mechanics item 4's
+   wait); the worker never ends its turn on the task; it never starts a second push; an
+   unfinished or inconclusive wait counts as no passing result, as `$deliver` §2's push step
+   says of a hook, and never as a failed hook to diagnose while the task still runs.
 2. In the same paragraph, state that the reference deliberately documents no
    harness-specific wait recipe, because output-file paths and backgrounding thresholds are
    harness-assigned and cannot be verified from this repository, and because in #505 every
    written recipe failed review.
 3. The paragraph names no output-file path, until-loop, timeout number, or Monitor usage,
    and does not prescribe `bounded_call`, which cannot attach to an already-backgrounded task.
-4. `skills/deliver/SKILL.md` §2's push step gains one link to that paragraph and none of its
-   text.
+4. `skills/deliver/SKILL.md` §2's push step gains one link, its text naming the worker rule
+   in Waiting mechanics (the anchor §3 also uses), and none of the paragraph's text.
 5. Bump `.claude-plugin/plugin.json` to `7.13.8`.
 
-No ADR: the operator fixed the decision; it is recorded in the reference itself.
+No ADR: the operator fixed the decision; the reference records it.
 
 ### Failure model
 
@@ -39,7 +41,7 @@ No ADR: the operator fixed the decision; it is recorded in the reference itself.
 
 ## Success
 
-1. The worker paragraph states Scope item 1's four obligations.
+1. The worker paragraph states Scope item 1's obligations, including the repeated check.
 2. It states Scope item 2's decision and both reasons.
 3. It contains none of the items Scope item 3 names.
 4. `$deliver` §2's push step carries exactly one added link to the paragraph, with no copied
@@ -50,6 +52,7 @@ No ADR: the operator fixed the decision; it is recorded in the reference itself.
 ## Validation
 
 - Criteria 1–4 — task-test-not-applicable: prose read by a model; anatomy rule 4 forbids
-  asserting on prose. The link's file is held by `check-skill-shape.sh` rule 5; its anchor is checked by reading.
+  asserting on prose. The link's file is held by `check-skill-shape.sh` rule 5; its anchor
+  is checked by reading.
 - Criterion 5 — focused-test: `just version-check`.
 - Criterion 6 — focused-test: `just plugin-check`; the pre-push hook's `just ci` run.
