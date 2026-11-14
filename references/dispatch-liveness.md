@@ -140,6 +140,16 @@ its timeout may still be running — a harness can move it to the background or 
 so the worker waits on that same task rather than starting a second copy. Its CI wait is the
 foreground poll `$deliver` §3 step 1 gives.
 
+For a push the harness has backgrounded, the wait is a contract. One bounded foreground call at a
+time checks that same task's completion; a call that returns with the task unfinished is followed
+by another, as item 4 above re-enters an unchanged wait. The worker never ends its turn on the
+task and never starts a second push. An unfinished or inconclusive wait counts as no passing
+result, as `$deliver`'s push step says of a hook, and is not a failed hook to diagnose while the
+task still runs. This reference deliberately documents no harness-specific recipe for that check:
+the backgrounded task's output location and the threshold that backgrounds a call are assigned by
+the harness and cannot be verified from this repository, and in #505 every wait recipe written
+for one harness failed review. Express the check with whatever the running harness offers.
+
 ## Observed end and reconciliation
 
 For a native agent, the harness's end-of-run notification, or a dispatcher-requested stop followed

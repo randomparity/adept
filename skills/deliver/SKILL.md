@@ -76,10 +76,11 @@ issue-free: ordinary `git push`). The hook's successful exit counts only for the
 actually checked. Confirm the pushed branch object's full SHA matches the
 checked candidate before recording a full pass. A skipped, failed, cancelled,
 or inconclusive hook has no passing result. Diagnose a failed hook before
-another push. If HEAD, relevant inputs, the integration base, or the execution
-environment change, reassess the assembled-branch and final evidence before
-claiming coverage. A new phase alone never invalidates an applicable result or
-requires another full run.
+another push. A push the harness backgrounds is waited on under the
+[worker rule in dispatch liveness](../../references/dispatch-liveness.md#waiting-mechanics).
+If HEAD, relevant inputs, the integration base, or the execution environment
+change, reassess the assembled-branch and final evidence before claiming coverage.
+A new phase alone never invalidates an applicable result or requires another full run.
 
 Open a PR against `BASE_BRANCH` (issue-backed: `deliver-write --claim-token TOKEN
 REPO ISSUE pr-create BASE_BRANCH TITLE BODY-FILE`; issue-free: `gh pr create`).
